@@ -122,7 +122,7 @@ export default function VendasPage() {
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -143,6 +143,7 @@ export default function VendasPage() {
     codigo_rastreio: "",
   });
   const [creditoLojistaSaldo, setCreditoLojistaSaldo] = useState(0);
+  const [creditoLojistaId, setCreditoLojistaId] = useState<string | null>(null);
   // Restaurar rascunho do localStorage ao montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -626,6 +627,7 @@ export default function VendasPage() {
   useEffect(() => {
     if (form.tipo !== "ATACADO" || (!form.cliente && !form.cpf && !form.cnpj)) {
       setCreditoLojistaSaldo(0);
+      setCreditoLojistaId(null);
       return;
     }
     const timer = setTimeout(async () => {
@@ -640,6 +642,7 @@ export default function VendasPage() {
           const json = await res.json();
           const saldo = Number(json.saldo || 0);
           setCreditoLojistaSaldo(saldo);
+          setCreditoLojistaId(json.lojista?.id || null);
           // Fallback: se veio cpf/cnpj e não achou, tenta só pelo nome
           if (saldo === 0 && form.cliente && (form.cpf || form.cnpj)) {
             const p2 = new URLSearchParams({ nome: form.cliente });
@@ -647,6 +650,7 @@ export default function VendasPage() {
             if (r2.ok) {
               const j2 = await r2.json();
               setCreditoLojistaSaldo(Number(j2.saldo || 0));
+              setCreditoLojistaId(j2.lojista?.id || null);
             }
           }
         }
@@ -1017,6 +1021,7 @@ export default function VendasPage() {
       comp_alt: parseFloat(form.comp_alt) || null,
       sinal_antecipado: parseFloat(form.sinal_antecipado) || 0,
       banco_sinal: form.banco_sinal || null,
+      forma_sinal: form.forma_sinal || "PIX",
       serial_no: prodFields.serial_no || null,
       imei: prodFields.imei || null,
       troca_produto: prodFields.troca_produto || null,
@@ -1052,6 +1057,7 @@ export default function VendasPage() {
       frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
+      _lojista_id: creditoLojistaId || null,
       // Rastreio Correios
       codigo_rastreio: form.local === "CORREIO" && form.codigo_rastreio ? form.codigo_rastreio.trim().toUpperCase() : null,
     };
@@ -1417,7 +1423,7 @@ export default function VendasPage() {
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
               entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
               valor_total_venda: "",
               troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1459,7 +1465,7 @@ export default function VendasPage() {
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
               entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
               valor_total_venda: "",
               troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1512,6 +1518,9 @@ export default function VendasPage() {
         if (json.ok) {
           successCount++;
           if (json.data?.id) savedVendaIds.push(json.data.id);
+          if (json.creditoDebitError) {
+            errors.push(`⚠️ Crédito lojista: ${json.creditoDebitError}`);
+          }
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
@@ -1534,7 +1543,7 @@ export default function VendasPage() {
         custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
         entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-        forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+        forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
         entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
         valor_total_venda: "",
         troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1796,6 +1805,7 @@ export default function VendasPage() {
       comp_alt: String(v.comp_alt || ""),
       sinal_antecipado: "",
       banco_sinal: "",
+      forma_sinal: "PIX",
       troca_produto: "",
       troca_cor: "",
       troca_categoria: "",
@@ -2025,7 +2035,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -2706,7 +2716,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -3668,6 +3678,20 @@ export default function VendasPage() {
                         />
                       </div>
                       <div className="flex items-center gap-1.5">
+                        <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Forma:</span>
+                        <select
+                          value={form.forma_sinal || "PIX"}
+                          onChange={(e) => setForm(f => ({ ...f, forma_sinal: e.target.value }))}
+                          className={`px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                        >
+                          <option value="PIX">PIX</option>
+                          <option value="CARTAO">Cartão</option>
+                          <option value="LINK">Link MP</option>
+                          <option value="DINHEIRO">Dinheiro</option>
+                          <option value="DEBITO">Débito</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
                         <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Banco:</span>
                         <select
                           value={form.banco_sinal}
@@ -3775,8 +3799,9 @@ export default function VendasPage() {
           const datasOrdenadas = [...vendasPorData.keys()].sort((a, b) => b.localeCompare(a));
 
           const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : tab === "correios" ? "📦 Envios pelos Correios" : tab === "programadas" ? "Vendas Programadas" : "Histórico de Vendas";
-          const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
-          const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
+          const filteredFinanceiro = filtered.filter(v => v.status_pagamento !== "PROGRAMADA");
+          const totalVendido = filteredFinanceiro.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+          const totalLucro = filteredFinanceiro.reduce((s, v) => s + (v.lucro || 0), 0);
 
           return (
             <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
@@ -3923,8 +3948,9 @@ export default function VendasPage() {
                     <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : tab === "correios" ? "com rastreio dos Correios" : "finalizada"}</div>
                   ) : datasOrdenadas.map((dataKey) => {
                     const vendasDoDia = vendasPorData.get(dataKey) || [];
-                    const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
-                    const vendidoDia = vendasDoDia.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+                    const vendasDoDiaFinanceiro = vendasDoDia.filter(v => v.status_pagamento !== "PROGRAMADA");
+                    const lucroDia = vendasDoDiaFinanceiro.reduce((s, v) => s + (v.lucro || 0), 0);
+                    const vendidoDia = vendasDoDiaFinanceiro.reduce((s, v) => s + (v.preco_vendido || 0), 0);
                     const qtdDia = vendasDoDia.length;
                     const [y, m, d] = (dataKey || "").split("-");
                     const dataLabel = d && m && y ? `${d}/${m}/${y}` : dataKey;
@@ -3990,8 +4016,10 @@ export default function VendasPage() {
                         const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
                         const espVal = parseFloat(String(v.entrada_especie || 0)) || 0;
                         const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
+                        const creditoVal = parseFloat(String(v.credito_lojista_usado || 0)) || 0;
                         const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
-                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal));
+                        if (creditoVal > 0) pagParts.push(`Crédito: ${fmt(creditoVal)}`);
+                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal - creditoVal));
                         const formaLabel = (f: string | null | undefined) => {
                           if (!f) return "";
                           if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
@@ -4009,7 +4037,8 @@ export default function VendasPage() {
                         } else if (v.forma && v.forma !== "CARTAO") {
                           const lbl = formaLabel(v.forma);
                           const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
-                          pagParts.push(resto > 0 ? `${lbl}${banco}: ${fmt(resto)}` : `${lbl}${banco}`);
+                          const valorForma = resto > 0 ? resto : (compVal > 0 ? compVal : 0);
+                          if (valorForma > 0) pagParts.push(`${lbl}${banco}: ${fmt(valorForma)}`);
                         }
                         // Sem forma definida mas tem complemento a pagar
                         if (!v.forma && resto > 0) {
@@ -4079,8 +4108,17 @@ export default function VendasPage() {
                               </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
                               <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
-                              <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
-                              <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                              {v.status_pagamento === "PROGRAMADA" ? (
+                                <>
+                                  <td className="px-3 py-2.5 text-xs"><span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold text-[10px]">Programada</span></td>
+                                  <td className="px-3 py-2.5 text-xs"><span className="text-amber-600 text-[10px]">—</span></td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
+                                  <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                                </>
+                              )}
                               <td className="px-3 py-2.5 text-xs max-w-[250px]">
                                 <div className="space-y-0.5">
                                   {pagParts.map((p, i) => (
@@ -4088,11 +4126,6 @@ export default function VendasPage() {
                                   ))}
                                 </div>
                                 <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span>
-                                {Number(v.credito_lojista_usado || 0) > 0 && (
-                                  <span className="inline-block mt-0.5 ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">
-                                    💳 Crédito: {fmt(Number(v.credito_lojista_usado))}
-                                  </span>
-                                )}
                                 {Number(v.sinal_antecipado || 0) > 0 && v.status_pagamento === "PROGRAMADA" && (
                                   <span className="block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
                                     💰 Sinal {v.banco_sinal ? `${v.banco_sinal}` : ""}: {fmt(Number(v.sinal_antecipado))} — saldo {fmt((Number(v.preco_vendido) || 0) - Number(v.sinal_antecipado || 0))}
@@ -4497,6 +4530,7 @@ export default function VendasPage() {
                                               comp_alt: String(primaryVenda.comp_alt || ""),
                                               sinal_antecipado: String(primaryVenda.sinal_antecipado || ""),
                                               banco_sinal: primaryVenda.banco_sinal || "",
+                                              forma_sinal: (primaryVenda as unknown as Record<string, string>).forma_sinal || "PIX",
                                               troca_produto: grupoVendas.length > 1 ? "" : trocaProd,
                                               troca_cor: grupoVendas.length > 1 ? "" : trocaCor,
                                               troca_categoria: grupoVendas.length > 1 ? "" : (trocaCategoria || (primaryVenda as unknown as Record<string, string>).troca_categoria || ""),
@@ -4933,7 +4967,123 @@ export default function VendasPage() {
                                           </button>
                                         )}
                                       </div>
+
+                                      {/* Campo de rastreio inline para vendas CORREIO */}
+                                      {v.local === "CORREIO" && (
+                                        <div className="mt-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                          <span className="text-xs font-semibold text-blue-500">📦 Rastreio:</span>
+                                          {v.codigo_rastreio ? (
+                                            <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-blue-500 hover:underline">{v.codigo_rastreio}</a>
+                                          ) : (
+                                            <span className={`text-xs ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Não informado</span>
+                                          )}
+                                          <input
+                                            id={`rastreio-input-${v.id}`}
+                                            defaultValue={v.codigo_rastreio || ""}
+                                            placeholder="BR123456789BR"
+                                            className={`px-2 py-1 border rounded font-mono text-xs uppercase w-40 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
+                                          />
+                                          <button
+                                            onClick={async () => {
+                                              const input = document.getElementById(`rastreio-input-${v.id}`) as HTMLInputElement;
+                                              const codigo = input?.value?.trim().toUpperCase() || "";
+                                              if (!codigo) return;
+                                              const res = await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                body: JSON.stringify({ id: v.id, codigo_rastreio: codigo }),
+                                              });
+                                              if (res.ok) {
+                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, codigo_rastreio: codigo } : r));
+                                                setMsg(`Rastreio ${codigo} salvo! Venda movida para aba Correios.`);
+                                              }
+                                            }}
+                                            className="px-2 py-1 rounded text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                                          >
+                                            Salvar
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
+
+                                    {/* Histórico de pagamentos (vendas programadas) */}
+                                    {(v.status_pagamento === "PROGRAMADA" || (Array.isArray((v as unknown as Record<string, unknown>).pagamento_historia) && ((v as unknown as Record<string, unknown>).pagamento_historia as unknown[]).length > 0)) && (() => {
+                                      const hist = (Array.isArray((v as unknown as Record<string, unknown>).pagamento_historia) ? (v as unknown as Record<string, unknown>).pagamento_historia : []) as { tipo: string; valor: number; data: string; forma: string; banco: string; obs?: string }[];
+                                      const totalPago = hist.reduce((s, p) => s + (p.valor || 0), 0);
+                                      const totalVenda = v.preco_vendido || 0;
+                                      const saldoRestante = Math.max(0, totalVenda - totalPago);
+                                      return (
+                                        <div className="space-y-2" onClick={e => e.stopPropagation()}>
+                                          <h4 className="text-xs font-bold text-amber-600 uppercase">💰 Pagamentos</h4>
+                                          <div className="flex gap-4 text-xs mb-2">
+                                            <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Total: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(totalVenda)}</strong></span>
+                                            <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Pago: <strong className="text-green-600">{fmt(totalPago)}</strong></span>
+                                            {saldoRestante > 0 && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Restante: <strong className="text-amber-600">{fmt(saldoRestante)}</strong></span>}
+                                          </div>
+                                          {hist.length > 0 && (
+                                            <div className="space-y-1">
+                                              {hist.map((p, i) => (
+                                                <div key={i} className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]"}`}>
+                                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${p.tipo === "SINAL" ? "bg-blue-100 text-blue-700" : p.tipo === "FINAL" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{p.tipo}</span>
+                                                  <span className="font-bold text-green-600">{fmt(p.valor)}</span>
+                                                  <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{p.forma} {p.banco}</span>
+                                                  <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{p.data?.split("-").reverse().join("/")}</span>
+                                                  {p.obs && <span className={dm ? "text-[#6E6E73]" : "text-[#86868B]"}>({p.obs})</span>}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {hist.length === 0 && v.sinal_antecipado > 0 && (
+                                            <div className={`px-3 py-1.5 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]"}`}>
+                                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700">SINAL</span>
+                                              <span className="ml-2 font-bold text-green-600">{fmt(v.sinal_antecipado)}</span>
+                                              <span className={`ml-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{v.banco_sinal || "—"}</span>
+                                            </div>
+                                          )}
+                                          {saldoRestante > 0 && (
+                                            <div className="mt-2">
+                                              <button
+                                                onClick={() => {
+                                                  const valorStr = prompt(`Valor do pagamento (restante: R$ ${saldoRestante.toLocaleString("pt-BR")}):`);
+                                                  if (!valorStr) return;
+                                                  const valor = parseFloat(valorStr.replace(/\./g, "").replace(",", ".")) || 0;
+                                                  if (valor <= 0) return;
+                                                  const forma = prompt("Forma: PIX, CARTAO, DINHEIRO, DEBITO") || "PIX";
+                                                  const banco = prompt("Banco: ITAU, INFINITE, MERCADO_PAGO, ESPECIE") || "ITAU";
+                                                  const tipo = valor >= saldoRestante ? "FINAL" : "PARCIAL";
+                                                  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+                                                  const novoPag = { tipo, valor, data: hoje, forma: forma.toUpperCase(), banco: banco.toUpperCase() };
+                                                  const novaHist = [...hist, novoPag];
+                                                  const novoTotalPago = novaHist.reduce((s, p) => s + (p.valor || 0), 0);
+                                                  const updates: Record<string, unknown> = { id: v.id, pagamento_historia: novaHist };
+                                                  // Se pagou tudo, finalizar a venda
+                                                  if (novoTotalPago >= totalVenda) {
+                                                    updates.status_pagamento = "FINALIZADO";
+                                                    updates.forma = novoPag.forma;
+                                                    updates.banco = novoPag.banco;
+                                                  }
+                                                  fetch("/api/vendas", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                    body: JSON.stringify(updates),
+                                                  }).then(r => r.json()).then(json => {
+                                                    if (json.ok || json.data) {
+                                                      setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updates, pagamento_historia: novaHist } as typeof r : r));
+                                                      setMsg(novoTotalPago >= totalVenda ? `Pagamento final registrado! Venda finalizada.` : `Pagamento de ${fmt(valor)} registrado.`);
+                                                    } else {
+                                                      alert("Erro: " + (json.error || "falha"));
+                                                    }
+                                                  }).catch(() => alert("Erro de conexão"));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-300 hover:bg-green-50 transition-colors"
+                                              >
+                                                + Registrar Pagamento
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Detalhes da venda */}
                                     <div className="space-y-2">
@@ -5294,7 +5444,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -5330,7 +5480,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",

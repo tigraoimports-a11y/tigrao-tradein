@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
         .from("vendas")
         .select(selectFields)
         .neq("status_pagamento", "CANCELADO")
+        .neq("status_pagamento", "PROGRAMADA")
         .gte("data", dataInicioStr)
         .lte("data", hojeStr)
         .order("data", { ascending: true })

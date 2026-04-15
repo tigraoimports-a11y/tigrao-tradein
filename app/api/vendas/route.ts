@@ -208,7 +208,9 @@ export async function POST(req: NextRequest) {
 
   // Crédito de lojista (abatimento): valor vem em usar_credito_loja (opcional, só ATACADO)
   const usarCreditoLoja = Number(body.usar_credito_loja || 0);
+  const lojistaIdDireto = body._lojista_id || null;
   delete body.usar_credito_loja;
+  delete body._lojista_id;
   // Salvar na coluna credito_lojista_usado (para rastreio na tela de operações)
   if (usarCreditoLoja > 0) body.credito_lojista_usado = usarCreditoLoja;
 
@@ -221,6 +223,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Auto-popular histórico de pagamentos para vendas programadas com sinal
+  if (body.status_pagamento === "PROGRAMADA" && Number(body.sinal_antecipado) > 0) {
+    const sinalHist = {
+      tipo: "SINAL",
+      valor: Number(body.sinal_antecipado),
+      data: body.data || new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }),
+      forma: body.forma_sinal || "PIX",
+      banco: body.banco_sinal || "ITAU",
+    };
+    body.pagamento_historia = [sinalHist];
+  }
+  // Remover campo virtual forma_sinal (não existe na tabela vendas)
+  delete body.forma_sinal;
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
@@ -231,30 +247,35 @@ export async function POST(req: NextRequest) {
 
   // Abater crédito do lojista (se solicitado) — usa tabela `lojistas` (saldo_credito),
   // mesma fonte de verdade da tela Clientes/Lojistas e do lookup na Nova Venda.
-  if (usarCreditoLoja > 0 && (body.tipo === "ATACADO" || body.origem === "ATACADO") && body.cliente) {
+  let creditoDebitError: string | null = null;
+  if (usarCreditoLoja > 0 && (body.tipo === "ATACADO" || body.origem === "ATACADO")) {
     try {
-      // 1) Localiza o lojista por cpf/cnpj/nome
-      const normNome = String(body.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
-      const cpfDig = String(body.cpf || "").replace(/\D/g, "");
-      const cnpjDig = String(body.cnpj || "").replace(/\D/g, "");
-      let lojistaId: string | null = null;
-      if (cpfDig) {
-        const { data: l } = await supabase.from("lojistas").select("id").eq("cpf", cpfDig).maybeSingle();
-        if (l) lojistaId = l.id;
-      }
-      if (!lojistaId && cnpjDig) {
-        const { data: l } = await supabase.from("lojistas").select("id").eq("cnpj", cnpjDig).maybeSingle();
-        if (l) lojistaId = l.id;
-      }
-      if (!lojistaId && normNome) {
-        const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", normNome);
-        if (ls && ls.length > 0) {
-          const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
-          lojistaId = alvo.id;
+      // 1) Usa lojista_id direto se o frontend enviou (mais confiável)
+      let lojistaId: string | null = lojistaIdDireto;
+
+      // 2) Fallback: localiza por cpf/cnpj/nome
+      if (!lojistaId && body.cliente) {
+        const normNome = String(body.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const cpfDig = String(body.cpf || "").replace(/\D/g, "");
+        const cnpjDig = String(body.cnpj || "").replace(/\D/g, "");
+        if (cpfDig) {
+          const { data: l } = await supabase.from("lojistas").select("id").eq("cpf", cpfDig).maybeSingle();
+          if (l) lojistaId = l.id;
+        }
+        if (!lojistaId && cnpjDig) {
+          const { data: l } = await supabase.from("lojistas").select("id").eq("cnpj", cnpjDig).maybeSingle();
+          if (l) lojistaId = l.id;
+        }
+        if (!lojistaId && normNome) {
+          const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", `%${normNome}%`);
+          if (ls && ls.length > 0) {
+            const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
+            lojistaId = alvo.id;
+          }
         }
       }
       if (lojistaId) {
-        await supabase.rpc("mover_saldo_lojista", {
+        const { error: rpcErr } = await supabase.rpc("mover_saldo_lojista", {
           p_lojista_id: lojistaId,
           p_tipo: "DEBITO",
           p_valor: usarCreditoLoja,
@@ -262,11 +283,18 @@ export async function POST(req: NextRequest) {
           p_motivo: `Venda ${data?.id?.slice(0, 8)}`,
           p_usuario: usuario,
         });
-        await logActivity(usuario, "Crédito lojista usado em venda", `${body.cliente}: -R$${usarCreditoLoja}`, "vendas", data?.id);
+        if (rpcErr) {
+          creditoDebitError = `Erro ao debitar crédito: ${rpcErr.message}`;
+          console.error("[Vendas] RPC mover_saldo_lojista erro:", rpcErr);
+        } else {
+          await logActivity(usuario, "Crédito lojista usado em venda", `${body.cliente}: -R$${usarCreditoLoja}`, "vendas", data?.id);
+        }
       } else {
+        creditoDebitError = `Lojista não encontrado para debitar crédito (cliente: ${body.cliente})`;
         console.warn("[Vendas] Crédito solicitado mas lojista não encontrado:", body.cliente);
       }
     } catch (e) {
+      creditoDebitError = `Erro inesperado ao debitar crédito: ${String(e)}`;
       console.error("[Vendas] Erro ao debitar crédito lojista:", e);
     }
   }
@@ -404,6 +432,7 @@ export async function POST(req: NextRequest) {
         origem: sem1Final.origem || null,
         garantia: sem1Final.garantia || null,
         cliente: nomeCliente || null,
+        contato: body.telefone || data?.telefone || null,
         fornecedor: nomeCliente || null,
         data_compra: body.data || data?.data || null,
         updated_at: new Date().toISOString(),
@@ -452,6 +481,7 @@ export async function POST(req: NextRequest) {
         origem: sem2Final.origem || null,
         garantia: sem2Final.garantia || null,
         cliente: nomeCliente2 || null,
+        contato: body.telefone || data?.telefone || null,
         fornecedor: nomeCliente2 || null,
         data_compra: body.data || data?.data || null,
         updated_at: new Date().toISOString(),
@@ -504,7 +534,7 @@ export async function POST(req: NextRequest) {
   // Recalcular saldos do dia automaticamente
   if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
 
-  return NextResponse.json({ ok: true, data });
+  return NextResponse.json({ ok: true, data, ...(creditoDebitError ? { creditoDebitError } : {}) });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -595,15 +625,89 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
+  // Capturar estoque_id novo antes de deletar do fields
+  const novoEstoqueId = fields._estoque_id || null;
+
+  // Capturar crédito de lojista antes de remover campos virtuais
+  const patchCreditoLoja = Number(fields.usar_credito_loja || 0);
+  const patchLojistaId = fields._lojista_id || null;
+
   // Remover campos internos que não existem na tabela vendas
   delete fields._seminovo;
   delete fields._seminovo2;
   delete fields._estoque_id;
-  delete fields.usar_credito_loja; // virtual — só usado no POST
+  delete fields.forma_sinal;
+  delete fields.usar_credito_loja;
+  delete fields._lojista_id;
+
+  // Se tem crédito de lojista, salvar na coluna correta
+  if (patchCreditoLoja > 0) {
+    fields.credito_lojista_usado = patchCreditoLoja;
+  }
+
+  // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
+  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto").eq("id", id).single();
+  const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
+
+  // Se tem novo estoque_id, vincular na venda
+  if (novoEstoqueId) {
+    fields.estoque_id = novoEstoqueId;
+  }
 
   // Todos os campos de troca existem na tabela vendas após migration 20260406_vendas_troca_serial_imei
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
+
+  // Se o produto foi trocado (estoque_id mudou), devolver o antigo ao estoque
+  if (!error && estoqueIdAnterior && novoEstoqueId && estoqueIdAnterior !== novoEstoqueId) {
+    const { data: itemAntigo } = await supabase.from("estoque").select("id, qnt").eq("id", estoqueIdAnterior).single();
+    if (itemAntigo) {
+      await supabase.from("estoque").update({
+        qnt: Number(itemAntigo.qnt || 0) + 1,
+        status: "EM ESTOQUE",
+        updated_at: new Date().toISOString(),
+      }).eq("id", estoqueIdAnterior);
+      console.log(`[Vendas PATCH] Produto anterior devolvido ao estoque: ${estoqueIdAnterior}`);
+    }
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Debitar crédito de lojista (se enviado no PATCH)
+  let patchCreditoDebitError: string | null = null;
+  if (patchCreditoLoja > 0 && data && data.length > 0) {
+    const venda = data[0];
+    try {
+      let lojistaId: string | null = patchLojistaId;
+      if (!lojistaId && venda.cliente) {
+        const normNome = String(venda.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", `%${normNome}%`);
+        if (ls && ls.length > 0) {
+          const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
+          lojistaId = alvo.id;
+        }
+      }
+      if (lojistaId) {
+        const { error: rpcErr } = await supabase.rpc("mover_saldo_lojista", {
+          p_lojista_id: lojistaId,
+          p_tipo: "DEBITO",
+          p_valor: patchCreditoLoja,
+          p_venda_id: id,
+          p_motivo: `Venda ${id.slice(0, 8)} (edição)`,
+          p_usuario: usuario,
+        });
+        if (rpcErr) {
+          patchCreditoDebitError = `Erro ao debitar crédito: ${rpcErr.message}`;
+          console.error("[Vendas PATCH] RPC mover_saldo_lojista erro:", rpcErr);
+        } else {
+          await logActivity(usuario, "Crédito lojista usado em venda (edição)", `${venda.cliente}: -R$${patchCreditoLoja}`, "vendas", id);
+        }
+      } else {
+        patchCreditoDebitError = `Lojista não encontrado para debitar crédito (cliente: ${venda.cliente})`;
+      }
+    } catch (e) {
+      patchCreditoDebitError = `Erro inesperado: ${String(e)}`;
+      console.error("[Vendas PATCH] Erro ao debitar crédito lojista:", e);
+    }
+  }
 
   // Se serial_no foi atualizado, marcar estoque correspondente como ESGOTADO
   // (previne itens vendidos que ficam "EM ESTOQUE" por falta de vínculo)
@@ -658,7 +762,7 @@ export async function PATCH(req: NextRequest) {
           to: venda.email!,
           clienteNome: venda.cliente || "Cliente",
           produto: `${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim(),
-          valor: Number(venda.preco_vendido || 0),
+          valor: Number(venda.preco_vendido || 0) - Number(venda.credito_lojista_usado || 0),
           notaFiscalUrl: venda.nota_fiscal_url!,
         }).then(() => {
           console.log("[Vendas] NF enviada por email para:", venda.email);
@@ -784,6 +888,7 @@ export async function PATCH(req: NextRequest) {
             imei: venda.troca_imei ? String(venda.troca_imei).toUpperCase() : null,
             garantia: venda.troca_garantia || null,
             cliente: nomeCliente,
+            contato: venda.telefone || null,
             fornecedor: nomeCliente,
             data_compra: venda.data,
             updated_at: new Date().toISOString(),
@@ -840,6 +945,7 @@ export async function PATCH(req: NextRequest) {
             imei: venda.troca_imei2 ? String(venda.troca_imei2).toUpperCase() : null,
             garantia: venda.troca_garantia2 || null,
             cliente: nomeCliente,
+            contato: venda.telefone || null,
             fornecedor: nomeCliente,
             data_compra: venda.data,
             updated_at: new Date().toISOString(),
@@ -851,7 +957,7 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, updated: data });
+  return NextResponse.json({ ok: true, updated: data, ...(patchCreditoDebitError ? { creditoDebitError: patchCreditoDebitError } : {}) });
 }
 
 export async function DELETE(req: NextRequest) {
