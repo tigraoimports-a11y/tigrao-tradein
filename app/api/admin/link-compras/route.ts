@@ -223,7 +223,7 @@ export async function PATCH(request: Request) {
     "troca_produto", "troca_valor", "troca_condicao", "troca_cor",
     "troca_produto2", "troca_valor2", "troca_condicao2", "troca_cor2",
     "vendedor", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
-    "pagamento_pago",
+    "pagamento_pago", "taxa_entrega",
     "mp_link", "mp_preference_id",
   ];
   for (const k of editableFields) {

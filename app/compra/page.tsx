@@ -130,6 +130,7 @@ function CompraForm() {
   const shoppingParam = searchParams.get("shopping") || "";
   const horarioParam = searchParams.get("horario") || "";
   const dataEntregaParam = searchParams.get("data_entrega") || "";
+  const taxaEntregaParam = parseFloat(searchParams.get("taxa_entrega") || "0") || 0;
 
   // Produtos adicionais (vindo do gerador de link) — com preço individual
   const produtosExtras: { nome: string; preco: number }[] = [];
@@ -557,6 +558,7 @@ function CompraForm() {
       lines.push(`*Data:* ${d}/${m}/${y}`);
     }
     lines.push(`*Local:* ${localStr}`);
+    if (taxaEntregaParam > 0) lines.push(`*Taxa de entrega:* R$ ${fmt(taxaEntregaParam)}`);
     if (pagEntrega) lines.push(pagEntrega);
     if (local === "Entrega" && !pagamentoPagoParam) {
       lines.push("");
