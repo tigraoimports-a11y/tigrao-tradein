@@ -467,12 +467,16 @@ function CompraForm() {
       ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
       ...(descontoParam > 0 ? [`*Total final:* R$ ${fmt(valorBaseFinal)}`] : []),
       `*Forma de pagamento:* ${pagStr}`,
-      // Detalhes do pagamento MP (quando pago via link MP)
+      // Detalhes do pagamento MP (quando pago via link MP).
+      // Valor pago = valorBaseFinal (preço - desconto - troca).
+      // NÃO expomos URL de "comprovante" porque mercadopago.com.br/activities/...
+      // só é acessível logado na conta que RECEBEU o pagamento (vendedor),
+      // não é público pro cliente.
+      ...(pagamentoPagoParam === "mp" && valorBaseFinal > 0
+        ? [`*Valor pago no link:* R$ ${fmt(valorBaseFinal)}`]
+        : []),
       ...(pagamentoPagoParam === "mp" && mpPaymentId
-        ? [
-            `*ID do pagamento MP:* ${mpPaymentId}`,
-            `*Comprovante:* https://www.mercadopago.com.br/activities/1/detail/${mpPaymentId}`,
-          ]
+        ? [`*ID do pagamento MP:* ${mpPaymentId}`]
         : []),
       ...(pagamentoPagoParam === "mp" && !mpPaymentId && mpPreferenceId
         ? [`*Preference MP:* ${mpPreferenceId}`]
