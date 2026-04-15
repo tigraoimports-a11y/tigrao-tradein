@@ -143,6 +143,7 @@ export default function VendasPage() {
     codigo_rastreio: "",
   });
   const [creditoLojistaSaldo, setCreditoLojistaSaldo] = useState(0);
+  const [creditoLojistaId, setCreditoLojistaId] = useState<string | null>(null);
   // Restaurar rascunho do localStorage ao montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -626,6 +627,7 @@ export default function VendasPage() {
   useEffect(() => {
     if (form.tipo !== "ATACADO" || (!form.cliente && !form.cpf && !form.cnpj)) {
       setCreditoLojistaSaldo(0);
+      setCreditoLojistaId(null);
       return;
     }
     const timer = setTimeout(async () => {
@@ -640,6 +642,7 @@ export default function VendasPage() {
           const json = await res.json();
           const saldo = Number(json.saldo || 0);
           setCreditoLojistaSaldo(saldo);
+          setCreditoLojistaId(json.lojista?.id || null);
           // Fallback: se veio cpf/cnpj e não achou, tenta só pelo nome
           if (saldo === 0 && form.cliente && (form.cpf || form.cnpj)) {
             const p2 = new URLSearchParams({ nome: form.cliente });
@@ -647,6 +650,7 @@ export default function VendasPage() {
             if (r2.ok) {
               const j2 = await r2.json();
               setCreditoLojistaSaldo(Number(j2.saldo || 0));
+              setCreditoLojistaId(j2.lojista?.id || null);
             }
           }
         }
@@ -1053,6 +1057,7 @@ export default function VendasPage() {
       frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
+      _lojista_id: creditoLojistaId || null,
       // Rastreio Correios
       codigo_rastreio: form.local === "CORREIO" && form.codigo_rastreio ? form.codigo_rastreio.trim().toUpperCase() : null,
     };
@@ -1513,6 +1518,9 @@ export default function VendasPage() {
         if (json.ok) {
           successCount++;
           if (json.data?.id) savedVendaIds.push(json.data.id);
+          if (json.creditoDebitError) {
+            errors.push(`⚠️ Crédito lojista: ${json.creditoDebitError}`);
+          }
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
