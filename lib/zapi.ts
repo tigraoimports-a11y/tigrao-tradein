@@ -9,6 +9,7 @@
 //   ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN
 //   ZAPI_GRUPO_PAGAMENTOS  — destino pra notificações de pagamento aprovado
 //                            (pode ser número pessoal "5521999999999"
+//                             OU ID de grupo "120363025xxx-group"
 //                             OU ID de grupo "120363025xxx@g.us")
 
 /**
@@ -35,9 +36,14 @@ export async function sendZApiMessage(
     return false;
   }
 
-  // Normaliza número (só pra DMs — grupos têm @g.us e passam pelo filtro abaixo)
+  // Grupos Z-API podem vir em 2 formatos:
+  //   1. "120363025xxx-group"   ← formato que o /chats da Z-API retorna
+  //   2. "120363025xxx@g.us"    ← formato legado do WhatsApp
+  // Qualquer um dos dois é enviado direto, sem normalizar.
+  // Só fazemos normalização de DDI pra DMs (número puro).
+  const isGroup = destino.includes("@g.us") || destino.endsWith("-group");
   let phone = destino;
-  if (!destino.includes("@")) {
+  if (!isGroup && !destino.includes("@")) {
     phone = destino.replace(/\D/g, "");
     if (!phone.startsWith("55") && phone.length >= 10) phone = `55${phone}`;
   }
