@@ -467,12 +467,16 @@ function CompraForm() {
       ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
       ...(descontoParam > 0 ? [`*Total final:* R$ ${fmt(valorBaseFinal)}`] : []),
       `*Forma de pagamento:* ${pagStr}`,
-      // Detalhes do pagamento MP (quando pago via link MP)
+      // Detalhes do pagamento MP (quando pago via link MP).
+      // Valor pago = valorBaseFinal (preço - desconto - troca).
+      // NÃO expomos URL de "comprovante" porque mercadopago.com.br/activities/...
+      // só é acessível logado na conta que RECEBEU o pagamento (vendedor),
+      // não é público pro cliente.
+      ...(pagamentoPagoParam === "mp" && valorBaseFinal > 0
+        ? [`*Valor pago no link:* R$ ${fmt(valorBaseFinal)}`]
+        : []),
       ...(pagamentoPagoParam === "mp" && mpPaymentId
-        ? [
-            `*ID do pagamento MP:* ${mpPaymentId}`,
-            `*Comprovante:* https://www.mercadopago.com.br/activities/1/detail/${mpPaymentId}`,
-          ]
+        ? [`*ID do pagamento MP:* ${mpPaymentId}`]
         : []),
       ...(pagamentoPagoParam === "mp" && !mpPaymentId && mpPreferenceId
         ? [`*Preference MP:* ${mpPreferenceId}`]
@@ -902,6 +906,15 @@ function CompraForm() {
           {!editPagamento && formaPagamento && (
             <div className="space-y-2">
               <div className="p-3 rounded-lg bg-green-50 border border-green-200 space-y-1.5">
+                {/* Quando pagamento já foi efetuado (link / pix / mp), mostra o status.
+                    Sem esse bloco a faixa verde ficaria vazia nesses casos porque
+                    não temos parcelas/entrada/PIX pra renderizar. */}
+                {pagamentoPagoParam && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-[#86868B]">Status</span>
+                    <span className="font-bold text-green-600">&#x2705; {formaPagamento}</span>
+                  </div>
+                )}
                 {entradaPixParam && parseFloat(entradaPixParam) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-[#86868B]">Entrada no PIX</span>

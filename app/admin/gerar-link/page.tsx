@@ -1054,14 +1054,43 @@ export default function GerarLinkPage() {
     for (let i = 1; i < prodsFilled.length; i++) {
       shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
     }
-    // Usa valorComTaxa (valor efetivamente pago no MP) em vez de rawPreco
-    shortData.v = String(valorComTaxa);
+    // IMPORTANTE: passamos o `rawPreco` (valor cheio do produto) e não o
+    // `valorComTaxa` porque o /compra recalcula `valorBase = preco - desconto - troca`.
+    // Se passássemos valorComTaxa (que já desconta troca), o form subtrairia
+    // troca de novo e daria valor errado.
+    if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    if (descontoNum > 0) shortData.dc = String(descontoNum);
     shortData.s = vendedorNome || "";
     shortData.w = whatsappDestino;
     if (localEntrega) shortData.l = localEntrega;
     if (shoppingNome) shortData.sh = shoppingNome;
     if (horario) shortData.h = horario;
     if (dataEntrega) shortData.dt = dataEntrega;
+
+    // Dados de troca — pra seção "Troca confirmada" aparecer preenchida no /compra
+    if (trocaProduto) shortData.tp = trocaProduto;
+    if (trocaCondicao) shortData.tcd = trocaCondicao;
+    if (trocaCor) shortData.tc = trocaCor;
+    const rawTrocaMp = trocaValor.replace(/\./g, "").replace(",", ".");
+    if (rawTrocaMp && rawTrocaMp !== "0") shortData.tv = rawTrocaMp;
+    if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
+    if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
+    if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
+    const rawTroca2Mp = trocaValor2.replace(/\./g, "").replace(",", ".");
+    if (temSegundaTroca && rawTroca2Mp && rawTroca2Mp !== "0") shortData.tv2 = rawTroca2Mp;
+
+    // Dados do cliente pré-preenchidos (quando o vendedor incluir)
+    if (incluirDadosCliente) {
+      if (cliNome.trim()) shortData.cn = cliNome.trim();
+      if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
+      if (cliEmail.trim()) shortData.cem = cliEmail.trim();
+      if (cliTelefone.trim()) shortData.cte = cliTelefone.trim();
+      if (cliCep.trim()) shortData.ccep = cliCep.trim();
+      if (cliEndereco.trim()) shortData.cen = cliEndereco.trim();
+      if (cliNumero.trim()) shortData.cnu = cliNumero.trim();
+      if (cliComplemento.trim()) shortData.cco = cliComplemento.trim();
+      if (cliBairro.trim()) shortData.cba = cliBairro.trim();
+    }
 
     setMpLoading(true);
     try {
