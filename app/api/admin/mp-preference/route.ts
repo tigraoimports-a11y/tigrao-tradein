@@ -52,12 +52,9 @@ export async function POST(request: Request) {
 
   const titulo = (body.titulo || "").trim();
   const valor = Number(body.valor);
-  // Default: 12x (cliente escolhe livremente). A config de "parcelado vendedor"
-  // na conta MP é quem define quais parcelas são sem juros.
-  const maxParcelas = Math.max(1, Math.min(12, Number(body.maxParcelas) || 12));
-  const defaultInst = body.defaultInstallments
-    ? Math.max(1, Math.min(maxParcelas, Number(body.defaultInstallments)))
-    : undefined;
+  // Campos `maxParcelas` e `defaultInstallments` ainda aceitos no body pra
+  // compatibilidade com frontends antigos, mas IGNORADOS — o parcelamento é
+  // controlado 100% pelo painel "Parcelado vendedor" do MP (ver payload abaixo).
 
   if (!titulo) {
     return NextResponse.json({ error: "titulo obrigatório" }, { status: 400 });
@@ -104,9 +101,11 @@ export async function POST(request: Request) {
       },
     ],
     payment_methods: {
-      installments: maxParcelas, // Máximo de parcelas que o cliente pode escolher
-      ...(defaultInst ? { default_installments: defaultInst } : {}),
-      // Excluir boleto (só cartão e PIX/crédito)
+      // ⚠️ NÃO enviamos `installments` nem `default_installments` aqui.
+      // Suporte MP confirmou: enviar `installments` sobrescreve as regras do
+      // "Parcelado vendedor" configurado no painel, fazendo o checkout cobrar
+      // juros mesmo com a config de 12x sem juros ativa na conta.
+      // Sem esses campos, MP usa a config do painel automaticamente.
       excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
     },
     back_urls: {

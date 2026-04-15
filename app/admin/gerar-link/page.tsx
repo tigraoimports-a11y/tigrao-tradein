@@ -1039,6 +1039,7 @@ export default function GerarLinkPage() {
     // produto, vendedor, entrega). Client data e forma pagamento ficam por
     // conta do /compra + override do pagamento_pago=mp.
     const corPTSimples = useCart ? (carrinhoLink[0].cor || "") : (corSel ? corParaPT(corSel) : "");
+    const corENCanon = useCart ? (carrinhoLink[0].corEN || "") : (corSel ? (corParaEN(corSel) || corSel) : "");
     const nomeProdutoFinal = corPTSimples ? `${prodsFilled[0]} ${corPTSimples}` : prodsFilled[0];
     const aplicarCorExtra = (nome: string, idx: number): string => {
       if (useCart) {
@@ -1056,14 +1057,43 @@ export default function GerarLinkPage() {
     for (let i = 1; i < prodsFilled.length; i++) {
       shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
     }
-    // Usa valorComTaxa (valor efetivamente pago no MP) em vez de rawPreco
-    shortData.v = String(valorComTaxa);
+    // IMPORTANTE: passamos o `rawPreco` (valor cheio do produto) e não o
+    // `valorComTaxa` porque o /compra recalcula `valorBase = preco - desconto - troca`.
+    // Se passássemos valorComTaxa (que já desconta troca), o form subtrairia
+    // troca de novo e daria valor errado.
+    if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    if (descontoNum > 0) shortData.dc = String(descontoNum);
     shortData.s = vendedorNome || "";
     shortData.w = whatsappDestino;
     if (localEntrega) shortData.l = localEntrega;
     if (shoppingNome) shortData.sh = shoppingNome;
     if (horario) shortData.h = horario;
     if (dataEntrega) shortData.dt = dataEntrega;
+
+    // Dados de troca — pra seção "Troca confirmada" aparecer preenchida no /compra
+    if (trocaProduto) shortData.tp = trocaProduto;
+    if (trocaCondicao) shortData.tcd = trocaCondicao;
+    if (trocaCor) shortData.tc = trocaCor;
+    const rawTrocaMp = trocaValor.replace(/\./g, "").replace(",", ".");
+    if (rawTrocaMp && rawTrocaMp !== "0") shortData.tv = rawTrocaMp;
+    if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
+    if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
+    if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
+    const rawTroca2Mp = trocaValor2.replace(/\./g, "").replace(",", ".");
+    if (temSegundaTroca && rawTroca2Mp && rawTroca2Mp !== "0") shortData.tv2 = rawTroca2Mp;
+
+    // Dados do cliente pré-preenchidos (quando o vendedor incluir)
+    if (incluirDadosCliente) {
+      if (cliNome.trim()) shortData.cn = cliNome.trim();
+      if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
+      if (cliEmail.trim()) shortData.cem = cliEmail.trim();
+      if (cliTelefone.trim()) shortData.cte = cliTelefone.trim();
+      if (cliCep.trim()) shortData.ccep = cliCep.trim();
+      if (cliEndereco.trim()) shortData.cen = cliEndereco.trim();
+      if (cliNumero.trim()) shortData.cnu = cliNumero.trim();
+      if (cliComplemento.trim()) shortData.cco = cliComplemento.trim();
+      if (cliBairro.trim()) shortData.cba = cliBairro.trim();
+    }
 
     setMpLoading(true);
     try {
@@ -1098,7 +1128,44 @@ export default function GerarLinkPage() {
         setMpErr(data?.error || "Falha ao gerar link MP.");
         return;
       }
-      setMpLink(data.init_point || data.sandbox_init_point || "");
+      const initPoint = data.init_point || data.sandbox_init_point || "";
+      setMpLink(initPoint);
+
+      // 3. Salvar no histórico persistente (mesma tabela dos links comuns).
+      // Assim o link MP aparece no /admin/historico-links junto com os demais,
+      // com `forma_pagamento="mp"` e os campos `mp_link`/`mp_preference_id`
+      // pra diferenciar e permitir reenvio/rastreio via webhook MP.
+      if (shortCode) {
+        try {
+          const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+          const urlCurta = `${baseUrl}/c/${shortCode}`;
+          await fetch("/api/admin/link-compras", {
+            method: "POST",
+            headers: adminHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              short_code: shortCode,
+              url_curta: urlCurta,
+              tipo: "COMPRA",
+              cliente_nome: cliNome.trim() || null,
+              cliente_telefone: cliTelefone.trim() || null,
+              cliente_cpf: cliCpf.trim() || null,
+              cliente_email: cliEmail.trim() || null,
+              produto: nomeProdutoFinal,
+              produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
+              cor: corENCanon || null,
+              valor: valorComTaxa,
+              forma_pagamento: "mp",
+              parcelas: numParcelas > 0 ? String(numParcelas) : null,
+              vendedor: vendedorNome || null,
+              simulacao_id: simulacaoId,
+              mp_link: initPoint,
+              mp_preference_id: data.preference_id || null,
+            }),
+          });
+        } catch {
+          // Não bloqueia o fluxo: o link MP já foi gerado, só falhou o histórico.
+        }
+      }
     } catch {
       setMpErr("Erro de rede ao contatar o servidor.");
     } finally {
