@@ -9,10 +9,17 @@ interface Grupo {
   ultimaMensagem: string | null;
 }
 
+interface ErroDetalhado {
+  msg: string;
+  status?: number;
+  hint?: string;
+  details?: unknown;
+}
+
 export default function ZapiGruposPage() {
   const { password } = useAdmin();
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState("");
+  const [erro, setErro] = useState<ErroDetalhado | null>(null);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [totalChats, setTotalChats] = useState(0);
   const [copiado, setCopiado] = useState<string | null>(null);
@@ -22,17 +29,25 @@ export default function ZapiGruposPage() {
   useEffect(() => {
     if (!password) return;
     setLoading(true);
-    setErro("");
+    setErro(null);
     fetch("/api/admin/zapi-groups", { headers: { "x-admin-password": password } })
       .then(async (r) => {
         const json = await r.json();
-        if (!r.ok) throw new Error(json.error || "Erro ao buscar grupos");
+        if (!r.ok) {
+          setErro({
+            msg: json.error || "Erro ao buscar grupos",
+            status: json.status,
+            hint: json.hint,
+            details: json.details,
+          });
+          return;
+        }
         setGrupos(json.groups || []);
         setTotalChats(json.totalChats || 0);
         setPhoneConectado(json.phoneConectado || null);
         setNomeConectado(json.nomeConectado || null);
       })
-      .catch((err) => setErro(String(err?.message || err)))
+      .catch((err) => setErro({ msg: String(err?.message || err) }))
       .finally(() => setLoading(false));
   }, [password]);
 
@@ -99,8 +114,25 @@ export default function ZapiGruposPage() {
       )}
 
       {erro && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-900">
-          <strong>Erro:</strong> {erro}
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-900 space-y-2">
+          <div>
+            <strong>Erro:</strong> {erro.msg}
+          </div>
+          {erro.hint && (
+            <div className="text-xs bg-red-100 rounded p-2">
+              <strong>Dica:</strong> {erro.hint}
+            </div>
+          )}
+          {erro.details !== undefined && erro.details !== null && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-red-700">Detalhes técnicos</summary>
+              <pre className="bg-red-100 rounded p-2 mt-1 overflow-auto max-h-60 whitespace-pre-wrap break-all">
+                {typeof erro.details === "string"
+                  ? erro.details
+                  : JSON.stringify(erro.details, null, 2)}
+              </pre>
+            </details>
+          )}
         </div>
       )}
 
