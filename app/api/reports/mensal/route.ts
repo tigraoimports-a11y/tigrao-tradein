@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
         .select("data, cliente, produto, preco_vendido, custo, lucro, tipo, origem, forma, banco, qnt_parcelas, status_pagamento, bairro, local, produto_na_troca")
         .gte("data", dataInicio)
         .lte("data", dataFim)
+        .neq("status_pagamento", "CANCELADO")
+        .neq("status_pagamento", "PROGRAMADA")
         .order("data"),
       supabase
         .from("gastos")

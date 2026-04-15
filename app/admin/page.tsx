@@ -121,8 +121,13 @@ export default function DashboardPage() {
   };
 
   // Vendas do mês
-  const vendasMes = data.vendas.filter(v => v.data?.startsWith(mesAtual) && v.status_pagamento !== "CANCELADO");
-  const vendasHoje = data.vendas.filter(v => v.data === hoje && v.status_pagamento !== "CANCELADO");
+  const vendasMes = data.vendas.filter(v => v.data?.startsWith(mesAtual) && v.status_pagamento !== "CANCELADO" && v.status_pagamento !== "PROGRAMADA");
+  const vendasHoje = data.vendas.filter(v => v.data === hoje && v.status_pagamento !== "CANCELADO" && v.status_pagamento !== "PROGRAMADA");
+  // Vendas programadas — pipeline futuro
+  const vendasProgramadas = data.vendas.filter(v => v.status_pagamento === "PROGRAMADA");
+  const receitaFutura = vendasProgramadas.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+  const sinalRecebido = vendasProgramadas.reduce((s, v) => s + (Number((v as unknown as Record<string, unknown>).sinal_antecipado) || 0), 0);
+  const saldoAReceber = receitaFutura - sinalRecebido;
 
   // Gastos do mês
   const gastosMes = data.gastos.filter(g => g.data?.startsWith(mesAtual));
@@ -560,6 +565,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card icon="📦" title="Capital em Produtos" value={fmt(capitalProdutos)} color="text-blue-700" sub={`Estoque: ${fmt(valorEstoque)} | A caminho: ${fmt(valorACaminho)}${valorPendencias > 0 ? ` | Pendências: ${fmt(valorPendencias)}` : ""}`} />
           <Card icon="⏳" title={`Vendas Pendentes (${vendasPendentes.length})`} value={fmt(valorPendente)} color="text-yellow-600" sub={vendasPendentes.slice(0, 3).map(v => v.cliente).join(" | ") || "Nenhuma"} />
+          {vendasProgramadas.length > 0 && (
+            <Card icon="📅" title={`Programadas (${vendasProgramadas.length})`} value={fmt(receitaFutura)} color="text-amber-600" sub={`Sinal: ${fmt(sinalRecebido)} | A receber: ${fmt(saldoAReceber)}`} />
+          )}
           <Card icon="⚠️" title={`Pendências Troca`} value={String(data.pendencias)} color="text-red-600" sub="Aguardando devolução" />
         </div>
       </div>

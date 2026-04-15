@@ -3775,8 +3775,9 @@ export default function VendasPage() {
           const datasOrdenadas = [...vendasPorData.keys()].sort((a, b) => b.localeCompare(a));
 
           const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : tab === "correios" ? "📦 Envios pelos Correios" : tab === "programadas" ? "Vendas Programadas" : "Histórico de Vendas";
-          const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
-          const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
+          const filteredFinanceiro = filtered.filter(v => v.status_pagamento !== "PROGRAMADA");
+          const totalVendido = filteredFinanceiro.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+          const totalLucro = filteredFinanceiro.reduce((s, v) => s + (v.lucro || 0), 0);
 
           return (
             <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
@@ -3923,8 +3924,9 @@ export default function VendasPage() {
                     <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : tab === "correios" ? "com rastreio dos Correios" : "finalizada"}</div>
                   ) : datasOrdenadas.map((dataKey) => {
                     const vendasDoDia = vendasPorData.get(dataKey) || [];
-                    const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
-                    const vendidoDia = vendasDoDia.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+                    const vendasDoDiaFinanceiro = vendasDoDia.filter(v => v.status_pagamento !== "PROGRAMADA");
+                    const lucroDia = vendasDoDiaFinanceiro.reduce((s, v) => s + (v.lucro || 0), 0);
+                    const vendidoDia = vendasDoDiaFinanceiro.reduce((s, v) => s + (v.preco_vendido || 0), 0);
                     const qtdDia = vendasDoDia.length;
                     const [y, m, d] = (dataKey || "").split("-");
                     const dataLabel = d && m && y ? `${d}/${m}/${y}` : dataKey;
@@ -4082,8 +4084,17 @@ export default function VendasPage() {
                               </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
                               <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
-                              <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
-                              <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                              {v.status_pagamento === "PROGRAMADA" ? (
+                                <>
+                                  <td className="px-3 py-2.5 text-xs"><span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold text-[10px]">Programada</span></td>
+                                  <td className="px-3 py-2.5 text-xs"><span className="text-amber-600 text-[10px]">—</span></td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
+                                  <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                                </>
+                              )}
                               <td className="px-3 py-2.5 text-xs max-w-[250px]">
                                 <div className="space-y-0.5">
                                   {pagParts.map((p, i) => (
@@ -4969,6 +4980,85 @@ export default function VendasPage() {
                                         </div>
                                       )}
                                     </div>
+
+                                    {/* Histórico de pagamentos (vendas programadas) */}
+                                    {(v.status_pagamento === "PROGRAMADA" || (Array.isArray((v as unknown as Record<string, unknown>).pagamento_historia) && ((v as unknown as Record<string, unknown>).pagamento_historia as unknown[]).length > 0)) && (() => {
+                                      const hist = (Array.isArray((v as unknown as Record<string, unknown>).pagamento_historia) ? (v as unknown as Record<string, unknown>).pagamento_historia : []) as { tipo: string; valor: number; data: string; forma: string; banco: string; obs?: string }[];
+                                      const totalPago = hist.reduce((s, p) => s + (p.valor || 0), 0);
+                                      const totalVenda = v.preco_vendido || 0;
+                                      const saldoRestante = Math.max(0, totalVenda - totalPago);
+                                      return (
+                                        <div className="space-y-2" onClick={e => e.stopPropagation()}>
+                                          <h4 className="text-xs font-bold text-amber-600 uppercase">💰 Pagamentos</h4>
+                                          <div className="flex gap-4 text-xs mb-2">
+                                            <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Total: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(totalVenda)}</strong></span>
+                                            <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Pago: <strong className="text-green-600">{fmt(totalPago)}</strong></span>
+                                            {saldoRestante > 0 && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Restante: <strong className="text-amber-600">{fmt(saldoRestante)}</strong></span>}
+                                          </div>
+                                          {hist.length > 0 && (
+                                            <div className="space-y-1">
+                                              {hist.map((p, i) => (
+                                                <div key={i} className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]"}`}>
+                                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${p.tipo === "SINAL" ? "bg-blue-100 text-blue-700" : p.tipo === "FINAL" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{p.tipo}</span>
+                                                  <span className="font-bold text-green-600">{fmt(p.valor)}</span>
+                                                  <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{p.forma} {p.banco}</span>
+                                                  <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{p.data?.split("-").reverse().join("/")}</span>
+                                                  {p.obs && <span className={dm ? "text-[#6E6E73]" : "text-[#86868B]"}>({p.obs})</span>}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {hist.length === 0 && v.sinal_antecipado > 0 && (
+                                            <div className={`px-3 py-1.5 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]"}`}>
+                                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700">SINAL</span>
+                                              <span className="ml-2 font-bold text-green-600">{fmt(v.sinal_antecipado)}</span>
+                                              <span className={`ml-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{v.banco_sinal || "—"}</span>
+                                            </div>
+                                          )}
+                                          {saldoRestante > 0 && (
+                                            <div className="mt-2">
+                                              <button
+                                                onClick={() => {
+                                                  const valorStr = prompt(`Valor do pagamento (restante: R$ ${saldoRestante.toLocaleString("pt-BR")}):`);
+                                                  if (!valorStr) return;
+                                                  const valor = parseFloat(valorStr.replace(/\./g, "").replace(",", ".")) || 0;
+                                                  if (valor <= 0) return;
+                                                  const forma = prompt("Forma: PIX, CARTAO, DINHEIRO, DEBITO") || "PIX";
+                                                  const banco = prompt("Banco: ITAU, INFINITE, MERCADO_PAGO, ESPECIE") || "ITAU";
+                                                  const tipo = valor >= saldoRestante ? "FINAL" : "PARCIAL";
+                                                  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+                                                  const novoPag = { tipo, valor, data: hoje, forma: forma.toUpperCase(), banco: banco.toUpperCase() };
+                                                  const novaHist = [...hist, novoPag];
+                                                  const novoTotalPago = novaHist.reduce((s, p) => s + (p.valor || 0), 0);
+                                                  const updates: Record<string, unknown> = { id: v.id, pagamento_historia: novaHist };
+                                                  // Se pagou tudo, finalizar a venda
+                                                  if (novoTotalPago >= totalVenda) {
+                                                    updates.status_pagamento = "FINALIZADO";
+                                                    updates.forma = novoPag.forma;
+                                                    updates.banco = novoPag.banco;
+                                                  }
+                                                  fetch("/api/vendas", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                    body: JSON.stringify(updates),
+                                                  }).then(r => r.json()).then(json => {
+                                                    if (json.ok || json.data) {
+                                                      setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updates, pagamento_historia: novaHist } as typeof r : r));
+                                                      setMsg(novoTotalPago >= totalVenda ? `Pagamento final registrado! Venda finalizada.` : `Pagamento de ${fmt(valor)} registrado.`);
+                                                    } else {
+                                                      alert("Erro: " + (json.error || "falha"));
+                                                    }
+                                                  }).catch(() => alert("Erro de conexão"));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-300 hover:bg-green-50 transition-colors"
+                                              >
+                                                + Registrar Pagamento
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Detalhes da venda */}
                                     <div className="space-y-2">

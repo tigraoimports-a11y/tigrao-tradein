@@ -35,8 +35,8 @@ export async function gerarParcial(
     .order("created_at", { ascending: false });
 
   const rows = (vendas ?? []) as Venda[];
-  // Excluir brindes dos cálculos financeiros
-  const activeRows = rows.filter(v => !v.is_brinde);
+  // Excluir brindes e programadas dos cálculos financeiros
+  const activeRows = rows.filter(v => !v.is_brinde && v.status_pagamento !== "PROGRAMADA");
   const totalVendas = activeRows.length;
   const receitaBruta = activeRows.reduce((s, v) => s + Number(v.preco_vendido), 0);
   const lucroTotal = activeRows.reduce((s, v) => s + Number(v.lucro), 0);
@@ -116,7 +116,8 @@ export async function gerarNoite(
     .select("*")
     .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .eq("recebimento", "D+0")
-    .neq("status_pagamento", "CANCELADO");
+    .neq("status_pagamento", "CANCELADO")
+    .neq("status_pagamento", "PROGRAMADA");
 
   const d0 = (vendasHoje ?? []) as Venda[];
   let pix_itau = sumByBanco(d0, "ITAU");
@@ -130,7 +131,8 @@ export async function gerarNoite(
     .select("*")
     .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .eq("recebimento", "D+1")
-    .neq("status_pagamento", "CANCELADO");
+    .neq("status_pagamento", "CANCELADO")
+    .neq("status_pagamento", "PROGRAMADA");
 
   for (const v of (vendasD1Hoje ?? []) as Venda[]) {
     const pixVal = Number(v.entrada_pix || 0);
@@ -254,7 +256,8 @@ export async function gerarNoite(
     .from("vendas")
     .select("preco_vendido, lucro, custo, origem, tipo, margem_pct, is_brinde")
     .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
-    .neq("status_pagamento", "CANCELADO");
+    .neq("status_pagamento", "CANCELADO")
+    .neq("status_pagamento", "PROGRAMADA");
 
   const allRaw = (todasVendas ?? []) as { preco_vendido: number; lucro: number; custo: number; origem: string; tipo: string; margem_pct: number; is_brinde?: boolean }[];
   const all = allRaw.filter(v => !v.is_brinde);
@@ -400,11 +403,13 @@ export async function gerarManha(
   const inicioMes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-01`;
   const { data: vendasMes } = await supabase
     .from("vendas")
-    .select("preco_vendido, lucro")
+    .select("preco_vendido, lucro, status_pagamento")
     .gte("data", inicioMes)
-    .lte("data", dataISO);
+    .lte("data", dataISO)
+    .neq("status_pagamento", "CANCELADO")
+    .neq("status_pagamento", "PROGRAMADA");
 
-  const mesRows = (vendasMes ?? []) as { preco_vendido: number; lucro: number }[];
+  const mesRows = (vendasMes ?? []) as { preco_vendido: number; lucro: number; status_pagamento: string }[];
   const faturamentoMes = mesRows.reduce((s, v) => s + Number(v.preco_vendido), 0);
 
   // 5. Fiado pendente
