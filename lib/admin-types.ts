@@ -91,6 +91,8 @@ export interface Venda {
   credito_lojista_usado: number;
   // Código de rastreio dos Correios
   codigo_rastreio: string | null;
+  // Histórico de pagamentos (vendas programadas com múltiplos pagamentos)
+  pagamento_historia: { tipo: string; valor: number; data: string; forma: string; banco: string; obs?: string }[];
 }
 
 export interface Reajuste {

@@ -221,6 +221,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Auto-popular histórico de pagamentos para vendas programadas com sinal
+  if (body.status_pagamento === "PROGRAMADA" && Number(body.sinal_antecipado) > 0) {
+    const sinalHist = {
+      tipo: "SINAL",
+      valor: Number(body.sinal_antecipado),
+      data: body.data || new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }),
+      forma: "PIX",
+      banco: body.banco_sinal || "ITAU",
+    };
+    body.pagamento_historia = [sinalHist];
+  }
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
