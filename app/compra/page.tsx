@@ -418,7 +418,6 @@ function CompraForm() {
     // Pagamento estruturado (bloco de linhas).
     // Caso especial: pagamento_pago=mp com entrada PIX → fluxo "dividido"
     // (link MP pagou o parcelado, PIX fica pendente na retirada).
-    // Split em "Pagamento 1: Link MP ✅ PAGO" + "Pagamento 2: PIX ⏳ PENDENTE".
     const isMpComPixPendente = pagamentoPagoParam === "mp" && entradaFinal > 0;
     const pagLines: string[] = [];
     if (isMpComPixPendente && parcelasCalc) {

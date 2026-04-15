@@ -1366,44 +1366,13 @@ export default function EntregasPage() {
               <p className={labelCls}>Bairro</p>
               <input value={form.bairro} onChange={(e) => set("bairro", e.target.value)} placeholder="Ex: Barra da Tijuca" className={inputCls} />
             </div>
-            <div className="col-span-2 md:col-span-3 p-3 rounded-xl border border-[#E5E5EA] bg-[#FAFAFA] space-y-3">
-              <p className="text-xs font-bold text-[#86868B] uppercase tracking-wider">Endereços</p>
-              <div>
-                <p className={labelCls}>Endereço do cliente (cadastro)</p>
-                <input value={form.endereco} readOnly placeholder="Preenchido ao colar dados do cliente" className={`${inputCls} opacity-70 cursor-not-allowed`} />
-              </div>
-              <div>
-                <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Endereço da coleta" : "Endereço de entrega"}</p>
-                <input value={form.endereco_entrega} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder={modoColeta || form.tipo === "COLETA" ? "Onde será feita a coleta" : "Onde será entregue (default = cadastro)"} className={inputCls} />
-              </div>
+            <div className="col-span-2 md:col-span-3">
+              <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Endereço da coleta" : "Endereço de entrega"}</p>
+              <input value={form.endereco_entrega || form.endereco} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder={modoColeta || form.tipo === "COLETA" ? "Endereço completo para coleta" : "Endereço completo para entrega"} className={inputCls} />
+              {form.endereco && form.endereco_entrega && form.endereco_entrega !== form.endereco && (
+                <p className="text-[10px] text-[#86868B] mt-1">📋 Cadastro: {form.endereco}</p>
+              )}
             </div>
-            <div>
-              <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Local da Coleta" : "Local de Entrega"}</p>
-              <select value={form.local_entrega} onChange={(e) => {
-                const v = e.target.value;
-                set("local_entrega", v);
-                if (v !== "SHOPPING") set("shopping_nome", "");
-                if (v !== "OUTRO") set("local_detalhes", "");
-              }} className={inputCls}>
-                <option value="">-- Selecionar --</option>
-                <option value="RETIRADA">Retirada em Loja</option>
-                <option value="RESIDÊNCIA">Residência</option>
-                <option value="SHOPPING">Shopping</option>
-                <option value="OUTRO">Outro</option>
-              </select>
-            </div>
-            {form.local_entrega === "SHOPPING" && (
-              <div className="col-span-2">
-                <p className={labelCls}>Shopping (nome + loja)</p>
-                <input value={form.shopping_nome} onChange={(e) => set("shopping_nome", e.target.value)} placeholder="Ex: Carioca Shopping - Loja 234" className={inputCls} />
-              </div>
-            )}
-            {form.local_entrega === "OUTRO" && (
-              <div className="col-span-2">
-                <p className={labelCls}>Detalhes do local</p>
-                <input value={form.local_detalhes} onChange={(e) => set("local_detalhes", e.target.value)} placeholder="Ex: Escritório, recepção do prédio..." className={inputCls} />
-              </div>
-            )}
             {modoSimples && (
               <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
                 <p className={labelCls}>Produto (texto livre)</p>
