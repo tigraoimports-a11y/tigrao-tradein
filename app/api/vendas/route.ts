@@ -733,6 +733,30 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Ao finalizar, garantir que o estoque foi deduzido (proteção contra criação com erro parcial)
+  if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
+    const venda = data[0];
+    const eid = venda.estoque_id;
+    const sn = venda.serial_no;
+    if (eid) {
+      const { data: eItem } = await supabase.from("estoque").select("id, qnt, status").eq("id", eid).single();
+      if (eItem && eItem.status === "EM ESTOQUE" && eItem.qnt > 0) {
+        const novaQnt = Math.max(0, eItem.qnt - 1);
+        await supabase.from("estoque").update({ qnt: novaQnt, status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", eid);
+        console.log(`[Vendas PATCH] Estoque deduzido na finalização: ${eid} → qnt=${novaQnt}`);
+      }
+    } else if (sn) {
+      const serialU = String(sn).toUpperCase();
+      const { data: found } = await supabase.from("estoque").select("id, qnt").eq("serial_no", serialU).eq("status", "EM ESTOQUE").limit(1);
+      if (found && found.length > 0) {
+        const novaQnt = Math.max(0, found[0].qnt - 1);
+        await supabase.from("estoque").update({ qnt: novaQnt, status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", found[0].id);
+        await supabase.from("vendas").update({ estoque_id: found[0].id }).eq("id", id);
+        console.log(`[Vendas PATCH] Estoque deduzido por serial na finalização: ${serialU} → qnt=${novaQnt}`);
+      }
+    }
+  }
+
   // Enviar notificação no Telegram quando venda é FINALIZADA
   if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
     const venda = data[0];
