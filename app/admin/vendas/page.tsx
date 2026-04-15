@@ -135,7 +135,7 @@ export default function VendasPage() {
     cep: "", bairro: "", cidade: "", uf: "",
     // Atacado: frete/entrega cobrado a parte
     frete_valor: "", frete_recebido: false as boolean,
-    frete_forma: "" as string, frete_banco: "" as string,
+    frete_forma: "" as string, frete_banco: "" as string, frete_parcelas: "" as string, frete_bandeira: "" as string,
     // Crédito de lojista (ATACADO): valor a abater do saldo pré-pago
     usar_credito_loja: "",
     // Brinde / Cortesia
@@ -1054,10 +1054,12 @@ export default function VendasPage() {
       data_programada: vendaProgramada && dataProgramada ? dataProgramada : null,
       vendedor: user?.nome || null,
       // Entrega atacado (cobrada à parte)
-      frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
-      frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
-      frete_forma: form.tipo === "ATACADO" && form.frete_forma ? form.frete_forma : null,
-      frete_banco: form.tipo === "ATACADO" && form.frete_banco ? form.frete_banco : null,
+      frete_valor: parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || null,
+      frete_recebido: form.frete_valor ? !!form.frete_recebido : null,
+      frete_forma: form.frete_forma || null,
+      frete_banco: form.frete_banco || null,
+      frete_parcelas: form.frete_parcelas ? parseInt(form.frete_parcelas) : null,
+      frete_bandeira: form.frete_bandeira || null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
       _lojista_id: creditoLojistaId || null,
@@ -1436,7 +1438,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1478,7 +1480,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1556,7 +1558,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
-        frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+        frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
         is_brinde: false,
       });
       setCatSel("");
@@ -1831,7 +1833,7 @@ export default function VendasPage() {
       cidade: "",
       uf: "",
       frete_valor: "",
-      frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+      frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
       is_brinde: false,
     });
     setCatSel("");
@@ -2047,7 +2049,7 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -2233,30 +2235,16 @@ export default function VendasPage() {
                   />
                   <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
                 </div>
-                {/* Forma e banco do pagamento da entrega */}
+                {/* Banco do PIX da entrega */}
                 {form.frete_valor && (
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <div>
-                      <p className={labelCls}>Forma do Pagamento</p>
-                      <select value={form.frete_forma} onChange={(e) => set("frete_forma", e.target.value)} className={inputCls}>
-                        <option value="">— Selecionar —</option>
-                        <option value="PIX">PIX</option>
-                        <option value="CARTAO">Cartão de Crédito</option>
-                        <option value="DEBITO">Débito</option>
-                        <option value="LINK">Link Mercado Pago</option>
-                        <option value="ESPECIE">Espécie (Dinheiro)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <p className={labelCls}>Banco / Máquina</p>
-                      <select value={form.frete_banco} onChange={(e) => set("frete_banco", e.target.value)} className={inputCls}>
-                        <option value="">— Selecionar —</option>
-                        <option value="ITAU">Itaú</option>
-                        <option value="INFINITE">InfinitePay</option>
-                        <option value="MERCADO_PAGO">Mercado Pago</option>
-                        <option value="ESPECIE">Espécie</option>
-                      </select>
-                    </div>
+                  <div className="mt-3">
+                    <p className={labelCls}>Banco do PIX</p>
+                    <select value={form.frete_banco} onChange={(e) => { set("frete_banco", e.target.value); set("frete_forma", e.target.value ? "PIX" : ""); }} className={inputCls}>
+                      <option value="">— Selecionar —</option>
+                      <option value="ITAU">Itaú</option>
+                      <option value="INFINITE">InfinitePay</option>
+                      <option value="MERCADO_PAGO">Mercado Pago</option>
+                    </select>
                   </div>
                 )}
               </div>
@@ -2441,6 +2429,79 @@ export default function VendasPage() {
                       <a href={`https://www.linkcorreios.com.br/${form.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`shrink-0 px-3 flex items-center justify-center rounded-xl text-[12px] font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white gap-1`}>📦 Rastrear</a>
                     )}
                   </div>
+                </div>
+              )}
+              {/* 🚚 Taxa de Entrega — vendas normais */}
+              {(form.local === "ENTREGA" || form.local === "CORREIO") && (
+                <div className={`p-3 rounded-xl border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E0E0E5] bg-[#FAFAFA]"}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Taxa de Entrega</span>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-[#86868B]">
+                      <input type="checkbox" checked={!!form.frete_recebido} onChange={(e) => set("frete_recebido", e.target.checked)} className="w-4 h-4 rounded accent-[#E8740E]" />
+                      Já recebido
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className={labelCls}>Valor (R$)</p>
+                      <input type="text" inputMode="numeric" value={form.frete_valor} onChange={(e) => { const digits = e.target.value.replace(/\D/g, ""); set("frete_valor", digits ? Number(digits).toLocaleString("pt-BR") : ""); }} placeholder="Ex: 30" className={inputCls} />
+                    </div>
+                    <div>
+                      <p className={labelCls}>Forma de Pagamento</p>
+                      <select value={form.frete_forma} onChange={(e) => { set("frete_forma", e.target.value); if (e.target.value !== "CARTAO") { set("frete_parcelas", ""); set("frete_bandeira", ""); } if (e.target.value === "ESPECIE") set("frete_banco", "ESPECIE"); }} className={inputCls}>
+                        <option value="">— Selecionar —</option>
+                        <option value="PIX">PIX</option>
+                        <option value="CARTAO">Cartão de Crédito</option>
+                        <option value="DEBITO">Débito</option>
+                        <option value="LINK">Link Mercado Pago</option>
+                        <option value="ESPECIE">Espécie (Dinheiro)</option>
+                      </select>
+                    </div>
+                  </div>
+                  {/* Campos condicionais por forma */}
+                  {form.frete_forma && form.frete_forma !== "ESPECIE" && (
+                    <div className={`grid gap-3 mt-3 ${form.frete_forma === "CARTAO" ? "grid-cols-3" : "grid-cols-1"}`}>
+                      <div>
+                        <p className={labelCls}>{form.frete_forma === "PIX" ? "Banco do PIX" : form.frete_forma === "LINK" ? "Plataforma" : "Máquina"}</p>
+                        <select value={form.frete_banco} onChange={(e) => set("frete_banco", e.target.value)} className={inputCls}>
+                          <option value="">— Selecionar —</option>
+                          {form.frete_forma === "LINK" ? (
+                            <option value="MERCADO_PAGO">Mercado Pago</option>
+                          ) : (
+                            <>
+                              <option value="ITAU">Itaú</option>
+                              <option value="INFINITE">InfinitePay</option>
+                              <option value="MERCADO_PAGO">Mercado Pago</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                      {form.frete_forma === "CARTAO" && (
+                        <>
+                          <div>
+                            <p className={labelCls}>Parcelas</p>
+                            <input type="number" min={1} max={18} value={form.frete_parcelas} onChange={(e) => set("frete_parcelas", e.target.value)} placeholder="1" className={inputCls} />
+                          </div>
+                          <div>
+                            <p className={labelCls}>Bandeira</p>
+                            <select value={form.frete_bandeira} onChange={(e) => set("frete_bandeira", e.target.value)} className={inputCls}>
+                              <option value="">— Selecionar —</option>
+                              <option value="VISA">Visa</option>
+                              <option value="MASTERCARD">Mastercard</option>
+                              <option value="ELO">Elo</option>
+                              <option value="AMEX">Amex</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
+                      {form.frete_forma === "LINK" && (
+                        <div>
+                          <p className={labelCls}>Parcelas no Link</p>
+                          <input type="number" min={1} max={18} value={form.frete_parcelas} onChange={(e) => set("frete_parcelas", e.target.value)} placeholder="1" className={inputCls} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               {/* CEP */}
@@ -2686,7 +2747,10 @@ export default function VendasPage() {
                                                   : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E]`
                                               }`}
                                             >
-                                              {p.serial_no ? <span className={`font-mono text-[11px] ${isSelected ? "text-white" : "text-purple-500"}`}>{p.serial_no}</span> : <span>{fmt(p.custo_unitario)}</span>}
+                                              <span className="flex flex-col items-start gap-0.5">
+                                                {p.serial_no ? <span className={`font-mono text-[11px] ${isSelected ? "text-white" : "text-purple-500"}`}>{p.serial_no}</span> : <span>{fmt(p.custo_unitario)}</span>}
+                                                {p.reserva_cliente && <span className={`text-[9px] font-semibold ${isSelected ? "text-white/80" : "text-orange-600"}`}>📌 {p.reserva_cliente}</span>}
+                                              </span>
                                             </button>
                                           );
                                         })}
@@ -2755,7 +2819,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -4599,6 +4663,8 @@ export default function VendasPage() {
                                               frete_recebido: !!primaryVenda.frete_recebido,
                                               frete_forma: primaryVenda.frete_forma || "",
                                               frete_banco: primaryVenda.frete_banco || "",
+                                              frete_parcelas: primaryVenda.frete_parcelas ? String(primaryVenda.frete_parcelas) : "",
+                                              frete_bandeira: primaryVenda.frete_bandeira || "",
                                               usar_credito_loja: "",
                                               is_brinde: !!primaryVenda.is_brinde,
                                               codigo_rastreio: primaryVenda.codigo_rastreio || "",
@@ -5207,10 +5273,10 @@ export default function VendasPage() {
                                             <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-500 hover:text-blue-700 underline">{v.codigo_rastreio}</a>
                                           </p>
                                         )}
-                                        {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
+                                        {(v.frete_valor ?? 0) > 0 && (
                                           <p>
-                                            <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
-                                            {v.frete_forma && <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({v.frete_forma}{v.frete_banco ? ` ${v.frete_banco}` : ""})</span>}
+                                            <strong>🚚 Taxa Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            {v.frete_forma && <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({v.frete_forma}{v.frete_banco ? ` ${v.frete_banco}` : ""}{v.frete_parcelas ? ` ${v.frete_parcelas}x` : ""}{v.frete_bandeira ? ` ${v.frete_bandeira}` : ""})</span>}
                                             {" "}
                                             <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
                                               {v.frete_recebido ? "RECEBIDO" : "PENDENTE"}
@@ -5487,7 +5553,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -5523,7 +5589,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);

@@ -5165,6 +5165,7 @@ export default function EstoquePage() {
                             <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold ${dm ? "bg-purple-900/30 text-purple-300 border border-purple-700/40" : "bg-purple-50 text-purple-700 border border-purple-200"}`}>
                               <span>📌</span>
                               <span className="truncate">Reservado: {nomes.join(", ")}</span>
+                              {(() => { const ops = [...new Set(reservados.map(p => p.reserva_operador).filter(Boolean))]; return ops.length > 0 ? <span className={`text-[9px] font-normal ${dm ? "text-purple-400" : "text-purple-500"}`}>por {ops.join(", ")}</span> : null; })()}
                             </div>
                           );
                         })()}
