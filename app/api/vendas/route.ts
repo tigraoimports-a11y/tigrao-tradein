@@ -227,11 +227,13 @@ export async function POST(req: NextRequest) {
       tipo: "SINAL",
       valor: Number(body.sinal_antecipado),
       data: body.data || new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }),
-      forma: "PIX",
+      forma: body.forma_sinal || "PIX",
       banco: body.banco_sinal || "ITAU",
     };
     body.pagamento_historia = [sinalHist];
   }
+  // Remover campo virtual forma_sinal (não existe na tabela vendas)
+  delete body.forma_sinal;
 
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
@@ -616,6 +618,7 @@ export async function PATCH(req: NextRequest) {
   delete fields._seminovo;
   delete fields._seminovo2;
   delete fields._estoque_id;
+  delete fields.forma_sinal;
   delete fields.usar_credito_loja; // virtual — só usado no POST
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)

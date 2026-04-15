@@ -122,7 +122,7 @@ export default function VendasPage() {
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1017,6 +1017,7 @@ export default function VendasPage() {
       comp_alt: parseFloat(form.comp_alt) || null,
       sinal_antecipado: parseFloat(form.sinal_antecipado) || 0,
       banco_sinal: form.banco_sinal || null,
+      forma_sinal: form.forma_sinal || "PIX",
       serial_no: prodFields.serial_no || null,
       imei: prodFields.imei || null,
       troca_produto: prodFields.troca_produto || null,
@@ -1417,7 +1418,7 @@ export default function VendasPage() {
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
               entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
               valor_total_venda: "",
               troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1459,7 +1460,7 @@ export default function VendasPage() {
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
               entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
               valor_total_venda: "",
               troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1534,7 +1535,7 @@ export default function VendasPage() {
         custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
         entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-        forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+        forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
         entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
         valor_total_venda: "",
         troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1796,6 +1797,7 @@ export default function VendasPage() {
       comp_alt: String(v.comp_alt || ""),
       sinal_antecipado: "",
       banco_sinal: "",
+      forma_sinal: "PIX",
       troca_produto: "",
       troca_cor: "",
       troca_categoria: "",
@@ -2025,7 +2027,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -2706,7 +2708,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -3668,6 +3670,20 @@ export default function VendasPage() {
                         />
                       </div>
                       <div className="flex items-center gap-1.5">
+                        <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Forma:</span>
+                        <select
+                          value={form.forma_sinal || "PIX"}
+                          onChange={(e) => setForm(f => ({ ...f, forma_sinal: e.target.value }))}
+                          className={`px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                        >
+                          <option value="PIX">PIX</option>
+                          <option value="CARTAO">Cartão</option>
+                          <option value="LINK">Link MP</option>
+                          <option value="DINHEIRO">Dinheiro</option>
+                          <option value="DEBITO">Débito</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
                         <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Banco:</span>
                         <select
                           value={form.banco_sinal}
@@ -4506,6 +4522,7 @@ export default function VendasPage() {
                                               comp_alt: String(primaryVenda.comp_alt || ""),
                                               sinal_antecipado: String(primaryVenda.sinal_antecipado || ""),
                                               banco_sinal: primaryVenda.banco_sinal || "",
+                                              forma_sinal: (primaryVenda as unknown as Record<string, string>).forma_sinal || "PIX",
                                               troca_produto: grupoVendas.length > 1 ? "" : trocaProd,
                                               troca_cor: grupoVendas.length > 1 ? "" : trocaCor,
                                               troca_categoria: grupoVendas.length > 1 ? "" : (trocaCategoria || (primaryVenda as unknown as Record<string, string>).troca_categoria || ""),
@@ -5419,7 +5436,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -5455,7 +5472,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
