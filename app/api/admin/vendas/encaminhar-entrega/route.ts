@@ -53,13 +53,30 @@ export async function POST(request: Request) {
   let produtoTxt = venda.produto || "";
   if (venda.cor) produtoTxt += ` ${venda.cor}`;
 
-  // Montar forma de pagamento
-  let formaPag = venda.forma || null;
-  if (formaPag && venda.parcelas && venda.parcelas > 1) {
-    formaPag = `${venda.parcelas}x ${formaPag}`;
+  // Montar forma de pagamento com detalhes completos (bandeira, parcelas, banco)
+  let formaPag = "";
+  if (venda.forma === "CARTAO" || venda.forma === "CREDITO") {
+    const partes: string[] = [];
+    if (venda.banco) partes.push(venda.banco);
+    if (venda.qnt_parcelas) partes.push(`${venda.qnt_parcelas}x`);
+    if (venda.bandeira) partes.push(venda.bandeira);
+    formaPag = partes.join(" ") || "CARTAO";
+  } else if (venda.forma === "DINHEIRO" || venda.forma === "ESPECIE") {
+    formaPag = "DINHEIRO";
+  } else if (venda.forma === "PIX") {
+    formaPag = `PIX${venda.banco ? ` (${venda.banco})` : ""}`;
+  } else if (venda.forma === "DEBITO") {
+    formaPag = `DEBITO${venda.banco ? ` (${venda.banco})` : ""}`;
+  } else if (venda.forma) {
+    formaPag = `${venda.forma}${venda.banco ? ` (${venda.banco})` : ""}`;
   }
-  if (venda.banco) {
-    formaPag = formaPag ? `${formaPag} (${venda.banco})` : venda.banco;
+  // Adicionar entrada PIX se houver
+  const entradaPix = Number(venda.entrada_pix || 0);
+  const entradaEspecie = Number(venda.entrada_especie || 0);
+  const totalEntrada = entradaPix + entradaEspecie;
+  if (totalEntrada > 0 && formaPag) {
+    const entradaLabel = entradaPix > 0 ? `PIX R$ ${entradaPix.toLocaleString("pt-BR")}` : `Espécie R$ ${entradaEspecie.toLocaleString("pt-BR")}`;
+    formaPag = `Entrada ${entradaLabel} + ${formaPag}`;
   }
 
   // Montar observação com detalhes úteis pro motoboy (incluindo 1º e 2º produto na troca)
@@ -114,11 +131,18 @@ export async function POST(request: Request) {
         }
         return partes.length > 0 ? partes.join(" + ") : null;
       })(),
-      forma_pagamento: formaPag,
-      valor: Number(venda.preco_vendido || 0) || null,
-      entrada: (Number(venda.entrada_pix || 0) + Number(venda.entrada_especie || 0)) || null,
+      forma_pagamento: formaPag || null,
+      // Valor bruto = o que o cliente paga (valor_comprovante inclui taxas do cartão)
+      // Fallback: preco_vendido (líquido) se não tiver valor_comprovante
+      valor: Number(venda.valor_comprovante || venda.preco_vendido || 0) || null,
+      entrada: totalEntrada > 0 ? totalEntrada : null,
       parcelas: venda.qnt_parcelas || null,
-      valor_total: Number(venda.preco_vendido || 0) || null,
+      valor_total: (() => {
+        // Total = entrada + valor no cartão (valor_comprovante) + troca
+        const comp = Number(venda.valor_comprovante || 0);
+        if (comp > 0) return comp + totalEntrada;
+        return Number(venda.preco_vendido || 0) || null;
+      })(),
       vendedor: venda.vendedor || null,
     })
     .select()
