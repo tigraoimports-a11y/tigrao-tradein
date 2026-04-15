@@ -419,14 +419,17 @@ function CompraForm() {
     // Pagamento estruturado (bloco de linhas).
     // Caso especial: pagamento_pago=mp com entrada PIX → fluxo "dividido"
     // (link MP pagou o parcelado, PIX fica pendente na retirada).
+    // Split em "Pagamento 1: Link MP [PAGO]" + "Pagamento 2: PIX [PENDENTE]".
+    // Usamos colchetes em vez de emojis pra garantir renderização em qualquer
+    // fonte/device (alguns navegadores/WhatsApp não suportam supplementary plane).
     const isMpComPixPendente = pagamentoPagoParam === "mp" && entradaFinal > 0;
     const pagLines: string[] = [];
     if (isMpComPixPendente && parcelasCalc) {
-      pagLines.push(`*Pagamento 1:* Link MP — ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} (total R$ ${fmt2(parcelasCalc.total)}) ✅ PAGO`);
-      pagLines.push(`*Pagamento 2:* PIX R$ ${fmt(entradaFinal)} ⏳ PENDENTE`);
+      pagLines.push(`*Pagamento 1:* Link MP — ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} (total R$ ${fmt2(parcelasCalc.total)}) [PAGO]`);
+      pagLines.push(`*Pagamento 2:* PIX R$ ${fmt(entradaFinal)} [PENDENTE]`);
     } else if (isMpComPixPendente) {
-      pagLines.push(`*Pagamento 1:* Link MP R$ ${fmt(valorParcelarFinal)} ✅ PAGO`);
-      pagLines.push(`*Pagamento 2:* PIX R$ ${fmt(entradaFinal)} ⏳ PENDENTE`);
+      pagLines.push(`*Pagamento 1:* Link MP R$ ${fmt(valorParcelarFinal)} [PAGO]`);
+      pagLines.push(`*Pagamento 2:* PIX R$ ${fmt(entradaFinal)} [PENDENTE]`);
     } else if (formaPagamento === "PIX") {
       pagLines.push(`*Forma:* PIX`);
       pagLines.push(`*Valor:* R$ ${fmt(valorBaseFinal)}`);
@@ -456,14 +459,14 @@ function CompraForm() {
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
     const enderecoFull = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
-    const pagEntrega = pagamentoPagoParam ? "" : local === "Correios" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
+    const pagEntrega = pagamentoPagoParam ? "" : local === "Correios" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" ? "PAGAR NA ENTREGA" : "";
 
     const lines = [
       `Olá, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliação de troca no site e preenchi o formulário de compra." : "Vim pelo formulário de compra!"}`,
       "",
       `*━━━ DADOS DA COMPRA — Tigrão Imports ━━━*`,
       "",
-      `*📋 DADOS PESSOAIS*`,
+      `*▸ DADOS PESSOAIS*`,
       // Dados pessoais / empresa
       ...(pessoa === "PJ"
         ? [
@@ -483,14 +486,14 @@ function CompraForm() {
       `*Bairro:* ${bairro}`,
       "",
       // Produtos
-      `*🛒 ${produtosExtras.length > 0 ? "PRODUTOS" : "PRODUTO"}*`,
+      `*▸ ${produtosExtras.length > 0 ? "PRODUTOS" : "PRODUTO"}*`,
       `*Produto 1:* ${produtoFinal}${corSel ? ` — ${corSel}` : ""}${precoFinal > 0 ? ` — R$ ${fmt(precoFinal)}` : ""}`,
       ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p.nome}${p.preco > 0 ? ` — R$ ${fmt(p.preco)}` : ""}`)),
       ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
       ...(descontoParam > 0 || produtosExtras.length > 0 ? [`*Total:* R$ ${fmt(valorBaseFinal)}`] : []),
       "",
       // Pagamento
-      `*💳 PAGAMENTO*`,
+      `*▸ PAGAMENTO*`,
       ...pagLines,
       // Detalhes do pagamento MP (quando pago via link MP).
       // Se não há entrada PIX, mostra "Valor pago no link" (valor total).
@@ -510,7 +513,7 @@ function CompraForm() {
     if (temTroca && (trocaProduto || descTroca)) {
       const temDoisUsados = !!trocaProduto2Param;
       lines.push("");
-      lines.push(`*🔄 ${temDoisUsados ? "APARELHOS NA TROCA" : "APARELHO NA TROCA"}*`);
+      lines.push(`*▸ ${temDoisUsados ? "APARELHOS NA TROCA" : "APARELHO NA TROCA"}*`);
       if (trocaProduto) {
         if (temDoisUsados) lines.push(``, `*Aparelho 1:*`);
         lines.push(`*Modelo:* ${trocaProduto}`);
@@ -535,7 +538,7 @@ function CompraForm() {
 
     // Vendedor, origem, entrega
     lines.push("");
-    lines.push(`*📍 ENTREGA*`);
+    lines.push(`*▸ ENTREGA*`);
     if (vendedor) lines.push(`*Vendedor:* ${vendedor}`);
     if (origem) lines.push(`*Indicação:* ${origem}`);
     lines.push(`*Horário:* ${horario}`);
@@ -548,7 +551,7 @@ function CompraForm() {
     if (pagEntrega) lines.push(pagEntrega);
     if (local === "Entrega" && !pagamentoPagoParam) {
       lines.push("");
-      lines.push("⚠️ *TAXA DE DESLOCAMENTO:* Caso a compra não seja concluída no ato da entrega (limite, divergência, etc), será cobrada taxa de deslocamento. ✅ Cliente ciente.");
+      lines.push("*! TAXA DE DESLOCAMENTO:* Caso a compra não seja concluída no ato da entrega (limite, divergência, etc), será cobrada taxa de deslocamento. Cliente ciente.");
     }
 
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda

@@ -119,6 +119,81 @@ export default async function ShortLinkPage({
 
   const redirectUrl = buildRedirectUrl(data);
 
+  // Quando o cliente volta do Mercado Pago com pagamento aprovado (pp=mp),
+  // mostramos uma tela de confirmação bonita antes de redirecionar pro /compra.
+  // Objetivo: dar um motivo ao cliente pra NÃO fechar a aba durante o breve
+  // momento em que o form está carregando ("Meu pagamento foi confirmado,
+  // vale a pena esperar pelo próximo passo").
+  // Redirect acontece automaticamente após 1.5s (suficiente pra ler a mensagem).
+  const vemDoMp = data.pagamento_pago === "mp" || data.pp === "mp";
+
+  if (vemDoMp) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        background: "linear-gradient(180deg, #f0fdf4 0%, #ffffff 60%)",
+        padding: "20px",
+      }}>
+        <meta httpEquiv="refresh" content={`2;url=${redirectUrl}`} />
+        <script dangerouslySetInnerHTML={{ __html: `setTimeout(() => window.location.replace("${redirectUrl}"), 1500)` }} />
+        <div style={{
+          width: 80, height: 80, borderRadius: "50%",
+          background: "#16a34a",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 24,
+          boxShadow: "0 8px 24px rgba(22, 163, 74, 0.25)",
+          animation: "pop 0.4s ease-out",
+        }}>
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5 13l4 4L19 7" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1D1D1F", margin: "0 0 8px", textAlign: "center" }}>
+          Pagamento confirmado!
+        </h1>
+        <p style={{ fontSize: 16, color: "#52525b", margin: "0 0 32px", textAlign: "center", maxWidth: 320 }}>
+          Agora só falta <strong>confirmar seus dados de entrega</strong> pra finalizar seu pedido.
+        </p>
+        <div style={{
+          width: 240,
+          height: 4,
+          background: "#e5e7eb",
+          borderRadius: 2,
+          overflow: "hidden",
+        }}>
+          <div style={{
+            width: "100%",
+            height: "100%",
+            background: "#16a34a",
+            animation: "load 1.5s ease-out forwards",
+            transformOrigin: "left",
+            transform: "scaleX(0)",
+          }} />
+        </div>
+        <p style={{ fontSize: 13, color: "#86868B", marginTop: 16 }}>
+          Abrindo formulário de entrega...
+        </p>
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes pop {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+          @keyframes load {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+          }
+        ` }} />
+      </div>
+    );
+  }
+
+  // Fluxo normal (sem pagamento MP): redirect instantâneo
   return (
     <div>
       <meta httpEquiv="refresh" content={`0;url=${redirectUrl}`} />
