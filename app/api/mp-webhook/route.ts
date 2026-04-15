@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { notifyPagamentoAprovado, sendZApiMessage } from "@/lib/zapi";
-import { formatPedidoMessage, type PedidoData } from "@/lib/formatPedido";
+import { notifyPagamentoAprovado } from "@/lib/zapi";
 
 // ============================================================
 // MP Webhook — recebe notificações de mudança de status
@@ -14,8 +13,14 @@ import { formatPedidoMessage, type PedidoData } from "@/lib/formatPedido";
 //   1. MP POST com { type: "payment", data: { id } }
 //   2. Buscamos detalhes do pagamento via GET /v1/payments/{id}
 //   3. Se status=approved → buscamos link_compras pelo external_reference
-//      (que é o short_code) e disparamos notificação WhatsApp pro grupo.
-//   4. Tudo é "best-effort": qualquer erro é logado mas não bloqueia a
+//      (que é o short_code).
+//   4. Fluxo INVERTIDO (cliente preencheu formulário antes de pagar —
+//      cliente_dados_preenchidos existe): NÃO notifica o grupo. O próprio
+//      cliente vai abrir o WhatsApp do vendedor via /pagamento-confirmado
+//      com a mensagem completa + comprovante.
+//   5. Fluxo ANTIGO (Link MP direto, sem formulário): notifica o grupo
+//      com formato compacto pra avisar a equipe que um pagamento chegou.
+//   6. Tudo é "best-effort": qualquer erro é logado mas não bloqueia a
 //      resposta 200 pro MP (se a gente retornasse 500, o MP reagendaria
 //      e a gente tomaria notificação duplicada depois).
 //
@@ -117,42 +122,33 @@ async function handleApprovedPayment(paymentId: string) {
       ? `(${payment.payer.phone.area_code}) ${payment.payer.phone.number}`
       : null;
 
-  // Decide qual formato usar:
-  // • Se o cliente PREENCHEU o formulário (temos cliente_dados_preenchidos)
-  //   → mensagem COMPLETA (igual ao WhatsApp manual).
-  // • Senão → formato compacto com só cliente/produto/valor.
+  // Fluxo invertido (cliente preencheu formulário ANTES de pagar):
+  // NÃO notificamos o grupo aqui — o próprio cliente vai abrir o WhatsApp
+  // do vendedor (via /pagamento-confirmado) com a mensagem COMPLETA e o
+  // comprovante MP. Notificar o grupo aqui geraria duplicidade e roubaria
+  // o pedido do vendedor que gerou o link.
+  //
+  // Só disparamos notificação pro grupo no fluxo ANTIGO (cliente pagou
+  // Link MP sem preencher formulário antes — não sabemos quem ele é).
   const snapshot = (link.cliente_dados_preenchidos ?? null) as Record<string, unknown> | null;
   const temFormularioCompleto = !!snapshot && !!snapshot.cliente;
 
   let ok = false;
 
   if (temFormularioCompleto) {
-    // Reconstrói PedidoData do snapshot JSONB (que o /api/create-mp-from-form
-    // salvou no formato esperado pela função formatPedidoMessage).
-    try {
-      const pedido = buildPedidoDataFromSnapshot(link, snapshot, payment);
-      const mensagem = formatPedidoMessage(pedido, {
-        header: false,
-        prefix: [
-          `💰 *PAGAMENTO APROVADO — Link MP*`,
-          `_Cliente pagou e o pedido foi confirmado automaticamente._`,
-        ],
-      });
-
-      const destino = process.env.ZAPI_GRUPO_PAGAMENTOS;
-      if (!destino) {
-        console.warn("[mp-webhook] ZAPI_GRUPO_PAGAMENTOS não configurado — skip");
-      } else {
-        ok = await sendZApiMessage(destino, mensagem);
-      }
-    } catch (err) {
-      console.error("[mp-webhook] erro ao montar mensagem completa, caindo no fallback:", err);
-    }
-  }
-
-  // Fallback: formato compacto (quando não tem formulário preenchido
-  // ou deu erro na montagem da mensagem completa).
-  if (!ok) {
+    // Fluxo invertido: cliente já foi redirecionado pro /pagamento-confirmado
+    // que abre o WhatsApp do vendedor. Nada pra notificar aqui.
+    console.log(
+      `[mp-webhook] fluxo invertido: link ${link.id} (short=${link.short_code}) ` +
+        `tem formulário preenchido — cliente vai abrir WhatsApp do vendedor direto. ` +
+        `Skip notificação do grupo.`
+    );
+    ok = true; // marcamos como notificado mesmo (não tem o que enviar)
+  } else {
+    // Fluxo antigo (Link MP direto sem formulário):
+    // Usa formato compacto (só cliente/produto/valor) pro grupo — não temos
+    // dados completos ainda. A ideia é alertar a equipe que um pagamento
+    // chegou e o cliente ainda vai preencher o /compra.
     ok = await notifyPagamentoAprovado({
       cliente: link.cliente_nome || nomeMp || "Cliente (aguardando formulário)",
       telefone: link.cliente_telefone || telefoneMp,
@@ -175,76 +171,6 @@ async function handleApprovedPayment(paymentId: string) {
       })
       .eq("id", link.id);
   }
-}
-
-// ============================================================
-// Converte snapshot JSONB + campos fixos da link_compras em PedidoData
-// ============================================================
-function buildPedidoDataFromSnapshot(
-  link: Record<string, unknown>,
-  snapshot: Record<string, unknown>,
-  payment: MpPayment
-): PedidoData {
-  // TS-friendly helpers pra puxar campos do JSON bruto
-  const snCliente = (snapshot.cliente ?? {}) as Record<string, string | undefined>;
-  const snProduto = (snapshot.produto ?? {}) as Record<string, unknown>;
-  const snPagamento = (snapshot.pagamento ?? {}) as Record<string, unknown>;
-  const snTroca = (snapshot.troca ?? null) as {
-    aparelhos?: Array<{
-      modelo: string;
-      cor?: string;
-      valor?: number;
-      condicao?: string;
-      caixa?: boolean;
-    }>;
-    descricaoLivre?: string;
-  } | null;
-  const snEntrega = (snapshot.entrega ?? {}) as Record<string, string | undefined>;
-
-  return {
-    cliente: {
-      nome: snCliente.nome || (link.cliente_nome as string) || "Cliente",
-      pessoa: (snCliente.pessoa === "PJ" ? "PJ" : "PF"),
-      cpf: snCliente.cpf || (link.cliente_cpf as string | undefined),
-      cnpj: snCliente.cnpj || undefined,
-      email: snCliente.email || (link.cliente_email as string | undefined),
-      telefone: snCliente.telefone || (link.cliente_telefone as string | undefined),
-      instagram: snCliente.instagram,
-      cep: snCliente.cep,
-      endereco: snCliente.endereco,
-      numero: snCliente.numero,
-      complemento: snCliente.complemento,
-      bairro: snCliente.bairro,
-    },
-    produto: {
-      nome: (snProduto.nome as string) || (link.produto as string) || "Produto",
-      cor: (snProduto.cor as string | undefined) || (link.cor as string | undefined),
-      preco: Number(snProduto.preco ?? link.valor ?? 0),
-      extras: (snProduto.extras as Array<{ nome: string; preco: number }> | undefined) || [],
-    },
-    pagamento: {
-      forma: (snPagamento.forma as string) || (link.forma_pagamento as string) || "Link de Pagamento",
-      parcelas:
-        (snPagamento.parcelas as string | undefined) ||
-        (payment.installments ? String(payment.installments) : (link.parcelas as string | undefined)),
-      entrada: Number(snPagamento.entrada ?? link.entrada ?? 0),
-      desconto: Number(snPagamento.desconto ?? link.desconto ?? 0),
-      pagamentoPago: "mp",
-      mpPaymentId: String(payment.id),
-      mpPreferenceId: link.mp_preference_id as string | undefined,
-    },
-    troca: snTroca || undefined,
-    entrega: {
-      local: (snEntrega.local as string) || "Entrega",
-      tipoEntrega: (snEntrega.tipoEntrega as "Residencia" | "Comercial" | undefined),
-      shopping: snEntrega.shopping,
-      data: snEntrega.data,
-      horario: snEntrega.horario,
-      vendedor: snEntrega.vendedor || (link.vendedor as string | undefined),
-      origem: snEntrega.origem,
-    },
-    isFromTradeIn: !!snapshot.isFromTradeIn,
-  };
 }
 
 // POST: notificação de evento

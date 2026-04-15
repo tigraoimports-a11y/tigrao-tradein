@@ -708,6 +708,10 @@ function CompraForm() {
         },
         isFromTradeIn,
         valorMp: valorMpCobrado,
+        // Número do WhatsApp do vendedor que gerou o link — salvamos no
+        // snapshot pra que /pagamento-confirmado possa redirecionar o cliente
+        // direto pro chat do vendedor com o pedido + comprovante MP.
+        whatsappVendedor: whatsappFinal,
       };
 
       const res = await fetch("/api/create-mp-from-form", {
