@@ -49,6 +49,7 @@ const NAV: NavEntry[] = [
       { href: "/admin/estoque", label: "Estoque", icon: "\u{1F4E6}", pageKey: "estoque" },
       { href: "/admin/etiquetas", label: "Etiquetas", icon: "\u{1F3F7}\uFE0F", pageKey: "etiquetas" },
       { href: "/admin/etiquetas-preco", label: "Etiquetas de Preco", icon: "\u{1F4B0}", pageKey: "etiquetas_preco" },
+      { href: "/admin/impressao-produtos", label: "Impressão Produtos", icon: "🖨️", pageKey: "impressao_produtos" },
       { href: "/admin/encomendas", label: "Encomendas", icon: "\u{1F6D2}", pageKey: "encomendas" },
       { href: "/admin/contrato-encomenda", label: "Contrato de Encomenda", icon: "\u{1F4C4}", pageKey: "contrato_encomenda" },
       { href: "/admin/clientes?tab=fornecedores", label: "Fornecedores", icon: "\u{1F91D}", pageKey: "fornecedores" },
