@@ -231,6 +231,7 @@ export default function GerarLinkPage() {
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
+  const [taxaEntrega, setTaxaEntrega] = useState("");
   // Link Mercado Pago (gerado via API MP — independente do "Gerar Link" do form)
   const [mpLink, setMpLink] = useState("");
   const [mpLoading, setMpLoading] = useState(false);
@@ -352,6 +353,7 @@ export default function GerarLinkPage() {
     observacao: string | null;
     arquivado: boolean;
     pagamento_pago: string | null;
+    taxa_entrega: number;
     created_at: string;
   };
   const [aba, setAba] = useState<"novo" | "historico">("novo");
@@ -561,6 +563,7 @@ export default function GerarLinkPage() {
           cliente_telefone: cliTelefone.trim() || null,
           cliente_cpf: cliCpf.trim() || null,
           cliente_email: cliEmail.trim() || null,
+          taxa_entrega: Number(rawTaxaEntrega) || 0,
         }),
       });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setPasteMsg(`❌ Erro ao salvar: ${j.error || res.status}`); return false; }
@@ -588,6 +591,7 @@ export default function GerarLinkPage() {
         if (shoppingNome) shortData.sh = shoppingNome;
         if (horario) shortData.h = horario;
         if (dataEntrega) shortData.dt = dataEntrega;
+        if (rawTaxaEntrega && rawTaxaEntrega !== "0") shortData.te = rawTaxaEntrega;
         if (trocaProduto) shortData.tp = trocaProduto;
         if (trocaCondicao) shortData.tcd = trocaCondicao;
         if (trocaCor) shortData.tc = trocaCor;
@@ -663,6 +667,7 @@ export default function GerarLinkPage() {
     if (l.entrada) setEntradaPix(Number(l.entrada).toLocaleString("pt-BR"));
     if (l.desconto) setDesconto(Number(l.desconto).toLocaleString("pt-BR"));
     if (l.vendedor) setVendedorNome(l.vendedor);
+    if (l.taxa_entrega) setTaxaEntrega(Number(l.taxa_entrega).toLocaleString("pt-BR"));
     if (l.cliente_nome || l.cliente_telefone || l.cliente_cpf) {
       setIncluirDadosCliente(true);
       if (l.cliente_nome) setCliNome(l.cliente_nome);
@@ -801,7 +806,7 @@ export default function GerarLinkPage() {
     setForma("Cartao Credito"); setParcelas("21"); setEntradaPix(""); setDesconto("");
     setPagamentoPago("");
     // Entrega
-    setLocalEntrega("shopping"); setShoppingNome(""); setHorario(""); setDataEntrega("");
+    setLocalEntrega("shopping"); setShoppingNome(""); setHorario(""); setDataEntrega(""); setTaxaEntrega("");
     // Troca
     setTemTroca(false); setTrocaProduto(""); setTrocaValor(""); setTrocaCondicao(""); setTrocaCor("");
     setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); setTrocaCondicao2(""); setTrocaCor2("");
@@ -817,6 +822,7 @@ export default function GerarLinkPage() {
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
   const rawTrocaVal = trocaValor.replace(/\./g, "").replace(",", ".");
   const rawTrocaVal2 = trocaValor2.replace(/\./g, "").replace(",", ".");
+  const rawTaxaEntrega = taxaEntrega.replace(/\./g, "").replace(",", ".");
 
   // Taxas de parcelamento (mesma tabela do sistema)
   const TAXAS: Record<number, number> = {
@@ -902,6 +908,7 @@ export default function GerarLinkPage() {
     if (shoppingNome) shortData.sh = shoppingNome;
     if (horario) shortData.h = horario;
     if (dataEntrega) shortData.dt = dataEntrega;
+    if (rawTaxaEntrega && rawTaxaEntrega !== "0") shortData.te = rawTaxaEntrega;
     if (trocaProduto) shortData.tp = trocaProduto;
     if (trocaCondicao) shortData.tcd = trocaCondicao;
     if (trocaCor) shortData.tc = trocaCor;
@@ -972,6 +979,7 @@ export default function GerarLinkPage() {
               vendedor: vendedorNome || null,
               simulacao_id: simulacaoId,
               pagamento_pago: pagamentoPago || null,
+              taxa_entrega: Number(rawTaxaEntrega) || 0,
             }),
           });
           if (!resHist.ok) {
@@ -1074,6 +1082,7 @@ export default function GerarLinkPage() {
     if (shoppingNome) shortData.sh = shoppingNome;
     if (horario) shortData.h = horario;
     if (dataEntrega) shortData.dt = dataEntrega;
+    if (rawTaxaEntrega && rawTaxaEntrega !== "0") shortData.te = rawTaxaEntrega;
 
     // Dados de troca — pra seção "Troca confirmada" aparecer preenchida no /compra
     if (trocaProduto) shortData.tp = trocaProduto;
@@ -2431,6 +2440,19 @@ export default function GerarLinkPage() {
               className={inputCls}
             />
           </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Taxa de Entrega (R$)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={taxaEntrega}
+            onChange={(e) => setTaxaEntrega(e.target.value.replace(/[^\d.,]/g, ""))}
+            placeholder="Ex: 30 (opcional)"
+            className={inputCls}
+          />
+          <p className="text-[10px] text-[#86868B] mt-0.5">Cobrado do cliente na entrega. Aparece no formulário e no WhatsApp.</p>
         </div>
 
         <div>
