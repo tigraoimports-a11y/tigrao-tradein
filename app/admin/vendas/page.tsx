@@ -1055,11 +1055,9 @@ export default function VendasPage() {
       vendedor: user?.nome || null,
       // Entrega atacado (cobrada à parte)
       frete_valor: parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || null,
-      frete_recebido: form.frete_valor ? !!form.frete_recebido : null,
-      frete_forma: form.frete_forma || null,
+      frete_recebido: form.frete_valor ? (form.frete_forma ? true : !!form.frete_recebido) : null,
+      frete_forma: form.frete_forma ? [form.frete_forma, form.frete_parcelas ? `${form.frete_parcelas}x` : "", form.frete_bandeira].filter(Boolean).join(" ") : null,
       frete_banco: form.frete_banco || null,
-      frete_parcelas: form.frete_parcelas ? parseInt(form.frete_parcelas) : null,
-      frete_bandeira: form.frete_bandeira || null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
       _lojista_id: creditoLojistaId || null,
@@ -2434,12 +2432,8 @@ export default function VendasPage() {
               {/* 🚚 Taxa de Entrega — vendas normais */}
               {(form.local === "ENTREGA" || form.local === "CORREIO") && (
                 <div className={`p-3 rounded-xl border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E0E0E5] bg-[#FAFAFA]"}`}>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="mb-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Taxa de Entrega</span>
-                    <label className="flex items-center gap-2 cursor-pointer text-xs text-[#86868B]">
-                      <input type="checkbox" checked={!!form.frete_recebido} onChange={(e) => set("frete_recebido", e.target.checked)} className="w-4 h-4 rounded accent-[#E8740E]" />
-                      Já recebido
-                    </label>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -4661,10 +4655,10 @@ export default function VendasPage() {
                                               uf: primaryVenda.uf || "",
                                               frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
                                               frete_recebido: !!primaryVenda.frete_recebido,
-                                              frete_forma: primaryVenda.frete_forma || "",
+                                              frete_forma: (() => { const f = primaryVenda.frete_forma || ""; return f.split(" ")[0] || ""; })(),
                                               frete_banco: primaryVenda.frete_banco || "",
-                                              frete_parcelas: primaryVenda.frete_parcelas ? String(primaryVenda.frete_parcelas) : "",
-                                              frete_bandeira: primaryVenda.frete_bandeira || "",
+                                              frete_parcelas: (() => { const m = (primaryVenda.frete_forma || "").match(/(\d+)x/); return m ? m[1] : ""; })(),
+                                              frete_bandeira: (() => { const parts = (primaryVenda.frete_forma || "").split(" "); return parts.find(p => ["VISA","MASTERCARD","ELO","AMEX"].includes(p)) || ""; })(),
                                               usar_credito_loja: "",
                                               is_brinde: !!primaryVenda.is_brinde,
                                               codigo_rastreio: primaryVenda.codigo_rastreio || "",
@@ -5276,7 +5270,7 @@ export default function VendasPage() {
                                         {(v.frete_valor ?? 0) > 0 && (
                                           <p>
                                             <strong>🚚 Taxa Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
-                                            {v.frete_forma && <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({v.frete_forma}{v.frete_banco ? ` ${v.frete_banco}` : ""}{v.frete_parcelas ? ` ${v.frete_parcelas}x` : ""}{v.frete_bandeira ? ` ${v.frete_bandeira}` : ""})</span>}
+                                            {v.frete_forma && <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({v.frete_forma}{v.frete_banco ? ` — ${v.frete_banco}` : ""})</span>}
                                             {" "}
                                             <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
                                               {v.frete_recebido ? "RECEBIDO" : "PENDENTE"}
