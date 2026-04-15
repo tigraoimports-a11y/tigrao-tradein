@@ -786,7 +786,7 @@ export async function PATCH(req: NextRequest) {
           to: venda.email!,
           clienteNome: venda.cliente || "Cliente",
           produto: `${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim(),
-          valor: Number(venda.preco_vendido || 0) - Number(venda.credito_lojista_usado || 0),
+          valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
           notaFiscalUrl: venda.nota_fiscal_url!,
         }).then(() => {
           console.log("[Vendas] NF enviada por email para:", venda.email);
