@@ -1063,6 +1063,11 @@ export default function GerarLinkPage() {
     // troca de novo e daria valor errado.
     if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
     if (descontoNum > 0) shortData.dc = String(descontoNum);
+    // Forma + parcelas + entrada PIX — pra /compra montar "Pagamento 1/2"
+    // quando há entrada PIX pendente (valor parcelado no link MP + PIX separado).
+    shortData.f = "Link de Pagamento";
+    if (parcelas) shortData.x = parcelas;
+    if (rawEntrada && rawEntrada !== "0") shortData.e = rawEntrada;
     shortData.s = vendedorNome || "";
     shortData.w = whatsappDestino;
     if (localEntrega) shortData.l = localEntrega;
@@ -1145,7 +1150,8 @@ export default function GerarLinkPage() {
             body: JSON.stringify({
               short_code: shortCode,
               url_curta: urlCurta,
-              tipo: "COMPRA",
+              // Se tem troca ou entrada PIX, é um fluxo misto (COMPRA + PIX pendente)
+              tipo: trocaProduto ? "TROCA" : "COMPRA",
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -1153,9 +1159,21 @@ export default function GerarLinkPage() {
               produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
               cor: corENCanon || null,
-              valor: valorComTaxa,
+              // Valor cheio do produto (consistente com botão laranja) —
+              // valorComTaxa (valor cobrado no MP) fica só em mp_link/mp_preference_id.
+              valor: Number(rawPreco) || 0,
+              desconto: descontoNum || 0,
               forma_pagamento: "mp",
               parcelas: numParcelas > 0 ? String(numParcelas) : null,
+              entrada: Number(rawEntrada) || 0,
+              troca_produto: trocaProduto || null,
+              troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
+              troca_condicao: trocaCondicao || null,
+              troca_cor: trocaCor || null,
+              troca_produto2: temSegundaTroca ? trocaProduto2 || null : null,
+              troca_valor2: temSegundaTroca ? Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0 : 0,
+              troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
+              troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
               vendedor: vendedorNome || null,
               simulacao_id: simulacaoId,
               mp_link: initPoint,
@@ -1303,7 +1321,11 @@ export default function GerarLinkPage() {
   const labelCls = `block text-sm font-medium mb-1 ${dm ? "text-[#98989D]" : "text-[#1D1D1F]"}`;
 
   const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito" || forma === "Link de Pagamento";
-  const showEntradaPix = forma === "Cartao Credito";
+  // Entrada PIX também disponível pra "Link de Pagamento" (MP):
+  // cliente paga parte no PIX (pendente / resolvido no WhatsApp) e o resto
+  // vai no link MP parcelado. Taxa do parcelamento é calculada em cima do
+  // valor que vai pro link (já descontando desconto + troca + entrada PIX).
+  const showEntradaPix = forma === "Cartao Credito" || forma === "Link de Pagamento";
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
