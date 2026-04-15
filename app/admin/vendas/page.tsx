@@ -519,7 +519,7 @@ export default function VendasPage() {
 
   const produtosFiltrados = catSel ? (() => {
     const [cat, tipo] = catSel.split("__");
-    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
+    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
   })() : [];
 
   const fetchVendas = useCallback(async () => {
@@ -2585,7 +2585,7 @@ export default function VendasPage() {
 
                 {/* Produtos agrupados por modelo */}
                 {(serialBusca.trim() || catSel) && (() => {
-                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE");
+                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
                   const filtrados = serialBusca.trim()
                     ? baseList.filter(p => (p.serial_no && p.serial_no.toUpperCase().includes(serialBusca.trim().toUpperCase())) || p.produto.toUpperCase().includes(serialBusca.trim().toUpperCase()))
                     : baseList;
