@@ -628,13 +628,22 @@ export async function PATCH(req: NextRequest) {
   // Capturar estoque_id novo antes de deletar do fields
   const novoEstoqueId = fields._estoque_id || null;
 
+  // Capturar crédito de lojista antes de remover campos virtuais
+  const patchCreditoLoja = Number(fields.usar_credito_loja || 0);
+  const patchLojistaId = fields._lojista_id || null;
+
   // Remover campos internos que não existem na tabela vendas
   delete fields._seminovo;
   delete fields._seminovo2;
   delete fields._estoque_id;
   delete fields.forma_sinal;
-  delete fields.usar_credito_loja; // virtual — só usado no POST
-  delete fields._lojista_id; // virtual — só usado no POST
+  delete fields.usar_credito_loja;
+  delete fields._lojista_id;
+
+  // Se tem crédito de lojista, salvar na coluna correta
+  if (patchCreditoLoja > 0) {
+    fields.credito_lojista_usado = patchCreditoLoja;
+  }
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
   const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto").eq("id", id).single();
@@ -661,6 +670,44 @@ export async function PATCH(req: NextRequest) {
     }
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Debitar crédito de lojista (se enviado no PATCH)
+  let patchCreditoDebitError: string | null = null;
+  if (patchCreditoLoja > 0 && data && data.length > 0) {
+    const venda = data[0];
+    try {
+      let lojistaId: string | null = patchLojistaId;
+      if (!lojistaId && venda.cliente) {
+        const normNome = String(venda.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", `%${normNome}%`);
+        if (ls && ls.length > 0) {
+          const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
+          lojistaId = alvo.id;
+        }
+      }
+      if (lojistaId) {
+        const { error: rpcErr } = await supabase.rpc("mover_saldo_lojista", {
+          p_lojista_id: lojistaId,
+          p_tipo: "DEBITO",
+          p_valor: patchCreditoLoja,
+          p_venda_id: id,
+          p_motivo: `Venda ${id.slice(0, 8)} (edição)`,
+          p_usuario: usuario,
+        });
+        if (rpcErr) {
+          patchCreditoDebitError = `Erro ao debitar crédito: ${rpcErr.message}`;
+          console.error("[Vendas PATCH] RPC mover_saldo_lojista erro:", rpcErr);
+        } else {
+          await logActivity(usuario, "Crédito lojista usado em venda (edição)", `${venda.cliente}: -R$${patchCreditoLoja}`, "vendas", id);
+        }
+      } else {
+        patchCreditoDebitError = `Lojista não encontrado para debitar crédito (cliente: ${venda.cliente})`;
+      }
+    } catch (e) {
+      patchCreditoDebitError = `Erro inesperado: ${String(e)}`;
+      console.error("[Vendas PATCH] Erro ao debitar crédito lojista:", e);
+    }
+  }
 
   // Se serial_no foi atualizado, marcar estoque correspondente como ESGOTADO
   // (previne itens vendidos que ficam "EM ESTOQUE" por falta de vínculo)
@@ -910,7 +957,7 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, updated: data });
+  return NextResponse.json({ ok: true, updated: data, ...(patchCreditoDebitError ? { creditoDebitError: patchCreditoDebitError } : {}) });
 }
 
 export async function DELETE(req: NextRequest) {
