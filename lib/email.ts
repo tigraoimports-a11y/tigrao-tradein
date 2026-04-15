@@ -78,9 +78,7 @@ export async function enviarNotaFiscal(opts: {
 
       <div style="background: #F5F5F7; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
         <p style="margin: 0 0 4px; font-size: 14px; color: #86868B;">Produto</p>
-        <p style="margin: 0 0 12px; font-size: 16px; color: #1D1D1F; font-weight: 600;">${opts.produto}</p>
-        <p style="margin: 0 0 4px; font-size: 14px; color: #86868B;">Valor</p>
-        <p style="margin: 0; font-size: 18px; color: #E8740E; font-weight: 700;">R$ ${valorFmt}</p>
+        <p style="margin: 0; font-size: 16px; color: #1D1D1F; font-weight: 600;">${opts.produto}</p>
       </div>
 
       <p style="color: #86868B; font-size: 12px; text-align: center; margin: 24px 0 0;">
