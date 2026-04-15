@@ -415,9 +415,18 @@ function CompraForm() {
       return { n, total, vp };
     })() : null;
 
-    // Pagamento estruturado (bloco de linhas)
+    // Pagamento estruturado (bloco de linhas).
+    // Caso especial: pagamento_pago=mp com entrada PIX → fluxo "dividido"
+    // (link MP pagou o parcelado, PIX fica pendente na retirada).
+    const isMpComPixPendente = pagamentoPagoParam === "mp" && entradaFinal > 0;
     const pagLines: string[] = [];
-    if (formaPagamento === "PIX") {
+    if (isMpComPixPendente && parcelasCalc) {
+      pagLines.push(`*Pagamento 1:* Link MP — ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} (total R$ ${fmt2(parcelasCalc.total)}) ✅ PAGO`);
+      pagLines.push(`*Pagamento 2:* PIX R$ ${fmt(entradaFinal)} ⏳ PENDENTE`);
+    } else if (isMpComPixPendente) {
+      pagLines.push(`*Pagamento 1:* Link MP R$ ${fmt(valorParcelarFinal)} ✅ PAGO`);
+      pagLines.push(`*Pagamento 2:* PIX R$ ${fmt(entradaFinal)} ⏳ PENDENTE`);
+    } else if (formaPagamento === "PIX") {
       pagLines.push(`*Forma:* PIX`);
       pagLines.push(`*Valor:* R$ ${fmt(valorBaseFinal)}`);
     } else if (formaPagamento === "Debito") {
@@ -482,9 +491,10 @@ function CompraForm() {
       // Pagamento
       `*💳 PAGAMENTO*`,
       ...pagLines,
-      // Detalhes do pagamento MP (quando pago via link MP)
-      // Valor pago = valorBaseFinal (preço - desconto - troca)
-      ...(pagamentoPagoParam === "mp" && valorBaseFinal > 0
+      // Detalhes do pagamento MP (quando pago via link MP).
+      // Se não há entrada PIX, mostra "Valor pago no link" (valor total).
+      // Se há entrada PIX, o valor já está em *Pagamento 1* acima.
+      ...(pagamentoPagoParam === "mp" && !isMpComPixPendente && valorBaseFinal > 0
         ? [`*Valor pago no link:* R$ ${fmt(valorBaseFinal)}`]
         : []),
       ...(pagamentoPagoParam === "mp" && mpPaymentId
@@ -922,12 +932,31 @@ function CompraForm() {
                 {/* Quando pagamento já foi efetuado (link / pix / mp), mostra o status.
                     Sem esse bloco a faixa verde ficaria vazia nesses casos porque
                     não temos parcelas/entrada/PIX pra renderizar. */}
-                {pagamentoPagoParam && (
+                {pagamentoPagoParam === "mp" && entradaPixNum > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-[#86868B]">Pagamento 1</span>
+                      <span className="font-bold text-green-600 text-right">
+                        &#x2705; Link MP
+                        {parcelas && (() => {
+                          const p = parcOpts.find(o => o.parcelas === parseInt(parcelas));
+                          return p ? ` ${p.parcelas}x de R$ ${fmt2(p.valorParcela)}` : "";
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-[#86868B]">Pagamento 2</span>
+                      <span className="font-bold text-amber-600 text-right">
+                        &#x23F3; PIX R$ {fmt(entradaPixNum)} (pendente)
+                      </span>
+                    </div>
+                  </>
+                ) : pagamentoPagoParam ? (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-[#86868B]">Status</span>
                     <span className="font-bold text-green-600">&#x2705; {formaPagamento}</span>
                   </div>
-                )}
+                ) : null}
                 {entradaPixParam && parseFloat(entradaPixParam) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-[#86868B]">Entrada no PIX</span>
