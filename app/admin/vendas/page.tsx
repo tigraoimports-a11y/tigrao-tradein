@@ -4958,13 +4958,27 @@ export default function VendasPage() {
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
-                                              await fetch("/api/vendas", {
-                                                method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, status_pagamento: "FINALIZADO" }),
-                                              });
-                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "FINALIZADO" } : r));
-                                              setMsg("Venda finalizada!");
+                                              // Finalizar todas as vendas do grupo (multi-produto)
+                                              const grupoIds = (v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id).map(gv => gv.id) : [v.id]);
+                                              let allOk = true;
+                                              for (const vid of grupoIds) {
+                                                const res = await fetch("/api/vendas", {
+                                                  method: "PATCH",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({ id: vid, status_pagamento: "FINALIZADO" }),
+                                                });
+                                                if (!res.ok) {
+                                                  const txt = await res.text().catch(() => "");
+                                                  console.error(`[Finalizar] Erro ao finalizar ${vid}:`, res.status, txt);
+                                                  allOk = false;
+                                                }
+                                              }
+                                              if (allOk) {
+                                                setVendas(prev => prev.map(r => grupoIds.includes(r.id) ? { ...r, status_pagamento: "FINALIZADO" } : r));
+                                                setMsg("Venda finalizada!");
+                                              } else {
+                                                setMsg("❌ Erro ao finalizar — verifique o console");
+                                              }
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
                                           >
