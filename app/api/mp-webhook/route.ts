@@ -102,10 +102,22 @@ async function handleApprovedPayment(paymentId: string) {
     return;
   }
 
+  // Fallback de dados do cliente: se o link_compras ainda não tem nome/telefone
+  // (cliente pagou antes de preencher o formulário), usamos o que o MP sabe
+  // sobre o pagador (nome do cartão, telefone de cadastro, etc).
+  const nomeMp = [payment.payer?.first_name, payment.payer?.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const telefoneMp =
+    payment.payer?.phone?.area_code && payment.payer?.phone?.number
+      ? `(${payment.payer.phone.area_code}) ${payment.payer.phone.number}`
+      : null;
+
   // Dispara WhatsApp
   const ok = await notifyPagamentoAprovado({
-    cliente: link.cliente_nome || "Cliente sem nome",
-    telefone: link.cliente_telefone,
+    cliente: link.cliente_nome || nomeMp || "Cliente (aguardando formulário)",
+    telefone: link.cliente_telefone || telefoneMp,
     produto: link.produto || "Produto",
     valor: Number(payment.transaction_amount || link.valor || 0),
     parcelas: payment.installments ? String(payment.installments) : link.parcelas,
