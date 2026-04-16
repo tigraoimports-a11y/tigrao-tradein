@@ -76,6 +76,12 @@ export function setCorPTOverride(enCanonico: string, pt: string) {
   try { window.dispatchEvent(new Event("cor-pt-updated")); } catch {}
 }
 
+// Remove acentos/diacriticos para casar com as chaves sem acento de COR_PT_TO_EN.
+// Ex: "Titânio Branco" -> "TITANIO BRANCO"
+function stripAccentsUpper(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+}
+
 export function corParaPT(corEN: string | null | undefined): string {
   if (!corEN) return "—";
   const trimmed = corEN.trim();
@@ -88,9 +94,9 @@ export function corParaPT(corEN: string | null | undefined): string {
   for (const [en, pt] of Object.entries(COR_EN_TO_PT_SIMPLES)) {
     if (en.toLowerCase() === trimmed.toLowerCase()) return pt;
   }
-  // Pode ter sido cadastrado já em PT (ex: "AZUL CÉU", "MEIA-NOITE").
-  // Converte PT → EN e tenta de novo.
-  const enFromPT = COR_PT_TO_EN[trimmed.toUpperCase()];
+  // Pode ter sido cadastrado já em PT (ex: "AZUL CÉU", "MEIA-NOITE", "Titânio Branco").
+  // Normaliza acentos e converte PT → EN pra tentar de novo.
+  const enFromPT = COR_PT_TO_EN[stripAccentsUpper(trimmed)];
   if (enFromPT) {
     for (const [en, pt] of Object.entries(COR_EN_TO_PT_SIMPLES)) {
       if (en.toLowerCase() === enFromPT.toLowerCase()) return pt;
@@ -155,8 +161,8 @@ export function corParaEN(cor: string | null | undefined): string | null {
   for (const en of Object.keys(COR_EN_TO_PT_SIMPLES)) {
     if (en.toLowerCase() === trimmed.toLowerCase()) return en;
   }
-  // PT → EN canônico
-  const en = COR_PT_TO_EN[trimmed.toUpperCase()];
+  // PT → EN canônico (normaliza acentos: "Titânio Branco" → "TITANIO BRANCO")
+  const en = COR_PT_TO_EN[stripAccentsUpper(trimmed)];
   if (en) {
     for (const k of Object.keys(COR_EN_TO_PT_SIMPLES)) {
       if (k.toLowerCase() === en.toLowerCase()) return k;
