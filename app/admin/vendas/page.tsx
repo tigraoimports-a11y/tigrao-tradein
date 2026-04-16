@@ -38,6 +38,9 @@ export default function VendasPage() {
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
+  // Inline payment form state (vendas programadas)
+  const [pagFormId, setPagFormId] = useState<string | null>(null);
+  const [pagForm, setPagForm] = useState({ valor: "", data: hojeBR(), forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" });
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
@@ -5147,43 +5150,137 @@ export default function VendasPage() {
                                           )}
                                           {saldoRestante > 0 && (
                                             <div className="mt-2">
-                                              <button
-                                                onClick={() => {
-                                                  const valorStr = prompt(`Valor do pagamento (restante: R$ ${saldoRestante.toLocaleString("pt-BR")}):`);
-                                                  if (!valorStr) return;
-                                                  const valor = parseFloat(valorStr.replace(/\./g, "").replace(",", ".")) || 0;
-                                                  if (valor <= 0) return;
-                                                  const forma = prompt("Forma: PIX, CARTAO, DINHEIRO, DEBITO") || "PIX";
-                                                  const banco = prompt("Banco: ITAU, INFINITE, MERCADO_PAGO, ESPECIE") || "ITAU";
-                                                  const tipo = valor >= saldoRestante ? "FINAL" : "PARCIAL";
-                                                  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-                                                  const novoPag = { tipo, valor, data: hoje, forma: forma.toUpperCase(), banco: banco.toUpperCase() };
-                                                  const novaHist = [...hist, novoPag];
-                                                  const novoTotalPago = novaHist.reduce((s, p) => s + (p.valor || 0), 0);
-                                                  const updates: Record<string, unknown> = { id: v.id, pagamento_historia: novaHist };
-                                                  // Se pagou tudo, finalizar a venda
-                                                  if (novoTotalPago >= totalVenda) {
-                                                    updates.status_pagamento = "FINALIZADO";
-                                                    updates.forma = novoPag.forma;
-                                                    updates.banco = novoPag.banco;
-                                                  }
-                                                  fetch("/api/vendas", {
-                                                    method: "PATCH",
-                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                    body: JSON.stringify(updates),
-                                                  }).then(r => r.json()).then(json => {
-                                                    if (json.ok || json.data) {
-                                                      setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updates, pagamento_historia: novaHist } as typeof r : r));
-                                                      setMsg(novoTotalPago >= totalVenda ? `Pagamento final registrado! Venda finalizada.` : `Pagamento de ${fmt(valor)} registrado.`);
-                                                    } else {
-                                                      alert("Erro: " + (json.error || "falha"));
-                                                    }
-                                                  }).catch(() => alert("Erro de conexão"));
-                                                }}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-300 hover:bg-green-50 transition-colors"
-                                              >
-                                                + Registrar Pagamento
-                                              </button>
+                                              {pagFormId !== v.id ? (
+                                                <button
+                                                  onClick={() => {
+                                                    setPagFormId(v.id);
+                                                    setPagForm({ valor: String(saldoRestante), data: hojeBR(), forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" });
+                                                  }}
+                                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-300 hover:bg-green-50 transition-colors"
+                                                >
+                                                  + Registrar Pagamento
+                                                </button>
+                                              ) : (
+                                                <div className={`p-3 rounded-xl border space-y-3 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`} onClick={e => e.stopPropagation()}>
+                                                  <div className="flex items-center justify-between">
+                                                    <h5 className="text-xs font-bold text-green-600">Registrar Pagamento</h5>
+                                                    <button onClick={() => setPagFormId(null)} className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"} hover:text-red-500`}>✕</button>
+                                                  </div>
+                                                  <div className="grid grid-cols-2 gap-2">
+                                                    {/* Data */}
+                                                    <div>
+                                                      <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data</label>
+                                                      <input type="date" value={pagForm.data} onChange={e => setPagForm(f => ({ ...f, data: e.target.value }))}
+                                                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                                                    </div>
+                                                    {/* Valor */}
+                                                    <div>
+                                                      <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor (restante: {fmt(saldoRestante)})</label>
+                                                      <input type="text" inputMode="decimal" value={pagForm.valor} onChange={e => setPagForm(f => ({ ...f, valor: e.target.value }))}
+                                                        placeholder={saldoRestante.toLocaleString("pt-BR")}
+                                                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                                                    </div>
+                                                    {/* Forma */}
+                                                    <div>
+                                                      <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Forma</label>
+                                                      <select value={pagForm.forma} onChange={e => setPagForm(f => ({ ...f, forma: e.target.value, parcelas: "", bandeira: "" }))}
+                                                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                        <option value="PIX">PIX</option>
+                                                        <option value="CARTAO">Cartão Crédito</option>
+                                                        <option value="DEBITO">Cartão Débito</option>
+                                                        <option value="LINK">Link Pagamento</option>
+                                                        <option value="ESPECIE">Espécie</option>
+                                                        <option value="DINHEIRO">Dinheiro</option>
+                                                      </select>
+                                                    </div>
+                                                    {/* Banco */}
+                                                    {pagForm.forma !== "ESPECIE" && pagForm.forma !== "DINHEIRO" && (
+                                                      <div>
+                                                        <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Banco</label>
+                                                        <select value={pagForm.banco} onChange={e => setPagForm(f => ({ ...f, banco: e.target.value }))}
+                                                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                          <option value="ITAU">Itaú</option>
+                                                          <option value="INFINITE">InfinitePay</option>
+                                                          <option value="MERCADO_PAGO">Mercado Pago</option>
+                                                        </select>
+                                                      </div>
+                                                    )}
+                                                    {/* Parcelas (Cartão / Link) */}
+                                                    {(pagForm.forma === "CARTAO" || pagForm.forma === "LINK") && (
+                                                      <div>
+                                                        <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Parcelas</label>
+                                                        <select value={pagForm.parcelas} onChange={e => setPagForm(f => ({ ...f, parcelas: e.target.value }))}
+                                                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                          <option value="">—</option>
+                                                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                                                        </select>
+                                                      </div>
+                                                    )}
+                                                    {/* Bandeira (Cartão Crédito / Débito) */}
+                                                    {(pagForm.forma === "CARTAO" || pagForm.forma === "DEBITO") && (
+                                                      <div>
+                                                        <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Bandeira</label>
+                                                        <select value={pagForm.bandeira} onChange={e => setPagForm(f => ({ ...f, bandeira: e.target.value }))}
+                                                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                          <option value="">—</option>
+                                                          <option value="VISA">Visa</option>
+                                                          <option value="MASTERCARD">Mastercard</option>
+                                                          <option value="ELO">Elo</option>
+                                                          <option value="AMEX">Amex</option>
+                                                        </select>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                  {/* Observação */}
+                                                  <div>
+                                                    <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Observação (opcional)</label>
+                                                    <input type="text" value={pagForm.obs} onChange={e => setPagForm(f => ({ ...f, obs: e.target.value }))}
+                                                      placeholder="Ex: pagou via transferência da mãe"
+                                                      className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                                                  </div>
+                                                  {/* Botões */}
+                                                  <div className="flex gap-2">
+                                                    <button
+                                                      onClick={() => {
+                                                        const valor = parseFloat(pagForm.valor.replace(/\./g, "").replace(",", ".")) || 0;
+                                                        if (valor <= 0) { alert("Informe um valor válido."); return; }
+                                                        const formaStr = [pagForm.forma, pagForm.parcelas ? `${pagForm.parcelas}x` : "", pagForm.bandeira].filter(Boolean).join(" ");
+                                                        const bancoStr = (pagForm.forma === "ESPECIE" || pagForm.forma === "DINHEIRO") ? "ESPECIE" : pagForm.banco;
+                                                        const tipo = valor >= saldoRestante ? "FINAL" : "PARCIAL";
+                                                        const novoPag = { tipo, valor, data: pagForm.data, forma: formaStr, banco: bancoStr, ...(pagForm.obs ? { obs: pagForm.obs } : {}) };
+                                                        const novaHist = [...hist, novoPag];
+                                                        const novoTotalPago = novaHist.reduce((s, p) => s + (p.valor || 0), 0);
+                                                        const updates: Record<string, unknown> = { id: v.id, pagamento_historia: novaHist };
+                                                        if (novoTotalPago >= totalVenda) {
+                                                          updates.status_pagamento = "FINALIZADO";
+                                                          updates.forma = pagForm.forma;
+                                                          updates.banco = bancoStr;
+                                                        }
+                                                        fetch("/api/vendas", {
+                                                          method: "PATCH",
+                                                          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                          body: JSON.stringify(updates),
+                                                        }).then(r => r.json()).then(json => {
+                                                          if (json.ok || json.data) {
+                                                            setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updates, pagamento_historia: novaHist } as typeof r : r));
+                                                            setMsg(novoTotalPago >= totalVenda ? `Pagamento final registrado! Venda finalizada.` : `Pagamento de ${fmt(valor)} registrado.`);
+                                                            setPagFormId(null);
+                                                          } else {
+                                                            alert("Erro: " + (json.error || "falha"));
+                                                          }
+                                                        }).catch(() => alert("Erro de conexão"));
+                                                      }}
+                                                      className="flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                                    >
+                                                      ✓ Confirmar
+                                                    </button>
+                                                    <button onClick={() => setPagFormId(null)}
+                                                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${dm ? "border-[#3A3A3C] text-[#98989D] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"} transition-colors`}>
+                                                      Cancelar
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           )}
                                         </div>
