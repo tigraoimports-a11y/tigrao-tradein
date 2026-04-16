@@ -14,8 +14,6 @@
 // Em todos os casos terminamos com a pergunta aberta
 // "Precisa de alguma ajuda para finalizar seu pedido?"
 // pra incentivar o cliente a responder.
-//
-// Nota: sem emojis por pedido do André — mensagem mais sóbria e profissional.
 
 export interface WaFollowUpInput {
   clienteNome?: string | null;
@@ -74,21 +72,21 @@ function buildResumo(input: WaFollowUpInput): string[] {
 
   // Produto desejado
   if (input.produto) {
-    linhas.push(`Produto na compra: ${juntarCor(input.produto, input.cor)}`);
-    if (valorProduto > 0) linhas.push(`Valor: ${money(valorProduto)}`);
+    linhas.push(`📱 Produto na compra: ${juntarCor(input.produto, input.cor)}`);
+    if (valorProduto > 0) linhas.push(`💰 Valor: ${money(valorProduto)}`);
     linhas.push("");
   }
 
   // Aparelho(s) na troca
   if (input.trocaNome) {
-    linhas.push(`Aparelho na troca: ${juntarCor(input.trocaNome, input.trocaCor)}`);
-    if (trocaVal > 0) linhas.push(`Valor abatido: ${money(trocaVal)}`);
+    linhas.push(`🔄 Aparelho na troca: ${juntarCor(input.trocaNome, input.trocaCor)}`);
+    if (trocaVal > 0) linhas.push(`   Valor abatido: ${money(trocaVal)}`);
     if (input.trocaNome2) {
       linhas.push(
         "",
-        `Aparelho 2 na troca: ${juntarCor(input.trocaNome2, input.trocaCor2)}`
+        `🔄 Aparelho 2 na troca: ${juntarCor(input.trocaNome2, input.trocaCor2)}`
       );
-      if (trocaVal2 > 0) linhas.push(`Valor abatido: ${money(trocaVal2)}`);
+      if (trocaVal2 > 0) linhas.push(`   Valor abatido: ${money(trocaVal2)}`);
     }
     linhas.push("");
   }
@@ -100,15 +98,15 @@ function buildResumo(input: WaFollowUpInput): string[] {
   const valorFinal = Math.max(valorProduto - desconto - totalTroca, 0);
   if (valorFinal > 0) {
     if (totalTroca > 0 || desconto > 0) {
-      linhas.push(`Valor final a pagar: ${money(valorFinal)}`);
+      linhas.push(`✅ Valor final a pagar: ${money(valorFinal)}`);
     }
-    linhas.push(`À vista no Pix: ${money(valorFinal)}`);
+    linhas.push(`💵 À vista no Pix: ${money(valorFinal)}`);
     const parcelasNum = Number(input.parcelas) || 12;
     const parcelas = parcelasNum > 0 && parcelasNum <= 21 ? parcelasNum : 12;
     const taxa = TAXAS[parcelas] ?? 13;
     const totalComTaxa = Math.ceil(valorFinal * (1 + taxa / 100));
     const porParcela = Math.ceil(totalComTaxa / parcelas);
-    linhas.push(`Ou parcelado em ${parcelas}x de ${money(porParcela)} no cartão`);
+    linhas.push(`💳 Ou parcelado em ${parcelas}x de ${money(porParcela)} no cartão`);
     linhas.push("");
   }
 
