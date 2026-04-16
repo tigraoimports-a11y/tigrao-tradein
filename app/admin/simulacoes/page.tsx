@@ -242,8 +242,16 @@ export default function AdminPage() {
       let items: HistoricoItem[] = [];
       if (res.ok) {
         const json = await res.json();
-        // Defensivo: garante client-side que todos têm data de preenchimento real.
-        items = (json.data || []).filter((r: HistoricoItem) => r.cliente_preencheu_em);
+        // Triple-check defensivo: servidor já filtra, mas garante aqui também
+        // que todos têm (1) timestamp de preenchimento, (2) snapshot JSONB
+        // cliente_dados_preenchidos e (3) status diferente de GOSTEI/SAIR
+        // (que são de simulação, não de form de compra).
+        const valido = (r: HistoricoItem) =>
+          !!r.cliente_preencheu_em &&
+          !!r.cliente_dados_preenchidos &&
+          r.status !== "GOSTEI" &&
+          r.status !== "SAIR";
+        items = (json.data || []).filter(valido);
       }
       setHistorico(items);
     } catch { /* silent */ }

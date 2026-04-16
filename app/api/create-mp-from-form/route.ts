@@ -204,8 +204,12 @@ export async function POST(req: NextRequest) {
     troca_valor2: Number(body.troca?.aparelhos?.[1]?.valor) || 0,
     // Snapshot completo
     cliente_dados_preenchidos: snapshot,
-    cliente_preencheu_em: new Date().toISOString(),
-    status: "PREENCHIDO",
+    // IMPORTANTE: NÃO setamos cliente_preencheu_em aqui. Esse timestamp só
+    // deve ser gravado quando o cliente EFETIVAMENTE completar o funil
+    // (pagamento aprovado no webhook MP ou envio via WhatsApp). Se setarmos
+    // aqui, clientes que desistem no checkout do MP ficam pra sempre como
+    // "Preenchido" no admin, poluindo a métrica. Vide PR da Opção A.
+    status: "AGUARDANDO_MP",
     updated_at: new Date().toISOString(),
   };
 

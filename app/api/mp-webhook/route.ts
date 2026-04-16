@@ -160,16 +160,30 @@ async function handleApprovedPayment(paymentId: string) {
     });
   }
 
-  // Marca como notificado no banco pra evitar duplicatas
+  // Marca como notificado no banco pra evitar duplicatas.
+  // AQUI também é onde marcamos oficialmente que o cliente completou o funil
+  // via MP: cliente_preencheu_em + status=PREENCHIDO + pagamento_pago=mp.
+  // No fluxo invertido, /api/create-mp-from-form salva os dados com
+  // status=AGUARDANDO_MP e NÃO seta cliente_preencheu_em — só marca aqui
+  // quando o pagamento é aprovado de fato, evitando falsos positivos
+  // (cliente que desiste no checkout do MP).
   if (ok) {
-    await supabase
-      .from("link_compras")
-      .update({
-        notificado_pago: true,
-        notificado_pago_em: new Date().toISOString(),
-        mp_payment_id: String(payment.id),
-      })
-      .eq("id", link.id);
+    const patch: Record<string, unknown> = {
+      notificado_pago: true,
+      notificado_pago_em: new Date().toISOString(),
+      mp_payment_id: String(payment.id),
+      updated_at: new Date().toISOString(),
+    };
+    if (!link.cliente_preencheu_em) {
+      patch.cliente_preencheu_em = new Date().toISOString();
+    }
+    if (link.status === "AGUARDANDO_MP" || !link.status) {
+      patch.status = "PREENCHIDO";
+    }
+    if (!link.pagamento_pago) {
+      patch.pagamento_pago = "mp";
+    }
+    await supabase.from("link_compras").update(patch).eq("id", link.id);
   }
 }
 
