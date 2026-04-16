@@ -8,7 +8,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
@@ -519,7 +519,7 @@ export default function VendasPage() {
 
   const produtosFiltrados = catSel ? (() => {
     const [cat, tipo] = catSel.split("__");
-    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
+    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
   })() : [];
 
   const fetchVendas = useCallback(async () => {
@@ -4182,12 +4182,12 @@ export default function VendasPage() {
                                 {v.is_brinde && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-pink-100 text-pink-700">BRINDE</span>}
                               </td>
                               <td className="px-3 py-2.5 max-w-[220px] text-xs">
-                                <span className="truncate block whitespace-nowrap">{v.produto}</span>
+                                <span className="truncate block whitespace-nowrap">{normalizarCoresNoTexto(v.produto)}</span>
                                 {isFirstInGrupo && (
                                   <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E]">📦 {grupoItens.length} itens</span>
                                 )}
                                 {v.troca_produto && (
-                                  <span className="block mt-0.5 text-[10px] text-purple-600 truncate whitespace-nowrap">🔄 {v.troca_produto}</span>
+                                  <span className="block mt-0.5 text-[10px] text-purple-600 truncate whitespace-nowrap">🔄 {normalizarCoresNoTexto(v.troca_produto)}</span>
                                 )}
                                 {tab === "correios" && v.codigo_rastreio && (
                                   <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors">📦 {v.codigo_rastreio}</a>
@@ -5194,7 +5194,7 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
                                       <div className="text-xs space-y-1">
-                                        <p><strong>Produto:</strong> {v.produto}</p>
+                                        <p><strong>Produto:</strong> {normalizarCoresNoTexto(v.produto)}</p>
                                         <p>
                                           <strong>Serial No.:</strong>{" "}
                                           {editingId === v.id + "-serial" ? (

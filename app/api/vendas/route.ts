@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
 import { recalcularSaldoDia } from "@/lib/saldos";
 import { recalcBalancos } from "@/lib/recalc-balancos";
+import { normalizarCoresNoTexto } from "@/lib/cor-pt";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -809,7 +810,7 @@ export async function PATCH(req: NextRequest) {
         enviarNotaFiscal({
           to: venda.email!,
           clienteNome: venda.cliente || "Cliente",
-          produto: `${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim(),
+          produto: normalizarCoresNoTexto(`${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim()),
           valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
           notaFiscalUrl: venda.nota_fiscal_url!,
         }).then(() => {
