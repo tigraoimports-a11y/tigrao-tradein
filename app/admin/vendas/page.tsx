@@ -1076,7 +1076,7 @@ export default function VendasPage() {
             valor,
             data: e.data,
             forma: formaStr,
-            banco: e.forma === "ESPECIE" ? "ESPECIE" : e.banco,
+            banco: e.forma === "ESPECIE" ? "ESPECIE" : e.forma === "LINK" ? "MERCADO_PAGO" : (e.banco || "ITAU"),
             ...(e.obs ? { obs: e.obs } : {}),
           };
         }),
@@ -2992,7 +2992,7 @@ export default function VendasPage() {
                           {fmt(parseFloat(entry.valor.replace(/\./g, "").replace(",", ".")) || 0)} via {entryFormaLabel}
                           {entry.parcelas ? ` ${entry.parcelas}x` : ""}
                           {entry.bandeira ? ` ${entry.bandeira}` : ""}
-                          {entry.banco && entry.forma !== "ESPECIE" ? ` — ${entry.banco.replace("_", " ")}` : ""}
+                          {entry.forma !== "ESPECIE" ? ` — ${(entry.forma === "LINK" ? "MERCADO_PAGO" : entry.banco || "ITAU").replace("_", " ")}` : ""}
                           {entry.data ? ` em ${entry.data.split("-").reverse().join("/")}` : ""}
                         </p>
                       )}
@@ -3449,7 +3449,7 @@ export default function VendasPage() {
                             {fmt(parseFloat(entry.valor.replace(/\./g, "").replace(",", ".")) || 0)} via {entryFormaLabel}
                             {entry.parcelas ? ` ${entry.parcelas}x` : ""}
                             {entry.bandeira ? ` ${entry.bandeira}` : ""}
-                            {entry.banco && entry.forma !== "ESPECIE" ? ` — ${entry.banco.replace("_", " ")}` : ""}
+                            {entry.forma !== "ESPECIE" ? ` — ${(entry.forma === "LINK" ? "MERCADO_PAGO" : entry.banco || "ITAU").replace("_", " ")}` : ""}
                             {entry.data ? ` em ${entry.data.split("-").reverse().join("/")}` : ""}
                           </p>
                         )}
