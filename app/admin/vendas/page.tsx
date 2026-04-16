@@ -3238,7 +3238,7 @@ export default function VendasPage() {
                 <label className="flex items-center gap-2 text-sm text-[#86868B]">
                   <input type="checkbox" checked={parseFloat(form.entrada_fiado) > 0} onChange={(e) => {
                     if (!e.target.checked) { setForm(f => ({ ...f, entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "" })); }
-                    else { setForm(f => ({ ...f, fiado_qnt_parcelas: f.fiado_qnt_parcelas || "1" })); }
+                    else { setForm(f => ({ ...f, entrada_fiado: f.entrada_fiado || "1", fiado_qnt_parcelas: f.fiado_qnt_parcelas || "1" })); }
                   }} className="accent-[#E8740E]" />
                   <span className="font-semibold">Parte Fiado?</span>
                 </label>
