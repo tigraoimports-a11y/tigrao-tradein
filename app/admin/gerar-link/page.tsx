@@ -232,10 +232,6 @@ export default function GerarLinkPage() {
   const [pasteMsg, setPasteMsg] = useState("");
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
   // Fluxo invertido: habilita botão "Pagar com Mercado Pago" no /compra.
-  // Cliente preenche o formulário ANTES de pagar — no clique, o servidor cria
-  // a preference MP com tudo pré-preenchido e redireciona pro checkout.
-  // Vantagem: quando MP confirma, o webhook já tem todos os dados e envia a
-  // notificação COMPLETA pro grupo (sem depender do cliente terminar o fluxo).
   const [pagarMp, setPagarMp] = useState(false);
   const [taxaEntrega, setTaxaEntrega] = useState("");
   // Link Mercado Pago (gerado via API MP — independente do "Gerar Link" do form)

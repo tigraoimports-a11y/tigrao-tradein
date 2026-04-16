@@ -8,7 +8,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
@@ -38,6 +38,12 @@ export default function VendasPage() {
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
+  // Inline payment form state (vendas programadas)
+  const [pagFormId, setPagFormId] = useState<string | null>(null);
+  const [pagForm, setPagForm] = useState({ valor: "", data: hojeBR(), forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" });
+  // Multi-date payment mode (registrar venda com pagamentos em datas diferentes)
+  const [multiDatePagamento, setMultiDatePagamento] = useState(false);
+  const [pagEntries, setPagEntries] = useState<{ data: string; valor: string; forma: string; banco: string; parcelas: string; bandeira: string; obs: string }[]>([]);
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
@@ -135,6 +141,7 @@ export default function VendasPage() {
     cep: "", bairro: "", cidade: "", uf: "",
     // Atacado: frete/entrega cobrado a parte
     frete_valor: "", frete_recebido: false as boolean,
+    frete_forma: "" as string, frete_banco: "" as string, frete_parcelas: "" as string, frete_bandeira: "" as string,
     // Crédito de lojista (ATACADO): valor a abater do saldo pré-pago
     usar_credito_loja: "",
     // Brinde / Cortesia
@@ -300,7 +307,7 @@ export default function VendasPage() {
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -983,8 +990,12 @@ export default function VendasPage() {
       fornecedor: prodFields.fornecedor || null,
       custo: pCusto,
       preco_vendido: pPrecoVendido,
-      banco: pBancoFinal,
-      forma: !gForma ? null : gForma === "LINK" ? "CARTAO" : gForma === "ESPECIE" ? "DINHEIRO" : gForma,
+      banco: multiDatePagamento && pagEntries.length > 0
+        ? (pagEntries[0].forma === "ESPECIE" ? "ESPECIE" : pagEntries[0].banco || "ITAU")
+        : pBancoFinal,
+      forma: multiDatePagamento && pagEntries.length > 0
+        ? (pagEntries[0].forma === "LINK" ? "CARTAO" : pagEntries[0].forma === "ESPECIE" ? "DINHEIRO" : pagEntries[0].forma)
+        : (!gForma ? null : gForma === "LINK" ? "CARTAO" : gForma === "ESPECIE" ? "DINHEIRO" : gForma),
       recebimento: !gForma ? null : gForma === "FIADO" ? (form.fiado_data_inicio || null) : gForma === "PIX" || gForma === "ESPECIE" ? "D+0" : gForma === "LINK" ? "D+0" : gForma === "DEBITO" ? "D+1" : "D+1",
       data_recebimento_fiado: gForma === "FIADO" && form.fiado_data_inicio ? form.fiado_data_inicio : null,
       qnt_parcelas: gParcelas || null,
@@ -1049,12 +1060,33 @@ export default function VendasPage() {
       troca_ciclos2: prodFields.troca_ciclos2 || null,
       troca_garantia2: prodFields.troca_garantia2 || null,
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
-      status_pagamento: vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA") : "AGUARDANDO",
+      status_pagamento: multiDatePagamento
+        ? (() => {
+            const totalEntries = pagEntries.reduce((s, e) => s + (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0), 0);
+            return totalEntries >= pPrecoVendido ? "FINALIZADO" : "PROGRAMADA";
+          })()
+        : vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA") : "AGUARDANDO",
       data_programada: vendaProgramada && dataProgramada ? dataProgramada : null,
+      ...(multiDatePagamento && pagEntries.length > 0 ? {
+        pagamento_historia: pagEntries.filter(e => (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0) > 0).map(e => {
+          const valor = parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0;
+          const formaStr = [e.forma === "LINK" ? "CARTAO" : e.forma, e.parcelas ? `${e.parcelas}x` : "", e.bandeira].filter(Boolean).join(" ");
+          return {
+            tipo: "PARCIAL",
+            valor,
+            data: e.data,
+            forma: formaStr,
+            banco: e.forma === "ESPECIE" ? "ESPECIE" : e.forma === "LINK" ? "MERCADO_PAGO" : (e.banco || "ITAU"),
+            ...(e.obs ? { obs: e.obs } : {}),
+          };
+        }),
+      } : {}),
       vendedor: user?.nome || null,
       // Entrega atacado (cobrada à parte)
-      frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
-      frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
+      frete_valor: parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || null,
+      frete_recebido: form.frete_valor ? (form.frete_forma ? true : !!form.frete_recebido) : null,
+      frete_forma: form.frete_forma ? [form.frete_forma, form.frete_parcelas ? `${form.frete_parcelas}x` : "", form.frete_bandeira].filter(Boolean).join(" ") : null,
+      frete_banco: form.frete_banco || null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
       _lojista_id: creditoLojistaId || null,
@@ -1433,7 +1465,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1475,7 +1507,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1553,7 +1585,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
-        frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+        frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
         is_brinde: false,
       });
       setCatSel("");
@@ -1562,7 +1594,7 @@ export default function VendasPage() {
       setShowSegundaTroca(false); setTrocaEnabled(false);
       setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
       setSerialBusca(""); setScanMsg("");
-      setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
+      setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
       localStorage.removeItem("tigrao_venda_draft");
       const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
@@ -1828,7 +1860,7 @@ export default function VendasPage() {
       cidade: "",
       uf: "",
       frete_valor: "",
-      frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+      frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
       is_brinde: false,
     });
     setCatSel("");
@@ -2044,14 +2076,14 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
-                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
+                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
                   localStorage.removeItem("tigrao_venda_draft");
                   setMsg("Formulario limpo!");
                   setTimeout(() => setMsg(""), 2000);
@@ -2230,6 +2262,18 @@ export default function VendasPage() {
                   />
                   <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
                 </div>
+                {/* Banco do PIX da entrega */}
+                {form.frete_valor && (
+                  <div className="mt-3">
+                    <p className={labelCls}>Banco do PIX</p>
+                    <select value={form.frete_banco} onChange={(e) => { set("frete_banco", e.target.value); set("frete_forma", e.target.value ? "PIX" : ""); }} className={inputCls}>
+                      <option value="">— Selecionar —</option>
+                      <option value="ITAU">Itaú</option>
+                      <option value="INFINITE">InfinitePay</option>
+                      <option value="MERCADO_PAGO">Mercado Pago</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Crédito de Lojista — aparece sempre em ATACADO, mesmo sem saldo (facilita cadastrar/ver) */}
@@ -2412,6 +2456,75 @@ export default function VendasPage() {
                       <a href={`https://www.linkcorreios.com.br/${form.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`shrink-0 px-3 flex items-center justify-center rounded-xl text-[12px] font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white gap-1`}>📦 Rastrear</a>
                     )}
                   </div>
+                </div>
+              )}
+              {/* 🚚 Taxa de Entrega — vendas normais */}
+              {(form.local === "ENTREGA" || form.local === "CORREIO") && (
+                <div className={`p-3 rounded-xl border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E0E0E5] bg-[#FAFAFA]"}`}>
+                  <div className="mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Taxa de Entrega</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className={labelCls}>Valor (R$)</p>
+                      <input type="text" inputMode="numeric" value={form.frete_valor} onChange={(e) => { const digits = e.target.value.replace(/\D/g, ""); set("frete_valor", digits ? Number(digits).toLocaleString("pt-BR") : ""); }} placeholder="Ex: 30" className={inputCls} />
+                    </div>
+                    <div>
+                      <p className={labelCls}>Forma de Pagamento</p>
+                      <select value={form.frete_forma} onChange={(e) => { set("frete_forma", e.target.value); if (e.target.value !== "CARTAO") { set("frete_parcelas", ""); set("frete_bandeira", ""); } if (e.target.value === "ESPECIE") set("frete_banco", "ESPECIE"); }} className={inputCls}>
+                        <option value="">— Selecionar —</option>
+                        <option value="PIX">PIX</option>
+                        <option value="CARTAO">Cartão de Crédito</option>
+                        <option value="DEBITO">Débito</option>
+                        <option value="LINK">Link Mercado Pago</option>
+                        <option value="ESPECIE">Espécie (Dinheiro)</option>
+                      </select>
+                    </div>
+                  </div>
+                  {/* Campos condicionais por forma */}
+                  {form.frete_forma && form.frete_forma !== "ESPECIE" && (
+                    <div className={`grid gap-3 mt-3 ${form.frete_forma === "CARTAO" ? "grid-cols-3" : "grid-cols-1"}`}>
+                      <div>
+                        <p className={labelCls}>{form.frete_forma === "PIX" ? "Banco do PIX" : form.frete_forma === "LINK" ? "Plataforma" : "Máquina"}</p>
+                        <select value={form.frete_banco} onChange={(e) => set("frete_banco", e.target.value)} className={inputCls}>
+                          <option value="">— Selecionar —</option>
+                          {form.frete_forma === "LINK" ? (
+                            <option value="MERCADO_PAGO">Mercado Pago</option>
+                          ) : (
+                            <>
+                              <option value="ITAU">Itaú</option>
+                              <option value="INFINITE">InfinitePay</option>
+                              <option value="MERCADO_PAGO">Mercado Pago</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                      {form.frete_forma === "CARTAO" && (
+                        <>
+                          <div>
+                            <p className={labelCls}>Parcelas</p>
+                            <input type="number" min={1} max={18} value={form.frete_parcelas} onChange={(e) => set("frete_parcelas", e.target.value)} placeholder="1" className={inputCls} />
+                          </div>
+                          <div>
+                            <p className={labelCls}>Bandeira</p>
+                            <select value={form.frete_bandeira} onChange={(e) => set("frete_bandeira", e.target.value)} className={inputCls}>
+                              <option value="">— Selecionar —</option>
+                              <option value="VISA">Visa</option>
+                              <option value="MASTERCARD">Mastercard</option>
+                              <option value="ELO">Elo</option>
+                              <option value="AMEX">Amex</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
+                      {form.frete_forma === "LINK" && (
+                        <div>
+                          <p className={labelCls}>Parcelas no Link</p>
+                          <input type="number" min={1} max={18} value={form.frete_parcelas} onChange={(e) => set("frete_parcelas", e.target.value)} placeholder="1" className={inputCls} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               {/* CEP */}
@@ -2657,7 +2770,10 @@ export default function VendasPage() {
                                                   : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E]`
                                               }`}
                                             >
-                                              {p.serial_no ? <span className={`font-mono text-[11px] ${isSelected ? "text-white" : "text-purple-500"}`}>{p.serial_no}</span> : <span>{fmt(p.custo_unitario)}</span>}
+                                              <span className="flex flex-col items-start gap-0.5">
+                                                {p.serial_no ? <span className={`font-mono text-[11px] ${isSelected ? "text-white" : "text-purple-500"}`}>{p.serial_no}</span> : <span>{fmt(p.custo_unitario)}</span>}
+                                                {p.reserva_cliente && <span className={`text-[9px] font-semibold ${isSelected ? "text-white/80" : "text-orange-600"}`}>📌 {p.reserva_cliente}</span>}
+                                              </span>
                                             </button>
                                           );
                                         })}
@@ -2726,7 +2842,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -2738,7 +2854,7 @@ export default function VendasPage() {
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
                   setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
-                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
+                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
                 }}
@@ -2779,13 +2895,140 @@ export default function VendasPage() {
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
-              {!podeVerHistorico && (
-                <span className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-lg">
-                  Deixe em branco → André ou Nicolas completam depois
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={multiDatePagamento}
+                    onChange={(e) => {
+                      setMultiDatePagamento(e.target.checked);
+                      if (e.target.checked && pagEntries.length === 0) {
+                        setPagEntries([{ data: form.data || hojeBR(), valor: "", forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" }]);
+                      }
+                    }}
+                    className="accent-blue-500 w-3.5 h-3.5"
+                  />
+                  <span className={`text-[11px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Datas diferentes</span>
+                </label>
+                {!podeVerHistorico && (
+                  <span className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-lg">
+                    Deixe em branco → André ou Nicolas completam depois
+                  </span>
+                )}
+              </div>
             </div>
 
+            {multiDatePagamento ? (
+              <div className="space-y-3">
+                {pagEntries.map((entry, idx) => {
+                  const entryFormaLabel = entry.forma === "CARTAO" ? "Cartão" : entry.forma === "DEBITO" ? "Débito" : entry.forma === "LINK" ? "Link MP" : entry.forma === "ESPECIE" ? "Espécie" : entry.forma || "—";
+                  return (
+                    <div key={idx} className={`p-3 rounded-xl border space-y-2 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E0E0E5]"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-blue-400" : "text-blue-600"}`}>Pagamento {idx + 1}</span>
+                        {pagEntries.length > 1 && (
+                          <button onClick={() => setPagEntries(prev => prev.filter((_, i) => i !== idx))} className="text-xs text-red-400 hover:text-red-600">✕ Remover</button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div>
+                          <p className={labelCls}>Data</p>
+                          <input type="date" value={entry.data} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, data: e.target.value } : p))} className={inputCls} />
+                        </div>
+                        <div>
+                          <p className={labelCls}>Valor (R$)</p>
+                          <input type="text" inputMode="decimal" value={entry.valor} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, valor: e.target.value } : p))} placeholder="0" className={inputCls} />
+                        </div>
+                        <div>
+                          <p className={labelCls}>Forma</p>
+                          <select value={entry.forma} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, forma: e.target.value, parcelas: "", bandeira: "", banco: e.target.value === "ESPECIE" ? "ESPECIE" : e.target.value === "LINK" ? "MERCADO_PAGO" : p.banco || "ITAU" } : p))} className={selectCls}>
+                            <option value="PIX">PIX</option>
+                            <option value="CARTAO">Cartão Crédito</option>
+                            <option value="DEBITO">Débito</option>
+                            <option value="LINK">Link Mercado Pago</option>
+                            <option value="ESPECIE">Espécie (Dinheiro)</option>
+                          </select>
+                        </div>
+                        {entry.forma !== "ESPECIE" && (
+                          <div>
+                            <p className={labelCls}>{entry.forma === "PIX" ? "Banco do PIX" : entry.forma === "LINK" ? "Plataforma" : "Máquina"}</p>
+                            <select value={entry.banco} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, banco: e.target.value } : p))} className={selectCls}>
+                              {entry.forma === "LINK" ? (
+                                <option value="MERCADO_PAGO">Mercado Pago</option>
+                              ) : (
+                                <>
+                                  <option value="ITAU">Itaú</option>
+                                  <option value="INFINITE">InfinitePay</option>
+                                  <option value="MERCADO_PAGO">Mercado Pago</option>
+                                </>
+                              )}
+                            </select>
+                          </div>
+                        )}
+                        {(entry.forma === "CARTAO" || entry.forma === "LINK") && (
+                          <div>
+                            <p className={labelCls}>Parcelas</p>
+                            <select value={entry.parcelas} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, parcelas: e.target.value } : p))} className={selectCls}>
+                              <option value="">—</option>
+                              {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                            </select>
+                          </div>
+                        )}
+                        {(entry.forma === "CARTAO" || entry.forma === "DEBITO") && (
+                          <div>
+                            <p className={labelCls}>Bandeira</p>
+                            <select value={entry.bandeira} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, bandeira: e.target.value } : p))} className={selectCls}>
+                              <option value="">—</option>
+                              <option value="VISA">Visa</option>
+                              <option value="MASTERCARD">Mastercard</option>
+                              <option value="ELO">Elo</option>
+                              <option value="AMEX">Amex</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                      {entry.valor && (
+                        <p className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                          {fmt(parseFloat(entry.valor.replace(/\./g, "").replace(",", ".")) || 0)} via {entryFormaLabel}
+                          {entry.parcelas ? ` ${entry.parcelas}x` : ""}
+                          {entry.bandeira ? ` ${entry.bandeira}` : ""}
+                          {entry.forma !== "ESPECIE" ? ` — ${(entry.forma === "LINK" ? "MERCADO_PAGO" : entry.banco || "ITAU").replace("_", " ")}` : ""}
+                          {entry.data ? ` em ${entry.data.split("-").reverse().join("/")}` : ""}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <button
+                  onClick={() => setPagEntries(prev => [...prev, { data: form.data || hojeBR(), valor: "", forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" }])}
+                  className={`w-full py-2 rounded-xl border-2 border-dashed text-xs font-semibold transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-blue-500 hover:text-blue-400" : "border-[#D2D2D7] text-[#86868B] hover:border-blue-400 hover:text-blue-500"}`}
+                >
+                  + Adicionar outro pagamento
+                </button>
+                {(() => {
+                  const totalEntries = pagEntries.reduce((s, e) => s + (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0), 0);
+                  const precoVendido = parseFloat(form.preco_vendido) || 0;
+                  const diff = precoVendido - totalEntries;
+                  return totalEntries > 0 ? (
+                    <div className={`rounded-xl px-4 py-2.5 text-xs flex flex-wrap gap-3 items-center ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                      <span>Total pagamentos: <strong className="text-green-600">{fmt(totalEntries)}</strong></span>
+                      {precoVendido > 0 && (
+                        <>
+                          <span>Preço vendido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(precoVendido)}</strong></span>
+                          {Math.abs(diff) > 1 && (
+                            <span className={diff > 0 ? "text-amber-600" : "text-red-500"}>
+                              {diff > 0 ? `Falta: ${fmt(diff)}` : `Excede: ${fmt(Math.abs(diff))}`}
+                            </span>
+                          )}
+                          {Math.abs(diff) <= 1 && <span className="text-green-600 font-bold">✓ Valor batido</span>}
+                        </>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            ) : (
+            <>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
                 <option value="">— Definir depois —</option>
@@ -2995,7 +3238,7 @@ export default function VendasPage() {
                 <label className="flex items-center gap-2 text-sm text-[#86868B]">
                   <input type="checkbox" checked={parseFloat(form.entrada_fiado) > 0} onChange={(e) => {
                     if (!e.target.checked) { setForm(f => ({ ...f, entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "" })); }
-                    else { setForm(f => ({ ...f, fiado_qnt_parcelas: f.fiado_qnt_parcelas || "1" })); }
+                    else { setForm(f => ({ ...f, entrada_fiado: f.entrada_fiado || "1", fiado_qnt_parcelas: f.fiado_qnt_parcelas || "1" })); }
                   }} className="accent-[#E8740E]" />
                   <span className="font-semibold">Parte Fiado?</span>
                 </label>
@@ -3059,6 +3302,8 @@ export default function VendasPage() {
               )}
             </div>
             )}
+            </>
+            )}
           </div>
           )}
 
@@ -3111,7 +3356,141 @@ export default function VendasPage() {
 
             {/* FORMA DE PAGAMENTO — cart mode */}
             <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-              <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={multiDatePagamento}
+                    onChange={(e) => {
+                      setMultiDatePagamento(e.target.checked);
+                      if (e.target.checked && pagEntries.length === 0) {
+                        setPagEntries([{ data: form.data || hojeBR(), valor: "", forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" }]);
+                      }
+                    }}
+                    className="accent-blue-500 w-3.5 h-3.5"
+                  />
+                  <span className={`text-[11px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Pagamentos em datas diferentes</span>
+                </label>
+              </div>
+
+              {/* ── MULTI-DATE PAYMENT MODE ── */}
+              {multiDatePagamento ? (
+                <div className="space-y-3">
+                  {pagEntries.map((entry, idx) => {
+                    const entryFormaLabel = entry.forma === "CARTAO" ? "Cartão" : entry.forma === "DEBITO" ? "Débito" : entry.forma === "LINK" ? "Link MP" : entry.forma === "ESPECIE" ? "Espécie" : entry.forma || "—";
+                    return (
+                      <div key={idx} className={`p-3 rounded-xl border space-y-2 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E0E0E5]"}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-blue-400" : "text-blue-600"}`}>Pagamento {idx + 1}</span>
+                          {pagEntries.length > 1 && (
+                            <button onClick={() => setPagEntries(prev => prev.filter((_, i) => i !== idx))} className="text-xs text-red-400 hover:text-red-600">✕ Remover</button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div>
+                            <p className={labelCls}>Data</p>
+                            <input type="date" value={entry.data} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, data: e.target.value } : p))} className={inputCls} />
+                          </div>
+                          <div>
+                            <p className={labelCls}>Valor (R$)</p>
+                            <input type="text" inputMode="decimal" value={entry.valor} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, valor: e.target.value } : p))} placeholder="0" className={inputCls} />
+                          </div>
+                          <div>
+                            <p className={labelCls}>Forma</p>
+                            <select value={entry.forma} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, forma: e.target.value, parcelas: "", bandeira: "", banco: e.target.value === "ESPECIE" ? "ESPECIE" : e.target.value === "LINK" ? "MERCADO_PAGO" : p.banco || "ITAU" } : p))} className={selectCls}>
+                              <option value="PIX">PIX</option>
+                              <option value="CARTAO">Cartão Crédito</option>
+                              <option value="DEBITO">Débito</option>
+                              <option value="LINK">Link Mercado Pago</option>
+                              <option value="ESPECIE">Espécie (Dinheiro)</option>
+                            </select>
+                          </div>
+                          {entry.forma !== "ESPECIE" && (
+                            <div>
+                              <p className={labelCls}>{entry.forma === "PIX" ? "Banco do PIX" : entry.forma === "LINK" ? "Plataforma" : "Máquina"}</p>
+                              <select value={entry.banco} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, banco: e.target.value } : p))} className={selectCls}>
+                                {entry.forma === "LINK" ? (
+                                  <option value="MERCADO_PAGO">Mercado Pago</option>
+                                ) : (
+                                  <>
+                                    <option value="ITAU">Itaú</option>
+                                    <option value="INFINITE">InfinitePay</option>
+                                    <option value="MERCADO_PAGO">Mercado Pago</option>
+                                  </>
+                                )}
+                              </select>
+                            </div>
+                          )}
+                          {(entry.forma === "CARTAO" || entry.forma === "LINK") && (
+                            <div>
+                              <p className={labelCls}>Parcelas</p>
+                              <select value={entry.parcelas} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, parcelas: e.target.value } : p))} className={selectCls}>
+                                <option value="">—</option>
+                                {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                              </select>
+                            </div>
+                          )}
+                          {(entry.forma === "CARTAO" || entry.forma === "DEBITO") && (
+                            <div>
+                              <p className={labelCls}>Bandeira</p>
+                              <select value={entry.bandeira} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, bandeira: e.target.value } : p))} className={selectCls}>
+                                <option value="">—</option>
+                                <option value="VISA">Visa</option>
+                                <option value="MASTERCARD">Mastercard</option>
+                                <option value="ELO">Elo</option>
+                                <option value="AMEX">Amex</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                        {entry.valor && (
+                          <p className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                            {fmt(parseFloat(entry.valor.replace(/\./g, "").replace(",", ".")) || 0)} via {entryFormaLabel}
+                            {entry.parcelas ? ` ${entry.parcelas}x` : ""}
+                            {entry.bandeira ? ` ${entry.bandeira}` : ""}
+                            {entry.forma !== "ESPECIE" ? ` — ${(entry.forma === "LINK" ? "MERCADO_PAGO" : entry.banco || "ITAU").replace("_", " ")}` : ""}
+                            {entry.data ? ` em ${entry.data.split("-").reverse().join("/")}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Add new entry button */}
+                  <button
+                    onClick={() => setPagEntries(prev => [...prev, { data: form.data || hojeBR(), valor: "", forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" }])}
+                    className={`w-full py-2 rounded-xl border-2 border-dashed text-xs font-semibold transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-blue-500 hover:text-blue-400" : "border-[#D2D2D7] text-[#86868B] hover:border-blue-400 hover:text-blue-500"}`}
+                  >
+                    + Adicionar outro pagamento
+                  </button>
+
+                  {/* Summary */}
+                  {(() => {
+                    const totalEntries = pagEntries.reduce((s, e) => s + (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0), 0);
+                    const precoVendido = parseFloat(form.preco_vendido) || 0;
+                    const diff = precoVendido - totalEntries;
+                    return totalEntries > 0 ? (
+                      <div className={`rounded-xl px-4 py-2.5 text-xs flex flex-wrap gap-3 items-center ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                        <span>Total pagamentos: <strong className="text-green-600">{fmt(totalEntries)}</strong></span>
+                        {precoVendido > 0 && (
+                          <>
+                            <span>Preço vendido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(precoVendido)}</strong></span>
+                            {Math.abs(diff) > 1 && (
+                              <span className={diff > 0 ? "text-amber-600" : "text-red-500"}>
+                                {diff > 0 ? `Falta: ${fmt(diff)}` : `Excede: ${fmt(Math.abs(diff))}`}
+                              </span>
+                            )}
+                            {Math.abs(diff) <= 1 && <span className="text-green-600 font-bold">✓ Valor batido</span>}
+                          </>
+                        )}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              ) : (
+              /* ── NORMAL SINGLE-DATE PAYMENT MODE ── */
+              <>
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
@@ -3344,6 +3723,8 @@ export default function VendasPage() {
                   </div>
                 )}
               </div>
+              )}
+              </>
               )}
             </div>
 
@@ -4095,12 +4476,12 @@ export default function VendasPage() {
                                 {v.is_brinde && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-pink-100 text-pink-700">BRINDE</span>}
                               </td>
                               <td className="px-3 py-2.5 max-w-[220px] text-xs">
-                                <span className="truncate block whitespace-nowrap">{v.produto}</span>
+                                <span className="truncate block whitespace-nowrap">{normalizarCoresNoTexto(v.produto)}</span>
                                 {isFirstInGrupo && (
                                   <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E]">📦 {grupoItens.length} itens</span>
                                 )}
                                 {v.troca_produto && (
-                                  <span className="block mt-0.5 text-[10px] text-purple-600 truncate whitespace-nowrap">🔄 {v.troca_produto}</span>
+                                  <span className="block mt-0.5 text-[10px] text-purple-600 truncate whitespace-nowrap">🔄 {normalizarCoresNoTexto(v.troca_produto)}</span>
                                 )}
                                 {tab === "correios" && v.codigo_rastreio && (
                                   <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors">📦 {v.codigo_rastreio}</a>
@@ -4568,6 +4949,10 @@ export default function VendasPage() {
                                               uf: primaryVenda.uf || "",
                                               frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
                                               frete_recebido: !!primaryVenda.frete_recebido,
+                                              frete_forma: (() => { const f = primaryVenda.frete_forma || ""; return f.split(" ")[0] || ""; })(),
+                                              frete_banco: primaryVenda.frete_banco || "",
+                                              frete_parcelas: (() => { const m = (primaryVenda.frete_forma || "").match(/(\d+)x/); return m ? m[1] : ""; })(),
+                                              frete_bandeira: (() => { const parts = (primaryVenda.frete_forma || "").split(" "); return parts.find(p => ["VISA","MASTERCARD","ELO","AMEX"].includes(p)) || ""; })(),
                                               usar_credito_loja: "",
                                               is_brinde: !!primaryVenda.is_brinde,
                                               codigo_rastreio: primaryVenda.codigo_rastreio || "",
@@ -4867,13 +5252,27 @@ export default function VendasPage() {
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
-                                              await fetch("/api/vendas", {
-                                                method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, status_pagamento: "FINALIZADO" }),
-                                              });
-                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "FINALIZADO" } : r));
-                                              setMsg("Venda finalizada!");
+                                              // Finalizar todas as vendas do grupo (multi-produto)
+                                              const grupoIds = (v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id).map(gv => gv.id) : [v.id]);
+                                              let allOk = true;
+                                              for (const vid of grupoIds) {
+                                                const res = await fetch("/api/vendas", {
+                                                  method: "PATCH",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({ id: vid, status_pagamento: "FINALIZADO" }),
+                                                });
+                                                if (!res.ok) {
+                                                  const txt = await res.text().catch(() => "");
+                                                  console.error(`[Finalizar] Erro ao finalizar ${vid}:`, res.status, txt);
+                                                  allOk = false;
+                                                }
+                                              }
+                                              if (allOk) {
+                                                setVendas(prev => prev.map(r => grupoIds.includes(r.id) ? { ...r, status_pagamento: "FINALIZADO" } : r));
+                                                setMsg("Venda finalizada!");
+                                              } else {
+                                                setMsg("❌ Erro ao finalizar — verifique o console");
+                                              }
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
                                           >
@@ -5042,43 +5441,137 @@ export default function VendasPage() {
                                           )}
                                           {saldoRestante > 0 && (
                                             <div className="mt-2">
-                                              <button
-                                                onClick={() => {
-                                                  const valorStr = prompt(`Valor do pagamento (restante: R$ ${saldoRestante.toLocaleString("pt-BR")}):`);
-                                                  if (!valorStr) return;
-                                                  const valor = parseFloat(valorStr.replace(/\./g, "").replace(",", ".")) || 0;
-                                                  if (valor <= 0) return;
-                                                  const forma = prompt("Forma: PIX, CARTAO, DINHEIRO, DEBITO") || "PIX";
-                                                  const banco = prompt("Banco: ITAU, INFINITE, MERCADO_PAGO, ESPECIE") || "ITAU";
-                                                  const tipo = valor >= saldoRestante ? "FINAL" : "PARCIAL";
-                                                  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-                                                  const novoPag = { tipo, valor, data: hoje, forma: forma.toUpperCase(), banco: banco.toUpperCase() };
-                                                  const novaHist = [...hist, novoPag];
-                                                  const novoTotalPago = novaHist.reduce((s, p) => s + (p.valor || 0), 0);
-                                                  const updates: Record<string, unknown> = { id: v.id, pagamento_historia: novaHist };
-                                                  // Se pagou tudo, finalizar a venda
-                                                  if (novoTotalPago >= totalVenda) {
-                                                    updates.status_pagamento = "FINALIZADO";
-                                                    updates.forma = novoPag.forma;
-                                                    updates.banco = novoPag.banco;
-                                                  }
-                                                  fetch("/api/vendas", {
-                                                    method: "PATCH",
-                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                    body: JSON.stringify(updates),
-                                                  }).then(r => r.json()).then(json => {
-                                                    if (json.ok || json.data) {
-                                                      setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updates, pagamento_historia: novaHist } as typeof r : r));
-                                                      setMsg(novoTotalPago >= totalVenda ? `Pagamento final registrado! Venda finalizada.` : `Pagamento de ${fmt(valor)} registrado.`);
-                                                    } else {
-                                                      alert("Erro: " + (json.error || "falha"));
-                                                    }
-                                                  }).catch(() => alert("Erro de conexão"));
-                                                }}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-300 hover:bg-green-50 transition-colors"
-                                              >
-                                                + Registrar Pagamento
-                                              </button>
+                                              {pagFormId !== v.id ? (
+                                                <button
+                                                  onClick={() => {
+                                                    setPagFormId(v.id);
+                                                    setPagForm({ valor: String(saldoRestante), data: hojeBR(), forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" });
+                                                  }}
+                                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-300 hover:bg-green-50 transition-colors"
+                                                >
+                                                  + Registrar Pagamento
+                                                </button>
+                                              ) : (
+                                                <div className={`p-3 rounded-xl border space-y-3 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`} onClick={e => e.stopPropagation()}>
+                                                  <div className="flex items-center justify-between">
+                                                    <h5 className="text-xs font-bold text-green-600">Registrar Pagamento</h5>
+                                                    <button onClick={() => setPagFormId(null)} className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"} hover:text-red-500`}>✕</button>
+                                                  </div>
+                                                  <div className="grid grid-cols-2 gap-2">
+                                                    {/* Data */}
+                                                    <div>
+                                                      <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data</label>
+                                                      <input type="date" value={pagForm.data} onChange={e => setPagForm(f => ({ ...f, data: e.target.value }))}
+                                                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                                                    </div>
+                                                    {/* Valor */}
+                                                    <div>
+                                                      <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor (restante: {fmt(saldoRestante)})</label>
+                                                      <input type="text" inputMode="decimal" value={pagForm.valor} onChange={e => setPagForm(f => ({ ...f, valor: e.target.value }))}
+                                                        placeholder={saldoRestante.toLocaleString("pt-BR")}
+                                                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                                                    </div>
+                                                    {/* Forma */}
+                                                    <div>
+                                                      <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Forma</label>
+                                                      <select value={pagForm.forma} onChange={e => setPagForm(f => ({ ...f, forma: e.target.value, parcelas: "", bandeira: "" }))}
+                                                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                        <option value="PIX">PIX</option>
+                                                        <option value="CARTAO">Cartão Crédito</option>
+                                                        <option value="DEBITO">Cartão Débito</option>
+                                                        <option value="LINK">Link Pagamento</option>
+                                                        <option value="ESPECIE">Espécie</option>
+                                                        <option value="DINHEIRO">Dinheiro</option>
+                                                      </select>
+                                                    </div>
+                                                    {/* Banco */}
+                                                    {pagForm.forma !== "ESPECIE" && pagForm.forma !== "DINHEIRO" && (
+                                                      <div>
+                                                        <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Banco</label>
+                                                        <select value={pagForm.banco} onChange={e => setPagForm(f => ({ ...f, banco: e.target.value }))}
+                                                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                          <option value="ITAU">Itaú</option>
+                                                          <option value="INFINITE">InfinitePay</option>
+                                                          <option value="MERCADO_PAGO">Mercado Pago</option>
+                                                        </select>
+                                                      </div>
+                                                    )}
+                                                    {/* Parcelas (Cartão / Link) */}
+                                                    {(pagForm.forma === "CARTAO" || pagForm.forma === "LINK") && (
+                                                      <div>
+                                                        <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Parcelas</label>
+                                                        <select value={pagForm.parcelas} onChange={e => setPagForm(f => ({ ...f, parcelas: e.target.value }))}
+                                                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                          <option value="">—</option>
+                                                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                                                        </select>
+                                                      </div>
+                                                    )}
+                                                    {/* Bandeira (Cartão Crédito / Débito) */}
+                                                    {(pagForm.forma === "CARTAO" || pagForm.forma === "DEBITO") && (
+                                                      <div>
+                                                        <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Bandeira</label>
+                                                        <select value={pagForm.bandeira} onChange={e => setPagForm(f => ({ ...f, bandeira: e.target.value }))}
+                                                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                                          <option value="">—</option>
+                                                          <option value="VISA">Visa</option>
+                                                          <option value="MASTERCARD">Mastercard</option>
+                                                          <option value="ELO">Elo</option>
+                                                          <option value="AMEX">Amex</option>
+                                                        </select>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                  {/* Observação */}
+                                                  <div>
+                                                    <label className={`text-[10px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Observação (opcional)</label>
+                                                    <input type="text" value={pagForm.obs} onChange={e => setPagForm(f => ({ ...f, obs: e.target.value }))}
+                                                      placeholder="Ex: pagou via transferência da mãe"
+                                                      className={`w-full px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                                                  </div>
+                                                  {/* Botões */}
+                                                  <div className="flex gap-2">
+                                                    <button
+                                                      onClick={() => {
+                                                        const valor = parseFloat(pagForm.valor.replace(/\./g, "").replace(",", ".")) || 0;
+                                                        if (valor <= 0) { alert("Informe um valor válido."); return; }
+                                                        const formaStr = [pagForm.forma, pagForm.parcelas ? `${pagForm.parcelas}x` : "", pagForm.bandeira].filter(Boolean).join(" ");
+                                                        const bancoStr = (pagForm.forma === "ESPECIE" || pagForm.forma === "DINHEIRO") ? "ESPECIE" : pagForm.banco;
+                                                        const tipo = valor >= saldoRestante ? "FINAL" : "PARCIAL";
+                                                        const novoPag = { tipo, valor, data: pagForm.data, forma: formaStr, banco: bancoStr, ...(pagForm.obs ? { obs: pagForm.obs } : {}) };
+                                                        const novaHist = [...hist, novoPag];
+                                                        const novoTotalPago = novaHist.reduce((s, p) => s + (p.valor || 0), 0);
+                                                        const updates: Record<string, unknown> = { id: v.id, pagamento_historia: novaHist };
+                                                        if (novoTotalPago >= totalVenda) {
+                                                          updates.status_pagamento = "FINALIZADO";
+                                                          updates.forma = pagForm.forma;
+                                                          updates.banco = bancoStr;
+                                                        }
+                                                        fetch("/api/vendas", {
+                                                          method: "PATCH",
+                                                          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                          body: JSON.stringify(updates),
+                                                        }).then(r => r.json()).then(json => {
+                                                          if (json.ok || json.data) {
+                                                            setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updates, pagamento_historia: novaHist } as typeof r : r));
+                                                            setMsg(novoTotalPago >= totalVenda ? `Pagamento final registrado! Venda finalizada.` : `Pagamento de ${fmt(valor)} registrado.`);
+                                                            setPagFormId(null);
+                                                          } else {
+                                                            alert("Erro: " + (json.error || "falha"));
+                                                          }
+                                                        }).catch(() => alert("Erro de conexão"));
+                                                      }}
+                                                      className="flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                                    >
+                                                      ✓ Confirmar
+                                                    </button>
+                                                    <button onClick={() => setPagFormId(null)}
+                                                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${dm ? "border-[#3A3A3C] text-[#98989D] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"} transition-colors`}>
+                                                      Cancelar
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           )}
                                         </div>
@@ -5089,7 +5582,7 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
                                       <div className="text-xs space-y-1">
-                                        <p><strong>Produto:</strong> {v.produto}</p>
+                                        <p><strong>Produto:</strong> {normalizarCoresNoTexto(v.produto)}</p>
                                         <p>
                                           <strong>Serial No.:</strong>{" "}
                                           {editingId === v.id + "-serial" ? (
@@ -5176,9 +5669,11 @@ export default function VendasPage() {
                                             <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-500 hover:text-blue-700 underline">{v.codigo_rastreio}</a>
                                           </p>
                                         )}
-                                        {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
+                                        {(v.frete_valor ?? 0) > 0 && (
                                           <p>
-                                            <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            <strong>🚚 Taxa Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            {v.frete_forma && <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({v.frete_forma}{v.frete_banco ? ` — ${v.frete_banco}` : ""})</span>}
+                                            {" "}
                                             <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
                                               {v.frete_recebido ? "RECEBIDO" : "PENDENTE"}
                                             </span>
@@ -5454,7 +5949,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -5490,7 +5985,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", frete_parcelas: "", frete_bandeira: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);

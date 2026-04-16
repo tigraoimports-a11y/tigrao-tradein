@@ -5156,6 +5156,19 @@ export default function EstoquePage() {
                             </div>);
                           })()}
                         </div>
+                        {/* Reserva — quem reservou */}
+                        {(() => {
+                          const reservados = items.filter(p => !!p.reserva_cliente);
+                          if (reservados.length === 0) return null;
+                          const nomes = [...new Set(reservados.map(p => p.reserva_cliente!))];
+                          return (
+                            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold ${dm ? "bg-purple-900/30 text-purple-300 border border-purple-700/40" : "bg-purple-50 text-purple-700 border border-purple-200"}`}>
+                              <span>📌</span>
+                              <span className="truncate">Reservado: {nomes.join(", ")}</span>
+                              {(() => { const ops = [...new Set(reservados.map(p => p.reserva_operador).filter(Boolean))]; return ops.length > 0 ? <span className={`text-[9px] font-normal ${dm ? "text-purple-400" : "text-purple-500"}`}>por {ops.join(", ")}</span> : null; })()}
+                            </div>
+                          );
+                        })()}
                         {/* Preço */}
                         <div className="flex items-center justify-between">
                           <span className={`text-xs sm:text-sm font-bold ${avgCusto ? "text-[#E8740E]" : "text-red-500"}`}>{avgCusto ? fmt(avgCusto) : "Sem preço"}</span>
@@ -5172,6 +5185,7 @@ export default function EstoquePage() {
                                 <div className="flex items-center gap-2">
                                   <span className={`font-mono ${dm ? "text-[#98989D]" : "text-[#636366]"}`}>{p.serial_no || p.imei || "—"}</span>
                                   {p.bateria && <span className={`text-[9px] px-1 rounded ${p.bateria >= 90 ? "bg-green-100 text-green-700" : p.bateria >= 85 ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>🔋{p.bateria}%</span>}
+                                  {p.reserva_cliente && <span className={`text-[9px] px-1.5 rounded font-semibold ${dm ? "bg-purple-900/30 text-purple-300" : "bg-purple-50 text-purple-700"}`}>📌 {p.reserva_cliente}</span>}
                                 </div>
                                 <span className={`text-[10px] ${textSecondary}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</span>
                               </div>
