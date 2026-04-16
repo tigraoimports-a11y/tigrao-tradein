@@ -749,8 +749,9 @@ export default function AdminPage() {
                     const trocaNome2 = h.troca_produto2 || (sim?.modelo_usado2 ? `${sim.modelo_usado2} ${sim.storage_usado2 || ""}`.trim() : null);
                     const trocaVal2Display = Number(h.troca_valor2 || 0) || (sim?.avaliacao_usado2 || 0);
                     const trocaTotalDisplay = trocaValDisplay + trocaVal2Display;
-                    const statusLabel = h.entrega_id ? "🚚 Entrega criada" : h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" || h.status === "ENCAMINHADO" ? "✅ Convertido" : h.status === "GOSTEI" ? "💚 Gostei" : "📝 Preenchido";
-                    const statusColor = h.entrega_id || h.status === "ENCAMINHADO" ? "bg-green-100 text-green-700" : h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : h.status === "GOSTEI" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700";
+                    // Status com fallback "Aguardando" quando cliente não preencheu — evita divergir da aba /admin/gerar-link
+                    const statusLabel = h.entrega_id ? "🚚 Entrega criada" : h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" || h.status === "ENCAMINHADO" ? "✅ Convertido" : h.status === "GOSTEI" ? "💚 Gostei" : h.cliente_preencheu_em ? "📝 Preenchido" : "⏳ Aguardando";
+                    const statusColor = h.entrega_id || h.status === "ENCAMINHADO" ? "bg-green-100 text-green-700" : h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : h.status === "GOSTEI" ? "bg-emerald-100 text-emerald-700" : h.cliente_preencheu_em ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700";
                     return (
                       <tr key={h.id} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA] transition-colors">
                         <td className="px-3 py-3 text-xs text-[#86868B] whitespace-nowrap">{criadoDate}</td>
