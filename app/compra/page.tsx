@@ -420,6 +420,18 @@ function CompraForm() {
       return;
     }
 
+    // Janela de agendamento: rejeita datas fora de [min, max] e domingos.
+    if (local !== "Correios" && dataEntrega) {
+      if (dataEntrega < agendamentoBounds.min || dataEntrega > agendamentoBounds.max) {
+        alert("Agendamento disponivel apenas para hoje, amanha ou depois de amanha. Ajuste a data.");
+        return;
+      }
+      if (new Date(dataEntrega + "T12:00:00").getDay() === 0) {
+        alert("Domingo indisponivel para agendamento. Ajuste a data.");
+        return;
+      }
+    }
+
     const produtoFinal = produtoInput || produtoParam || "";
     const precoFinal = preco > 0 ? preco : precoAuto;
     if (!precoFinal) {
@@ -1299,23 +1311,32 @@ function CompraForm() {
           )}
 
           {/* Data — janela curta (hoje, +1, +2 calendário) com domingo bloqueado.
-              Bounds computadas em lib/date-utils.getAgendamentoBounds. */}
+              Bounds computadas em lib/date-utils.getAgendamentoBounds.
+              Obs: min/max do <input type="date"> são apenas dica visual em
+              alguns browsers — o clamp abaixo garante a regra no onChange. */}
           {local !== "Correios" && (<div>
             <label className={labelCls}>Data *</label>
             <input type="date" required value={dataEntrega}
               onChange={(e) => {
-                if (!e.target.value) return;
-                const d = new Date(e.target.value + "T12:00:00");
+                const raw = e.target.value;
+                if (!raw) return;
+                // Clamp: fora da janela → volta pro min/max mais próximo.
+                let iso = raw;
+                if (iso < agendamentoBounds.min) iso = agendamentoBounds.min;
+                else if (iso > agendamentoBounds.max) iso = agendamentoBounds.max;
+                // Domingo: pula para a próxima segunda automaticamente.
+                const d = new Date(iso + "T12:00:00");
                 if (d.getDay() === 0) {
-                  // Domingo: pula para a próxima segunda automaticamente
                   d.setDate(d.getDate() + 1);
                   const y = d.getFullYear();
                   const m = String(d.getMonth() + 1).padStart(2, "0");
                   const day = String(d.getDate()).padStart(2, "0");
-                  setDataEntrega(`${y}-${m}-${day}`);
-                  return;
+                  iso = `${y}-${m}-${day}`;
                 }
-                setDataEntrega(e.target.value);
+                if (iso !== raw) {
+                  alert("Agendamento disponivel apenas para hoje, amanha ou depois de amanha (sem domingo).");
+                }
+                setDataEntrega(iso);
               }}
               min={agendamentoBounds.min}
               max={agendamentoBounds.max}

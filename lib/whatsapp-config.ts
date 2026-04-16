@@ -17,13 +17,15 @@ export const WHATSAPP_FORMULARIO = WHATSAPP_NUMBERS.bianca;
 // Número pra seminovos (Nicolas)
 export const WHATSAPP_SEMINOVO = WHATSAPP_NUMBERS.nicolas;
 
-// Buscar número por nome do vendedor
+/** @deprecated Use getWhatsAppFromVendedores(nome, vendedores, fallback) de
+ *  lib/vendedores.ts — que lê a lista dinâmica do /admin/configuracoes em
+ *  vez do mapa hard-coded abaixo. Mantida só como fallback legado. */
 export function getWhatsAppByVendedor(vendedor: string): string {
   const key = vendedor.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") as keyof typeof WHATSAPP_NUMBERS;
   return WHATSAPP_NUMBERS[key] || WHATSAPP_DEFAULT;
 }
 
-// Vendedores disponíveis
+/** @deprecated Use useVendedores() em lib/vendedores.ts. */
 export const VENDEDORES = [
   { nome: "André", whatsapp: WHATSAPP_NUMBERS.andre },
   { nome: "Bianca", whatsapp: WHATSAPP_NUMBERS.bianca },
