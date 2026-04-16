@@ -13,11 +13,13 @@ export interface Vendedor {
   recebe_links?: boolean;
 }
 
-// Defaults: só Bianca recebe os links direto. Nicolas tem WhatsApp próprio
-// mas os links dele são triados pela Bianca. Nicole/Paloma usam Instagram.
+// Defaults: André e Bianca recebem os próprios links. Nicolas tem WhatsApp
+// próprio mas os links dele são triados pela Bianca. Nicole/Paloma usam
+// Instagram. Flag editável no /admin/configuracoes — cada um pode ligar/
+// desligar "Recebe" pela UI sem precisar mexer em código.
 export const VENDEDORES_PADRAO: Vendedor[] = [
-  { nome: "André",   numero: "5521967442665", recebe_links: false },
-  { nome: "Bianca",  numero: "5521972461357", recebe_links: true },
+  { nome: "André",   numero: "5521967442665", recebe_links: true  },
+  { nome: "Bianca",  numero: "5521972461357", recebe_links: true  },
   { nome: "Nicolas", numero: "5521995618747", recebe_links: false },
   { nome: "Nicole",  numero: "",              recebe_links: false },
 ];
