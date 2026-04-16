@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { mergeVendedores, VENDEDORES_PADRAO as VENDEDORES_BASE } from "@/lib/vendedores";
 
 interface HorarioRow {
   id: string;
@@ -11,13 +12,6 @@ interface HorarioRow {
   ativo: boolean;
 }
 
-const VENDEDORES_PADRAO = [
-  { nome: "André",   numero: "5521967442665" },
-  { nome: "Bianca",  numero: "5521972461357" },
-  { nome: "Nicolas", numero: "5521995618747" },
-  { nome: "Nicole",  numero: "" },
-];
-
 export default function ConfiguracoesPage() {
   const { password } = useAdmin();
 
@@ -25,7 +19,7 @@ export default function ConfiguracoesPage() {
   const [principal, setPrincipal] = useState("5521972461357"); // Bianca default
   const [formLacrados, setFormLacrados] = useState(""); // WhatsApp formulários lacrados
   const [formSeminovos, setFormSeminovos] = useState(""); // WhatsApp formulários seminovos
-  const [vendedores, setVendedores] = useState(VENDEDORES_PADRAO.map(v => ({ ...v })));
+  const [vendedores, setVendedores] = useState(VENDEDORES_BASE.map(v => ({ ...v })));
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,31 +38,11 @@ export default function ConfiguracoesPage() {
         if (data.whatsapp_principal) setPrincipal(String(data.whatsapp_principal));
         if (data.whatsapp_formularios) setFormLacrados(String(data.whatsapp_formularios));
         if (data.whatsapp_formularios_seminovos) setFormSeminovos(String(data.whatsapp_formularios_seminovos));
-        // whatsapp_vendedores: { andre: "5521...", ... }
-        // whatsapp_vendedores_nomes: { andre: "André", ... } (display names)
-        const raw = data.whatsapp_vendedores;
-        const nomesMap = (data.whatsapp_vendedores_nomes || {}) as Record<string, string>;
-        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-          const dbMap = raw as Record<string, string>;
-          const nomesUsados = new Set<string>();
-          const resultado: { nome: string; numero: string }[] = [];
-          // Primeiro: vendedores padrão (mantém ordem)
-          for (const v of VENDEDORES_PADRAO) {
-            const key = v.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            if (key in dbMap) {
-              resultado.push({ nome: nomesMap[key] || v.nome, numero: dbMap[key] });
-              nomesUsados.add(key);
-            }
-          }
-          // Depois: vendedores extras que só existem no banco
-          for (const [key, num] of Object.entries(dbMap)) {
-            if (!nomesUsados.has(key)) {
-              const nome = nomesMap[key] || key.charAt(0).toUpperCase() + key.slice(1);
-              resultado.push({ nome, numero: num });
-            }
-          }
-          if (resultado.length > 0) setVendedores(resultado);
-        }
+        // Merge padrão + banco em lib/vendedores.ts (fonte única).
+        setVendedores(mergeVendedores(
+          data.whatsapp_vendedores as Record<string, string> | null,
+          data.whatsapp_vendedores_nomes as Record<string, string> | null
+        ));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
