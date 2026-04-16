@@ -809,6 +809,7 @@ export default function AdminPage() {
           cor: h.cor,
           valor: h.valor,
           desconto: h.desconto,
+          parcelas: h.parcelas,
           trocaNome,
           trocaCor,
           trocaValor: trocaVal,

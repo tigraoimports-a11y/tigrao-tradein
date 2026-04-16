@@ -1827,6 +1827,7 @@ export default function GerarLinkPage() {
                       cor: l.cor,
                       valor: l.valor,
                       desconto: l.desconto,
+                      parcelas: l.parcelas,
                       trocaNome: l.troca_produto,
                       trocaCor: l.troca_cor,
                       trocaValor: l.troca_valor,
