@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
   if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
   if (labels._whatsapp_vendedores_nomes) result.whatsapp_vendedores_nomes = labels._whatsapp_vendedores_nomes;
   if (labels._whatsapp_vendedores_recebe_links) result.whatsapp_vendedores_recebe_links = labels._whatsapp_vendedores_recebe_links;
+  if (labels._whatsapp_vendedores_ativo) result.whatsapp_vendedores_ativo = labels._whatsapp_vendedores_ativo;
 
   return NextResponse.json({ data: result });
 }
@@ -40,7 +41,7 @@ export async function PUT(req: NextRequest) {
   if (body.origens !== undefined) updates.origens = body.origens;
 
   // Salvar whatsapp config dentro do campo labels (JSONB) pra não depender de colunas novas
-  if (body.whatsapp_principal !== undefined || body.whatsapp_formularios !== undefined || body.whatsapp_formularios_seminovos !== undefined || body.whatsapp_vendedores !== undefined || body.whatsapp_vendedores_nomes !== undefined || body.whatsapp_vendedores_recebe_links !== undefined || body.labels !== undefined) {
+  if (body.whatsapp_principal !== undefined || body.whatsapp_formularios !== undefined || body.whatsapp_formularios_seminovos !== undefined || body.whatsapp_vendedores !== undefined || body.whatsapp_vendedores_nomes !== undefined || body.whatsapp_vendedores_recebe_links !== undefined || body.whatsapp_vendedores_ativo !== undefined || body.labels !== undefined) {
     const { data: current } = await supabase.from("tradein_config").select("labels").limit(1).single();
     const currentLabels = (current?.labels && typeof current.labels === "object") ? current.labels as Record<string, unknown> : {};
     const newLabels = { ...currentLabels };
@@ -51,6 +52,7 @@ export async function PUT(req: NextRequest) {
     if (body.whatsapp_vendedores !== undefined) newLabels._whatsapp_vendedores = body.whatsapp_vendedores;
     if (body.whatsapp_vendedores_nomes !== undefined) newLabels._whatsapp_vendedores_nomes = body.whatsapp_vendedores_nomes;
     if (body.whatsapp_vendedores_recebe_links !== undefined) newLabels._whatsapp_vendedores_recebe_links = body.whatsapp_vendedores_recebe_links;
+    if (body.whatsapp_vendedores_ativo !== undefined) newLabels._whatsapp_vendedores_ativo = body.whatsapp_vendedores_ativo;
     updates.labels = newLabels;
   }
 

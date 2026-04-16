@@ -42,7 +42,8 @@ export default function ConfiguracoesPage() {
         setVendedores(mergeVendedores(
           data.whatsapp_vendedores as Record<string, string> | null,
           data.whatsapp_vendedores_nomes as Record<string, string> | null,
-          data.whatsapp_vendedores_recebe_links as Record<string, boolean> | null
+          data.whatsapp_vendedores_recebe_links as Record<string, boolean> | null,
+          data.whatsapp_vendedores_ativo as Record<string, boolean> | null
         ));
       })
       .catch(() => {})
@@ -102,12 +103,14 @@ export default function ConfiguracoesPage() {
       const waMap: Record<string, string> = {};
       const waNomes: Record<string, string> = {}; // key normalizada → nome display
       const waRecebe: Record<string, boolean> = {}; // key → recebe_links
+      const waAtivo: Record<string, boolean> = {}; // key → ativo
       for (const v of vendedores) {
         if (v.nome.trim()) {
           const key = v.nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           waMap[key] = v.numero;
           waNomes[key] = v.nome.trim();
           waRecebe[key] = !!v.recebe_links;
+          waAtivo[key] = v.ativo !== false;
         }
       }
       const res = await fetch("/api/admin/tradein-config", {
@@ -120,6 +123,7 @@ export default function ConfiguracoesPage() {
           whatsapp_vendedores: waMap,
           whatsapp_vendedores_nomes: waNomes,
           whatsapp_vendedores_recebe_links: waRecebe,
+          whatsapp_vendedores_ativo: waAtivo,
         }),
       });
       const j = await res.json();
@@ -155,7 +159,7 @@ export default function ConfiguracoesPage() {
 
           {/* Seleção rápida por vendedor */}
           <div className="flex gap-2 flex-wrap">
-            {vendedores.filter(v => v.numero).map(v => (
+            {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
               <button
                 key={v.nome}
                 type="button"
@@ -204,7 +208,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {vendedores.filter(v => v.numero).map(v => (
+            {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
               <button
                 key={v.nome}
                 type="button"
@@ -253,7 +257,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {vendedores.filter(v => v.numero).map(v => (
+            {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
               <button
                 key={v.nome}
                 type="button"
@@ -297,13 +301,15 @@ export default function ConfiguracoesPage() {
           <div>
             <p className="font-bold text-[#1D1D1F]">👤 Vendedores — Links de Compra</p>
             <p className="text-xs text-[#86868B] mt-1">
-              Cada vendedor tem um link próprio (ex: /andre, /bianca). Marque <b>Recebe</b> pra links submetidos caírem no WhatsApp dele; desmarcado, vão pro destino padrão (Bianca).
+              Cada vendedor tem um link próprio (ex: /andre, /bianca). Marque <b>Recebe</b> pra links submetidos caírem no WhatsApp dele; desmarcado, vão pro destino padrão (Bianca). Clique 👁️ pra <b>desativar</b> (some das dropdowns, mas fica salvo pra não quebrar histórico) ou ✕ pra remover de vez.
             </p>
           </div>
 
           <div className="space-y-2">
-            {vendedores.map((v, i) => (
-              <div key={i} className="flex items-center gap-2">
+            {vendedores.map((v, i) => {
+              const ativo = v.ativo !== false;
+              return (
+              <div key={i} className={`flex items-center gap-2 ${ativo ? "" : "opacity-50"}`}>
                 <input
                   value={v.nome}
                   onChange={e => {
@@ -343,19 +349,32 @@ export default function ConfiguracoesPage() {
                 </label>
                 <button
                   type="button"
+                  onClick={() => {
+                    const upd = [...vendedores];
+                    upd[i] = { ...upd[i], ativo: !ativo };
+                    setVendedores(upd);
+                  }}
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F5F5F7] transition-all"
+                  title={ativo ? "Desativar (fica oculto das dropdowns, mas não apaga histórico)" : "Reativar"}
+                >
+                  {ativo ? "👁️" : "🙈"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setVendedores(vendedores.filter((_, j) => j !== i))}
                   className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                  title="Remover vendedor"
+                  title="Remover de vez (apaga do banco — prefira 👁️ para desativar sem perder histórico)"
                 >
                   ✕
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <button
             type="button"
-            onClick={() => setVendedores([...vendedores, { nome: "", numero: "", recebe_links: false }])}
+            onClick={() => setVendedores([...vendedores, { nome: "", numero: "", recebe_links: false, ativo: true }])}
             className="w-full py-2 rounded-lg text-sm font-semibold text-[#E8740E] border border-dashed border-[#E8740E] hover:bg-orange-50 transition-all"
           >
             + Adicionar vendedor
