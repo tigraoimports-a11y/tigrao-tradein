@@ -9,12 +9,14 @@ name: Backup Supabase
 #   GitHub → Actions → Backup Supabase → qualquer run → Artifacts
 #
 # Secret necessário (configurar em Settings → Secrets → Actions):
-#   SUPABASE_DB_URL: connection string do Supabase
-#     (pegar em: Supabase dashboard → Project Settings → Database →
-#      Connection string → URI, marcar "Use connection pooling" = NÃO
-#      pra pegar a direct connection)
+#   SUPABASE_DB_URL: connection string do Supabase (Session pooler)
+#     (pegar em: Supabase dashboard → Connect → Session pooler → URI)
 #     Formato:
-#       postgresql://postgres:[SENHA]@db.[PROJETO].supabase.co:5432/postgres
+#       postgresql://postgres.[PROJETO]:[SENHA]@aws-N-[REGIAO].pooler.supabase.com:5432/postgres
+#
+# Estratégia: rodamos pg_dump via Docker (image postgres:17) pra garantir
+# compatibilidade de versão com o servidor Supabase (Postgres 17). Evita
+# a dor de cabeça de instalar postgresql-client via apt em runner Ubuntu.
 #
 # Pra restaurar: ver docs/DISASTER_RECOVERY.md
 # ============================================================
@@ -35,16 +37,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL 17 client
-        run: |
-          # Supabase roda Postgres 15/17 — instala o client mais novo pra
-          # evitar erro "server version mismatch"
-          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
-
-      - name: Run pg_dump
+      - name: Run pg_dump (via Docker postgres:17)
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -57,22 +50,27 @@ jobs:
           TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
           BACKUP_FILE="supabase_backup_${TIMESTAMP}.sql.gz"
 
-          echo "🗄️  Iniciando pg_dump..."
-          # --no-owner + --no-privileges: backup portável (não amarra em role específico)
-          # --clean: inclui DROP antes de CREATE (facilita restore sobre banco existente)
-          # --if-exists: DROP só se a tabela existir (evita erro em banco vazio)
-          # --schema=public: só o schema público (ignora supabase internals tipo auth/storage)
-          pg_dump \
-            --no-owner \
-            --no-privileges \
-            --clean \
-            --if-exists \
-            --schema=public \
-            --file="$BACKUP_FILE.sql" \
-            "$SUPABASE_DB_URL"
+          echo "🗄️  Iniciando pg_dump via Docker postgres:17..."
+          # Flags:
+          #   --no-owner + --no-privileges: backup portável (não amarra em role específico)
+          #   --clean + --if-exists: inclui DROP IF EXISTS antes de cada CREATE
+          #     (facilita restore sobre banco existente, idempotente em banco vazio)
+          #   --schema=public: só o schema público (ignora internals do Supabase:
+          #     auth.*, storage.*, realtime.*, vault.*, extensions.*)
+          #
+          # Usamos sh -c pra que a expansão de $DBURL aconteça DENTRO do container
+          # (onde o env var tá definido), não no shell do host.
+          docker run --rm \
+            -e DBURL="$SUPABASE_DB_URL" \
+            postgres:17 \
+            sh -c 'pg_dump --no-owner --no-privileges --clean --if-exists --schema=public "$DBURL"' \
+            | gzip > "$BACKUP_FILE"
 
-          # Comprime pra economizar espaço de artifact
-          gzip "$BACKUP_FILE.sql"
+          # Sanity check — se a saída for vazia, algo falhou silenciosamente
+          if [ ! -s "$BACKUP_FILE" ]; then
+            echo "❌ Backup vazio — pg_dump falhou silenciosamente"
+            exit 1
+          fi
 
           SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
           echo "✅ Backup gerado: $BACKUP_FILE ($SIZE)"
