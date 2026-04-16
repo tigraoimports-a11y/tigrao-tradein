@@ -1473,36 +1473,77 @@ export default function AdminPage() {
             </span>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                  <th className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={filtered.length > 0 && filtered.every((r) => selected.has(r.id))}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelected(new Set(filtered.map((r) => r.id)));
-                        else setSelected(new Set());
-                      }}
-                      className="w-4 h-4 accent-[#E8740E] cursor-pointer"
-                    />
-                  </th>
-                  {["Contato", "Data", "Nome", "WhatsApp", "Vendedor", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status", ""].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={13} className="px-4 py-8 text-center text-[#86868B]">Nenhuma simulação encontrada</td>
-                  </tr>
-                ) : (
-                  filtered.map((row) => (
-                    <tr key={row.id} onClick={() => { setModalRow(row); setModalParcelasVisiveis(null); setEditMode(false); }} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+          {/* Cards compactos (estilo Historico de /admin/gerar-link) */}
+          <div className="p-3 space-y-2">
+            {filtered.length === 0 ? (
+              <p className="px-4 py-8 text-center text-[#86868B] text-sm">Nenhuma simulação encontrada</p>
+            ) : (
+              filtered.map((row) => {
+                const statusColor = row.status === "GOSTEI"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-600";
+                const statusLabel = row.status === "GOSTEI" ? "✅ Fechou" : "❌ Saiu";
+                const whatsappUrl = (() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })();
+                return (
+                  <div
+                    key={row.id}
+                    onClick={() => { setModalRow(row); setModalParcelasVisiveis(null); setEditMode(false); }}
+                    className={`border rounded-xl p-3 cursor-pointer transition-colors ${selected.has(row.id) ? "bg-orange-50 border-orange-300" : row.status === "GOSTEI" ? "border-green-200 bg-green-50/30 hover:bg-green-50" : "border-[#E5E5EA] bg-[#F9F9FB] hover:bg-[#F0F0F3]"}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="flex-1 min-w-[200px]">
+                        {/* Linha 1: Status + Data + Vendedor */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${statusColor}`}>{statusLabel}</span>
+                          <span className="text-[10px] text-[#86868B]">{fmtDate(row.created_at)}</span>
+                          {row.vendedor && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-700">{row.vendedor}</span>
+                          )}
+                          {row.contatado && (
+                            <span className="text-[10px] text-green-600 font-medium">✓ Contatado</span>
+                          )}
+                        </div>
+
+                        {/* Linha 2: Nome + WhatsApp link */}
+                        <p className="text-sm font-semibold text-[#1D1D1F] mt-1">
+                          {row.nome}
+                          {" "}
+                          <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-green-600 hover:underline text-xs font-normal"
+                          >
+                            · {row.whatsapp}
+                          </a>
+                        </p>
+
+                        {/* Linha 3: Produto novo (preço) */}
+                        <p className="text-[13px] text-[#1D1D1F] mt-1">
+                          <span className="font-medium">{row.modelo_novo} {row.storage_novo}</span>
+                          <span className="text-[#E8740E] font-semibold ml-2">{fmt(row.preco_novo)}</span>
+                        </p>
+
+                        {/* Linha 4: Troca (se houver) */}
+                        {row.modelo_usado && (
+                          <p className="text-xs text-[#6E6E73] mt-0.5">
+                            🔄 Troca: {row.modelo_usado} {row.storage_usado} — Avaliação <span className="text-green-600 font-semibold">{fmt(row.avaliacao_usado)}</span>
+                          </p>
+                        )}
+
+                        {/* Linha 5: Diferença PIX + Forma pagamento */}
+                        <p className="text-xs mt-0.5">
+                          <span className="text-[#86868B]">Diferença PIX: </span>
+                          <span className="text-[#E8740E] font-bold">{fmt(row.diferenca)}</span>
+                          {row.forma_pagamento && (
+                            <span className="text-[#6E6E73] ml-2">· {row.forma_pagamento}</span>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Checkbox + botoes ao lado */}
+                      <div className="flex items-start gap-2" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected.has(row.id)}
@@ -1512,96 +1553,81 @@ export default function AdminPage() {
                             else next.delete(row.id);
                             setSelected(next);
                           }}
-                          className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                          className="w-4 h-4 accent-[#E8740E] cursor-pointer mt-1"
                         />
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-col gap-1 items-start">
-                          <button
-                            onClick={() => {
-                              setData((prev) => prev ? prev.map((r) => r.id === row.id ? { ...r, contatado: true } : r) : prev);
-                              fetch("/api/admin/contatar", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                body: JSON.stringify({ id: row.id }),
-                              });
-                              const num = row.whatsapp.replace(/\D/g, "");
-                              const full = num.startsWith("55") ? num : `55${num}`;
-                              const condicoes = row.condicao_linhas?.join("\n") ?? "";
-                              const msg = [
-                                `Ola ${row.nome}!`,
-                                ``,
-                                `Vi que voce fez uma simulacao de trade-in aqui na TigraoimportsImports`,
-                                ``,
-                                `Produto novo: ${row.modelo_novo} ${row.storage_novo} (R$ ${row.preco_novo.toLocaleString("pt-BR")})`,
-                                `Seu aparelho: ${row.modelo_usado} ${row.storage_usado}`,
-                                ...(condicoes ? [condicoes] : []),
-                                `Avaliacao: R$ ${row.avaliacao_usado.toLocaleString("pt-BR")}`,
-                                `Diferenca no PIX: R$ ${row.diferenca.toLocaleString("pt-BR")}`,
-                                ``,
-                                `Posso te fazer uma proposta especial?`,
-                              ].join("\n");
-                              window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors"
-                          >
-                            WhatsApp
-                          </button>
-                          {row.contatado && (
-                            <span className="text-[10px] text-green-600 font-medium">Contatado</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
-                      <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">{row.nome}</td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <a href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline whitespace-nowrap">{row.whatsapp}</a>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {row.vendedor ? (
-                          <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{row.vendedor}</span>
-                        ) : (
-                          <span className="text-[#86868B] text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-[#1D1D1F] whitespace-nowrap">
-                        {row.modelo_novo} {row.storage_novo}
-                        <span className="text-[#86868B] ml-1 text-xs">({fmt(row.preco_novo)})</span>
-                      </td>
-                      <td className="px-4 py-3 text-[#6E6E73] whitespace-nowrap">{row.modelo_usado} {row.storage_usado}</td>
-                      <td className="px-4 py-3 text-green-600 font-medium whitespace-nowrap">{fmt(row.avaliacao_usado)}</td>
-                      <td className="px-4 py-3 text-[#E8740E] font-bold whitespace-nowrap">{fmt(row.diferenca)}</td>
-                      <td className="px-4 py-3 text-[#6E6E73] text-xs max-w-[160px] truncate">{row.forma_pagamento || "—"}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${row.status === "GOSTEI" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-                          {row.status === "GOSTEI" ? "Fechou" : "Saiu"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          disabled={deleting === row.id}
-                          onClick={async () => {
-                            if (!confirm(`Excluir simulação de ${row.nome}?`)) return;
-                            setDeleting(row.id);
-                            await fetch("/api/admin/simulacoes", {
-                              method: "DELETE",
-                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                              body: JSON.stringify({ id: row.id }),
-                            });
-                            setData((prev) => prev ? prev.filter((r) => r.id !== row.id) : prev);
-                            setDeleting(null);
-                          }}
-                          className="p-1.5 rounded-lg text-[#86868B] hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
-                          title="Excluir"
-                        >
-                          {deleting === row.id ? "..." : "X"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+
+                    {/* Botoes acao embaixo */}
+                    <div className="flex gap-2 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => {
+                          setData((prev) => prev ? prev.map((r) => r.id === row.id ? { ...r, contatado: true } : r) : prev);
+                          fetch("/api/admin/contatar", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                            body: JSON.stringify({ id: row.id }),
+                          });
+                          const num = row.whatsapp.replace(/\D/g, "");
+                          const full = num.startsWith("55") ? num : `55${num}`;
+                          const condicoes = row.condicao_linhas?.join("\n") ?? "";
+                          const msg = [
+                            `Ola ${row.nome}!`,
+                            ``,
+                            `Vi que voce fez uma simulacao de trade-in aqui na TigraoimportsImports`,
+                            ``,
+                            `Produto novo: ${row.modelo_novo} ${row.storage_novo} (R$ ${row.preco_novo.toLocaleString("pt-BR")})`,
+                            `Seu aparelho: ${row.modelo_usado} ${row.storage_usado}`,
+                            ...(condicoes ? [condicoes] : []),
+                            `Avaliacao: R$ ${row.avaliacao_usado.toLocaleString("pt-BR")}`,
+                            `Diferenca no PIX: R$ ${row.diferenca.toLocaleString("pt-BR")}`,
+                            ``,
+                            `Posso te fazer uma proposta especial?`,
+                          ].join("\n");
+                          window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
+                        }}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 font-semibold"
+                      >
+                        💬 WhatsApp
+                      </button>
+                      <button
+                        disabled={deleting === row.id}
+                        onClick={async () => {
+                          if (!confirm(`Excluir simulação de ${row.nome}?`)) return;
+                          setDeleting(row.id);
+                          await fetch("/api/admin/simulacoes", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                            body: JSON.stringify({ id: row.id }),
+                          });
+                          setData((prev) => prev ? prev.filter((r) => r.id !== row.id) : prev);
+                          setDeleting(null);
+                        }}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-white border border-red-300 text-red-500 hover:bg-red-50 font-medium ml-auto disabled:opacity-40"
+                      >
+                        {deleting === row.id ? "..." : "🗑️ Excluir"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {/* Checkbox selecionar todos no topo, se tem filtrados */}
+            {filtered.length > 0 && (
+              <div className="px-2 pt-2 flex items-center gap-2 text-xs text-[#86868B]">
+                <input
+                  type="checkbox"
+                  checked={filtered.every((r) => selected.has(r.id))}
+                  onChange={(e) => {
+                    if (e.target.checked) setSelected(new Set(filtered.map((r) => r.id)));
+                    else setSelected(new Set());
+                  }}
+                  className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                />
+                <span>Selecionar todos ({filtered.length})</span>
+              </div>
+            )}
           </div>
         </div>
 
