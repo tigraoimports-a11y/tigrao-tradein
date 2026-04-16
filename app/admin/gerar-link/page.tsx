@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
+import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
+import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 
@@ -209,6 +210,8 @@ export default function GerarLinkPage() {
   }, [carrinhoLink]);
 
   const [vendedorNome, setVendedorNome] = useState("");
+  // Lista dinâmica de vendedores (editável em /admin/configuracoes).
+  const vendedoresList = useVendedores(adminPw);
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
   const [entradaPix, setEntradaPix] = useState("");
@@ -576,7 +579,7 @@ export default function GerarLinkPage() {
           if (useCart) { const item = carrinhoLink[idx]; return item?.cor ? `${nome} ${item.cor}` : nome; }
           const cor = coresExtras[idx - 1]; return cor ? `${nome} ${corParaPT(cor)}` : nome;
         };
-        const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+        const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
         const shortData: Record<string, string> = {};
         shortData.p = nomeProdutoFinal;
         for (let i = 1; i < prodsFilled.length; i++) {
@@ -878,7 +881,7 @@ export default function GerarLinkPage() {
       return;
     }
 
-    const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+    const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
     // Helper: aplica cor extra no nome (PT simples)
@@ -1065,7 +1068,7 @@ export default function GerarLinkPage() {
       if (!cor) return nome;
       return `${nome} ${corParaPT(cor)}`;
     };
-    const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+    const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
 
     const shortData: Record<string, string> = {};
     shortData.p = nomeProdutoFinal;
@@ -2466,9 +2469,9 @@ export default function GerarLinkPage() {
           <label className={labelCls}>Vendedor</label>
           <select value={vendedorNome} onChange={(e) => setVendedorNome(e.target.value)} className={inputCls}>
             <option value="">-- Selecionar --</option>
-            <option value="Andre">Andre</option>
-            <option value="Bianca">Bianca</option>
-            <option value="Nicole">Nicole</option>
+            {vendedoresList.map((v) => (
+              <option key={v.nome} value={v.nome}>{v.nome}</option>
+            ))}
           </select>
         </div>
 

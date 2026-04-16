@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { mergeVendedores, VENDEDORES_PADRAO as VENDEDORES_BASE } from "@/lib/vendedores";
 
 interface HorarioRow {
   id: string;
@@ -11,13 +12,6 @@ interface HorarioRow {
   ativo: boolean;
 }
 
-const VENDEDORES_PADRAO = [
-  { nome: "André",   numero: "5521967442665" },
-  { nome: "Bianca",  numero: "5521972461357" },
-  { nome: "Nicolas", numero: "5521995618747" },
-  { nome: "Nicole",  numero: "" },
-];
-
 export default function ConfiguracoesPage() {
   const { password } = useAdmin();
 
@@ -25,7 +19,7 @@ export default function ConfiguracoesPage() {
   const [principal, setPrincipal] = useState("5521972461357"); // Bianca default
   const [formLacrados, setFormLacrados] = useState(""); // WhatsApp formulários lacrados
   const [formSeminovos, setFormSeminovos] = useState(""); // WhatsApp formulários seminovos
-  const [vendedores, setVendedores] = useState(VENDEDORES_PADRAO.map(v => ({ ...v })));
+  const [vendedores, setVendedores] = useState(VENDEDORES_BASE.map(v => ({ ...v })));
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,31 +38,13 @@ export default function ConfiguracoesPage() {
         if (data.whatsapp_principal) setPrincipal(String(data.whatsapp_principal));
         if (data.whatsapp_formularios) setFormLacrados(String(data.whatsapp_formularios));
         if (data.whatsapp_formularios_seminovos) setFormSeminovos(String(data.whatsapp_formularios_seminovos));
-        // whatsapp_vendedores: { andre: "5521...", ... }
-        // whatsapp_vendedores_nomes: { andre: "André", ... } (display names)
-        const raw = data.whatsapp_vendedores;
-        const nomesMap = (data.whatsapp_vendedores_nomes || {}) as Record<string, string>;
-        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-          const dbMap = raw as Record<string, string>;
-          const nomesUsados = new Set<string>();
-          const resultado: { nome: string; numero: string }[] = [];
-          // Primeiro: vendedores padrão (mantém ordem)
-          for (const v of VENDEDORES_PADRAO) {
-            const key = v.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            if (key in dbMap) {
-              resultado.push({ nome: nomesMap[key] || v.nome, numero: dbMap[key] });
-              nomesUsados.add(key);
-            }
-          }
-          // Depois: vendedores extras que só existem no banco
-          for (const [key, num] of Object.entries(dbMap)) {
-            if (!nomesUsados.has(key)) {
-              const nome = nomesMap[key] || key.charAt(0).toUpperCase() + key.slice(1);
-              resultado.push({ nome, numero: num });
-            }
-          }
-          if (resultado.length > 0) setVendedores(resultado);
-        }
+        // Merge padrão + banco em lib/vendedores.ts (fonte única).
+        setVendedores(mergeVendedores(
+          data.whatsapp_vendedores as Record<string, string> | null,
+          data.whatsapp_vendedores_nomes as Record<string, string> | null,
+          data.whatsapp_vendedores_recebe_links as Record<string, boolean> | null,
+          data.whatsapp_vendedores_ativo as Record<string, boolean> | null
+        ));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -126,11 +102,15 @@ export default function ConfiguracoesPage() {
       // salvar com keys normalizadas (lowercase sem acento) para compatibilidade com VENDEDOR_WHATSAPP
       const waMap: Record<string, string> = {};
       const waNomes: Record<string, string> = {}; // key normalizada → nome display
+      const waRecebe: Record<string, boolean> = {}; // key → recebe_links
+      const waAtivo: Record<string, boolean> = {}; // key → ativo
       for (const v of vendedores) {
         if (v.nome.trim()) {
           const key = v.nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           waMap[key] = v.numero;
           waNomes[key] = v.nome.trim();
+          waRecebe[key] = !!v.recebe_links;
+          waAtivo[key] = v.ativo !== false;
         }
       }
       const res = await fetch("/api/admin/tradein-config", {
@@ -142,6 +122,8 @@ export default function ConfiguracoesPage() {
           whatsapp_formularios_seminovos: formSeminovos || principal,
           whatsapp_vendedores: waMap,
           whatsapp_vendedores_nomes: waNomes,
+          whatsapp_vendedores_recebe_links: waRecebe,
+          whatsapp_vendedores_ativo: waAtivo,
         }),
       });
       const j = await res.json();
@@ -177,7 +159,7 @@ export default function ConfiguracoesPage() {
 
           {/* Seleção rápida por vendedor */}
           <div className="flex gap-2 flex-wrap">
-            {vendedores.filter(v => v.numero).map(v => (
+            {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
               <button
                 key={v.nome}
                 type="button"
@@ -226,7 +208,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {vendedores.filter(v => v.numero).map(v => (
+            {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
               <button
                 key={v.nome}
                 type="button"
@@ -275,7 +257,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {vendedores.filter(v => v.numero).map(v => (
+            {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
               <button
                 key={v.nome}
                 type="button"
@@ -319,13 +301,15 @@ export default function ConfiguracoesPage() {
           <div>
             <p className="font-bold text-[#1D1D1F]">👤 Vendedores — Links de Compra</p>
             <p className="text-xs text-[#86868B] mt-1">
-              Cada vendedor tem um link próprio (ex: /andre, /bianca). Quando o cliente submete, a mensagem vai pro WhatsApp do vendedor.
+              Cada vendedor tem um link próprio (ex: /andre, /bianca). Marque <b>Recebe</b> pra links submetidos caírem no WhatsApp dele; desmarcado, vão pro destino padrão (Bianca). Clique 👁️ pra <b>desativar</b> (some das dropdowns, mas fica salvo pra não quebrar histórico) ou ✕ pra remover de vez.
             </p>
           </div>
 
           <div className="space-y-2">
-            {vendedores.map((v, i) => (
-              <div key={i} className="flex items-center gap-2">
+            {vendedores.map((v, i) => {
+              const ativo = v.ativo !== false;
+              return (
+              <div key={i} className={`flex items-center gap-2 ${ativo ? "" : "opacity-50"}`}>
                 <input
                   value={v.nome}
                   onChange={e => {
@@ -347,21 +331,50 @@ export default function ConfiguracoesPage() {
                   placeholder="5521999999999"
                   className={inputCls}
                 />
+                <label
+                  className="shrink-0 flex items-center gap-1 text-xs font-semibold text-[#1D1D1F] cursor-pointer select-none px-2 py-1 rounded-lg hover:bg-[#F5F5F7]"
+                  title="Se marcado, links gerados por esse vendedor vão pro WhatsApp dele. Se desmarcado, caem no destino padrão (Bianca)."
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!v.recebe_links}
+                    onChange={e => {
+                      const upd = [...vendedores];
+                      upd[i] = { ...upd[i], recebe_links: e.target.checked };
+                      setVendedores(upd);
+                    }}
+                    className="accent-[#E8740E]"
+                  />
+                  Recebe
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const upd = [...vendedores];
+                    upd[i] = { ...upd[i], ativo: !ativo };
+                    setVendedores(upd);
+                  }}
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F5F5F7] transition-all"
+                  title={ativo ? "Desativar (fica oculto das dropdowns, mas não apaga histórico)" : "Reativar"}
+                >
+                  {ativo ? "👁️" : "🙈"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setVendedores(vendedores.filter((_, j) => j !== i))}
                   className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                  title="Remover vendedor"
+                  title="Remover de vez (apaga do banco — prefira 👁️ para desativar sem perder histórico)"
                 >
                   ✕
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <button
             type="button"
-            onClick={() => setVendedores([...vendedores, { nome: "", numero: "" }])}
+            onClick={() => setVendedores([...vendedores, { nome: "", numero: "", recebe_links: false, ativo: true }])}
             className="w-full py-2 rounded-lg text-sm font-semibold text-[#E8740E] border border-dashed border-[#E8740E] hover:bg-orange-50 transition-all"
           >
             + Adicionar vendedor

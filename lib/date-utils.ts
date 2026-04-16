@@ -15,3 +15,27 @@ export function horaBR(): string {
 export function dataEfetiva(v: { data: string; data_programada?: string | null }): string {
   return v.data_programada || v.data;
 }
+
+/** Formata Date local para YYYY-MM-DD (evita off-by-one por UTC). */
+function fmtLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Janela de agendamento do Link de Compra: mínimo = hoje (ou amanhã se >=18h),
+ * máximo = min + 2 dias. Domingos são pulados em ambos os extremos.
+ */
+export function getAgendamentoBounds(now: Date = new Date()): { min: string; max: string } {
+  const base = new Date(now);
+  base.setDate(base.getDate() + (base.getHours() >= 18 ? 1 : 0));
+  while (base.getDay() === 0) base.setDate(base.getDate() + 1);
+
+  const max = new Date(base);
+  max.setDate(max.getDate() + 2);
+  if (max.getDay() === 0) max.setDate(max.getDate() + 1);
+
+  return { min: fmtLocalDate(base), max: fmtLocalDate(max) };
+}

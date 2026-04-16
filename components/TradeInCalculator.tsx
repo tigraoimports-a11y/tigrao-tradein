@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import type { NewProduct, UsedDeviceValue, AppConfig, TradeInQuestion, TradeInConfig } from "@/lib/types";
-import type { ConditionData, ModelDiscounts, WarrantyBonuses, AnyConditionData, DeviceType } from "@/lib/calculations";
+import type { ConditionData, ModelDiscounts, AnyConditionData, DeviceType } from "@/lib/calculations";
 import { formatBRL } from "@/lib/calculations";
 import { getTemaTI, temaTICSSVars } from "@/lib/temas-tradein";
 import { useTradeInAnalytics } from "@/lib/useTradeInAnalytics";
@@ -88,9 +88,6 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     multiplier21: 1.21,
     validadeHoras: 24,
     whatsappNumero: "5521967442665",
-    bonusGarantiaAte3m: 0.03,
-    bonusGarantia3a6m: 0.05,
-    bonusGarantia6mMais: 0.07,
   });
 
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
@@ -348,7 +345,6 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               usedValues={usedData.usedValues}
               excludedModels={usedData.excludedModels}
               modelDiscounts={usedData.modelDiscounts}
-              warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
               questionsConfig={questionsConfig}
               onNext={handleStep1Complete}
               onTrackQuestion={trackQuestion}
@@ -395,7 +391,6 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
                 usedValues={usedData.usedValues}
                 excludedModels={usedData.excludedModels}
                 modelDiscounts={usedData.modelDiscounts}
-                warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
                 questionsConfig={questionsConfig}
                 onNext={handleStep1Complete}
                 onTrackQuestion={trackQuestion}
