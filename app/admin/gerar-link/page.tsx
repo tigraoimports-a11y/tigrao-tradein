@@ -6,6 +6,7 @@ import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
 import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
+import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -1699,8 +1700,18 @@ export default function GerarLinkPage() {
           {histLoading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
           {!histLoading && histLinks.length === 0 && <p className="text-xs text-[#86868B] text-center py-6">Nenhum link encontrado.</p>}
 
+          {(() => {
+            // Esconde links onde o cliente já preencheu o form de compra — esses
+            // aparecem em /admin/simulacoes → Histórico de Formulários. Aqui
+            // mantemos só o que ainda está "Aguardando" (ninguém preencheu).
+            // Preenchido = tem cliente_dados_preenchidos (JSONB) E cliente_preencheu_em.
+            const visiveis = histLinks.filter(l => !(l.cliente_dados_preenchidos && l.cliente_preencheu_em));
+            if (!histLoading && visiveis.length === 0 && histLinks.length > 0) {
+              return <p className="text-xs text-[#86868B] text-center py-6">Todos os links encontrados já foram preenchidos. Consulte em <strong>Simulações → Histórico de Formulários</strong>.</p>;
+            }
+            return (
           <div className="space-y-2">
-            {histLinks.map((l) => (
+            {visiveis.map((l) => (
               <div key={l.id} className={`border rounded-xl p-3 ${l.tipo === "TROCA" ? "border-purple-200 bg-purple-50/30" : "border-[#E5E5EA] bg-[#F9F9FB]"}`}>
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div className="flex-1 min-w-[200px]">
@@ -1784,6 +1795,36 @@ export default function GerarLinkPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2 flex-wrap">
+                  {l.cliente_telefone && (() => {
+                    const waHref = buildWaFollowUpUrl({
+                      clienteNome: l.cliente_nome,
+                      clienteTelefone: l.cliente_telefone,
+                      produto: l.produto,
+                      cor: l.cor,
+                      valor: l.valor,
+                      desconto: l.desconto,
+                      trocaNome: l.troca_produto,
+                      trocaCor: l.troca_cor,
+                      trocaValor: l.troca_valor,
+                      trocaNome2: l.troca_produto2,
+                      trocaCor2: l.troca_cor2,
+                      trocaValor2: l.troca_valor2,
+                      preencheuEm: l.cliente_preencheu_em,
+                      pagamentoPago: l.pagamento_pago,
+                      entregaId: l.entrega_id,
+                    });
+                    if (!waHref) return null;
+                    return (
+                      <a
+                        href={waHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 font-medium"
+                      >
+                        💬 WhatsApp
+                      </a>
+                    );
+                  })()}
                   <button
                     onClick={() => copiarLinkHist(l.url_curta || `${typeof window !== "undefined" ? window.location.origin : ""}/c/${l.short_code}`)}
                     className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] font-medium"
@@ -1836,6 +1877,8 @@ export default function GerarLinkPage() {
               </div>
             ))}
           </div>
+            );
+          })()}
         </div>
       )}
 
