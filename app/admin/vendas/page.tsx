@@ -2895,13 +2895,140 @@ export default function VendasPage() {
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
-              {!podeVerHistorico && (
-                <span className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-lg">
-                  Deixe em branco → André ou Nicolas completam depois
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={multiDatePagamento}
+                    onChange={(e) => {
+                      setMultiDatePagamento(e.target.checked);
+                      if (e.target.checked && pagEntries.length === 0) {
+                        setPagEntries([{ data: form.data || hojeBR(), valor: "", forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" }]);
+                      }
+                    }}
+                    className="accent-blue-500 w-3.5 h-3.5"
+                  />
+                  <span className={`text-[11px] font-medium ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Datas diferentes</span>
+                </label>
+                {!podeVerHistorico && (
+                  <span className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-lg">
+                    Deixe em branco → André ou Nicolas completam depois
+                  </span>
+                )}
+              </div>
             </div>
 
+            {multiDatePagamento ? (
+              <div className="space-y-3">
+                {pagEntries.map((entry, idx) => {
+                  const entryFormaLabel = entry.forma === "CARTAO" ? "Cartão" : entry.forma === "DEBITO" ? "Débito" : entry.forma === "LINK" ? "Link MP" : entry.forma === "ESPECIE" ? "Espécie" : entry.forma || "—";
+                  return (
+                    <div key={idx} className={`p-3 rounded-xl border space-y-2 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E0E0E5]"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-blue-400" : "text-blue-600"}`}>Pagamento {idx + 1}</span>
+                        {pagEntries.length > 1 && (
+                          <button onClick={() => setPagEntries(prev => prev.filter((_, i) => i !== idx))} className="text-xs text-red-400 hover:text-red-600">✕ Remover</button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div>
+                          <p className={labelCls}>Data</p>
+                          <input type="date" value={entry.data} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, data: e.target.value } : p))} className={inputCls} />
+                        </div>
+                        <div>
+                          <p className={labelCls}>Valor (R$)</p>
+                          <input type="text" inputMode="decimal" value={entry.valor} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, valor: e.target.value } : p))} placeholder="0" className={inputCls} />
+                        </div>
+                        <div>
+                          <p className={labelCls}>Forma</p>
+                          <select value={entry.forma} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, forma: e.target.value, parcelas: "", bandeira: "", banco: e.target.value === "ESPECIE" ? "ESPECIE" : p.banco || "ITAU" } : p))} className={selectCls}>
+                            <option value="PIX">PIX</option>
+                            <option value="CARTAO">Cartão Crédito</option>
+                            <option value="DEBITO">Débito</option>
+                            <option value="LINK">Link Mercado Pago</option>
+                            <option value="ESPECIE">Espécie (Dinheiro)</option>
+                          </select>
+                        </div>
+                        {entry.forma !== "ESPECIE" && (
+                          <div>
+                            <p className={labelCls}>{entry.forma === "PIX" ? "Banco do PIX" : entry.forma === "LINK" ? "Plataforma" : "Máquina"}</p>
+                            <select value={entry.banco} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, banco: e.target.value } : p))} className={selectCls}>
+                              {entry.forma === "LINK" ? (
+                                <option value="MERCADO_PAGO">Mercado Pago</option>
+                              ) : (
+                                <>
+                                  <option value="ITAU">Itaú</option>
+                                  <option value="INFINITE">InfinitePay</option>
+                                  <option value="MERCADO_PAGO">Mercado Pago</option>
+                                </>
+                              )}
+                            </select>
+                          </div>
+                        )}
+                        {(entry.forma === "CARTAO" || entry.forma === "LINK") && (
+                          <div>
+                            <p className={labelCls}>Parcelas</p>
+                            <select value={entry.parcelas} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, parcelas: e.target.value } : p))} className={selectCls}>
+                              <option value="">—</option>
+                              {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                            </select>
+                          </div>
+                        )}
+                        {(entry.forma === "CARTAO" || entry.forma === "DEBITO") && (
+                          <div>
+                            <p className={labelCls}>Bandeira</p>
+                            <select value={entry.bandeira} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, bandeira: e.target.value } : p))} className={selectCls}>
+                              <option value="">—</option>
+                              <option value="VISA">Visa</option>
+                              <option value="MASTERCARD">Mastercard</option>
+                              <option value="ELO">Elo</option>
+                              <option value="AMEX">Amex</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                      {entry.valor && (
+                        <p className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                          {fmt(parseFloat(entry.valor.replace(/\./g, "").replace(",", ".")) || 0)} via {entryFormaLabel}
+                          {entry.parcelas ? ` ${entry.parcelas}x` : ""}
+                          {entry.bandeira ? ` ${entry.bandeira}` : ""}
+                          {entry.banco && entry.forma !== "ESPECIE" ? ` — ${entry.banco.replace("_", " ")}` : ""}
+                          {entry.data ? ` em ${entry.data.split("-").reverse().join("/")}` : ""}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <button
+                  onClick={() => setPagEntries(prev => [...prev, { data: form.data || hojeBR(), valor: "", forma: "PIX", banco: "ITAU", parcelas: "", bandeira: "", obs: "" }])}
+                  className={`w-full py-2 rounded-xl border-2 border-dashed text-xs font-semibold transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-blue-500 hover:text-blue-400" : "border-[#D2D2D7] text-[#86868B] hover:border-blue-400 hover:text-blue-500"}`}
+                >
+                  + Adicionar outro pagamento
+                </button>
+                {(() => {
+                  const totalEntries = pagEntries.reduce((s, e) => s + (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0), 0);
+                  const precoVendido = parseFloat(form.preco_vendido) || 0;
+                  const diff = precoVendido - totalEntries;
+                  return totalEntries > 0 ? (
+                    <div className={`rounded-xl px-4 py-2.5 text-xs flex flex-wrap gap-3 items-center ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                      <span>Total pagamentos: <strong className="text-green-600">{fmt(totalEntries)}</strong></span>
+                      {precoVendido > 0 && (
+                        <>
+                          <span>Preço vendido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(precoVendido)}</strong></span>
+                          {Math.abs(diff) > 1 && (
+                            <span className={diff > 0 ? "text-amber-600" : "text-red-500"}>
+                              {diff > 0 ? `Falta: ${fmt(diff)}` : `Excede: ${fmt(Math.abs(diff))}`}
+                            </span>
+                          )}
+                          {Math.abs(diff) <= 1 && <span className="text-green-600 font-bold">✓ Valor batido</span>}
+                        </>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            ) : (
+            <>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
                 <option value="">— Definir depois —</option>
@@ -3174,6 +3301,8 @@ export default function VendasPage() {
                 </div>
               )}
             </div>
+            )}
+            </>
             )}
           </div>
           )}
