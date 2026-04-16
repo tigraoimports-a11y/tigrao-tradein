@@ -368,6 +368,7 @@ export default function GerarLinkPage() {
   const [histBusca, setHistBusca] = useState("");
   const [histTipo, setHistTipo] = useState<"" | "COMPRA" | "TROCA">("");
   const [histArquivado, setHistArquivado] = useState<"0" | "1">("0");
+  const [histStatus, setHistStatus] = useState<"" | "ATIVO" | "PREENCHIDO" | "ENCAMINHADO">("");
 
   async function fetchHistorico() {
     if (!adminPw) return;
@@ -376,6 +377,7 @@ export default function GerarLinkPage() {
       const params = new URLSearchParams();
       if (histBusca.trim()) params.set("q", histBusca.trim());
       if (histTipo) params.set("tipo", histTipo);
+      if (histStatus) params.set("status", histStatus);
       params.set("arquivado", histArquivado);
       const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders(), cache: "no-store" });
       const j = await res.json();
@@ -394,7 +396,7 @@ export default function GerarLinkPage() {
 
   useEffect(() => {
     if (aba === "historico") fetchHistorico();
-  }, [aba, histBusca, histTipo, histArquivado]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aba, histBusca, histTipo, histArquivado, histStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function arquivarLink(id: string, arquivado: boolean) {
     await fetch("/api/admin/link-compras", {
@@ -1813,6 +1815,12 @@ export default function GerarLinkPage() {
               <option value="">Todos tipos</option>
               <option value="COMPRA">🛒 Só compra</option>
               <option value="TROCA">🔄 Com troca</option>
+            </select>
+            <select value={histStatus} onChange={(e) => setHistStatus(e.target.value as "" | "ATIVO" | "PREENCHIDO" | "ENCAMINHADO")} className={inputCls} style={{ maxWidth: 180 }}>
+              <option value="">Todos status</option>
+              <option value="ATIVO">⏳ Aguardando</option>
+              <option value="PREENCHIDO">📝 Preenchido</option>
+              <option value="ENCAMINHADO">✅ Entrega criada</option>
             </select>
             <select value={histArquivado} onChange={(e) => setHistArquivado(e.target.value as "0" | "1")} className={inputCls} style={{ maxWidth: 160 }}>
               <option value="0">Ativos</option>

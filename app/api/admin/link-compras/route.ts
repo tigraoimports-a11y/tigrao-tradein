@@ -117,6 +117,10 @@ export async function GET(request: Request) {
   else if (arquivado === "1") query = query.eq("arquivado", true);
 
   if (tipo === "COMPRA" || tipo === "TROCA") query = query.eq("tipo", tipo);
+  const statusParam = url.searchParams.get("status") || "";
+  if (statusParam === "ATIVO" || statusParam === "PREENCHIDO" || statusParam === "ENCAMINHADO") {
+    query = query.eq("status", statusParam);
+  }
   if (url.searchParams.get("preenchidos") === "1") {
     // Se incluir_simulador=1, também retorna link_compras auto-criados pelo
     // simulador de trade-in (operador=Simulador), mesmo que o cliente tenha
