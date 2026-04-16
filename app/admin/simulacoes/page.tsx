@@ -17,6 +17,7 @@ import {
 import type { ConditionData, IPadConditionData, MacBookConditionData, ModelDiscounts } from "@/lib/calculations";
 import { INSTALLMENT_RATES } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
+import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 import FlexiblePaymentSimulator from "@/components/FlexiblePaymentSimulator";
 
 const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
@@ -795,45 +796,24 @@ export default function AdminPage() {
         const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
         const formatDate = (d: string | null) => d ? new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
-        // Monta mensagem pronta do WhatsApp baseado no estado do pedido
-        const firstName = (h.cliente_nome || "").split(" ")[0] || "";
-        const money = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
-        const msgLines: string[] = [`Olá ${firstName}!`, ""];
-        const totalTroca = trocaVal + trocaVal2;
-        const resumoTroca: string[] = [];
-        if (trocaNome) {
-          resumoTroca.push(`🔄 Aparelho na troca: ${trocaNome}${trocaCor ? ` ${trocaCor}` : ""}${trocaVal > 0 ? ` — ${money(trocaVal)}` : ""}`);
-          if (trocaNome2) {
-            resumoTroca.push(`🔄 Aparelho 2 na troca: ${trocaNome2}${trocaCor2 ? ` ${trocaCor2}` : ""}${trocaVal2 > 0 ? ` — ${money(trocaVal2)}` : ""}`);
-            if (totalTroca > 0) resumoTroca.push(`   Total da troca: ${money(totalTroca)}`);
-          }
-        }
-        const resumoNovo: string[] = [];
-        if (h.produto) {
-          resumoNovo.push(`📱 Produto novo: ${h.produto}${h.cor ? ` — ${h.cor}` : ""}`);
-          if (valorFinal > 0) resumoNovo.push(`💰 Valor: ${money(valorFinal)}`);
-        }
-
-        if (h.entrega_id) {
-          msgLines.push("Tudo certo com a sua entrega? Qualquer dúvida é só me chamar por aqui.");
-        } else if (h.pagamento_pago) {
-          msgLines.push("Recebemos seu pagamento! Já estamos preparando tudo para a entrega.", "");
-          if (resumoNovo.length) msgLines.push(...resumoNovo, "");
-          if (resumoTroca.length) msgLines.push(...resumoTroca, "");
-          msgLines.push("Qualquer dúvida, estou à disposição!");
-        } else if (h.cliente_preencheu_em) {
-          msgLines.push("Tudo certo com o seu pedido? Vi que você já preencheu o formulário mas ainda não finalizou o pagamento.", "");
-          if (resumoNovo.length) msgLines.push(...resumoNovo, "");
-          if (resumoTroca.length) msgLines.push(...resumoTroca, "");
-          msgLines.push("Deseja fechar seu pedido ainda hoje?");
-        } else {
-          msgLines.push("Vi que você gostou da nossa proposta de troca, porém não finalizou seu pedido.", "");
-          msgLines.push("Segue um resumo da sua avaliação:", "");
-          if (resumoNovo.length) msgLines.push(...resumoNovo, "");
-          if (resumoTroca.length) msgLines.push(...resumoTroca, "");
-          msgLines.push("Deseja fechar seu pedido ainda hoje?");
-        }
-        const waHref = hTel ? `https://wa.me/55${hTel}?text=${encodeURIComponent(msgLines.join("\n"))}` : "";
+        // Mensagem pronta de WhatsApp (lib compartilhada com /admin/gerar-link)
+        const waHref = buildWaFollowUpUrl({
+          clienteNome: h.cliente_nome,
+          clienteTelefone: h.cliente_telefone,
+          produto: h.produto,
+          cor: h.cor,
+          valor: h.valor,
+          desconto: h.desconto,
+          trocaNome,
+          trocaCor,
+          trocaValor: trocaVal,
+          trocaNome2,
+          trocaCor2,
+          trocaValor2: trocaVal2,
+          preencheuEm: h.cliente_preencheu_em,
+          pagamentoPago: h.pagamento_pago,
+          entregaId: h.entrega_id,
+        });
         const Row = ({ label, value, color }: { label: string; value: string | number | null | undefined; color?: string }) => (
           value ? <div className="flex justify-between py-1.5 border-b border-[#F5F5F7]"><span className="text-[#86868B] text-xs">{label}</span><span className={`text-sm font-medium ${color || "text-[#1D1D1F]"}`}>{value}</span></div> : null
         );
