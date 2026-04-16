@@ -786,6 +786,46 @@ export default function AdminPage() {
         const trocaCond2 = h.troca_condicao2 || (sim?.condicao_linhas2 ? sim.condicao_linhas2.join(" | ") : null);
         const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
         const formatDate = (d: string | null) => d ? new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+
+        // Monta mensagem pronta do WhatsApp baseado no estado do pedido
+        const firstName = (h.cliente_nome || "").split(" ")[0] || "";
+        const money = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
+        const msgLines: string[] = [`Olá ${firstName}!`, ""];
+        const totalTroca = trocaVal + trocaVal2;
+        const resumoTroca: string[] = [];
+        if (trocaNome) {
+          resumoTroca.push(`🔄 Aparelho na troca: ${trocaNome}${trocaCor ? ` ${trocaCor}` : ""}${trocaVal > 0 ? ` — ${money(trocaVal)}` : ""}`);
+          if (trocaNome2) {
+            resumoTroca.push(`🔄 Aparelho 2 na troca: ${trocaNome2}${trocaCor2 ? ` ${trocaCor2}` : ""}${trocaVal2 > 0 ? ` — ${money(trocaVal2)}` : ""}`);
+            if (totalTroca > 0) resumoTroca.push(`   Total da troca: ${money(totalTroca)}`);
+          }
+        }
+        const resumoNovo: string[] = [];
+        if (h.produto) {
+          resumoNovo.push(`📱 Produto novo: ${h.produto}${h.cor ? ` — ${h.cor}` : ""}`);
+          if (valorFinal > 0) resumoNovo.push(`💰 Valor: ${money(valorFinal)}`);
+        }
+
+        if (h.entrega_id) {
+          msgLines.push("Tudo certo com a sua entrega? Qualquer dúvida é só me chamar por aqui.");
+        } else if (h.pagamento_pago) {
+          msgLines.push("Recebemos seu pagamento! Já estamos preparando tudo para a entrega.", "");
+          if (resumoNovo.length) msgLines.push(...resumoNovo, "");
+          if (resumoTroca.length) msgLines.push(...resumoTroca, "");
+          msgLines.push("Qualquer dúvida, estou à disposição!");
+        } else if (h.cliente_preencheu_em) {
+          msgLines.push("Tudo certo com o seu pedido? Vi que você já preencheu o formulário mas ainda não finalizou o pagamento.", "");
+          if (resumoNovo.length) msgLines.push(...resumoNovo, "");
+          if (resumoTroca.length) msgLines.push(...resumoTroca, "");
+          msgLines.push("Deseja fechar seu pedido ainda hoje?");
+        } else {
+          msgLines.push("Vi que você gostou da nossa proposta de troca, porém não finalizou seu pedido.", "");
+          msgLines.push("Segue um resumo da sua avaliação:", "");
+          if (resumoNovo.length) msgLines.push(...resumoNovo, "");
+          if (resumoTroca.length) msgLines.push(...resumoTroca, "");
+          msgLines.push("Deseja fechar seu pedido ainda hoje?");
+        }
+        const waHref = hTel ? `https://wa.me/55${hTel}?text=${encodeURIComponent(msgLines.join("\n"))}` : "";
         const Row = ({ label, value, color }: { label: string; value: string | number | null | undefined; color?: string }) => (
           value ? <div className="flex justify-between py-1.5 border-b border-[#F5F5F7]"><span className="text-[#86868B] text-xs">{label}</span><span className={`text-sm font-medium ${color || "text-[#1D1D1F]"}`}>{value}</span></div> : null
         );
@@ -904,8 +944,8 @@ export default function AdminPage() {
 
                 {/* Ações */}
                 <div className="flex gap-2 pt-2">
-                  {h.cliente_telefone && (
-                    <a href={`https://wa.me/55${h.cliente_telefone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"
+                  {h.cliente_telefone && waHref && (
+                    <a href={waHref} target="_blank" rel="noopener noreferrer"
                       className="flex-1 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold text-center transition-colors">
                       WhatsApp
                     </a>
