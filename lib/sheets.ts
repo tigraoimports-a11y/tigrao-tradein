@@ -127,9 +127,6 @@ export async function fetchConfig(): Promise<AppConfig> {
     multiplier21: parseNumber(configMap["Parcela 21x - Multiplicador"] || "1,21"),
     validadeHoras: 24, // Fixo em 24h — não depende mais da planilha
     whatsappNumero: configMap["WhatsApp número"] || configMap["WhatsApp numero"] || process.env.WHATSAPP_NUMBER || "5521999999999",
-    bonusGarantiaAte3m: parseNumber(configMap["Bonus garantia ate 3 meses"] || "0.03"),
-    bonusGarantia3a6m: parseNumber(configMap["Bonus garantia 3 a 6 meses"] || "0.05"),
-    bonusGarantia6mMais: parseNumber(configMap["Bonus garantia 6 meses ou mais"] || "0.07"),
   };
 }
 
