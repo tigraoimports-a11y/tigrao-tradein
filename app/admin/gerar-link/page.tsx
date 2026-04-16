@@ -1840,14 +1840,9 @@ export default function GerarLinkPage() {
           {!histLoading && histLinks.length === 0 && <p className="text-xs text-[#86868B] text-center py-6">Nenhum link encontrado.</p>}
 
           {(() => {
-            // Esconde links onde o cliente já preencheu o form de compra — esses
-            // aparecem em /admin/simulacoes → Histórico de Formulários. Aqui
-            // mantemos só o que ainda está "Aguardando" (ninguém preencheu).
-            // Preenchido = tem cliente_dados_preenchidos (JSONB) E cliente_preencheu_em.
-            const visiveis = histLinks.filter(l => !(l.cliente_dados_preenchidos && l.cliente_preencheu_em));
-            if (!histLoading && visiveis.length === 0 && histLinks.length > 0) {
-              return <p className="text-xs text-[#86868B] text-center py-6">Todos os links encontrados já foram preenchidos. Consulte em <strong>Simulações → Histórico de Formulários</strong>.</p>;
-            }
+            // Mostra TODOS os links (Aguardando, Preenchido, Entrega criada).
+            // Operador filtra via o dropdown "Status" em cima se quiser ver só um tipo.
+            const visiveis = histLinks;
             return (
           <div className="space-y-2">
             {visiveis.map((l) => (
