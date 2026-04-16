@@ -1,0 +1,99 @@
+name: Backup Supabase
+
+# ============================================================
+# Backup automático diário do banco Supabase
+# ============================================================
+# Roda todo dia às 06:00 UTC (03:00 BRT) e gera um dump completo
+# via pg_dump. O arquivo fica salvo como artifact do GitHub Actions
+# por 90 dias — baixar em:
+#   GitHub → Actions → Backup Supabase → qualquer run → Artifacts
+#
+# Secret necessário (configurar em Settings → Secrets → Actions):
+#   SUPABASE_DB_URL: connection string do Supabase
+#     (pegar em: Supabase dashboard → Project Settings → Database →
+#      Connection string → URI, marcar "Use connection pooling" = NÃO
+#      pra pegar a direct connection)
+#     Formato:
+#       postgresql://postgres:[SENHA]@db.[PROJETO].supabase.co:5432/postgres
+#
+# Pra restaurar: ver docs/DISASTER_RECOVERY.md
+# ============================================================
+
+on:
+  schedule:
+    # 06:00 UTC = 03:00 BRT (horário de menor uso)
+    - cron: "0 6 * * *"
+  # Permite rodar manualmente pelo GitHub UI
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          # Supabase roda Postgres 15/17 — instala o client mais novo pra
+          # evitar erro "server version mismatch"
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Run pg_dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "❌ SUPABASE_DB_URL não configurado — abortando"
+            echo "Configure em Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+          TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
+          BACKUP_FILE="supabase_backup_${TIMESTAMP}.sql.gz"
+
+          echo "🗄️  Iniciando pg_dump..."
+          # --no-owner + --no-privileges: backup portável (não amarra em role específico)
+          # --clean: inclui DROP antes de CREATE (facilita restore sobre banco existente)
+          # --if-exists: DROP só se a tabela existir (evita erro em banco vazio)
+          # --schema=public: só o schema público (ignora supabase internals tipo auth/storage)
+          pg_dump \
+            --no-owner \
+            --no-privileges \
+            --clean \
+            --if-exists \
+            --schema=public \
+            --file="$BACKUP_FILE.sql" \
+            "$SUPABASE_DB_URL"
+
+          # Comprime pra economizar espaço de artifact
+          gzip "$BACKUP_FILE.sql"
+
+          SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+          echo "✅ Backup gerado: $BACKUP_FILE ($SIZE)"
+          echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          # 90 dias é o máximo de retention no plano free do GitHub
+          retention-days: 90
+          # Sem compressão extra (já vem gzipado)
+          compression-level: 0
+
+      - name: Sumário
+        run: |
+          echo "## ✅ Backup concluído com sucesso" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Arquivo: \`${{ env.BACKUP_FILE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Retention: 90 dias" >> $GITHUB_STEP_SUMMARY
+          echo "- Download em: **Artifacts** (acima)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pra restaurar: \`docs/DISASTER_RECOVERY.md\`" >> $GITHUB_STEP_SUMMARY
