@@ -1429,7 +1429,12 @@ export default function EntregasPage() {
                 </div>
                 <div>
                   <p className={labelCls}>Vendedor</p>
-                  <input value={form.vendedor} onChange={(e) => set("vendedor", e.target.value)} placeholder="Ex: Nicolas" className={inputCls} />
+                  <select value={form.vendedor} onChange={(e) => set("vendedor", e.target.value)} className={inputCls}>
+                    <option value="">-- Selecionar --</option>
+                    {vendedoresList.map((v) => (
+                      <option key={v.nome} value={v.nome}>{v.nome}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <p className={labelCls}>Motoboy / Responsável</p>
