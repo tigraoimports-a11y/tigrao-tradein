@@ -376,7 +376,7 @@ export default function GerarLinkPage() {
       if (histBusca.trim()) params.set("q", histBusca.trim());
       if (histTipo) params.set("tipo", histTipo);
       params.set("arquivado", histArquivado);
-      const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders() });
+      const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders(), cache: "no-store" });
       const j = await res.json();
       const rows = (j.data || []).map((r: LinkCompra & { produtos_extras: unknown }) => {
         let pe: string[] | null = null;
@@ -1694,6 +1694,14 @@ export default function GerarLinkPage() {
               <option value="0">Ativos</option>
               <option value="1">Arquivados</option>
             </select>
+            <button
+              onClick={() => fetchHistorico()}
+              disabled={histLoading}
+              className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20 transition-colors disabled:opacity-50"
+              title="Atualizar lista"
+            >
+              {histLoading ? "..." : "🔄 Atualizar"}
+            </button>
           </div>
 
           {histLoading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
