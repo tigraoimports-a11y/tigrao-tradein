@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { getWhatsAppByVendedor } from "@/lib/whatsapp-config";
-import { useVendedores } from "@/lib/vendedores";
+import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
+import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 
@@ -579,7 +579,7 @@ export default function GerarLinkPage() {
           if (useCart) { const item = carrinhoLink[idx]; return item?.cor ? `${nome} ${item.cor}` : nome; }
           const cor = coresExtras[idx - 1]; return cor ? `${nome} ${corParaPT(cor)}` : nome;
         };
-        const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+        const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
         const shortData: Record<string, string> = {};
         shortData.p = nomeProdutoFinal;
         for (let i = 1; i < prodsFilled.length; i++) {
@@ -881,7 +881,7 @@ export default function GerarLinkPage() {
       return;
     }
 
-    const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+    const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
     // Helper: aplica cor extra no nome (PT simples)
@@ -1068,7 +1068,7 @@ export default function GerarLinkPage() {
       if (!cor) return nome;
       return `${nome} ${corParaPT(cor)}`;
     };
-    const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+    const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
 
     const shortData: Record<string, string> = {};
     shortData.p = nomeProdutoFinal;
