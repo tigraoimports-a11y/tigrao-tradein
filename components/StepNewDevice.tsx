@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { NewProduct, TradeInConfig } from "@/lib/types";
+import type { NewProduct, TradeInConfig, SeminovoCategoria } from "@/lib/types";
+import { SEMINOVO_CATEGORIAS, SEMINOVO_CAT_LABELS } from "@/lib/types";
 import { getUniqueModels, getStoragesForModel, getProductPrice } from "@/lib/sheets";
 import { formatBRL, calculateQuote, getAnyConditionLines, type AnyConditionData, type DeviceType } from "@/lib/calculations";
 import { WHATSAPP_SEMINOVO } from "@/lib/whatsapp-config";
@@ -51,11 +52,12 @@ function getCategory(modelo: string): ProductCategory {
   return "iPhone";
 }
 
-const SEMINOVOS = [
-  { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"] },
-  { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"] },
-  { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"] },
-  { modelo: "iPhone 16 Pro Max", storages: ["256GB"] },
+// Defaults usados apenas quando o banco não respondeu ainda
+const SEMINOVOS_DEFAULT: { modelo: string; storages: string[]; ativo: boolean; categoria: SeminovoCategoria }[] = [
+  { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true, categoria: "iphone" },
 ];
 
 export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, usedColor, whatsappNumber, condition, deviceType, tradeinConfig, usedModel2, usedStorage2, usedColor2, condition2, deviceType2, tradeInValue1, tradeInValue2 }: StepNewDeviceProps) {
@@ -68,12 +70,40 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   const [semiStorage, setSemiStorage] = useState("");
   const [semiNome, setSemiNome] = useState("");
   const [semiWhatsapp, setSemiWhatsapp] = useState("");
+  // Categoria escolhida no modo seminovo — separada de `category` (lacrado)
+  // porque os dois universos são independentes (mesma divisão do admin).
+  const [semiCat, setSemiCat] = useState<SeminovoCategoria | "">("");
 
-  // Use config from DB or fallback to hardcoded
-  const seminovos = useMemo(() => {
-    const list = tradeinConfig?.seminovos?.filter((s) => s.ativo);
-    return list && list.length > 0 ? list : SEMINOVOS;
+  // Normaliza a lista vinda do DB com categoria (backfill: item sem categoria → iphone).
+  // Inclui apenas ativos, já prontos pra uso.
+  const seminovosAll = useMemo(() => {
+    const raw = tradeinConfig?.seminovos?.filter((s) => s.ativo);
+    const src = raw && raw.length > 0 ? raw : SEMINOVOS_DEFAULT;
+    return src.map((s) => ({
+      modelo: s.modelo,
+      storages: s.storages,
+      categoria: ((s as { categoria?: string }).categoria as SeminovoCategoria) || "iphone",
+    }));
   }, [tradeinConfig]);
+
+  // Categorias com ao menos 1 seminovo ativo (as únicas abas clicáveis).
+  const semiCats = useMemo(() => {
+    const set = new Set<SeminovoCategoria>();
+    seminovosAll.forEach((s) => set.add(s.categoria));
+    return SEMINOVO_CATEGORIAS.filter((c) => set.has(c));
+  }, [seminovosAll]);
+
+  // Categoria efetiva: se o user não escolheu e só existe 1 categoria,
+  // seleciona automaticamente (evita seletor redundante e tela vazia se o
+  // config chega depois do click).
+  const semiCatEffective: SeminovoCategoria | "" = semiCat || (semiCats.length === 1 ? semiCats[0] : "");
+
+  // Filtra pela categoria efetiva.
+  const seminovos = useMemo(
+    () => (semiCatEffective ? seminovosAll.filter((s) => s.categoria === semiCatEffective) : []),
+    [seminovosAll, semiCatEffective]
+  );
+
   const lbl = tradeinConfig?.labels || {};
 
   // Categorias disponíveis (que tenham produtos no catálogo)
@@ -115,7 +145,8 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   function selectMode(m: "lacrado" | "seminovo") {
     setMode(m);
     setCategory(""); setLine(""); setModel(""); setStorage(""); cancelCmp();
-    setSemiModel(""); setSemiStorage("");
+    setSemiModel(""); setSemiStorage(""); setSemiCat("");
+    // Auto-seleção quando só há 1 categoria é derivada em semiCatEffective.
   }
 
   function selectCategory(c: ProductCategory) {
@@ -297,15 +328,31 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
             <p className="text-[12px]" style={{ color: "var(--ti-muted)" }}>{lbl.seminovo_info || "Aparelhos revisados e em excelente estado. O valor e condicoes serao informados por WhatsApp."}</p>
           </div>
 
-          <Sec title="Modelo seminovo">
-            <div className="grid grid-cols-1 gap-2">
-              {seminovos.map((s) => (
-                <Btn key={s.modelo} sel={semiModel === s.modelo} onClick={() => { setSemiModel(s.modelo); setSemiStorage(""); }} className="text-left">
-                  {s.modelo}
-                </Btn>
-              ))}
-            </div>
-          </Sec>
+          {/* Categoria do seminovo — só aparece se houver mais de uma.
+              Mesma ergonomia do modo lacrado (Categoria → Modelo → Storage). */}
+          {semiCats.length > 1 && (
+            <Sec title="Categoria">
+              <div className="grid grid-cols-2 gap-2">
+                {semiCats.map((c) => (
+                  <Btn key={c} sel={semiCat === c} onClick={() => { setSemiCat(c); setSemiModel(""); setSemiStorage(""); }}>
+                    {SEMINOVO_CAT_LABELS[c].icon} {SEMINOVO_CAT_LABELS[c].label}
+                  </Btn>
+                ))}
+              </div>
+            </Sec>
+          )}
+
+          {semiCatEffective && seminovos.length > 0 && (
+            <Sec title="Modelo seminovo">
+              <div className="grid grid-cols-1 gap-2">
+                {seminovos.map((s) => (
+                  <Btn key={s.modelo} sel={semiModel === s.modelo} onClick={() => { setSemiModel(s.modelo); setSemiStorage(""); }} className="text-left">
+                    {s.modelo}
+                  </Btn>
+                ))}
+              </div>
+            </Sec>
+          )}
 
           {semiModel && (
             <Sec title="Armazenamento">
