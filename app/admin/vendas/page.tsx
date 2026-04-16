@@ -2656,7 +2656,7 @@ export default function VendasPage() {
 
                 {/* Produtos agrupados por modelo */}
                 {(serialBusca.trim() || catSel) && (() => {
-                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
+                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE");
                   const filtrados = serialBusca.trim()
                     ? baseList.filter(p => (p.serial_no && p.serial_no.toUpperCase().includes(serialBusca.trim().toUpperCase())) || p.produto.toUpperCase().includes(serialBusca.trim().toUpperCase()))
                     : baseList;
