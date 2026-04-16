@@ -2941,7 +2941,7 @@ export default function VendasPage() {
                         </div>
                         <div>
                           <p className={labelCls}>Forma</p>
-                          <select value={entry.forma} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, forma: e.target.value, parcelas: "", bandeira: "", banco: e.target.value === "ESPECIE" ? "ESPECIE" : p.banco || "ITAU" } : p))} className={selectCls}>
+                          <select value={entry.forma} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, forma: e.target.value, parcelas: "", bandeira: "", banco: e.target.value === "ESPECIE" ? "ESPECIE" : e.target.value === "LINK" ? "MERCADO_PAGO" : p.banco || "ITAU" } : p))} className={selectCls}>
                             <option value="PIX">PIX</option>
                             <option value="CARTAO">Cartão Crédito</option>
                             <option value="DEBITO">Débito</option>
@@ -3398,7 +3398,7 @@ export default function VendasPage() {
                           </div>
                           <div>
                             <p className={labelCls}>Forma</p>
-                            <select value={entry.forma} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, forma: e.target.value, parcelas: "", bandeira: "", banco: e.target.value === "ESPECIE" ? "ESPECIE" : p.banco || "ITAU" } : p))} className={selectCls}>
+                            <select value={entry.forma} onChange={e => setPagEntries(prev => prev.map((p, i) => i === idx ? { ...p, forma: e.target.value, parcelas: "", bandeira: "", banco: e.target.value === "ESPECIE" ? "ESPECIE" : e.target.value === "LINK" ? "MERCADO_PAGO" : p.banco || "ITAU" } : p))} className={selectCls}>
                               <option value="PIX">PIX</option>
                               <option value="CARTAO">Cartão Crédito</option>
                               <option value="DEBITO">Débito</option>
