@@ -9,9 +9,6 @@ const FALLBACK_CONFIG: AppConfig = {
   multiplier21: 1.21,
   validadeHoras: 24,
   whatsappNumero: process.env.WHATSAPP_NUMBER || "5521967442665",
-  bonusGarantiaAte3m: 0.03,
-  bonusGarantia3a6m: 0.05,
-  bonusGarantia6mMais: 0.07,
 };
 
 export async function GET(req: NextRequest) {

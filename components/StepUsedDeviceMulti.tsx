@@ -6,7 +6,7 @@ import { corParaPT } from "@/lib/cor-pt";
 import { getUniqueUsedModels, getUsedStoragesForModel, getUsedBaseValue } from "@/lib/sheets";
 import {
   calculateAnyTradeInValue, getDiscountsForModel, formatBRL,
-  type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts, type WarrantyBonuses,
+  type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts,
 } from "@/lib/calculations";
 
 type MultiDeviceType = DeviceType | "watch";
@@ -15,7 +15,6 @@ interface StepUsedDeviceMultiProps {
   usedValues: UsedDeviceValue[];
   excludedModels: string[];
   modelDiscounts?: Record<string, ModelDiscounts>;
-  warrantyBonuses?: WarrantyBonuses;
   questionsConfig?: TradeInQuestion[] | null;
   deviceType: MultiDeviceType;
   onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
@@ -135,7 +134,7 @@ function toCalcDeviceType(dt: MultiDeviceType): DeviceType {
   return dt;
 }
 
-export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelDiscounts, warrantyBonuses, questionsConfig, deviceType, onNext, onTrackQuestion }: StepUsedDeviceMultiProps) {
+export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelDiscounts, questionsConfig, deviceType, onNext, onTrackQuestion }: StepUsedDeviceMultiProps) {
   const qc = questionsConfig;
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
@@ -246,7 +245,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const md = useMemo(() => getDiscountsForModel(model, modelDiscounts), [model, modelDiscounts]);
   const tradeInValue = useMemo(() => {
     if (baseValue === null || (isQActive(qc, "hasDamage") && hasDamage !== false) || (isQActive(qc, "partsReplaced") && partsReplaced === "thirdParty")) return 0;
-    return calculateAnyTradeInValue(calcDeviceType, baseValue, cond, md, warrantyBonuses);
+    return calculateAnyTradeInValue(calcDeviceType, baseValue, cond, md);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, partsReplaced, hasWarranty, warrantyMonth, warrantyYear, md, hasOriginalBox, hasWearMarks, wearMarksDiscount, calcDeviceType]);
 
