@@ -228,81 +228,27 @@ export default function AdminPage() {
   }, [password, fetchData]);
   useAutoRefetch(useCallback(() => { if (password) fetchData(password); }, [password, fetchData]), !!password);
 
-  // Fetch histórico (link_compras com formulário preenchido + simulações GOSTEI sem link)
+  // Fetch histórico — SOMENTE clientes que preencheram o formulário de compra e chegaram no WhatsApp.
+  // Clientes com link gerado mas sem preenchimento (status "Aguardando") aparecem só em /admin/gerar-link.
+  // Simulações "Gostei" sem preenchimento ficam só na aba "Simulações" (não são duplicadas aqui).
   const fetchHistorico = useCallback(async () => {
     if (!password) return;
     setHistoricoLoading(true);
     try {
-      // 1) Link_compras com formulário preenchido OU auto-criados pelo simulador de trade-in.
-      //    incluir_simulador=1 pega também os GOSTEI onde o cliente enviou o formulário
-      //    completo só pelo WhatsApp (cliente_preencheu_em null mas operador=Simulador).
-      const res = await fetch("/api/admin/link-compras?preenchidos=1&incluir_simulador=1&limit=500", {
+      // Traz link_compras com cliente_preencheu_em IS NOT NULL (servidor filtra).
+      const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=500", {
         headers: { "x-admin-password": password },
       });
       let items: HistoricoItem[] = [];
       if (res.ok) {
         const json = await res.json();
-        items = (json.data || []).filter((r: HistoricoItem) =>
-          r.cliente_preencheu_em || r.operador === "Simulador"
-        );
+        // Defensivo: garante client-side que todos têm data de preenchimento real.
+        items = (json.data || []).filter((r: HistoricoItem) => r.cliente_preencheu_em);
       }
-
-      // 2) Simulações GOSTEI que não têm link_compras — converter para HistoricoItem
-      // Pegar telefones já presentes nos link_compras
-      const linkTels = new Set(items.map(i => (i.cliente_telefone || "").replace(/\D/g, "").slice(-8)).filter(t => t.length >= 8));
-      const linkSimIds = new Set(items.map(i => i.simulacao_id).filter(Boolean));
-      const gosteiFiltrado = (data || []).filter(s =>
-        s.status === "GOSTEI" &&
-        !linkSimIds.has(s.id) &&
-        !(s.whatsapp && linkTels.has(s.whatsapp.replace(/\D/g, "").slice(-8)))
-      );
-      // Dedup por telefone (pegar só o mais recente)
-      const seen = new Set<string>();
-      for (const s of gosteiFiltrado) {
-        const tel8 = (s.whatsapp || "").replace(/\D/g, "").slice(-8);
-        if (tel8 && seen.has(tel8)) continue;
-        if (tel8) seen.add(tel8);
-        items.push({
-          id: `sim_${s.id}`,
-          created_at: s.created_at,
-          short_code: "",
-          tipo: "TROCA",
-          cliente_nome: s.nome,
-          cliente_telefone: s.whatsapp,
-          cliente_cpf: null,
-          cliente_email: null,
-          produto: `${s.modelo_novo} ${s.storage_novo}`.trim(),
-          produtos_extras: null,
-          cor: null,
-          valor: s.preco_novo || 0,
-          desconto: 0,
-          entrada: 0,
-          forma_pagamento: s.forma_pagamento || null,
-          parcelas: null,
-          status: "GOSTEI",
-          cliente_preencheu_em: s.created_at,
-          cliente_dados_preenchidos: null,
-          pagamento_pago: null,
-          vendedor: s.vendedor || null,
-          operador: null,
-          troca_produto: `${s.modelo_usado} ${s.storage_usado}`.trim(),
-          troca_valor: s.avaliacao_usado || 0,
-          troca_condicao: Array.isArray(s.condicao_linhas) ? s.condicao_linhas.join(" | ") : null,
-          troca_cor: s.cor_usado || null,
-          troca_produto2: s.modelo_usado2 ? `${s.modelo_usado2} ${s.storage_usado2 || ""}`.trim() : null,
-          troca_valor2: s.avaliacao_usado2 || 0,
-          troca_condicao2: Array.isArray(s.condicao_linhas2) ? s.condicao_linhas2.join(" | ") : null,
-          troca_cor2: s.cor_usado2 || null,
-          simulacao_id: s.id,
-          entrega_id: null,
-          observacao: null,
-        });
-      }
-
       setHistorico(items);
     } catch { /* silent */ }
     setHistoricoLoading(false);
-  }, [password, data]);
+  }, [password]);
 
   useEffect(() => {
     if (mainTab === "historico" && data && data.length > 0) fetchHistorico();
@@ -684,7 +630,7 @@ export default function AdminPage() {
               </button>
             </div>
             <p className="px-5 pt-3 text-xs text-[#86868B]">
-              Clientes que fizeram simulação → clicaram &quot;Gostei, fechar pedido&quot; → preencheram o formulário de compra → chegaram no WhatsApp
+              Somente clientes que preencheram o formulário de compra e chegaram no WhatsApp. Links sem preenchimento (⏳ Aguardando) aparecem em <strong>Gerar Link → Histórico</strong>.
             </p>
             <div className="px-5 py-3 flex items-center gap-2">
               <div className="relative flex-1 max-w-md">
