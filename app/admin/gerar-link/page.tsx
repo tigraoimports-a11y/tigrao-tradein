@@ -405,28 +405,59 @@ export default function GerarLinkPage() {
     fetchHistorico();
   }
 
-  // Marca um link "Aguardando" como preenchido manualmente. Útil quando o
-  // cliente preencheu o formulário no /compra e o WhatsApp chegou na equipe,
-  // mas o POST /preenchimento não salvou (iOS Safari cancelando request
-  // apesar do sendBeacon, ou cliente sem conexão estável). Sem isso, o link
-  // fica pra sempre como "Aguardando" mesmo depois do pedido chegar.
-  async function marcarComoPreenchido(id: string) {
-    if (!confirm("Marcar este link como preenchido? Use quando o cliente já enviou o formulário pelo WhatsApp mas o sistema não registrou automaticamente.")) return;
-    const res = await fetch("/api/admin/link-compras", {
-      method: "PATCH",
-      headers: adminHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({
-        id,
+  // Modal "Marcar como preenchido" — reabre um link Aguardando e permite
+  // ao admin copiar os dados do WhatsApp do cliente pro banco, garantindo
+  // que o link apareça corretamente em /admin/simulacoes > Historico de
+  // Formularios com nome e telefone preenchidos (em vez de ficar em branco).
+  const [marcarLink, setMarcarLink] = useState<LinkCompra | null>(null);
+  const [marcarNome, setMarcarNome] = useState("");
+  const [marcarTelefone, setMarcarTelefone] = useState("");
+  const [marcarCpf, setMarcarCpf] = useState("");
+  const [marcarEmail, setMarcarEmail] = useState("");
+  const [marcarSalvando, setMarcarSalvando] = useState(false);
+
+  function abrirMarcarPreenchido(l: LinkCompra) {
+    setMarcarLink(l);
+    setMarcarNome(l.cliente_nome || "");
+    setMarcarTelefone(l.cliente_telefone || "");
+    setMarcarCpf(l.cliente_cpf || "");
+    setMarcarEmail(l.cliente_email || "");
+  }
+
+  async function confirmarMarcarPreenchido() {
+    if (!marcarLink) return;
+    const nome = marcarNome.trim();
+    const tel = marcarTelefone.trim();
+    if (!nome) { alert("Informe o nome do cliente."); return; }
+    if (!tel) { alert("Informe o WhatsApp do cliente."); return; }
+
+    setMarcarSalvando(true);
+    try {
+      const patch: Record<string, unknown> = {
+        id: marcarLink.id,
+        cliente_nome: nome,
+        cliente_telefone: tel,
         cliente_preencheu_em: new Date().toISOString(),
         status: "PREENCHIDO",
-      }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      alert("Erro ao marcar: " + (j.error || res.status));
-      return;
+      };
+      if (marcarCpf.trim()) patch.cliente_cpf = marcarCpf.trim();
+      if (marcarEmail.trim()) patch.cliente_email = marcarEmail.trim();
+
+      const res = await fetch("/api/admin/link-compras", {
+        method: "PATCH",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert("Erro ao marcar: " + (j.error || res.status));
+        return;
+      }
+      setMarcarLink(null);
+      fetchHistorico();
+    } finally {
+      setMarcarSalvando(false);
     }
-    fetchHistorico();
   }
 
   async function excluirLink(id: string) {
@@ -1650,6 +1681,74 @@ export default function GerarLinkPage() {
         </div>
       )}
 
+      {/* Modal: Marcar como preenchido — pede nome/telefone do cliente pra
+          que o link apareça corretamente em Histórico de Formulários.
+          Use quando o cliente preencheu via /compra mas o POST não salvou
+          (iOS Safari cancelando sendBeacon, conexão instável, etc). */}
+      {marcarLink && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setMarcarLink(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#1D1D1F]">✓ Marcar como preenchido</h3>
+              <button onClick={() => setMarcarLink(null)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-[#86868B] bg-blue-50 border border-blue-200 rounded-lg p-2">
+                Use esta tela quando o cliente já enviou o formulário pelo WhatsApp mas o sistema não registrou automaticamente. Copie os dados do WhatsApp do cliente para cá.
+              </p>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Nome completo *</label>
+                <input
+                  type="text"
+                  value={marcarNome}
+                  onChange={(e) => setMarcarNome(e.target.value)}
+                  placeholder="Nome do cliente (copiar do WhatsApp)"
+                  className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">WhatsApp *</label>
+                <input
+                  type="tel"
+                  value={marcarTelefone}
+                  onChange={(e) => setMarcarTelefone(e.target.value)}
+                  placeholder="(21) 99999-9999"
+                  className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">CPF (opcional)</label>
+                <input
+                  type="text"
+                  value={marcarCpf}
+                  onChange={(e) => setMarcarCpf(e.target.value)}
+                  placeholder="000.000.000-00"
+                  className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">E-mail (opcional)</label>
+                <input
+                  type="email"
+                  value={marcarEmail}
+                  onChange={(e) => setMarcarEmail(e.target.value)}
+                  placeholder="cliente@email.com"
+                  className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1"
+                />
+              </div>
+              <button
+                onClick={confirmarMarcarPreenchido}
+                disabled={!marcarNome.trim() || !marcarTelefone.trim() || marcarSalvando}
+                className="w-full py-2.5 rounded-lg bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-50"
+              >
+                {marcarSalvando ? "Salvando..." : "✓ Marcar como preenchido"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Encaminhar pra entrega */}
       {encaminharLink && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setEncaminharLink(null)}>
@@ -1870,11 +1969,20 @@ export default function GerarLinkPage() {
                   </button>
                   {!l.cliente_preencheu_em && (
                     <button
-                      onClick={() => marcarComoPreenchido(l.id)}
+                      onClick={() => abrirMarcarPreenchido(l)}
                       className="text-xs px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium"
                       title="Use quando o cliente já mandou o formulário pelo WhatsApp mas o sistema não registrou"
                     >
                       ✓ Marcar como preenchido
+                    </button>
+                  )}
+                  {l.cliente_preencheu_em && (!l.cliente_nome || !l.cliente_telefone) && (
+                    <button
+                      onClick={() => abrirMarcarPreenchido(l)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 font-medium"
+                      title="Complete os dados do cliente (nome/WhatsApp) a partir da mensagem recebida"
+                    >
+                      ✏️ Preencher dados do cliente
                     </button>
                   )}
                   {l.cliente_preencheu_em && (
