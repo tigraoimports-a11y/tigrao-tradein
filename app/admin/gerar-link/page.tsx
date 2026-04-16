@@ -405,6 +405,30 @@ export default function GerarLinkPage() {
     fetchHistorico();
   }
 
+  // Marca um link "Aguardando" como preenchido manualmente. Útil quando o
+  // cliente preencheu o formulário no /compra e o WhatsApp chegou na equipe,
+  // mas o POST /preenchimento não salvou (iOS Safari cancelando request
+  // apesar do sendBeacon, ou cliente sem conexão estável). Sem isso, o link
+  // fica pra sempre como "Aguardando" mesmo depois do pedido chegar.
+  async function marcarComoPreenchido(id: string) {
+    if (!confirm("Marcar este link como preenchido? Use quando o cliente já enviou o formulário pelo WhatsApp mas o sistema não registrou automaticamente.")) return;
+    const res = await fetch("/api/admin/link-compras", {
+      method: "PATCH",
+      headers: adminHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        id,
+        cliente_preencheu_em: new Date().toISOString(),
+        status: "PREENCHIDO",
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert("Erro ao marcar: " + (j.error || res.status));
+      return;
+    }
+    fetchHistorico();
+  }
+
   async function excluirLink(id: string) {
     if (!confirm("Excluir este link do histórico definitivamente? Essa ação não pode ser desfeita.")) return;
     const res = await fetch("/api/admin/link-compras", {
@@ -1843,6 +1867,15 @@ export default function GerarLinkPage() {
                   >
                     ✏️ Editar
                   </button>
+                  {!l.cliente_preencheu_em && (
+                    <button
+                      onClick={() => marcarComoPreenchido(l.id)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium"
+                      title="Use quando o cliente já mandou o formulário pelo WhatsApp mas o sistema não registrou"
+                    >
+                      ✓ Marcar como preenchido
+                    </button>
+                  )}
                   {l.cliente_preencheu_em && (
                     <button
                       onClick={() => setViewDataLink(l)}
