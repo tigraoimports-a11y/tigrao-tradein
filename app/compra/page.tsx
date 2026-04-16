@@ -604,12 +604,18 @@ function CompraForm() {
 
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
 
-    // Se veio de um short link rastreável, devolve os dados preenchidos pro admin (fire-and-forget)
+    // Se veio de um short link rastreável, devolve os dados preenchidos pro admin.
+    // IMPORTANTE: keepalive:true garante que o POST complete mesmo quando o
+    // window.open logo abaixo navega pro WhatsApp (mobile/iOS costumam cancelar
+    // requests pendentes na navegação). Sem keepalive, cliente_preencheu_em
+    // ficava null e o pedido aparecia como "Aguardando" no admin mesmo depois
+    // de chegar no WhatsApp.
     if (shortCode) {
       const enderecoFullTxt = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
       fetch(`/api/link-compras/${encodeURIComponent(shortCode)}/preenchimento`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        keepalive: true,
         body: JSON.stringify({
           dados: {
             nome, cpf: pessoa === "PJ" ? "" : cpf, cnpj: pessoa === "PJ" ? cnpj : "", pessoa,
