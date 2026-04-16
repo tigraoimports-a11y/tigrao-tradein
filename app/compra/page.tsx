@@ -605,31 +605,46 @@ function CompraForm() {
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
 
     // Se veio de um short link rastreável, devolve os dados preenchidos pro admin.
-    // IMPORTANTE: keepalive:true garante que o POST complete mesmo quando o
-    // window.open logo abaixo navega pro WhatsApp (mobile/iOS costumam cancelar
-    // requests pendentes na navegação). Sem keepalive, cliente_preencheu_em
-    // ficava null e o pedido aparecia como "Aguardando" no admin mesmo depois
-    // de chegar no WhatsApp.
+    // IMPORTANTE: usamos navigator.sendBeacon — projetado exatamente pra POSTs
+    // que precisam sobreviver ao unload/navigation (analytics, tracking).
+    // fetch+keepalive falhava em mobile Safari/Chrome: o navegador cancelava
+    // o request ao abrir wa.me, deixando cliente_preencheu_em NULL e o pedido
+    // aparecia como "Aguardando" no admin mesmo depois de chegar no WhatsApp.
+    // sendBeacon é gerenciado pelo user-agent fora do contexto da página, então
+    // completa mesmo quando a aba navega ou fecha.
     if (shortCode) {
       const enderecoFullTxt = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
-      fetch(`/api/link-compras/${encodeURIComponent(shortCode)}/preenchimento`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        keepalive: true,
-        body: JSON.stringify({
-          dados: {
-            nome, cpf: pessoa === "PJ" ? "" : cpf, cnpj: pessoa === "PJ" ? cnpj : "", pessoa,
-            email, telefone, instagram,
-            cep, endereco, numero, complemento, bairro,
-            endereco_completo: enderecoFullTxt,
-            produto: produtoFinal, cor: corSel, preco: precoFinal,
-            forma_pagamento: pagLines.join(" | "),
-            local: localStr, horario, data_entrega: dataEntrega,
-            vendedor, origem,
-            website: honeypot,
-          },
-        }),
-      }).catch(() => {});
+      const payload = JSON.stringify({
+        dados: {
+          nome, cpf: pessoa === "PJ" ? "" : cpf, cnpj: pessoa === "PJ" ? cnpj : "", pessoa,
+          email, telefone, instagram,
+          cep, endereco, numero, complemento, bairro,
+          endereco_completo: enderecoFullTxt,
+          produto: produtoFinal, cor: corSel, preco: precoFinal,
+          forma_pagamento: pagLines.join(" | "),
+          local: localStr, horario, data_entrega: dataEntrega,
+          vendedor, origem,
+          website: honeypot,
+        },
+      });
+      const preenchUrl = `/api/link-compras/${encodeURIComponent(shortCode)}/preenchimento`;
+      let beaconOk = false;
+      if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+        try {
+          const blob = new Blob([payload], { type: "application/json" });
+          beaconOk = navigator.sendBeacon(preenchUrl, blob);
+        } catch { /* fallback */ }
+      }
+      // Fallback: fetch+keepalive caso o beacon falhe (quota estourada ou browser
+      // sem suporte). Melhor que nada — em desktop funciona bem.
+      if (!beaconOk) {
+        fetch(preenchUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: payload,
+        }).catch(() => {});
+      }
     }
 
     const url = `https://wa.me/${whatsappFinal}?text=${encodeURIComponent(lines.join("\n"))}`;
