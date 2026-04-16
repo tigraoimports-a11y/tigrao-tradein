@@ -229,29 +229,34 @@ export default function AdminPage() {
   }, [password, fetchData]);
   useAutoRefetch(useCallback(() => { if (password) fetchData(password); }, [password, fetchData]), !!password);
 
-  // Fetch histórico — SOMENTE clientes que preencheram o formulário de compra e chegaram no WhatsApp.
-  // Clientes com link gerado mas sem preenchimento (status "Aguardando") aparecem só em /admin/gerar-link.
-  // Simulações "Gostei" sem preenchimento ficam só na aba "Simulações" (não são duplicadas aqui).
+  // Fetch histórico — SOMENTE clientes que atingiram algum marco do funil.
+  // Inclui: preenchimento salvo, entrega encaminhada, ou pagamento efetuado.
+  // Clientes com link gerado mas sem nenhum desses sinais (status "Aguardando")
+  // aparecem só em /admin/gerar-link. Simulações "Gostei" ficam só na aba
+  // "Simulações" (não são duplicadas aqui).
   const fetchHistorico = useCallback(async () => {
     if (!password) return;
     setHistoricoLoading(true);
     try {
-      // Traz link_compras com cliente_preencheu_em IS NOT NULL (servidor filtra).
+      // Servidor já filtra (preencheu_em OR entrega_id OR pagamento_pago)
+      // + exclui AGUARDANDO_MP (cliente iniciou MP mas não finalizou).
       const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=500", {
         headers: { "x-admin-password": password },
       });
       let items: HistoricoItem[] = [];
       if (res.ok) {
         const json = await res.json();
-        // Triple-check defensivo: servidor já filtra, mas garante aqui também
-        // que todos têm (1) timestamp de preenchimento, (2) snapshot JSONB
-        // cliente_dados_preenchidos e (3) status diferente de GOSTEI/SAIR
-        // (que são de simulação, não de form de compra).
+        // Defensivo: garante que todos têm PELO MENOS UM sinal de funil
+        // completo e status diferente de GOSTEI/SAIR (simulação pura).
+        // NÃO exigimos cliente_dados_preenchidos (JSONB) aqui — em casos
+        // legados (POST keepalive falha, entrega criada manualmente, etc.)
+        // o JSONB pode estar null mesmo quando o funil foi completado.
+        // O modal de detalhes lida com entries legado mostrando aviso.
         const valido = (r: HistoricoItem) =>
-          !!r.cliente_preencheu_em &&
-          !!r.cliente_dados_preenchidos &&
+          (!!r.cliente_preencheu_em || !!r.entrega_id || !!r.pagamento_pago) &&
           r.status !== "GOSTEI" &&
-          r.status !== "SAIR";
+          r.status !== "SAIR" &&
+          r.status !== "AGUARDANDO_MP";
         items = (json.data || []).filter(valido);
       }
       setHistorico(items);
