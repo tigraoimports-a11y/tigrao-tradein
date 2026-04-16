@@ -16,32 +16,56 @@ interface EstoqueItem {
   status: string;
 }
 
+interface LinhaEstilo {
+  texto: string;
+  bold: boolean;
+  size: number; // pt
+}
+
 interface EtiquetaFila {
   id: string;
-  linha1: string;
-  linha2: string;
-  linha3: string;
+  linhas: LinhaEstilo[]; // sempre 3 posições (cor/config podem vir vazias)
   qtd: number;
 }
 
-// ── CSS print (mesmo padrão Brother QL-820NWB 62mm x 45mm) ──
+// Default: todas as linhas bold 11pt (mesmo peso visual). O operador
+// ajusta individualmente se uma linha específica precisar de outro
+// tamanho ou perder o negrito.
+const DEFAULT_BOLD = true;
+const DEFAULT_SIZE = 11;
+const SIZE_OPTIONS = [7, 8, 9, 10, 11, 12, 14, 16];
+
+function linhaVazia(): LinhaEstilo {
+  return { texto: "", bold: DEFAULT_BOLD, size: DEFAULT_SIZE };
+}
+
+// ── CSS print (Brother QL-820NWB 62mm x 45mm) ──
+// Estilo de cada linha vem inline em `gerarHtmlEtiqueta` — o CSS aqui
+// cuida só de layout e página.
 const PRINT_CSS = `
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{margin:0;padding:0;width:100%}
-  body{font-family:Arial,Helvetica,sans-serif}
+  body{font-family:Arial,Helvetica,sans-serif;color:#1D1D1F}
   .wrap{text-align:center;padding:5mm 5mm 3mm 5mm;display:flex;flex-direction:column;justify-content:center;height:100%;min-height:45mm}
-  .linha1{font-size:11pt;font-weight:bold;line-height:1.2;text-transform:uppercase}
-  .linha2{font-size:9pt;color:#333;margin-top:1.5mm;line-height:1.2}
-  .linha3{font-size:8pt;color:#333;margin-top:1.5mm;text-transform:uppercase}
   @page{size:62mm 45mm;margin:0}
 `;
 
-function gerarHtmlEtiqueta(linha1: string, linha2: string, linha3: string): string {
-  return `<div class="wrap">
-    <div class="linha1">${linha1}</div>
-    ${linha2 ? `<div class="linha2">${linha2}</div>` : ""}
-    ${linha3 ? `<div class="linha3">${linha3}</div>` : ""}
-  </div>`;
+function estiloLinha(l: LinhaEstilo, idx: number): string {
+  return [
+    `font-size:${l.size}pt`,
+    `font-weight:${l.bold ? "bold" : "normal"}`,
+    "line-height:1.2",
+    "text-transform:uppercase",
+    idx > 0 ? "margin-top:1.5mm" : "",
+  ].filter(Boolean).join(";");
+}
+
+function gerarHtmlEtiqueta(linhas: LinhaEstilo[]): string {
+  const divs = linhas
+    .filter(l => l.texto.trim())
+    .map((l, i) => `<div style="${estiloLinha(l, i)}">${l.texto}</div>`)
+    .join("");
+  return `<div class="wrap">${divs}</div>`;
 }
 
 // ── Extrai nome base do produto (sem cor, sem storage) ──
@@ -165,11 +189,16 @@ export default function ImpressaoProdutosPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const sugRef = useRef<HTMLDivElement>(null);
 
-  // Campos editáveis da etiqueta
-  const [linha1, setLinha1] = useState("");
-  const [linha2, setLinha2] = useState("");
-  const [linha3, setLinha3] = useState("");
+  // Campos editáveis da etiqueta — 3 linhas com texto + estilo
+  const [linhas, setLinhas] = useState<LinhaEstilo[]>([linhaVazia(), linhaVazia(), linhaVazia()]);
   const [qtd, setQtd] = useState(1);
+
+  function atualizarLinha(idx: number, patch: Partial<LinhaEstilo>) {
+    setLinhas(prev => prev.map((l, i) => i === idx ? { ...l, ...patch } : l));
+  }
+  function resetLinhas() {
+    setLinhas([linhaVazia(), linhaVazia(), linhaVazia()]);
+  }
 
   // Fila de impressão
   const [fila, setFila] = useState<EtiquetaFila[]>([]);
@@ -220,17 +249,26 @@ export default function ImpressaoProdutosPage() {
     const nome = extrairNomeBase(p.produto, p.categoria);
     const config = extrairConfig(p.produto, p.categoria, p.observacao);
     const cor = p.cor ? corParaPT(p.cor).toUpperCase() : "";
-    setLinha1(nome);
-    setLinha2(config);
-    setLinha3(cor);
+    // Ao selecionar, reseta estilo pros defaults (bold 11pt em todas).
+    setLinhas([
+      { texto: nome, bold: DEFAULT_BOLD, size: DEFAULT_SIZE },
+      { texto: config, bold: DEFAULT_BOLD, size: DEFAULT_SIZE },
+      { texto: cor, bold: DEFAULT_BOLD, size: DEFAULT_SIZE },
+    ]);
     setBuscaProduto(cleanProdutoDisplay(p.produto));
     setShowSuggestions(false);
   }
 
   function adicionarFila() {
-    if (!linha1.trim()) return;
-    setFila([...fila, { id: Date.now().toString(), linha1: linha1.trim(), linha2: linha2.trim(), linha3: linha3.trim(), qtd }]);
-    setLinha1(""); setLinha2(""); setLinha3(""); setQtd(1); setBuscaProduto("");
+    if (!linhas[0].texto.trim()) return;
+    setFila([...fila, {
+      id: Date.now().toString(),
+      linhas: linhas.map(l => ({ ...l, texto: l.texto.trim() })),
+      qtd,
+    }]);
+    resetLinhas();
+    setQtd(1);
+    setBuscaProduto("");
   }
 
   function removerFila(id: string) {
@@ -238,13 +276,13 @@ export default function ImpressaoProdutosPage() {
   }
 
   function imprimirUma() {
-    if (!linha1.trim()) return;
+    if (!linhas[0].texto.trim()) return;
     const win = window.open("", "_blank", "width=300,height=300");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta Produto</title>
       <style>${PRINT_CSS}</style></head><body>
-      ${gerarHtmlEtiqueta(linha1, linha2, linha3)}
+      ${gerarHtmlEtiqueta(linhas)}
       <script>window.onload=function(){window.print();window.close();};<\/script></body></html>`);
     win.document.close();
   }
@@ -256,7 +294,7 @@ export default function ImpressaoProdutosPage() {
     const pages: string[] = [];
     for (const item of fila) {
       for (let i = 0; i < item.qtd; i++) {
-        pages.push(`<div class="page">${gerarHtmlEtiqueta(item.linha1, item.linha2, item.linha3)}</div>`);
+        pages.push(`<div class="page">${gerarHtmlEtiqueta(item.linhas)}</div>`);
       }
     }
     win.document.write(`<!DOCTYPE html><html><head>
@@ -327,27 +365,48 @@ export default function ImpressaoProdutosPage() {
           <div className={cardCls}>
             <p className={`text-sm font-bold mb-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>✏️ Conteúdo da Etiqueta</p>
             <div className="space-y-3">
-              <div>
-                <p className={labelCls}>Linha 1 — Nome do produto</p>
-                <input value={linha1} onChange={e => setLinha1(e.target.value.toUpperCase())} placeholder="Ex: MACBOOK AIR M5" className={`${inputCls} font-bold`} />
-              </div>
-              <div>
-                <p className={labelCls}>Linha 2 — Configuração</p>
-                <input value={linha2} onChange={e => setLinha2(e.target.value)} placeholder='Ex: 15" 16GB | 512GB' className={inputCls} />
-              </div>
-              <div>
-                <p className={labelCls}>Linha 3 — Cor</p>
-                <input value={linha3} onChange={e => setLinha3(e.target.value.toUpperCase())} placeholder="Ex: PRETO" className={inputCls} />
-              </div>
+              {(["Linha 1 — Nome do produto", "Linha 2 — Configuração", "Linha 3 — Cor"] as const).map((rotulo, i) => {
+                const placeholder = i === 0 ? "Ex: MACBOOK AIR M5" : i === 1 ? 'Ex: 15" 16GB | 512GB' : "Ex: PRETO";
+                const linha = linhas[i];
+                return (
+                  <div key={i}>
+                    <p className={labelCls}>{rotulo}</p>
+                    <input
+                      value={linha.texto}
+                      onChange={e => atualizarLinha(i, { texto: e.target.value.toUpperCase() })}
+                      placeholder={placeholder}
+                      className={`${inputCls} ${linha.bold ? "font-bold" : ""}`}
+                    />
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => atualizarLinha(i, { bold: !linha.bold })}
+                        title={linha.bold ? "Tirar negrito" : "Aplicar negrito"}
+                        className={`w-8 h-7 rounded text-xs font-bold transition-colors ${linha.bold ? "bg-[#E8740E] text-white" : (dm ? "bg-[#2C2C2E] text-[#86868B] border border-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7]")}`}
+                      >
+                        B
+                      </button>
+                      <select
+                        value={linha.size}
+                        onChange={e => atualizarLinha(i, { size: Number(e.target.value) })}
+                        title="Tamanho da fonte"
+                        className={`px-2 py-1 rounded text-xs border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                      >
+                        {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}pt</option>)}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
               <div className="flex items-end gap-3 pt-1">
                 <div className="w-20">
                   <p className={labelCls}>Qtd</p>
                   <input type="number" min={1} max={50} value={qtd} onChange={e => setQtd(Math.max(1, parseInt(e.target.value) || 1))} className={`${inputCls} text-center`} />
                 </div>
-                <button onClick={adicionarFila} disabled={!linha1.trim()} className="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                <button onClick={adicionarFila} disabled={!linhas[0].texto.trim()} className="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors">
                   + Adicionar à fila
                 </button>
-                <button onClick={imprimirUma} disabled={!linha1.trim()} className="py-2.5 px-4 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] disabled:opacity-40 transition-colors">
+                <button onClick={imprimirUma} disabled={!linhas[0].texto.trim()} className="py-2.5 px-4 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] disabled:opacity-40 transition-colors">
                   🖨️ Imprimir
                 </button>
               </div>
@@ -368,9 +427,22 @@ export default function ImpressaoProdutosPage() {
             <p className={`text-sm font-bold mb-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>👁️ Preview</p>
             <div className={`mx-auto border-2 border-dashed rounded-lg ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`} style={{ width: "62mm", height: "45mm", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ textAlign: "center", padding: "3mm 5mm", fontFamily: "Arial, Helvetica, sans-serif" }}>
-                <div style={{ fontSize: "11pt", fontWeight: "bold", lineHeight: 1.2, textTransform: "uppercase" as const, color: linha1 ? (dm ? "#F5F5F7" : "#1D1D1F") : (dm ? "#555" : "#CCC") }}>{linha1 || "NOME DO PRODUTO"}</div>
-                {(linha2 || !linha1) && <div style={{ fontSize: "9pt", color: linha2 ? (dm ? "#AEAEB2" : "#333") : (dm ? "#555" : "#CCC"), marginTop: "1.5mm", lineHeight: 1.2 }}>{linha2 || "CONFIGURAÇÃO"}</div>}
-                {(linha3 || !linha1) && <div style={{ fontSize: "8pt", color: linha3 ? (dm ? "#AEAEB2" : "#333") : (dm ? "#555" : "#CCC"), marginTop: "1.5mm", textTransform: "uppercase" as const }}>{linha3 || "COR"}</div>}
+                {linhas.map((l, i) => {
+                  const placeholders = ["NOME DO PRODUTO", "CONFIGURAÇÃO", "COR"];
+                  const show = l.texto || (i === 0 || !linhas[0].texto);
+                  if (!show) return null;
+                  const temTexto = !!l.texto;
+                  return (
+                    <div key={i} style={{
+                      fontSize: `${l.size}pt`,
+                      fontWeight: l.bold ? "bold" : "normal",
+                      lineHeight: 1.2,
+                      textTransform: "uppercase",
+                      marginTop: i > 0 ? "1.5mm" : 0,
+                      color: temTexto ? (dm ? "#F5F5F7" : "#1D1D1F") : (dm ? "#555" : "#CCC"),
+                    }}>{l.texto || placeholders[i]}</div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -392,8 +464,8 @@ export default function ImpressaoProdutosPage() {
                 {fila.map(f => (
                   <div key={f.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F5F5F7] border-[#E5E5EA]"}`}>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-bold truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{f.linha1}</p>
-                      {(f.linha2 || f.linha3) && <p className={`text-[10px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{[f.linha2, f.linha3].filter(Boolean).join(" • ")}</p>}
+                      <p className={`text-xs font-bold truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{f.linhas[0]?.texto}</p>
+                      {(f.linhas[1]?.texto || f.linhas[2]?.texto) && <p className={`text-[10px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{[f.linhas[1]?.texto, f.linhas[2]?.texto].filter(Boolean).join(" • ")}</p>}
                     </div>
                     <div className="flex items-center gap-2 ml-2 shrink-0">
                       <span className="text-xs font-semibold text-[#E8740E] bg-[#FFF5EB] px-2 py-0.5 rounded-full">×{f.qtd}</span>
