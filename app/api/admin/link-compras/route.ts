@@ -124,7 +124,14 @@ export async function GET(request: Request) {
     if (url.searchParams.get("incluir_simulador") === "1") {
       query = query.or("cliente_preencheu_em.not.is.null,operador.eq.Simulador");
     } else {
-      query = query.not("cliente_preencheu_em", "is", null);
+      // FILTRO ESTRITO: exige cliente_dados_preenchidos (JSONB) E
+      // cliente_preencheu_em. O JSONB só é gravado quando o form de compra
+      // é de fato enviado (/preenchimento ou /create-mp-from-form). Descarta
+      // links auto-criados pelo Simulador (só tem preencheu_em se alguém
+      // editou manualmente) e outros casos de timestamp setado sem dados.
+      query = query
+        .not("cliente_preencheu_em", "is", null)
+        .not("cliente_dados_preenchidos", "is", null);
     }
   }
   if (from) query = query.gte("created_at", from);
