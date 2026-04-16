@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
+import { getWhatsAppByVendedor } from "@/lib/whatsapp-config";
+import { useVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 
@@ -209,6 +210,8 @@ export default function GerarLinkPage() {
   }, [carrinhoLink]);
 
   const [vendedorNome, setVendedorNome] = useState("");
+  // Lista dinâmica de vendedores (editável em /admin/configuracoes).
+  const vendedoresList = useVendedores(adminPw);
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
   const [entradaPix, setEntradaPix] = useState("");
@@ -2466,9 +2469,9 @@ export default function GerarLinkPage() {
           <label className={labelCls}>Vendedor</label>
           <select value={vendedorNome} onChange={(e) => setVendedorNome(e.target.value)} className={inputCls}>
             <option value="">-- Selecionar --</option>
-            <option value="Andre">Andre</option>
-            <option value="Bianca">Bianca</option>
-            <option value="Nicole">Nicole</option>
+            {vendedoresList.map((v) => (
+              <option key={v.nome} value={v.nome}>{v.nome}</option>
+            ))}
           </select>
         </div>
 

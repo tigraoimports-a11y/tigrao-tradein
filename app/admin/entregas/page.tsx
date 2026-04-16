@@ -7,6 +7,7 @@ import { getTaxa, calcularLiquido } from "@/lib/taxas";
 import { INSTALLMENT_RATES } from "@/lib/calculations";
 import { formatProdutoDisplay, getModeloBase } from "@/lib/produto-display";
 import { corParaPT } from "@/lib/cor-pt";
+import { useVendedores } from "@/lib/vendedores";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
@@ -153,6 +154,8 @@ function formatPagamentoDisplay(
 
 export default function EntregasPage() {
   const { password, apiHeaders, darkMode: dm } = useAdmin();
+  // Lista dinâmica de vendedores (editável em /admin/configuracoes).
+  const vendedoresList = useVendedores(password);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -1898,8 +1901,9 @@ export default function EntregasPage() {
               <p className={labelCls}>Vendedor</p>
               <select value={form.vendedor} onChange={(e) => set("vendedor", e.target.value)} className={inputCls}>
                 <option value="">-- Selecionar --</option>
-                <option value="Andre">Andre</option>
-                <option value="Bianca">Bianca</option>
+                {vendedoresList.map((v) => (
+                  <option key={v.nome} value={v.nome}>{v.nome}</option>
+                ))}
               </select>
             </div>
             </>)}
