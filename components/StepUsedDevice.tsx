@@ -5,7 +5,7 @@ import type { UsedDeviceValue, TradeInQuestion } from "@/lib/types";
 import { getUniqueUsedModels, getUsedStoragesForModel, getUsedBaseValue } from "@/lib/sheets";
 import {
   calculateTradeInValue, getDiscountsForModel, formatBRL,
-  type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts, type WarrantyBonuses,
+  type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts,
 } from "@/lib/calculations";
 import { COR_EN_TO_PT_SIMPLES } from "@/lib/cor-pt";
 
@@ -22,7 +22,6 @@ interface StepUsedDeviceProps {
   usedValues: UsedDeviceValue[];
   excludedModels: string[];
   modelDiscounts?: Record<string, ModelDiscounts>;
-  warrantyBonuses?: WarrantyBonuses;
   questionsConfig?: TradeInQuestion[] | null;
   onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
@@ -46,7 +45,7 @@ function isQActive(config: TradeInQuestion[] | null | undefined, slug: string): 
 
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-export default function StepUsedDevice({ usedValues, excludedModels, modelDiscounts, warrantyBonuses, questionsConfig, onNext, onTrackQuestion }: StepUsedDeviceProps) {
+export default function StepUsedDevice({ usedValues, excludedModels, modelDiscounts, questionsConfig, onNext, onTrackQuestion }: StepUsedDeviceProps) {
   const qc = questionsConfig;
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
@@ -128,7 +127,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const md = useMemo(() => getDiscountsForModel(model, modelDiscounts), [model, modelDiscounts]);
   const tradeInValue = useMemo(() => {
     if (baseValue === null || (isQActive(qc, "hasDamage") && hasDamage !== false) || (isQActive(qc, "partsReplaced") && partsReplaced === "thirdParty")) return 0;
-    return calculateTradeInValue(baseValue, cond, md, warrantyBonuses);
+    return calculateTradeInValue(baseValue, cond, md);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, partsReplaced, hasWarranty, warrantyMonth, warrantyYear, md, hasOriginalBox, hasWearMarks, wearMarksDiscount]);
 

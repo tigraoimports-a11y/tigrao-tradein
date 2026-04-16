@@ -126,31 +126,26 @@ function applyBatteryDiscount(battery: number, tiers: BatteryTier[]): number {
 
 
 export interface WarrantyBonuses {
-  ate3m: number;   // percentual para ate 3 meses restantes (ex: 0.03 = 3%)
-  de3a6m: number;  // percentual para 3 a 6 meses restantes (ex: 0.05 = 5%)
-  acima6m: number; // percentual para 6 meses ou mais (ex: 0.07 = 7%)
+  ate3m: number;   // valor absoluto em R$ (ex: 200) ou percentual decimal (ex: 0.03 = 3%)
+  de3a6m: number;
+  acima6m: number;
 }
-
-const DEFAULT_WARRANTY_BONUSES: WarrantyBonuses = {
-  ate3m: 0.03,
-  de3a6m: 0.05,
-  acima6m: 0.07,
-};
 
 /**
  * Calcula bonus de garantia Apple baseado no mes informado.
- * O bonus e um percentual do valor base do modelo.
- * Ex: iPhone 14 128GB base R$2.300, garantia >6m => bonus = 2300 * 0.07 = R$161
+ * Le valores cadastrados por modelo em /admin/usados -> "+ Garantia".
+ * Se o modelo nao tem bonuses configurados, retorna 0.
  */
 export function calculateWarrantyBonus(
   warrantyMonth: number | null,
-  bonuses?: WarrantyBonuses,
+  bonuses: WarrantyBonuses | undefined,
   warrantyYear?: number | null,
   baseValue?: number
 ): number {
   if (warrantyMonth === null) return 0;
+  if (!bonuses) return 0;
 
-  const b = bonuses || DEFAULT_WARRANTY_BONUSES;
+  const b = bonuses;
   const base = baseValue || 0;
 
   // Protecao: se valores de bonus > 1, sao absolutos (R$), nao percentuais
@@ -206,7 +201,6 @@ export function calculateTradeInValue(
   baseValue: number,
   condition: ConditionData,
   modelDiscounts?: ModelDiscounts,
-  warrantyBonuses?: WarrantyBonuses
 ): number {
   if (condition.hasDamage) return 0;
   if (condition.partsReplaced === "thirdParty") return 0;
@@ -343,7 +337,7 @@ const DEFAULT_IPAD_DISCOUNTS = {
 export function calculateIPadTradeInValue(
   baseValue: number,
   condition: IPadConditionData,
-  warrantyBonuses?: WarrantyBonuses
+  modelDiscounts?: ModelDiscounts,
 ): number {
   if (condition.hasDamage) return 0;
 
@@ -354,7 +348,7 @@ export function calculateIPadTradeInValue(
   value += DEFAULT_IPAD_DISCOUNTS.peeling[condition.peeling];
   value += applyBatteryDiscount(condition.battery, DEFAULT_IPAD_DISCOUNTS.batteryTiers);
 
-  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses, condition.warrantyYear, baseValue);
+  value += calculateWarrantyBonus(condition.warrantyMonth, modelDiscounts?.warrantyBonuses, condition.warrantyYear, baseValue);
 
   if (condition.hasApplePencil) {
     value += DEFAULT_IPAD_DISCOUNTS.applePencilBonus;
@@ -410,7 +404,7 @@ const DEFAULT_MACBOOK_DISCOUNTS = {
 export function calculateMacBookTradeInValue(
   baseValue: number,
   condition: MacBookConditionData,
-  warrantyBonuses?: WarrantyBonuses
+  modelDiscounts?: ModelDiscounts,
 ): number {
   if (condition.hasDamage) return 0;
 
@@ -432,7 +426,7 @@ export function calculateMacBookTradeInValue(
     value += DEFAULT_MACBOOK_DISCOUNTS.chargerMissing;
   }
 
-  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses, condition.warrantyYear, baseValue);
+  value += calculateWarrantyBonus(condition.warrantyMonth, modelDiscounts?.warrantyBonuses, condition.warrantyYear, baseValue);
 
   if (!condition.hasOriginalBox) {
     value -= 100;
@@ -476,16 +470,15 @@ export function calculateAnyTradeInValue(
   baseValue: number,
   condition: AnyConditionData,
   modelDiscounts?: ModelDiscounts,
-  warrantyBonuses?: WarrantyBonuses
 ): number {
   if (deviceType === "ipad" && isIPadCondition(condition)) {
-    return calculateIPadTradeInValue(baseValue, condition, warrantyBonuses);
+    return calculateIPadTradeInValue(baseValue, condition, modelDiscounts);
   }
   if (deviceType === "macbook" && isMacBookCondition(condition)) {
-    return calculateMacBookTradeInValue(baseValue, condition, warrantyBonuses);
+    return calculateMacBookTradeInValue(baseValue, condition, modelDiscounts);
   }
   // iPhone (default)
-  return calculateTradeInValue(baseValue, condition as ConditionData, modelDiscounts, warrantyBonuses);
+  return calculateTradeInValue(baseValue, condition as ConditionData, modelDiscounts);
 }
 
 /**

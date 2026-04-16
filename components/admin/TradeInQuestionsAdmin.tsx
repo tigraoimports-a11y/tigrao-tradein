@@ -444,35 +444,6 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                   </div>
                 )}
 
-                {/* Conditional date (warranty) config */}
-                {q.tipo === "conditional_date" && (
-                  <div>
-                    <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Bônus de garantia (% do valor base)</label>
-                    <div className="mt-2 space-y-2">
-                      {["ate3m", "de3a6m", "acima6m"].map((key) => {
-                        const bonuses = (q.config.bonuses || {}) as Record<string, number>;
-                        const labels: Record<string, string> = { ate3m: "Até 3 meses", de3a6m: "3 a 6 meses", acima6m: "Acima de 6 meses" };
-                        return (
-                          <div key={key} className="flex items-center gap-2 bg-[#F5F5F7] rounded-lg px-3 py-2">
-                            <span className="text-xs text-[#86868B] w-32">{labels[key]}</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={bonuses[key] || 0}
-                              onChange={(e) => {
-                                const newBonuses = { ...bonuses, [key]: Number(e.target.value) };
-                                updateConfig(q.id, "bonuses", newBonuses);
-                              }}
-                              className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
-                            />
-                            <span className="text-xs text-[#86868B]">({((bonuses[key] || 0) * 100).toFixed(0)}%)</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 {/* Save button */}
                 <div className="flex justify-end pt-2">
                   <button
