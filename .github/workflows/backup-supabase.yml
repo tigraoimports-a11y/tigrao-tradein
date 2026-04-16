@@ -1,0 +1,97 @@
+name: Backup Supabase
+
+# ============================================================
+# Backup automático diário do banco Supabase
+# ============================================================
+# Roda todo dia às 06:00 UTC (03:00 BRT) e gera um dump completo
+# via pg_dump. O arquivo fica salvo como artifact do GitHub Actions
+# por 90 dias — baixar em:
+#   GitHub → Actions → Backup Supabase → qualquer run → Artifacts
+#
+# Secret necessário (configurar em Settings → Secrets → Actions):
+#   SUPABASE_DB_URL: connection string do Supabase (Session pooler)
+#     (pegar em: Supabase dashboard → Connect → Session pooler → URI)
+#     Formato:
+#       postgresql://postgres.[PROJETO]:[SENHA]@aws-N-[REGIAO].pooler.supabase.com:5432/postgres
+#
+# Estratégia: rodamos pg_dump via Docker (image postgres:17) pra garantir
+# compatibilidade de versão com o servidor Supabase (Postgres 17). Evita
+# a dor de cabeça de instalar postgresql-client via apt em runner Ubuntu.
+#
+# Pra restaurar: ver docs/DISASTER_RECOVERY.md
+# ============================================================
+
+on:
+  schedule:
+    # 06:00 UTC = 03:00 BRT (horário de menor uso)
+    - cron: "0 6 * * *"
+  # Permite rodar manualmente pelo GitHub UI
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run pg_dump (via Docker postgres:17)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "❌ SUPABASE_DB_URL não configurado — abortando"
+            echo "Configure em Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+          TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
+          BACKUP_FILE="supabase_backup_${TIMESTAMP}.sql.gz"
+
+          echo "🗄️  Iniciando pg_dump via Docker postgres:17..."
+          # Flags:
+          #   --no-owner + --no-privileges: backup portável (não amarra em role específico)
+          #   --clean + --if-exists: inclui DROP IF EXISTS antes de cada CREATE
+          #     (facilita restore sobre banco existente, idempotente em banco vazio)
+          #   --schema=public: só o schema público (ignora internals do Supabase:
+          #     auth.*, storage.*, realtime.*, vault.*, extensions.*)
+          #
+          # Usamos sh -c pra que a expansão de $DBURL aconteça DENTRO do container
+          # (onde o env var tá definido), não no shell do host.
+          docker run --rm \
+            -e DBURL="$SUPABASE_DB_URL" \
+            postgres:17 \
+            sh -c 'pg_dump --no-owner --no-privileges --clean --if-exists --schema=public "$DBURL"' \
+            | gzip > "$BACKUP_FILE"
+
+          # Sanity check — se a saída for vazia, algo falhou silenciosamente
+          if [ ! -s "$BACKUP_FILE" ]; then
+            echo "❌ Backup vazio — pg_dump falhou silenciosamente"
+            exit 1
+          fi
+
+          SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+          echo "✅ Backup gerado: $BACKUP_FILE ($SIZE)"
+          echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          # 90 dias é o máximo de retention no plano free do GitHub
+          retention-days: 90
+          # Sem compressão extra (já vem gzipado)
+          compression-level: 0
+
+      - name: Sumário
+        run: |
+          echo "## ✅ Backup concluído com sucesso" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Arquivo: \`${{ env.BACKUP_FILE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Retention: 90 dias" >> $GITHUB_STEP_SUMMARY
+          echo "- Download em: **Artifacts** (acima)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pra restaurar: \`docs/DISASTER_RECOVERY.md\`" >> $GITHUB_STEP_SUMMARY

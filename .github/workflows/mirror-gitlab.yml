@@ -1,0 +1,44 @@
+name: Mirror to GitLab
+
+# Empurra o codigo pro repo espelho no GitLab a cada push em main.
+# Seguranca: se o GitHub cair ou suspender a conta, o codigo fica
+# vivo no GitLab e a gente consegue continuar trabalhando.
+#
+# Configuracao (so uma vez):
+# 1. Criar repo no GitLab (docs/GITLAB_MIRROR.md passo 1-2)
+# 2. Gerar access token no GitLab com escopo write_repository
+# 3. Adicionar secrets no GitHub:
+#    - GITLAB_MIRROR_URL: https://gitlab.com/USUARIO/REPO.git
+#    - GITLAB_TOKEN: glpat-...
+#
+# Manutencao: renovar o token anualmente (GitLab avisa por e-mail).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to GitLab mirror
+        env:
+          GITLAB_MIRROR_URL: ${{ secrets.GITLAB_MIRROR_URL }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          if [ -z "$GITLAB_MIRROR_URL" ] || [ -z "$GITLAB_TOKEN" ]; then
+            echo "::error::GITLAB_MIRROR_URL ou GITLAB_TOKEN nao configurados"
+            exit 1
+          fi
+          # Monta URL com token embutido (usuario oauth2)
+          AUTH_URL=$(echo "$GITLAB_MIRROR_URL" | sed "s|https://|https://oauth2:${GITLAB_TOKEN}@|")
+          git remote add gitlab "$AUTH_URL"
+          git push gitlab main --force
+          echo "Mirror atualizado em GitLab"

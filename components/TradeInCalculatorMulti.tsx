@@ -363,6 +363,34 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
   return (
     <main className="min-h-dvh flex flex-col items-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
+      {/* Honeypot anti-bot — invisível pra humanos (off-screen + aria-hidden).
+          Bots que fazem scraping preenchem todos os inputs; o valor é lido via
+          document.getElementById('tradein-honeypot') nos handlers de submit e
+          enviado no payload pra /api/leads e /api/link-compras-auto. O backend
+          descarta via checkHoneypot() retornando 200 fake pra não dar feedback. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: "-9999px",
+          top: "-9999px",
+          width: 1,
+          height: 1,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+      >
+        <label htmlFor="tradein-honeypot">Website (não preencher)</label>
+        <input
+          id="tradein-honeypot"
+          type="text"
+          name="website"
+          autoComplete="off"
+          tabIndex={-1}
+          defaultValue=""
+        />
+      </div>
+
       <div className="w-full max-w-[440px]">
         {/* Header */}
         <div className="text-center mb-6">

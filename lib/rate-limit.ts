@@ -93,7 +93,48 @@ export function rateLimitPublic(req: NextRequest): NextResponse | null {
   return rateLimit(req, 30, ONE_MINUTE, "public");
 }
 
-/** 30 requests per hour — for lead/simulation submission endpoints */
-export function rateLimitSubmission(req: NextRequest): NextResponse | null {
-  return rateLimit(req, 30, ONE_HOUR, "submission");
+/**
+ * 30 requests per hour — for lead/simulation/form submission endpoints.
+ *
+ * Opcionalmente aceita um bucket para separar contadores por endpoint.
+ * Se não passar bucket, cai no "submission" (retrocompat com chamadas antigas).
+ *
+ * Exemplos:
+ *   rateLimitSubmission(req)              → bucket "submission" (leads etc)
+ *   rateLimitSubmission(req, "mp-form")   → bucket "submission:mp-form"
+ *   rateLimitSubmission(req, "link-fill") → bucket "submission:link-fill"
+ */
+export function rateLimitSubmission(
+  req: NextRequest,
+  bucket?: string,
+): NextResponse | null {
+  const bucketName = bucket ? `submission:${bucket}` : "submission";
+  return rateLimit(req, 30, ONE_HOUR, bucketName);
+}
+
+// ── Honeypot ─────────────────────────────────────────────────────────────
+
+/**
+ * Nome do campo honeypot que fica oculto nos formulários públicos.
+ *
+ * Bots que fazem scraping de formulários preenchem todos os inputs que
+ * encontram. Humanos nunca veem esse campo (está escondido via CSS/aria).
+ * Se vier preenchido, é bot.
+ *
+ * Retorna 200 OK (fingindo sucesso) em vez de 400/403 pra não dar feedback
+ * pro bot — ele pensa que funcionou e não retenta/refina ataque.
+ */
+export const HONEYPOT_FIELD = "website";
+
+export function checkHoneypot(
+  body: Record<string, unknown> | null | undefined,
+): NextResponse | null {
+  if (!body) return null;
+  const val = body[HONEYPOT_FIELD];
+  if (typeof val === "string" && val.trim() !== "") {
+    console.warn("[honeypot] bot detected, dropping submission");
+    // 200 fake-success pra bot não descobrir que foi pego
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+  return null;
 }
