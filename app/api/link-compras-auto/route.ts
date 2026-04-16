@@ -1,11 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { rateLimitSubmission, checkHoneypot } from "@/lib/rate-limit";
 
 // Endpoint PÚBLICO: cria um link_compras automaticamente quando o cliente
 // clica "DESEJO FECHAR MEU PEDIDO" no simulador de trade-in.
 // Sem auth — é chamado do site público. Apenas insere, não lê/edita/deleta.
-export async function POST(request: Request) {
+// Protegido por rate limit (30 req/hora por IP) + honeypot.
+export async function POST(req: NextRequest) {
+  const limited = rateLimitSubmission(req, "link-auto");
+  if (limited) return limited;
+
   try {
-    const body = await request.json();
+    const body = await req.json();
+
+    const honeypot = checkHoneypot(body);
+    if (honeypot) return honeypot;
+
     const { supabase } = await import("@/lib/supabase");
 
     if (!body.short_code || !body.produto) {
