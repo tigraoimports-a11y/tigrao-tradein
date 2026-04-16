@@ -1,6 +1,6 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { TradeInQuestion, TradeInQuestionOption, SeminovoOption } from "@/lib/types";
+import React, { useEffect, useMemo, useState } from "react";
+import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoCategoria, SEMINOVO_CAT_LABELS } from "@/lib/types";
 
 interface Props {
   password: string;
@@ -226,8 +226,8 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
         Gerencie as perguntas do simulador de troca. Altere texto, opções, descontos e ordem. Desative perguntas que não quer exibir.
       </div>
 
-      {/* === CONFIG SECTIONS === */}
-      <TradeInConfigAdmin password={password} />
+      {/* deviceTab drives which seminovo category is shown in "Modelos Seminovo". */}
+      <TradeInConfigAdmin password={password} deviceTab={deviceTab} />
 
       <div className="border-t border-[#E5E5EA] my-6" />
 
@@ -514,10 +514,10 @@ const DEFAULT_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_SEMINOVOS: SeminovoOption[] = [
-  { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true },
-  { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true },
-  { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true },
-  { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true },
+  { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true, categoria: "iphone" },
 ];
 
 const DEFAULT_ORIGENS = ["Anúncio", "Story", "Direct", "WhatsApp", "Indicação", "Já sou cliente"];
@@ -552,7 +552,9 @@ const LABEL_GROUPS: { title: string; keys: { key: string; label: string }[] }[] 
   },
 ];
 
-function TradeInConfigAdmin({ password }: { password: string }) {
+function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceTab: string }) {
+  // Mantemos a lista inteira em memória — o banco persiste tudo num único
+  // JSONB, então precisa voltar completa no PUT. A filtragem é por render.
   const [seminovos, setSeminovos] = useState<SeminovoOption[]>(DEFAULT_SEMINOVOS);
   const [labels, setLabels] = useState<Record<string, string>>(DEFAULT_LABELS);
   const [origens, setOrigens] = useState<string[]>(DEFAULT_ORIGENS);
@@ -564,6 +566,24 @@ function TradeInConfigAdmin({ password }: { password: string }) {
   const [newSemiModelo, setNewSemiModelo] = useState("");
   const [newSemiStorage, setNewSemiStorage] = useState("");
 
+  // Itens sem categoria (pré-migration) caem em "iphone" para compatibilidade.
+  const categoriaAtiva: SeminovoCategoria = (deviceTab as SeminovoCategoria) in SEMINOVO_CAT_LABELS ? (deviceTab as SeminovoCategoria) : "iphone";
+
+  // Índices reais na lista completa — toggles/edições precisam do índice certo
+  // mesmo com a UI filtrada.
+  const visibleIndices = useMemo(
+    () => seminovos.reduce<number[]>((acc, s, i) => {
+      if ((s.categoria || "iphone") === categoriaAtiva) acc.push(i);
+      return acc;
+    }, []),
+    [seminovos, categoriaAtiva]
+  );
+
+  const countCategoriaAtiva = useMemo(
+    () => seminovos.filter((s) => (s.categoria || "iphone") === categoriaAtiva && s.ativo).length,
+    [seminovos, categoriaAtiva]
+  );
+
   function getHeaders() {
     return { "x-admin-password": password, "Content-Type": "application/json" };
   }
@@ -574,7 +594,14 @@ function TradeInConfigAdmin({ password }: { password: string }) {
       .then((json) => {
         const d = json.data;
         if (d) {
-          if (Array.isArray(d.seminovos) && d.seminovos.length > 0) setSeminovos(d.seminovos);
+          if (Array.isArray(d.seminovos) && d.seminovos.length > 0) {
+            // Backfill: itens antigos sem categoria caem em "iphone"
+            const normalized: SeminovoOption[] = d.seminovos.map((s: SeminovoOption) => ({
+              ...s,
+              categoria: (s.categoria as SeminovoCategoria) || "iphone",
+            }));
+            setSeminovos(normalized);
+          }
           if (d.labels && Object.keys(d.labels).length > 0) setLabels({ ...DEFAULT_LABELS, ...d.labels });
           if (Array.isArray(d.origens) && d.origens.length > 0) setOrigens(d.origens);
         }
@@ -645,11 +672,24 @@ function TradeInConfigAdmin({ password }: { password: string }) {
 
       {showMsg()}
 
-      {/* === SEMINOVOS === */}
-      {sectionBtn("seminovos", "Modelos Seminovo", seminovos.filter((s) => s.ativo).length)}
+      {/* === SEMINOVOS ===
+          O botão mostra "(n)" = nº de modelos ativos NA CATEGORIA da aba atual
+          (antes mostrava o total geral, o que causava confusão). */}
+      {sectionBtn("seminovos", `Modelos Seminovo — ${SEMINOVO_CAT_LABELS[categoriaAtiva].label}`, countCategoriaAtiva)}
       {expandedSection === "seminovos" && (
         <div className="border border-[#D2D2D7] rounded-xl bg-white p-4 space-y-3">
-          {seminovos.map((s, si) => (
+          <div className="text-[11px] text-[#86868B] bg-[#F5F5F7] rounded-lg px-3 py-2 leading-relaxed">
+            <strong>{SEMINOVO_CAT_LABELS[categoriaAtiva].label}:</strong> apenas os modelos seminovos desta categoria aparecem aqui.
+            Troque a aba acima para ver/editar outras categorias.
+          </div>
+          {visibleIndices.length === 0 && (
+            <div className="text-center text-sm text-[#86868B] py-4 italic">
+              Nenhum modelo seminovo cadastrado para {SEMINOVO_CAT_LABELS[categoriaAtiva].label}.
+            </div>
+          )}
+          {visibleIndices.map((si) => {
+            const s = seminovos[si];
+            return (
             <div key={si} className={`rounded-lg border border-[#E5E5EA] p-3 space-y-2 ${!s.ativo ? "opacity-50" : ""}`}>
               <div className="flex items-center gap-2">
                 <input
@@ -697,7 +737,7 @@ function TradeInConfigAdmin({ password }: { password: string }) {
                 ))}
                 <div className="inline-flex items-center gap-1">
                   <input
-                    value={si === seminovos.length - 1 ? newSemiStorage : ""}
+                    value={si === visibleIndices[visibleIndices.length - 1] ? newSemiStorage : ""}
                     onChange={(e) => setNewSemiStorage(e.target.value)}
                     onFocus={() => setNewSemiStorage("")}
                     onKeyDown={(e) => {
@@ -713,19 +753,53 @@ function TradeInConfigAdmin({ password }: { password: string }) {
                   />
                 </div>
               </div>
+              {/* Campo de preço — reservado pra futuro. Hoje opcional e escondido
+                  atrás de um detalhamento pra não poluir a UI. O valor já é
+                  persistido no banco (preco?: number), então quando ativarmos
+                  a precificação automática nada precisa ser migrado. */}
+              <details className="text-[11px] text-[#86868B]">
+                <summary className="cursor-pointer select-none hover:text-[#1D1D1F]">
+                  Preço (opcional — uso futuro){typeof s.preco === "number" ? ` · R$ ${s.preco.toLocaleString("pt-BR")}` : ""}
+                </summary>
+                <div className="mt-2 flex items-center gap-2">
+                  <span>R$</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={typeof s.preco === "number" ? String(s.preco) : ""}
+                    onChange={(e) => {
+                      const arr = [...seminovos];
+                      const raw = e.target.value.trim();
+                      const num = raw === "" ? undefined : Number(raw);
+                      arr[si] = { ...arr[si], preco: Number.isFinite(num as number) ? (num as number) : undefined };
+                      setSeminovos(arr);
+                    }}
+                    placeholder="Ex: 5500"
+                    className="w-32 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                  />
+                  <span className="text-[10px] italic">Ainda não exibido ao cliente.</span>
+                </div>
+              </details>
             </div>
-          ))}
+            );
+          })}
           <div className="flex gap-2">
             <input
               value={newSemiModelo}
               onChange={(e) => setNewSemiModelo(e.target.value)}
-              placeholder="Ex: iPhone 17 Pro"
+              placeholder={`Ex: ${categoriaAtiva === "iphone" ? "iPhone 17 Pro" : categoriaAtiva === "ipad" ? "iPad Pro M4" : categoriaAtiva === "macbook" ? "MacBook Air M3" : "Apple Watch Series 10"}`}
               className="flex-1 px-3 py-2 rounded-lg border border-dashed border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
             />
             <button
               onClick={() => {
                 if (newSemiModelo.trim()) {
-                  setSeminovos([...seminovos, { modelo: newSemiModelo.trim(), storages: ["128GB", "256GB"], ativo: true }]);
+                  // Novo item herda a categoria da aba aberta.
+                  setSeminovos([...seminovos, {
+                    modelo: newSemiModelo.trim(),
+                    storages: ["128GB", "256GB"],
+                    ativo: true,
+                    categoria: categoriaAtiva,
+                  }]);
                   setNewSemiModelo("");
                 }
               }}

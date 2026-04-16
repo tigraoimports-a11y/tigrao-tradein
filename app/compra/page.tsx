@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { WHATSAPP_FORMULARIO } from "@/lib/whatsapp-config";
 import { corParaPT } from "@/lib/cor-pt";
+import { getAgendamentoBounds } from "@/lib/date-utils";
 
 function maskCPF(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -300,8 +301,24 @@ function CompraForm() {
   const [bairro, setBairro] = useState(bairroParam);
   const [horario, setHorario] = useState(horarioParam);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState<string[]>(["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]);
-  const [local, setLocal] = useState<"Loja" | "Entrega" | "Correios">(localParam === "correios" ? "Correios" : localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
-  const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">(localParam === "shopping" ? "Shopping" : "Residencia");
+  // "Outro" = entrega em local personalizado (aprovado internamente via gerar-link).
+  // Essa opção nunca aparece para o cliente comum — só se o operador passou
+  // localParam === "outro" no link. Pagamento tratado como "pagar na entrega"
+  // (mesma regra de shopping, sem exigência de antecipação).
+  const [local, setLocal] = useState<"Loja" | "Entrega" | "Correios">(
+    localParam === "correios" ? "Correios"
+      : (localParam === "shopping" || localParam === "residencia" || localParam === "outro") ? "Entrega"
+      : localParam === "loja" ? "Loja"
+      : "Loja"
+  );
+  const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia" | "Outro">(
+    localParam === "shopping" ? "Shopping"
+      : localParam === "outro" ? "Outro"
+      : "Residencia"
+  );
+  // Sinaliza que o operador pré-autorizou local personalizado — só mostramos
+  // esse tipo quando este flag estiver ativo.
+  const localOutroHabilitado = localParam === "outro";
   const [shopping, setShopping] = useState(shoppingParam);
   const [dataEntrega, setDataEntrega] = useState(dataEntregaParam);
   const [formaPagamento, setFormaPagamento] = useState(formaParam);
@@ -371,6 +388,9 @@ function CompraForm() {
   const [loadingMp, setLoadingMp] = useState(false);
   const [erroMp, setErroMp] = useState("");
 
+  // Janela de agendamento (hoje a D+2 de calendário, pulando domingos).
+  const agendamentoBounds = useMemo(() => getAgendamentoBounds(), []);
+
   // Installment calculations
   const descontoNum = parseFloat(String(descontoParam)) || 0;
   const valorBase = preco > 0 ? Math.max(preco - descontoNum - trocaNum, 0) : 0;
@@ -404,6 +424,18 @@ function CompraForm() {
       return;
     }
 
+    // Janela de agendamento: rejeita datas fora de [min, max] e domingos.
+    if (local !== "Correios" && dataEntrega) {
+      if (dataEntrega < agendamentoBounds.min || dataEntrega > agendamentoBounds.max) {
+        alert("Agendamento disponivel apenas para hoje, amanha ou depois de amanha. Ajuste a data.");
+        return;
+      }
+      if (new Date(dataEntrega + "T12:00:00").getDay() === 0) {
+        alert("Domingo indisponivel para agendamento. Ajuste a data.");
+        return;
+      }
+    }
+
     const produtoFinal = produtoInput || produtoParam || "";
     const precoFinal = preco > 0 ? preco : precoAuto;
     if (!precoFinal) {
@@ -414,6 +446,7 @@ function CompraForm() {
     const localStr = local === "Loja" ? "Retirada em loja"
       : local === "Correios" ? "Envio Correios"
       : tipoEntrega === "Shopping" ? `Entrega - Shopping: ${shopping}`
+      : tipoEntrega === "Outro" ? `Entrega - Local combinado: ${shopping || "(a definir)"}`
       : "Entrega - Residência";
 
     // Valor base para cálculos (usa precoFinal definido acima)
@@ -705,7 +738,9 @@ function CompraForm() {
         entrega: {
           local: local === "Correios" ? "Correios" : local === "Loja" ? "Loja" : "Entrega",
           tipoEntrega: local === "Entrega" ? tipoEntrega : undefined,
-          shopping: tipoEntrega === "Shopping" ? shopping : undefined,
+          // Para "Outro", o campo `shopping` guarda o nome do local combinado
+          // (reusamos o mesmo campo pra evitar novo campo no backend).
+          shopping: (tipoEntrega === "Shopping" || tipoEntrega === "Outro") ? shopping : undefined,
           data: dataEntrega,
           horario,
           vendedor,
@@ -1309,35 +1344,38 @@ function CompraForm() {
           </div>
           )}
 
-          {/* Data — seg a sab (não mostra pra Correios) */}
+          {/* Data — janela curta (hoje, +1, +2 calendário) com domingo bloqueado.
+              Bounds computadas em lib/date-utils.getAgendamentoBounds.
+              Obs: min/max do <input type="date"> são apenas dica visual em
+              alguns browsers — o clamp abaixo garante a regra no onChange. */}
           {local !== "Correios" && (<div>
             <label className={labelCls}>Data *</label>
             <input type="date" required value={dataEntrega}
               onChange={(e) => {
-                if (!e.target.value) return;
-                const d = new Date(e.target.value + "T12:00:00");
+                const raw = e.target.value;
+                if (!raw) return;
+                // Clamp: fora da janela → volta pro min/max mais próximo.
+                let iso = raw;
+                if (iso < agendamentoBounds.min) iso = agendamentoBounds.min;
+                else if (iso > agendamentoBounds.max) iso = agendamentoBounds.max;
+                // Domingo: pula para a próxima segunda automaticamente.
+                const d = new Date(iso + "T12:00:00");
                 if (d.getDay() === 0) {
-                  // Domingo: pula para a próxima segunda automaticamente
                   d.setDate(d.getDate() + 1);
                   const y = d.getFullYear();
                   const m = String(d.getMonth() + 1).padStart(2, "0");
                   const day = String(d.getDate()).padStart(2, "0");
-                  setDataEntrega(`${y}-${m}-${day}`);
-                  return;
+                  iso = `${y}-${m}-${day}`;
                 }
-                setDataEntrega(e.target.value);
+                if (iso !== raw) {
+                  alert("Agendamento disponivel apenas para hoje, amanha ou depois de amanha (sem domingo).");
+                }
+                setDataEntrega(iso);
               }}
-              min={(() => {
-                const d = new Date();
-                d.setDate(d.getDate() + (d.getHours() >= 18 ? 1 : 0));
-                while (d.getDay() === 0) d.setDate(d.getDate() + 1);
-                // Usar data LOCAL (não UTC) para evitar off-by-one em fusos horários
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, "0");
-                const day = String(d.getDate()).padStart(2, "0");
-                return `${y}-${m}-${day}`;
-              })()}
+              min={agendamentoBounds.min}
+              max={agendamentoBounds.max}
               className={inputCls} />
+            <p className="text-[11px] text-[#86868B] mt-1">Agendamento disponivel para hoje, amanha ou depois de amanha. Domingo indisponivel.</p>
           </div>)}
 
           {/* Horário — dinâmico conforme tipo + dia da semana (não mostra pra Correios) */}
@@ -1362,15 +1400,22 @@ function CompraForm() {
           {local === "Entrega" && (
             <div className="space-y-3">
               <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Local de entrega *</label>
-              <div className="flex gap-3">
-                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Residencia" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+              {/* "Outro" só aparece com localParam=outro (exceção liberada pelo operador). */}
+              <div className={`grid gap-3 ${localOutroHabilitado ? "grid-cols-3" : "grid-cols-2"}`}>
+                <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Residencia" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                   <input type="radio" name="tipoEntrega" value="Residencia" checked={tipoEntrega === "Residencia"} onChange={() => { setTipoEntrega("Residencia"); setShopping(""); }} className="sr-only" />
-                  &#x1F3E0; <span className="font-medium">Residência</span>
+                  &#x1F3E0; <span className="font-medium text-sm">Residência</span>
                 </label>
-                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                   <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
-                  &#x1F3EC; <span className="font-medium">Shopping</span>
+                  &#x1F3EC; <span className="font-medium text-sm">Shopping</span>
                 </label>
+                {localOutroHabilitado && (
+                  <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Outro" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                    <input type="radio" name="tipoEntrega" value="Outro" checked={tipoEntrega === "Outro"} onChange={() => setTipoEntrega("Outro")} className="sr-only" />
+                    &#x1F4CD; <span className="font-medium text-sm">Outro local</span>
+                  </label>
+                )}
               </div>
               {!pagamentoPagoParam && (
                 <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
@@ -1383,7 +1428,14 @@ function CompraForm() {
                   <input type="text" required value={shopping} onChange={(e) => setShopping(e.target.value)} placeholder="Ex: BarraShopping, Village Mall..." className={inputCls} />
                 </div>
               )}
-              {!pagamentoPagoParam && (
+              {tipoEntrega === "Outro" && (
+                <div>
+                  <label className={labelCls}>Local combinado *</label>
+                  <input type="text" required value={shopping} onChange={(e) => setShopping(e.target.value)} placeholder="Ex: Estação do metrô, escritório..." className={inputCls} />
+                  <p className="text-[11px] text-[#86868B] mt-1 italic">Entrega em local personalizado previamente combinado com a equipe.</p>
+                </div>
+              )}
+              {!pagamentoPagoParam && tipoEntrega !== "Outro" && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs leading-relaxed">
                   <p><strong>⚠️ Taxa de deslocamento:</strong> Caso a compra nao seja concluida no ato da entrega (falta de limite, divergencia, etc), sera cobrada uma taxa de deslocamento.</p>
                 </div>

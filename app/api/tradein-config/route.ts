@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 
 const DEFAULT_CONFIG = {
   seminovos: [
-    { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true },
-    { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true },
-    { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true },
-    { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true },
+    { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
+    { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true, categoria: "iphone" },
+    { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
+    { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true, categoria: "iphone" },
   ],
   labels: {
     step1_titulo: "Qual é o modelo do seu usado?",
@@ -46,6 +46,15 @@ export async function GET() {
     if (labels._whatsapp_formularios) result.whatsapp_formularios = labels._whatsapp_formularios;
     if (labels._whatsapp_formularios_seminovos) result.whatsapp_formularios_seminovos = labels._whatsapp_formularios_seminovos;
     if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
+
+    // Backfill defensivo: garante que todo seminovo tenha categoria (fallback iphone).
+    // Cobre linhas antigas do banco que ainda não passaram pela migration.
+    if (Array.isArray(result.seminovos)) {
+      result.seminovos = (result.seminovos as Record<string, unknown>[]).map((s) => ({
+        ...s,
+        categoria: (s.categoria as string) || "iphone",
+      }));
+    }
 
     return NextResponse.json({ data: result });
   } catch {
