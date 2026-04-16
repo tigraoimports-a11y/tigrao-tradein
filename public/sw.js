@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'tigrao-v4';
+const CACHE_VERSION = 'tigrao-v5';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -183,7 +183,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── API calls: network-first, cache fallback ──
+  // ── APIs de admin: bypass total (sempre fresh, nunca cacheia) ──
+  // Links preenchidos/encaminhados sumiam da listagem porque o SW estava
+  // servindo resposta cacheada em certas condicoes. Admin precisa de tempo-real.
+  if (url.pathname.startsWith('/api/admin/')) {
+    return; // deixa o browser handlear direto, sem interceptar
+  }
+
+  // ── API calls (publicas): network-first, cache fallback ──
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
