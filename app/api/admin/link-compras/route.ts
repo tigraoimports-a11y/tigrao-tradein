@@ -124,14 +124,26 @@ export async function GET(request: Request) {
     if (url.searchParams.get("incluir_simulador") === "1") {
       query = query.or("cliente_preencheu_em.not.is.null,operador.eq.Simulador");
     } else {
-      // FILTRO ESTRITO: exige cliente_dados_preenchidos (JSONB) E
-      // cliente_preencheu_em. O JSONB só é gravado quando o form de compra
-      // é de fato enviado (/preenchimento ou /create-mp-from-form). Descarta
-      // links auto-criados pelo Simulador (só tem preencheu_em se alguém
-      // editou manualmente) e outros casos de timestamp setado sem dados.
-      query = query
-        .not("cliente_preencheu_em", "is", null)
-        .not("cliente_dados_preenchidos", "is", null);
+      // FILTRO INCLUSIVO: mostra qualquer cliente que atingiu um marco do funil.
+      // Aceita qualquer um destes sinais (não todos ao mesmo tempo):
+      //   a) cliente_preencheu_em  — preenchimento salvou no banco
+      //   b) entrega_id            — admin encaminhou pra entrega (o link
+      //                              só pode receber entrega se alguém
+      //                              atendeu o cliente no WhatsApp)
+      //   c) pagamento_pago        — cliente pagou (MP ou outro meio)
+      //
+      // Motivação: o JSONB cliente_dados_preenchidos pode estar null em
+      // casos legítimos — principalmente quando o POST /preenchimento com
+      // keepalive falha ao navegar pro WhatsApp (mobile/iOS), ou quando a
+      // venda veio de fluxo antigo antes desses campos existirem. Nesses
+      // casos, se a entrega foi criada/pagamento foi feito, o cliente
+      // COMPLETOU o funil e precisa aparecer no Histórico de Formulários.
+      query = query.or(
+        "cliente_preencheu_em.not.is.null,entrega_id.not.is.null,pagamento_pago.not.is.null"
+      );
+      // Excluir estados intermediários (cliente iniciou checkout MP mas
+      // não finalizou) — Opção A do webhook já impede essa contagem errada.
+      query = query.neq("status", "AGUARDANDO_MP");
     }
   }
   if (from) query = query.gte("created_at", from);
