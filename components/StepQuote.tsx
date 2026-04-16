@@ -5,6 +5,7 @@ import type { QuoteResult, InstallmentOption, AnyConditionData, DeviceType } fro
 import type { LeadSaiu } from "@/lib/supabase";
 import type { NewProduct } from "@/lib/types";
 import { calculateQuote, getWhatsAppUrl, getAnyConditionLines, formatBRL } from "@/lib/calculations";
+import { getHoneypotValue } from "@/lib/honeypot-client";
 import FlexiblePaymentSimulator, { type PaymentBlock, type PaymentSummary, calculatePaymentSummary } from "./FlexiblePaymentSimulator";
 
 const PARCELAS_OPCOES = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
@@ -26,7 +27,8 @@ interface StepQuoteProps {
 
 async function salvarLead(lead: LeadSaiu & { formaPagamento?: string; origem?: string; motivoSaida?: string }) {
   try {
-    const res = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lead) });
+    const payload = { ...lead, website: getHoneypotValue() };
+    const res = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (res.status === 429) { console.warn("[salvarLead] Rate limit atingido, mas prosseguindo"); return; }
     const json = await res.json();
     if (json.duplicate) console.log("[salvarLead] Duplicidade ignorada");
@@ -365,6 +367,7 @@ export default function StepQuote(p: StepQuoteProps) {
                     troca_condicao2: cond2Lines || null,
                     troca_cor2: hasSecond ? (usedColor2 || null) : null,
                     vendedor: vendedor || null,
+                    website: getHoneypotValue(),
                   }),
                 }).catch(() => {});
                 // Inclui ?short=<code> na URL de /compra pra que a submissão salve o preenchimento

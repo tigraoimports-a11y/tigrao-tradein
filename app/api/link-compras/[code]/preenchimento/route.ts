@@ -1,15 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { rateLimitSubmission, checkHoneypot } from "@/lib/rate-limit";
 
 // Endpoint PÚBLICO: cliente preenche dados na página /c/[code] e envia de volta.
 // Salva o snapshot JSONB em link_compras.cliente_dados_preenchidos + timestamp + status=PREENCHIDO
 // Sem auth (é público por design — só aceita se o short_code existe).
-export async function POST(request: Request, ctx: { params: Promise<{ code: string }> }) {
+// Protegido por rate limit (30 req/hora por IP) + honeypot.
+export async function POST(req: NextRequest, ctx: { params: Promise<{ code: string }> }) {
+  const limited = rateLimitSubmission(req, "link-fill");
+  if (limited) return limited;
+
   try {
     const { code } = await ctx.params;
     if (!code) return NextResponse.json({ error: "code required" }, { status: 400 });
 
-    const body = await request.json();
+    const body = await req.json();
     const dados = body?.dados || body; // aceita tanto {dados:{...}} quanto raw
+
+    // Honeypot: checa tanto o nível raiz quanto dentro de dados.* (por garantia)
+    const honeypot = checkHoneypot(body) || checkHoneypot(dados);
+    if (honeypot) return honeypot;
 
     const { supabase } = await import("@/lib/supabase");
 

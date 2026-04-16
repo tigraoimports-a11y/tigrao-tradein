@@ -5,6 +5,7 @@ import type { NewProduct, TradeInConfig } from "@/lib/types";
 import { getUniqueModels, getStoragesForModel, getProductPrice } from "@/lib/sheets";
 import { formatBRL, calculateQuote, getAnyConditionLines, type AnyConditionData, type DeviceType } from "@/lib/calculations";
 import { WHATSAPP_SEMINOVO } from "@/lib/whatsapp-config";
+import { getHoneypotValue } from "@/lib/honeypot-client";
 
 interface StepNewDeviceProps {
   products: NewProduct[];
@@ -368,6 +369,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                         avaliacaoUsado2: tradeInValue2 || 0,
                         condicaoLinhas2: condLines2,
                       } : {}),
+                      website: getHoneypotValue(),
                     }),
                   }).catch(() => {});
                   const waNum = WHATSAPP_SEMINOVO;

@@ -336,6 +336,10 @@ function CompraForm() {
   const [trocaValor, setTrocaValor] = useState(trocaValorParam);
   const [trocaCond, setTrocaCond] = useState(trocaCondParam);
   const [descTroca, setDescTroca] = useState("");
+
+  // Honeypot anti-bot: campo oculto via CSS que só bots preenchem.
+  // Se vier com valor no submit, o backend descarta a submissão (200 fake).
+  const [honeypot, setHoneypot] = useState("");
   const trocaNum1 = parseFloat(trocaValor) || 0;
   const trocaNum2 = parseFloat(trocaValor2Param) || 0;
   const trocaNum = trocaNum1 + trocaNum2;
@@ -583,6 +587,7 @@ function CompraForm() {
             forma_pagamento: pagLines.join(" | "),
             local: localStr, horario, data_entrega: dataEntrega,
             vendedor, origem,
+            website: honeypot,
           },
         }),
       }).catch(() => {});
@@ -712,6 +717,8 @@ function CompraForm() {
         // snapshot pra que /pagamento-confirmado possa redirecionar o cliente
         // direto pro chat do vendedor com o pedido + comprovante MP.
         whatsappVendedor: whatsappFinal,
+        // Honeypot anti-bot (humanos nunca preenchem isso — só bots)
+        website: honeypot,
       };
 
       const res = await fetch("/api/create-mp-from-form", {
@@ -961,6 +968,33 @@ function CompraForm() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="mx-4 mt-4 mb-8 space-y-3">
+        {/* Honeypot anti-bot — invisível pra humanos (off-screen + aria-hidden).
+            Bots que fazem scraping preenchem todos os inputs; se vier com valor,
+            o backend descarta via checkHoneypot() retornando 200 fake. */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: "-9999px",
+            top: "-9999px",
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+        >
+          <label htmlFor="website">Website (não preencher)</label>
+          <input
+            id="website"
+            type="text"
+            name="website"
+            autoComplete="off"
+            tabIndex={-1}
+            value={honeypot}
+            onChange={(e) => setHoneypot(e.target.value)}
+          />
+        </div>
+
         {/* Dados Pessoais */}
         <div className={cardCls}>
           <p className={sectionTitle}>{pessoa === "PJ" ? "Dados da Empresa" : "Dados Pessoais"}</p>
