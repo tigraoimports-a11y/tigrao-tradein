@@ -64,7 +64,7 @@ export default function RootLayout({
         {children}
         <script
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').then(function(reg){if(window.location.pathname.startsWith('/admin')){navigator.serviceWorker.ready.then(function(r){r.active&&r.active.postMessage({type:'WARM_CACHE'})})}})})}`
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').then(function(reg){reg.update().catch(function(){});if(reg.waiting){reg.waiting.postMessage({type:'SKIP_WAITING'})}var refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!refreshing){refreshing=true;window.location.reload()}});if(window.location.pathname.startsWith('/admin')){navigator.serviceWorker.ready.then(function(r){r.active&&r.active.postMessage({type:'WARM_CACHE'})})}})})}`
           }}
         />
       </body>

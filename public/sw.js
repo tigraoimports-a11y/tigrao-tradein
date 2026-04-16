@@ -59,6 +59,7 @@ self.addEventListener('activate', (event) => {
 
 // ─── Messages ───
 self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
   if (event.data && event.data.type === 'WARM_CACHE') warmCache();
 });
 
