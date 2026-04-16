@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { rateLimitSubmission } from "@/lib/rate-limit";
 
 function generateCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -9,7 +10,11 @@ function generateCode(): string {
 }
 
 // POST: create short link (stores in activity_log with entidade="short_link")
+// Protegido por rate limit (30/hora/IP) — evita spam do activity_log.
 export async function POST(req: NextRequest) {
+  const limited = rateLimitSubmission(req, "short-link");
+  if (limited) return limited;
+
   const body = await req.json();
   const { data } = body;
   if (!data) return NextResponse.json({ error: "data required" }, { status: 400 });
@@ -28,7 +33,11 @@ export async function POST(req: NextRequest) {
 }
 
 // PATCH: update short link data
+// Protegido por rate limit (30/hora/IP) — evita spam do activity_log.
 export async function PATCH(req: NextRequest) {
+  const limited = rateLimitSubmission(req, "short-link");
+  if (limited) return limited;
+
   const body = await req.json();
   const { code, data } = body;
   if (!code || !data) return NextResponse.json({ error: "code and data required" }, { status: 400 });

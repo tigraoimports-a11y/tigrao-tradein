@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createMpPreference } from "@/lib/mpPreference";
+import { rateLimitSubmission, checkHoneypot } from "@/lib/rate-limit";
 
 // ============================================================
 // POST /api/create-mp-from-form
@@ -86,13 +87,22 @@ interface CreateMpFromFormBody {
   whatsappVendedor?: string;
 }
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
+  // Rate limit: 30 req/hora por IP neste endpoint
+  const limited = rateLimitSubmission(req, "mp-form");
+  if (limited) return limited;
+
   let body: CreateMpFromFormBody;
   try {
-    body = await request.json();
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
+
+  // Honeypot: bots preenchem o campo "website" que fica oculto no form.
+  // Retornamos 200 OK (fake success) pra não dar feedback pro bot.
+  const honeypot = checkHoneypot(body as unknown as Record<string, unknown>);
+  if (honeypot) return honeypot;
 
   const { shortCode } = body;
   if (!shortCode) {
