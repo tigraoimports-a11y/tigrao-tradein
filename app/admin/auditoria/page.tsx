@@ -264,9 +264,39 @@ export default function AuditoriaPage() {
 function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string }) {
   const pat = data.patrimonio;
   const calc = data.calculo;
-  const difAbs = Math.abs(calc.diferenca);
+
+  // Saldos reais editáveis
+  const [saldosReais, setSaldosReais] = useState({
+    itau: "",
+    infinite: "",
+    mercado_pago: "",
+    especie: "",
+  });
+
+  const parseReais = (val: string): number => {
+    if (!val.trim()) return NaN;
+    // "73.104" (milhares) → remove pontos, "73104,50" → troca virgula
+    const cleaned = val.replace(/\./g, "").replace(",", ".");
+    return parseFloat(cleaned) || 0;
+  };
+
+  const hasOverride = Object.values(saldosReais).some((v) => v.trim() !== "");
+  const saldoReal = {
+    itau: saldosReais.itau.trim() ? parseReais(saldosReais.itau) : data.saldo_atual.itau,
+    infinite: saldosReais.infinite.trim() ? parseReais(saldosReais.infinite) : data.saldo_atual.infinite,
+    mercado_pago: saldosReais.mercado_pago.trim() ? parseReais(saldosReais.mercado_pago) : data.saldo_atual.mercado_pago,
+    especie: saldosReais.especie.trim() ? parseReais(saldosReais.especie) : data.saldo_atual.especie,
+  };
+  const totalSaldoReal = saldoReal.itau + saldoReal.infinite + saldoReal.mercado_pago + saldoReal.especie;
+  const patrimonioAtualReal = totalSaldoReal + data.estoque.valor_atual + data.recebiveis_pendentes;
+  const diferencaReal = patrimonioAtualReal - calc.patrimonio_esperado;
+
+  // Usa valores corrigidos se houver override
+  const difFinal = hasOverride ? diferencaReal : calc.diferenca;
+  const atualFinal = hasOverride ? patrimonioAtualReal : calc.patrimonio_atual;
+  const difAbs = Math.abs(difFinal);
   const difOk = difAbs < 100; // tolerancia de R$100
-  const difColor = difOk ? "text-green-600" : calc.diferenca < 0 ? "text-red-600" : "text-amber-600";
+  const difColor = difOk ? "text-green-600" : difFinal < 0 ? "text-red-600" : "text-amber-600";
 
   return (
     <div className="space-y-5">
@@ -425,15 +455,38 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
         </div>
         <div className="p-5 space-y-3">
           <LinhaBalanco
-            label="Saldos em Conta"
-            valor={data.saldo_atual.total}
+            label={hasOverride ? "Saldos em Conta (reais)" : "Saldos em Conta"}
+            valor={hasOverride ? totalSaldoReal : data.saldo_atual.total}
             icon="🏦"
           />
-          <div className="pl-6 space-y-1">
-            <LinhaBalanco label="Itau" valor={data.saldo_atual.itau} sub />
-            <LinhaBalanco label="Infinite" valor={data.saldo_atual.infinite} sub />
-            <LinhaBalanco label="Mercado Pago" valor={data.saldo_atual.mercado_pago} sub />
-            <LinhaBalanco label="Especie" valor={data.saldo_atual.especie} sub />
+          {hasOverride && totalSaldoReal !== data.saldo_atual.total && (
+            <p className="text-[10px] text-[#86868B] pl-6">
+              Sistema calculava: {money(data.saldo_atual.total)} (dif: {money(totalSaldoReal - data.saldo_atual.total)})
+            </p>
+          )}
+          <div className="pl-6 space-y-2">
+            {([
+              { key: "itau" as const, label: "Itau", sistema: data.saldo_atual.itau },
+              { key: "infinite" as const, label: "Infinite", sistema: data.saldo_atual.infinite },
+              { key: "mercado_pago" as const, label: "Mercado Pago", sistema: data.saldo_atual.mercado_pago },
+              { key: "especie" as const, label: "Especie", sistema: data.saldo_atual.especie },
+            ]).map(({ key, label, sistema }) => (
+              <div key={key} className="flex items-center justify-between gap-2">
+                <span className="text-xs text-[#86868B] min-w-[100px]">{label}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-[#86868B]">{money(sistema)}</span>
+                  <span className="text-[10px] text-[#C7C7CC]">→</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="real"
+                    value={saldosReais[key]}
+                    onChange={(e) => setSaldosReais((prev) => ({ ...prev, [key]: e.target.value }))}
+                    className="w-[100px] px-2 py-1 text-xs font-mono text-right border border-[#D2D2D7] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#E8740E] focus:border-[#E8740E]"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
 
           <Divisor />
@@ -476,7 +529,7 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
 
           <LinhaBalanco
             label="Patrimonio Atual Total"
-            valor={calc.patrimonio_atual}
+            valor={atualFinal}
             destaque
             icon="📊"
           />
@@ -488,7 +541,7 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
         className={`rounded-2xl border-2 shadow-sm overflow-hidden ${
           difOk
             ? "border-green-400 bg-green-50"
-            : calc.diferenca < 0
+            : difFinal < 0
             ? "border-red-400 bg-red-50"
             : "border-amber-400 bg-amber-50"
         }`}
@@ -500,7 +553,7 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
                 Resultado da Auditoria
               </h3>
               <p className="text-xs text-[#86868B] mt-0.5">
-                Esperado vs Atual
+                Esperado vs Atual{hasOverride ? " (com saldos reais)" : ""}
               </p>
             </div>
             {difOk ? (
@@ -510,7 +563,7 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
             ) : (
               <span
                 className={`px-4 py-1.5 rounded-full text-xs font-bold ${
-                  calc.diferenca < 0
+                  difFinal < 0
                     ? "bg-red-200 text-red-800"
                     : "bg-amber-200 text-amber-800"
                 }`}
@@ -530,21 +583,21 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
             <div className="text-center">
               <p className="text-[10px] text-[#86868B] uppercase font-semibold">Atual</p>
               <p className="text-lg font-bold text-[#1D1D1F] mt-1">
-                {money(calc.patrimonio_atual)}
+                {money(atualFinal)}
               </p>
             </div>
             <div className="text-center">
               <p className="text-[10px] text-[#86868B] uppercase font-semibold">Diferenca</p>
               <p className={`text-lg font-bold mt-1 ${difColor}`}>
-                {calc.diferenca > 0 ? "+" : ""}
-                {money(calc.diferenca)}
+                {difFinal > 0 ? "+" : ""}
+                {money(difFinal)}
               </p>
             </div>
           </div>
 
           {!difOk && (
             <p className="text-xs mt-3 text-[#86868B]">
-              {calc.diferenca < 0
+              {difFinal < 0
                 ? "Patrimonio atual esta abaixo do esperado. Verifique se ha dinheiro ou produto faltando."
                 : "Patrimonio atual esta acima do esperado. Pode indicar receita nao registrada ou ajuste pendente."}
             </p>
