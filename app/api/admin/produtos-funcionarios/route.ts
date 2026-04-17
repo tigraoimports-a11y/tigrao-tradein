@@ -190,8 +190,12 @@ export async function PATCH(req: NextRequest) {
           updated_at: new Date().toISOString(),
         }).eq("id", antes.estoque_id);
       }
+      // Se havia saldo pendente, mantem DESLIGADO_PENDENTE (debito continua em aberto).
+      // Se estava tudo pago ou era CEDIDO, marca DEVOLVIDO (finalizado, vinculo encerrado).
+      const saldoPendente = Number(antes.valor_funcionario || 0) - Number(antes.valor_pago || 0);
+      const temDebito = saldoPendente > 0.01;
       await supabase.from("produtos_funcionarios").update({
-        status: "DEVOLVIDO",
+        status: temDebito ? "DESLIGADO_PENDENTE" : "DEVOLVIDO",
         data_devolucao: new Date().toISOString().slice(0, 10),
         updated_at: new Date().toISOString(),
       }).eq("id", id);
@@ -199,11 +203,11 @@ export async function PATCH(req: NextRequest) {
       await logActivity(
         usuario,
         "Devolveu produto de funcionario",
-        `${antes.funcionario} — ${antes.produto}`,
+        `${antes.funcionario} — ${antes.produto}${temDebito ? ` (saldo pendente R$ ${saldoPendente.toLocaleString("pt-BR")})` : ""}`,
         "produtos_funcionarios",
         id
       );
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, saldoPendente: temDebito ? saldoPendente : 0 });
     }
 
     // Update comum

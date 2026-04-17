@@ -167,15 +167,24 @@ export default function ProdutosFuncionariosPage() {
   };
 
   const handleDevolver = async (v: Vinculo) => {
-    if (!confirm(`Devolver "${v.produto}" de ${v.funcionario} ao estoque?`)) return;
+    const saldo = Math.max(0, Number(v.valor_funcionario || 0) - Number(v.valor_pago || 0));
+    const aviso = saldo > 0
+      ? `Atenção: ${v.funcionario} ainda deve R$ ${saldo.toLocaleString("pt-BR")} desse acordo.\n\nAo devolver, o produto volta pro estoque MAS o débito continua em aberto (status DESLIGADO_PENDENTE).\n\nConfirmar devolução?`
+      : `Devolver "${v.produto}" de ${v.funcionario} ao estoque?`;
+    if (!confirm(aviso)) return;
     const res = await fetch("/api/admin/produtos-funcionarios", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
       body: JSON.stringify({ id: v.id, devolver: true }),
     });
     const j = await res.json();
-    if (j.ok) { setMsg("✅ Produto devolvido ao estoque"); fetchVinculos(); }
-    else setMsg("❌ " + (j.error || "erro"));
+    if (j.ok) {
+      const msgFinal = j.saldoPendente > 0
+        ? `✅ Produto devolvido. Débito de R$ ${Number(j.saldoPendente).toLocaleString("pt-BR")} em aberto com ${v.funcionario}.`
+        : "✅ Produto devolvido ao estoque";
+      setMsg(msgFinal);
+      fetchVinculos();
+    } else setMsg("❌ " + (j.error || "erro"));
   };
 
   const handleMarcarDesligado = async (v: Vinculo) => {
@@ -537,6 +546,7 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
         <div className="p-5 space-y-4">
           {tipo === "estoque" ? (
             <>
+<<<<<<< Updated upstream
               <div>
                 <label className="text-[11px] uppercase text-[#86868B] font-semibold">Buscar produto *</label>
                 <input
@@ -561,11 +571,65 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
                         {item.cor || "—"}
                         {item.serial_no ? ` • SN: ${item.serial_no}` : ""}
                         {item.imei ? ` • IMEI: ${item.imei}` : ""}
+=======
+              {estoqueSel ? (
+                <div className="p-3 rounded-xl bg-green-50 border-2 border-green-300">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] uppercase font-bold text-green-700">✓ Produto selecionado</p>
+                      <p className="font-bold text-[#1D1D1F] mt-1">{estoqueSel.produto}</p>
+                      <p className="text-xs text-[#86868B] mt-0.5">
+                        {estoqueSel.cor || "—"}
+                        {estoqueSel.serial_no ? ` • SN: ${estoqueSel.serial_no}` : ""}
+                        {estoqueSel.imei ? ` • IMEI: ${estoqueSel.imei}` : ""}
+                      </p>
+                      <p className="text-sm font-mono font-bold text-[#E8740E] mt-1">
+                        Custo: {fmt(Number(estoqueSel.custo_compra ?? estoqueSel.custo_unitario ?? 0))}
+>>>>>>> Stashed changes
                       </p>
                     </div>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueSel(null)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] whitespace-nowrap"
+                    >
+                      Trocar
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="text-[11px] uppercase text-[#86868B] font-semibold">Buscar produto *</label>
+                  <input
+                    type="text" value={busca} onChange={e => setBusca(e.target.value)}
+                    placeholder="Nome, serial, IMEI ou cor"
+                    className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#E8740E] focus:outline-none"
+                    autoFocus
+                  />
+                  <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-[#E8E8ED] bg-[#F9F9FB]">
+                    {filtered.length === 0 ? (
+                      <p className="text-xs text-[#86868B] p-3">Nenhum item encontrado</p>
+                    ) : filtered.map(item => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => { setEstoqueSel(item); setBusca(""); }}
+                        className="w-full text-left px-3 py-2 text-sm border-b border-[#F0F0F5] hover:bg-[#E8740E]/10 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{item.produto}</span>
+                          <span className="text-xs font-mono text-[#E8740E]">{fmt(Number(item.custo_compra ?? item.custo_unitario ?? 0))}</span>
+                        </div>
+                        <p className="text-xs text-[#86868B]">
+                          {item.cor || "—"}
+                          {item.serial_no ? ` • SN: ${item.serial_no}` : ""}
+                          {item.imei ? ` • IMEI: ${item.imei}` : ""}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="grid grid-cols-2 gap-3">
