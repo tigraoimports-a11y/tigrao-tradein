@@ -17,6 +17,7 @@ export const PAGE_GROUPS: { label: string; pages: { key: string; label: string }
     label: "Produtos",
     pages: [
       { key: "estoque", label: "Estoque" },
+      { key: "produtos_funcionarios", label: "Produtos c/ Funcionários" },
       { key: "precos", label: "Precos" },
       { key: "etiquetas", label: "Etiquetas" },
       { key: "etiquetas_preco", label: "Etiquetas de Preco" },
