@@ -59,31 +59,27 @@ export async function POST(req: NextRequest) {
 
 /**
  * GET: Preview do balanço manual de seminovos.
- * Retorna lista de modelos em estoque da categoria SEMINOVOS, com quantidade,
- * valor total (custo_compra ponderado) e o balanço calculado (custo médio).
+ * Retorna lista de modelos em estoque com tipo=SEMINOVO, agrupados por
+ * categoria + modelo base (getModeloBase), com quantidade, valor total
+ * (custo_compra ponderado) e o balanço calculado (custo médio).
  * Usado pra UI de seleção antes de aplicar.
- *
- * ?categoria=SEMINOVOS (opcional, default SEMINOVOS)
  */
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const url = new URL(req.url);
-    const categoria = (url.searchParams.get("categoria") || "SEMINOVOS").toUpperCase();
-
     const { supabase } = await import("@/lib/supabase");
     const { data: items, error } = await supabase
       .from("estoque")
-      .select("id, categoria, produto, cor, qnt, custo_compra, custo_unitario")
+      .select("id, categoria, produto, cor, tipo, qnt, custo_compra, custo_unitario")
       .eq("status", "EM ESTOQUE")
+      .eq("tipo", "SEMINOVO")
       .gt("qnt", 0)
-      .ilike("categoria", categoria)
       .range(0, 49999);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    type Row = { id: string; categoria: string; produto: string; cor: string | null; qnt: number; custo_compra: number; custo_unitario: number };
+    type Row = { id: string; categoria: string; produto: string; cor: string | null; tipo: string | null; qnt: number; custo_compra: number; custo_unitario: number };
     interface Grupo {
       categoria: string;
       modeloBase: string;

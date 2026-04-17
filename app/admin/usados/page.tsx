@@ -922,7 +922,7 @@ function BalancoSeminovosSection({
     if (!password) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/recalc-balancos?categoria=SEMINOVOS", {
+      const res = await fetch("/api/admin/recalc-balancos", {
         headers: { "x-admin-password": password },
         cache: "no-store",
       });
