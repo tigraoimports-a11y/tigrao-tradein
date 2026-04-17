@@ -132,6 +132,8 @@ export default function AdminPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [modalRow, setModalRow] = useState<SimulacaoRow | null>(null);
+  const [editingWa, setEditingWa] = useState<{ id: string; valor: string } | null>(null);
+  const [savingWa, setSavingWa] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
@@ -1555,7 +1557,81 @@ export default function AdminPage() {
                       <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
                       <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">{row.nome}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <a href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline whitespace-nowrap">{row.whatsapp}</a>
+                        {editingWa?.id === row.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={editingWa.valor}
+                              onChange={(e) => setEditingWa({ id: row.id, valor: e.target.value })}
+                              placeholder="(21) 9XXXX-XXXX"
+                              autoFocus
+                              className="px-2 py-1 rounded border border-[#E8740E] text-xs w-36 focus:outline-none"
+                              onKeyDown={async (e) => {
+                                if (e.key === "Escape") { setEditingWa(null); return; }
+                                if (e.key !== "Enter") return;
+                                // Fall through to save logic below
+                                (e.currentTarget.nextElementSibling as HTMLButtonElement)?.click();
+                              }}
+                            />
+                            <button
+                              disabled={savingWa}
+                              onClick={async () => {
+                                const raw = editingWa.valor.replace(/\D/g, "");
+                                if (raw.length < 10) { alert("WhatsApp invalido. Inclua DDD + numero."); return; }
+                                setSavingWa(true);
+                                try {
+                                  const res = await fetch("/api/admin/simulacoes", {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                    body: JSON.stringify({ id: row.id, whatsapp: editingWa.valor }),
+                                  });
+                                  const j = await res.json();
+                                  if (!j.ok) { alert("Erro: " + (j.error || "falha")); setSavingWa(false); return; }
+                                  setData((prev) => prev ? prev.map((r) => r.id === row.id ? { ...r, whatsapp: editingWa.valor } : r) : prev);
+                                  setEditingWa(null);
+                                } catch (err) {
+                                  alert("Erro de conexao: " + String(err));
+                                }
+                                setSavingWa(false);
+                              }}
+                              className="text-xs text-green-600 hover:text-green-800 px-1"
+                              title="Salvar"
+                            >
+                              {savingWa ? "..." : "✓"}
+                            </button>
+                            <button
+                              onClick={() => setEditingWa(null)}
+                              className="text-xs text-[#86868B] hover:text-red-500 px-1"
+                              title="Cancelar"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 group">
+                            {row.whatsapp && row.whatsapp.replace(/\D/g, "").length >= 10 ? (
+                              <a
+                                href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-green-600 hover:underline whitespace-nowrap"
+                              >
+                                {row.whatsapp}
+                              </a>
+                            ) : (
+                              <span className="text-red-500 text-xs font-medium whitespace-nowrap">⚠ {row.whatsapp || "(vazio)"}</span>
+                            )}
+                            {user?.role === "admin" && (
+                              <button
+                                onClick={() => setEditingWa({ id: row.id, valor: row.whatsapp || "" })}
+                                className="text-xs text-[#86868B] hover:text-[#E8740E] opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Editar WhatsApp"
+                              >
+                                ✏️
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {row.vendedor ? (
