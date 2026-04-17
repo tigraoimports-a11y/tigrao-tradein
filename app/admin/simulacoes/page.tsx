@@ -140,6 +140,7 @@ export default function AdminPage() {
   // Modais de edicao (WhatsApp + Marcar invalido)
   const [editWaRow, setEditWaRow] = useState<SimulacaoRow | null>(null);
   const [invalidarRow, setInvalidarRow] = useState<SimulacaoRow | null>(null);
+  const [desfazerRow, setDesfazerRow] = useState<SimulacaoRow | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
@@ -1743,6 +1744,21 @@ export default function AdminPage() {
         />
       )}
 
+      {/* Modal: Desfazer inválido */}
+      {desfazerRow && (
+        <DesfazerInvalidoModal
+          row={desfazerRow}
+          password={password}
+          userNome={user?.nome || "sistema"}
+          onClose={() => setDesfazerRow(null)}
+          onSaved={(patch) => {
+            setData((prev) => prev ? prev.map((r) => r.id === desfazerRow.id ? { ...r, ...patch } : r) : prev);
+            setModalRow((prev) => prev && prev.id === desfazerRow.id ? { ...prev, ...patch } : prev);
+            setDesfazerRow(null);
+          }}
+        />
+      )}
+
       {/* Modal: Marcar como inválido */}
       {invalidarRow && (
         <InvalidarModal
@@ -1795,11 +1811,22 @@ export default function AdminPage() {
               {/* Banner INVALIDO (se marcado) */}
               {modalRow.status === "INVALIDO" && (
                 <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <h3 className="text-sm font-bold text-red-700 flex items-center gap-2">🚫 Lead marcado como Inválido</h3>
-                    {modalRow.respondido_wa && (
-                      <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">✅ Já respondido no WhatsApp</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {modalRow.respondido_wa && (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">✅ Já respondido no WhatsApp</span>
+                      )}
+                      {user?.role === "admin" && (
+                        <button
+                          onClick={() => setDesfazerRow(modalRow)}
+                          className="text-[10px] bg-white border border-red-300 text-red-700 hover:bg-red-100 px-2 py-1 rounded-lg font-semibold"
+                          title="Desfazer marcacao"
+                        >
+                          🔄 Desfazer
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {modalRow.motivo_invalido && (
                     <div className="text-sm">
@@ -3080,6 +3107,102 @@ function InvalidarModal({
           <button onClick={salvar} disabled={saving} className="px-4 py-2 rounded-lg text-sm bg-red-600 text-white font-bold hover:bg-red-700 disabled:opacity-50">
             {saving ? "Salvando..." : "🚫 Marcar Inválido"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ====================================================================
+// Modal: Desfazer marcacao de INVALIDO
+// ====================================================================
+
+function DesfazerInvalidoModal({
+  row,
+  password,
+  userNome,
+  onClose,
+  onSaved,
+}: {
+  row: SimulacaoRow;
+  password: string;
+  userNome: string;
+  onClose: () => void;
+  onSaved: (patch: Partial<SimulacaoRow>) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const desfazer = async (novoStatus: "GOSTEI" | "SAIR") => {
+    setErro(null);
+    setSaving(true);
+    try {
+      const patch = {
+        status: novoStatus,
+        motivo_invalido: null,
+        obs_invalido: null,
+        respondido_wa: false,
+        marcado_invalido_em: null,
+        marcado_invalido_por: null,
+      };
+      const res = await fetch("/api/admin/simulacoes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userNome) },
+        body: JSON.stringify({ id: row.id, ...patch }),
+      });
+      const j = await res.json();
+      if (!j.ok) { setErro(j.error || "Erro ao desfazer"); setSaving(false); return; }
+      onSaved(patch as Partial<SimulacaoRow>);
+    } catch (e) {
+      setErro(String(e));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-[#1D1D1F]">🔄 Desfazer Inválido</h2>
+          <button onClick={onClose} className="text-2xl text-[#86868B] hover:text-[#1D1D1F]">×</button>
+        </div>
+
+        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+          <p className="text-sm font-medium text-[#1D1D1F]">{row.nome}</p>
+          <p className="text-xs text-[#6E6E73] mt-0.5">{row.whatsapp}</p>
+          {row.motivo_invalido && (
+            <p className="text-xs text-red-600 mt-1">Marcado como: <strong>{row.motivo_invalido}</strong></p>
+          )}
+        </div>
+
+        <p className="text-sm text-[#1D1D1F] mb-4">
+          Pra qual status devolver esta simulação?
+        </p>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => desfazer("GOSTEI")}
+            disabled={saving}
+            className="w-full text-left px-4 py-3 rounded-xl border-2 border-green-300 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
+          >
+            <p className="text-sm font-bold text-green-700">✅ Fechou pedido</p>
+            <p className="text-xs text-green-600/80">Cliente deu GOSTEI na simulação e pode prosseguir com a compra</p>
+          </button>
+
+          <button
+            onClick={() => desfazer("SAIR")}
+            disabled={saving}
+            className="w-full text-left px-4 py-3 rounded-xl border-2 border-red-300 bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
+          >
+            <p className="text-sm font-bold text-red-700">❌ Saiu sem fechar</p>
+            <p className="text-xs text-red-600/80">Cliente não fechou, mas não foi por problema do aparelho</p>
+          </button>
+        </div>
+
+        {erro && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg mt-3">{erro}</p>}
+
+        <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-[#E5E5EA]">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium">Cancelar</button>
         </div>
       </div>
     </div>
