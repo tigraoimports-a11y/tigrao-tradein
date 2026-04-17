@@ -5361,8 +5361,8 @@ export default function VendasPage() {
                                             ❌ Cancelar Venda
                                           </button>
                                         )}
-                                        {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
-                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && (v.local === "ENTREGA" || v.local === "RETIRADA") && (
+                                        {/* Botão Encaminhar Entrega — SO aparece se ainda nao tem entrega vinculada */}
+                                        {!v.entrega_id && (v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && (v.local === "ENTREGA" || v.local === "RETIRADA") && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -5383,6 +5383,13 @@ export default function VendasPage() {
                                                 const json = await res.json();
                                                 if (res.ok) {
                                                   setMsg("📦 Entrega criada com sucesso!");
+                                                  // Atualiza local pra esconder o botao imediatamente e mostrar 'Ver entrega'
+                                                  if (json.entrega?.id) {
+                                                    setVendas(prev => prev.map(x => x.id === v.id ? { ...x, entrega_id: json.entrega.id } : x));
+                                                  }
+                                                } else if (res.status === 409) {
+                                                  setMsg("⚠️ Esta venda já tem uma entrega vinculada.");
+                                                  fetchVendas();
                                                 } else {
                                                   setMsg(`Erro: ${json.error || "Falha ao criar entrega"}`);
                                                 }
@@ -5394,6 +5401,17 @@ export default function VendasPage() {
                                           >
                                             📦 {v.status_pagamento === "PROGRAMADA" || v.data_programada ? "Agendar Entrega" : "Encaminhar Entrega"}
                                           </button>
+                                        )}
+                                        {/* Botao 'Ver entrega' quando ja tem entrega vinculada */}
+                                        {v.entrega_id && (
+                                          <a
+                                            href={`/admin/entregas?destacar=${v.entrega_id}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-700 border border-green-300 bg-green-50 hover:bg-green-100 transition-colors inline-flex items-center gap-1"
+                                            title="Abrir entrega vinculada"
+                                          >
+                                            🚚 Ver entrega
+                                          </a>
                                         )}
                                         {/* Botão Reajuste — só admin */}
                                         {podeVerHistorico && <button

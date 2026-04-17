@@ -70,13 +70,16 @@ export async function POST(request: Request) {
   } else if (venda.forma) {
     formaPag = `${venda.forma}${venda.banco ? ` (${venda.banco})` : ""}`;
   }
-  // Adicionar entrada PIX se houver
+  // Adicionar entrada PIX/ESPECIE se houver (motoboy precisa saber separado)
   const entradaPix = Number(venda.entrada_pix || 0);
   const entradaEspecie = Number(venda.entrada_especie || 0);
   const totalEntrada = entradaPix + entradaEspecie;
-  if (totalEntrada > 0 && formaPag) {
-    const entradaLabel = entradaPix > 0 ? `PIX R$ ${entradaPix.toLocaleString("pt-BR")}` : `Espécie R$ ${entradaEspecie.toLocaleString("pt-BR")}`;
-    formaPag = `Entrada ${entradaLabel} + ${formaPag}`;
+  if (totalEntrada > 0) {
+    const entradaPartes: string[] = [];
+    if (entradaPix > 0) entradaPartes.push(`PIX R$ ${entradaPix.toLocaleString("pt-BR")}`);
+    if (entradaEspecie > 0) entradaPartes.push(`Espécie R$ ${entradaEspecie.toLocaleString("pt-BR")}`);
+    const entradaLabel = `Entrada ${entradaPartes.join(" + ")}`;
+    formaPag = formaPag ? `${entradaLabel} + ${formaPag}` : entradaLabel;
   }
 
   // Montar observação com detalhes úteis pro motoboy (incluindo 1º e 2º produto na troca)
@@ -148,6 +151,13 @@ export async function POST(request: Request) {
     .select()
     .single();
   if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
+
+  // Vincular a venda a entrega recem-criada (facilita UI: esconder botao
+  // Encaminhar, mostrar botao Ver Entrega, etc.)
+  await supabase
+    .from("vendas")
+    .update({ entrega_id: entrega.id })
+    .eq("id", venda_id);
 
   await logActivity(
     getUser(request),

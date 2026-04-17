@@ -172,8 +172,21 @@ export async function POST(request: Request) {
       tipo: link.tipo === "TROCA" || trocaLinhas.length > 0 ? "TROCA" : null,
       forma_pagamento: (() => {
         if (!forma) return null;
-        if (isCartao && parcelasNum > 0) return `${parcelasNum}x no ${forma === "Link de Pagamento" ? "Link" : "Cartão"}`;
-        return forma;
+        // Monta a forma base do restante (pos-entrada)
+        const base = isCartao && parcelasNum > 0
+          ? `${parcelasNum}x no ${forma === "Link de Pagamento" ? "Link" : "Cartão"}`
+          : forma;
+        // Se tem entrada (Pix/Especie geralmente), mostra separadamente — motoboy
+        // e o resumo da entrega precisam ver a quebra (ex: "Entrada R$ 500 via Pix + 10x no Cartão")
+        if (entradaVal > 0) {
+          const bancoEntrada = String(link.banco_pix || preench.banco_pix || "ITAU").toUpperCase();
+          // Detecta se entrada eh Pix (default) ou dinheiro. Nos links de compra
+          // a entrada tipicamente e PIX, mas conferimos formaPagamento do preench.
+          const formaEntrada = String(preench.forma_entrada || "PIX").toUpperCase();
+          const labelForma = formaEntrada.includes("ESPEC") || formaEntrada.includes("DINHEIRO") ? "Dinheiro" : "Pix";
+          return `Entrada R$ ${entradaVal.toLocaleString("pt-BR")} via ${labelForma}${bancoEntrada && labelForma === "Pix" ? ` (${bancoEntrada})` : ""} + ${base}`;
+        }
+        return base;
       })(),
       valor: valorFinal > 0 ? valorFinal : (valorBase > 0 ? valorBase : null),
       entrada: entradaVal > 0 ? entradaVal : null,
