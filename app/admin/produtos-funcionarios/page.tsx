@@ -419,30 +419,39 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
   const [percentual, setPercentual] = useState(50);
   const [observacao, setObservacao] = useState("");
   const [dataSaida, setDataSaida] = useState(hojeBR());
+  // Pagamento inicial
+  const [registrarPagamento, setRegistrarPagamento] = useState(false);
+  const [pagForma, setPagForma] = useState("PIX");
+  const [pagConta, setPagConta] = useState("ITAU");
+  const [pagParcelas, setPagParcelas] = useState(1);
+  const [pagValor, setPagValor] = useState("");
+  const [pagObs, setPagObs] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     if (tipo !== "estoque") return;
     (async () => {
-      const res = await fetch("/api/estoque?status=EM ESTOQUE", {
+      // Busca todos sem filtro (URL com espaco pode falhar em alguns browsers), depois filtra client-side.
+      const res = await fetch("/api/estoque", {
         headers: { "x-admin-password": password },
       });
       const j = await res.json();
       if (j.data) {
-        setEstoqueItems((j.data as EstoqueItem[]).filter(i => i.status === "EM ESTOQUE" && i.qnt > 0));
+        setEstoqueItems((j.data as EstoqueItem[]).filter(i => i.status === "EM ESTOQUE" && Number(i.qnt) > 0));
       }
     })();
   }, [tipo, password]);
 
   const filtered = useMemo(() => {
-    if (!busca.trim()) return estoqueItems.slice(0, 30);
+    if (!busca.trim()) return estoqueItems.slice(0, 50);
     const q = busca.toLowerCase();
     return estoqueItems.filter(i =>
       i.produto.toLowerCase().includes(q) ||
       (i.serial_no || "").toLowerCase().includes(q) ||
+      (i.imei || "").toLowerCase().includes(q) ||
       (i.cor || "").toLowerCase().includes(q)
-    ).slice(0, 30);
+    ).slice(0, 50);
   }, [estoqueItems, busca]);
 
   const valorBase = tipo === "estoque"
@@ -484,6 +493,29 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
       });
       const j = await res.json();
       if (!j.ok) { setErr(j.error || "Erro ao salvar"); return; }
+
+      // Se marcou registrar pagamento inicial, posta pagamento
+      const valorPagNum = Number((pagValor || "").replace(/\D/g, ""));
+      if (registrarPagamento && valorPagNum > 0 && j.data?.id) {
+        const resPag = await fetch("/api/admin/produtos-funcionarios/pagamento", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+          body: JSON.stringify({
+            produto_funcionario_id: j.data.id,
+            data: dataSaida,
+            valor: valorPagNum,
+            forma: pagForma,
+            conta: (pagForma === "PIX" || pagForma === "CARTAO") ? pagConta : null,
+            parcelas: pagParcelas,
+            observacao: pagObs || null,
+          }),
+        });
+        const jPag = await resPag.json();
+        if (!jPag.ok) {
+          setErr(`Vínculo criado, mas falhou o pagamento: ${jPag.error || "erro"}`);
+          // Ainda assim chama onSaved pra refetch
+        }
+      }
       onSaved();
     } finally {
       setSaving(false);
@@ -526,7 +558,9 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
                         <span className="text-xs font-mono text-[#E8740E]">{fmt(Number(item.custo_compra ?? item.custo_unitario ?? 0))}</span>
                       </div>
                       <p className="text-xs text-[#86868B]">
-                        {item.cor || "—"} {item.serial_no ? `• SN: ${item.serial_no}` : ""}
+                        {item.cor || "—"}
+                        {item.serial_no ? ` • SN: ${item.serial_no}` : ""}
+                        {item.imei ? ` • IMEI: ${item.imei}` : ""}
                       </p>
                     </div>
                   ))}
@@ -627,6 +661,73 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
               className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#E8740E] focus:outline-none"
             />
           </div>
+
+          {/* Pagamento inicial — so aparece quando ha valor a ser pago pelo funcionario */}
+          {valorFunc > 0 && (
+            <div className="pt-3 border-t border-[#E8E8ED]">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={registrarPagamento} onChange={e => {
+                  setRegistrarPagamento(e.target.checked);
+                  if (e.target.checked && !pagValor) setPagValor(String(Math.round(valorFunc)));
+                }} className="w-4 h-4 accent-[#E8740E]" />
+                <span className="text-sm font-semibold text-[#1D1D1F]">💰 Registrar pagamento inicial?</span>
+              </label>
+              <p className="text-[11px] text-[#86868B] mt-1 ml-6">Marque se o funcionário ja pagou algo no ato. Saldo restante fica pendente.</p>
+
+              {registrarPagamento && (
+                <div className="mt-3 p-3 bg-[#F9F9FB] rounded-lg space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Forma</label>
+                      <select value={pagForma} onChange={e => setPagForma(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                        <option value="PIX">Pix</option>
+                        <option value="CARTAO">Cartão (máquina)</option>
+                        <option value="LINK">Link Mercado Pago</option>
+                        <option value="DINHEIRO">Dinheiro</option>
+                        <option value="DESCONTO_FOLHA">Desconto em folha</option>
+                        <option value="OUTRO">Outro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Valor (R$)</label>
+                      <input type="text" inputMode="numeric" value={pagValor} onChange={e => setPagValor(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" placeholder={`Ate ${fmt(valorFunc)}`} />
+                    </div>
+                  </div>
+
+                  {(pagForma === "PIX" || pagForma === "CARTAO") && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] uppercase text-[#86868B] font-semibold">{pagForma === "PIX" ? "Conta Pix" : "Maquina"}</label>
+                        <select value={pagConta} onChange={e => setPagConta(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                          <option value="ITAU">Itaú</option>
+                          <option value="INFINITEPAY">InfinitePay</option>
+                          <option value="MERCADOPAGO">Mercado Pago</option>
+                        </select>
+                      </div>
+                      {pagForma === "CARTAO" && (
+                        <div>
+                          <label className="text-[10px] uppercase text-[#86868B] font-semibold">Parcelas</label>
+                          <input type="number" min={1} max={24} value={pagParcelas} onChange={e => setPagParcelas(Number(e.target.value))} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {pagForma === "LINK" && (
+                    <div>
+                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Parcelas do Link</label>
+                      <input type="number" min={1} max={24} value={pagParcelas} onChange={e => setPagParcelas(Number(e.target.value))} className="mt-1 w-32 px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-[10px] uppercase text-[#86868B] font-semibold">Observação do pagamento (opcional)</label>
+                    <input type="text" value={pagObs} onChange={e => setPagObs(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {err && <p className="text-sm text-red-600">{err}</p>}
         </div>
