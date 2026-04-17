@@ -506,11 +506,18 @@ export async function PATCH(req: NextRequest) {
   // Buscar estado anterior para o log
   const { data: antes } = await supabase.from("estoque").select("*").eq("id", id).single();
 
-  // custo_compra é IMUTÁVEL após cadastro (custo real da compra).
-  // custo_unitario = balanço (média ponderada) só muda via endpoint /api/admin/recalc-balancos.
-  // Se o cliente tentar alterar custo_compra, preservamos o valor original.
-  if (antes && fields.custo_compra !== undefined && antes.custo_compra != null && Number(antes.custo_compra) > 0) {
-    delete fields.custo_compra;
+  // custo_compra = valor real que entrou em estoque. Admin pode corrigir (erro de digitacao, etc).
+  // custo_unitario = balanço (média ponderada) só muda via endpoint /api/admin/recalc-balancos
+  // ou por edicao manual explicita.
+  // Se custo_compra for editado e ainda nao ha balanco aplicado, mantem custo_unitario sincronizado.
+  if (antes && fields.custo_compra !== undefined) {
+    const ccAnt = Number(antes.custo_compra || 0);
+    const cuAnt = Number(antes.custo_unitario || 0);
+    const ccNovo = fields.custo_compra == null ? 0 : Number(fields.custo_compra);
+    // Se custo_unitario == custo_compra antigo (nao houve balanco), atualiza ambos pro novo custo_compra.
+    if (cuAnt === ccAnt && fields.custo_unitario === undefined) {
+      fields.custo_unitario = ccNovo;
+    }
   }
 
   // Forçar serial_no e imei em caixa alta
