@@ -21,10 +21,23 @@ export async function GET(req: NextRequest) {
   const role = getRole(req);
   if (role !== "admin") return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
 
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("usuarios")
-    .select("id, nome, login, role, ativo, permissoes, created_at")
+    .select("id, nome, login, role, ativo, permissoes, abas_ocultas, created_at")
     .order("nome");
+
+  let data: unknown = primary.data;
+  let error = primary.error;
+
+  // Fallback: coluna abas_ocultas pode nao existir ainda (migration nao aplicada)
+  if (error && /abas_ocultas/i.test(error.message)) {
+    const fallback = await supabase
+      .from("usuarios")
+      .select("id, nome, login, role, ativo, permissoes, created_at")
+      .order("nome");
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data: data ?? [] });
@@ -42,18 +55,19 @@ export async function PATCH(req: NextRequest) {
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  // Only allow updating role, ativo, and permissoes
+  // Only allow updating role, ativo, permissoes, and abas_ocultas
   const allowed: Record<string, unknown> = {};
   if (fields.role !== undefined) allowed.role = fields.role;
   if (fields.ativo !== undefined) allowed.ativo = fields.ativo;
   if (fields.permissoes !== undefined) allowed.permissoes = fields.permissoes;
+  if (fields.abas_ocultas !== undefined) allowed.abas_ocultas = fields.abas_ocultas;
 
   if (Object.keys(allowed).length === 0) {
     return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 });
   }
 
   // Get current user info for logging
-  const { data: antes } = await supabase.from("usuarios").select("nome, role, ativo, permissoes").eq("id", id).single();
+  const { data: antes } = await supabase.from("usuarios").select("nome, role, ativo, permissoes, abas_ocultas").eq("id", id).single();
 
   const { error } = await supabase.from("usuarios").update(allowed).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -65,6 +79,11 @@ export async function PATCH(req: NextRequest) {
     const before = (antes?.permissoes as string[] ?? []).sort().join(",");
     const after = (fields.permissoes as string[]).sort().join(",");
     if (before !== after) changes.push(`permissoes atualizadas`);
+  }
+  if (fields.abas_ocultas !== undefined) {
+    const before = (antes?.abas_ocultas as string[] ?? []).sort().join(",");
+    const after = (fields.abas_ocultas as string[]).sort().join(",");
+    if (before !== after) changes.push(`abas ocultas atualizadas`);
   }
 
   if (changes.length > 0) {
