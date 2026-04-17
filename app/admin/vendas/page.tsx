@@ -3236,15 +3236,22 @@ export default function VendasPage() {
                       }} placeholder="Valor total do link" className={inputCls} /></div>
                       <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                         <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
-                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
+                          const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
+                          const compAltDisp = parseFloat(form.comp_alt) || 0;
+                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || "CARTAO") as "CARTAO" | "LINK") : 0;
+                          const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
+                          return (
                           <>
-                            <span>Liquido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
+                            <span>Liquido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqPrincDisp)}</strong></span>
+                            {liqAltDisp > 0 && <span>+ 2o cartao: <strong>{fmt(liqAltDisp)}</strong></span>}
                             {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
                             {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
                             {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
-                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
+                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(liqPrincDisp + liqAltDisp + entradaPix + entradaEspecie + valorTroca))}</strong></span>
                           </>
-                        )}
+                          );
+                        })()}
                       </div>
                     </>
                   )}
