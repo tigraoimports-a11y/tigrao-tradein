@@ -144,17 +144,34 @@ export default function ProdutosFuncionariosPage() {
   }, [filtrados]);
 
   // Totais
+  // Conceitos:
+  // - patrimonioEmpresa: valor_empresa (parte que a empresa absorveu) de vinculos ativos.
+  //   E o que ficaria como 'prejuizo/investimento' se o produto nao voltasse.
+  // - aReceber: valor_funcionario - valor_pago dos que ainda estao com funcionario.
+  //   Enquanto o funcionario nao pagar, isso e patrimonio da empresa tambem (em
+  //   forma de 'produto em poder do funcionario com saldo pendente').
+  // - patrimonioTotal: soma dos dois = o que a empresa tem em ativo relacionado a func.
   const totais = useMemo(() => {
-    let totalCedido = 0, totalEmAberto = 0, totalQuitado = 0, totalDesligado = 0;
+    let patrimonioEmpresa = 0;
+    let aReceber = 0;
+    let totalQuitado = 0;
+    let totalDesligado = 0;
     for (const v of vinculos) {
       if (v.status === "DEVOLVIDO") continue;
       const aberto = Math.max(0, Number(v.valor_funcionario || 0) - Number(v.valor_pago || 0));
-      if (v.status === "CEDIDO") totalCedido += Number(v.valor_total || 0);
-      if (v.status === "DESLIGADO_PENDENTE") totalDesligado += aberto;
-      if (v.status === "QUITADO") totalQuitado += Number(v.valor_funcionario || 0);
-      if (["ACORDO_ATIVO", "PENDENTE_PAGAMENTO"].includes(v.status)) totalEmAberto += aberto;
+      if (v.status === "QUITADO") {
+        totalQuitado += Number(v.valor_funcionario || 0);
+        continue;
+      }
+      if (v.status === "DESLIGADO_PENDENTE") {
+        totalDesligado += aberto;
+        continue;
+      }
+      // Ativo em poder do funcionario (EM_USO, CEDIDO, ACORDO_ATIVO, PENDENTE_PAGAMENTO)
+      patrimonioEmpresa += Number(v.valor_empresa || 0);
+      aReceber += aberto;
     }
-    return { totalCedido, totalEmAberto, totalQuitado, totalDesligado };
+    return { patrimonioEmpresa, aReceber, totalQuitado, totalDesligado, patrimonioTotal: patrimonioEmpresa + aReceber };
   }, [vinculos]);
 
   const toggleExpandir = (id: string) => {
@@ -211,21 +228,27 @@ export default function ProdutosFuncionariosPage() {
 
       {/* Cards de totais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="p-4 bg-green-50 rounded-xl border border-green-100">
-          <p className="text-xs text-green-700 font-semibold uppercase">Cedidos</p>
-          <p className="text-xl font-bold text-green-800 mt-1">{fmt(totais.totalCedido)}</p>
+        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+          <p className="text-[11px] text-blue-700 font-semibold uppercase">Patrimônio c/ funcionários</p>
+          <p className="text-xl font-bold text-blue-800 mt-1">{fmt(totais.patrimonioTotal)}</p>
+          <p className="text-[10px] text-blue-600 mt-1">
+            Empresa: {fmt(totais.patrimonioEmpresa)} + A receber: {fmt(totais.aReceber)}
+          </p>
         </div>
         <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-          <p className="text-xs text-amber-700 font-semibold uppercase">Em aberto</p>
-          <p className="text-xl font-bold text-amber-800 mt-1">{fmt(totais.totalEmAberto)}</p>
+          <p className="text-[11px] text-amber-700 font-semibold uppercase">A receber de funcionários</p>
+          <p className="text-xl font-bold text-amber-800 mt-1">{fmt(totais.aReceber)}</p>
+          <p className="text-[10px] text-amber-600 mt-1">Saldo pendente em acordos ativos</p>
         </div>
         <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-          <p className="text-xs text-emerald-700 font-semibold uppercase">Quitados</p>
+          <p className="text-[11px] text-emerald-700 font-semibold uppercase">Quitados</p>
           <p className="text-xl font-bold text-emerald-800 mt-1">{fmt(totais.totalQuitado)}</p>
+          <p className="text-[10px] text-emerald-600 mt-1">Acordos finalizados</p>
         </div>
         <div className="p-4 bg-red-50 rounded-xl border border-red-100">
-          <p className="text-xs text-red-700 font-semibold uppercase">Desligados c/ pendência</p>
+          <p className="text-[11px] text-red-700 font-semibold uppercase">Desligados c/ pendência</p>
           <p className="text-xl font-bold text-red-800 mt-1">{fmt(totais.totalDesligado)}</p>
+          <p className="text-[10px] text-red-600 mt-1">Ex-funcionários devendo</p>
         </div>
       </div>
 
@@ -289,7 +312,9 @@ export default function ProdutosFuncionariosPage() {
                             </div>
                             <p className="text-xs text-[#86868B] mt-0.5">
                               {v.cor ? `${v.cor} • ` : ""}
-                              {v.serial_no ? `SN: ${v.serial_no}` : v.imei ? `IMEI: ${v.imei}` : "sem serial"}
+                              {v.serial_no ? `SN: ${v.serial_no}` : ""}
+                              {v.imei ? `${v.serial_no ? " • " : ""}IMEI: ${v.imei}` : ""}
+                              {!v.serial_no && !v.imei ? "sem serial" : ""}
                               {" • Saída: "}{v.data_saida}
                             </p>
                             <p className="text-xs text-[#6E6E73] mt-1">
@@ -315,8 +340,62 @@ export default function ProdutosFuncionariosPage() {
 
                         {exp && (
                           <div className="mt-3 pt-3 border-t border-[#F0F0F5] space-y-3">
+                            {/* Detalhes do produto */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                              <div className="p-2 bg-[#F9F9FB] rounded-lg">
+                                <p className="text-[9px] uppercase text-[#86868B] font-bold">Categoria</p>
+                                <p className="font-mono mt-0.5">{v.categoria || "—"}</p>
+                              </div>
+                              <div className="p-2 bg-[#F9F9FB] rounded-lg">
+                                <p className="text-[9px] uppercase text-[#86868B] font-bold">Serial</p>
+                                <p className="font-mono mt-0.5">{v.serial_no || "—"}</p>
+                              </div>
+                              <div className="p-2 bg-[#F9F9FB] rounded-lg">
+                                <p className="text-[9px] uppercase text-[#86868B] font-bold">IMEI</p>
+                                <p className="font-mono mt-0.5">{v.imei || "—"}</p>
+                              </div>
+                              <div className="p-2 bg-[#F9F9FB] rounded-lg">
+                                <p className="text-[9px] uppercase text-[#86868B] font-bold">Data Saída</p>
+                                <p className="font-mono mt-0.5">{v.data_saida}</p>
+                              </div>
+                            </div>
+
+                            {/* Breakdown financeiro */}
+                            <div className="p-3 bg-gradient-to-br from-[#FFF7ED] to-[#F9F9FB] rounded-xl border border-[#F5E6D3]">
+                              <p className="text-[10px] uppercase text-[#86868B] font-bold mb-2">💰 Breakdown financeiro</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                <div>
+                                  <p className="text-[10px] text-[#86868B]">Valor total do produto</p>
+                                  <p className="font-mono font-bold text-[#1D1D1F]">{fmt(v.valor_total)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-green-700">Empresa banca</p>
+                                  <p className="font-mono font-bold text-green-800">{fmt(v.valor_empresa)}</p>
+                                  <p className="text-[9px] text-green-600">{v.tipo_acordo === "CEDIDO" ? "100%" : `${100 - v.percentual_funcionario}%`}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-amber-700">Funcionário paga</p>
+                                  <p className="font-mono font-bold text-amber-800">{fmt(v.valor_funcionario)}</p>
+                                  <p className="text-[9px] text-amber-600">{v.percentual_funcionario || 0}%</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-[#86868B]">Já pago / Saldo</p>
+                                  <p className="font-mono font-bold text-green-700">{fmt(v.valor_pago)}</p>
+                                  {saldo > 0 && (
+                                    <p className="text-[9px] text-amber-600">Falta {fmt(saldo)}</p>
+                                  )}
+                                  {v.valor_funcionario > 0 && saldo === 0 && (
+                                    <p className="text-[9px] text-green-600">✓ Quitado</p>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-[#86868B] mt-2 italic">
+                                Patrimônio da empresa nesse item: <strong className="text-[#1D1D1F]">{fmt(v.valor_empresa + saldo)}</strong> ({fmt(v.valor_empresa)} absorvido + {fmt(saldo)} a receber)
+                              </p>
+                            </div>
+
                             <div>
-                              <p className="text-[10px] uppercase text-[#86868B] font-semibold mb-1">Observação</p>
+                              <p className="text-[10px] uppercase text-[#86868B] font-semibold mb-1">Observação do acordo</p>
                               <p className="text-sm text-[#1D1D1F] bg-[#F9F9FB] p-3 rounded-lg">{v.observacao}</p>
                             </div>
 
