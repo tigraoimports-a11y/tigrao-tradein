@@ -1106,7 +1106,6 @@ export default function EstoquePage() {
   // Modal de reservar produto
   const [reservaTarget, setReservaTarget] = useState<ProdutoEstoque | null>(null);
   const [reservaForm, setReservaForm] = useState({ cliente: "", data: "", para: "", operador: "" });
-  const [reservaSaving, setReservaSaving] = useState(false);
   // Configs do catálogo para o modelo do produto no detalhe (cores por modelo específico)
   const [detailModelConfigs, setDetailModelConfigs] = useState<Record<string, string[]>>({});
   // Mapa completo modelo → [cores EN] do catálogo (usado na reposição)
@@ -2633,8 +2632,10 @@ export default function EstoquePage() {
     setImportingInitial(false);
   };
 
-  // Reservados: produtos movidos para a aba Reservas (ficam escondidos das outras listas)
-  const isReservado = (p: ProdutoEstoque) => !!p.reserva_cliente;
+  // Reservados: produtos movidos para a aba Reservas (ficam escondidos das outras listas).
+  // Exclui ESGOTADOS — se foi vendido, a reserva cumpriu o papel (mesmo que os campos ainda
+  // estejam preenchidos em itens legados antes do fix do endpoint de venda).
+  const isReservado = (p: ProdutoEstoque) => !!p.reserva_cliente && p.status !== "ESGOTADO" && p.qnt > 0;
   const reservados = estoque.filter(isReservado);
 
   // Filtrar por tipo (sempre excluindo reservados)
@@ -7224,100 +7225,118 @@ export default function EstoquePage() {
 
       {/* Modal Reservar Produto */}
       {reservaTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !reservaSaving && setReservaTarget(null)}>
-          <div className={`w-full max-w-md rounded-2xl p-6 ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#E5E5EA]"}`} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className={`text-base font-bold ${textPrimary}`}>Reservar Produto</h3>
-              <button onClick={() => !reservaSaving && setReservaTarget(null)} className={`${textMuted} hover:${textPrimary}`}>✕</button>
+        <ReservaModal
+          target={reservaTarget}
+          initialForm={reservaForm}
+          dm={dm}
+          onClose={() => setReservaTarget(null)}
+          onSaved={(patch) => {
+            setEstoque(prev => prev.map(x => x.id === reservaTarget.id ? { ...x, ...patch } : x));
+            setMsg(`✅ Reservado para ${patch.reserva_cliente}`);
+            setReservaTarget(null);
+            setDetailProduct(null);
+          }}
+          onError={(msg) => setMsg("❌ " + msg)}
+          apiPatch={apiPatch}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Modal de Reservar Produto ──
+   Extraido do EstoquePage pra evitar re-render da pagina inteira a cada letra.
+   Estado do form fica isolado aqui dentro. */
+function ReservaModal({ target, initialForm, dm, onClose, onSaved, onError, apiPatch }: {
+  target: ProdutoEstoque;
+  initialForm: { cliente: string; data: string; para: string; operador: string };
+  dm: boolean;
+  onClose: () => void;
+  onSaved: (patch: { reserva_cliente: string; reserva_data: string; reserva_para: string; reserva_operador: string }) => void;
+  onError: (msg: string) => void;
+  apiPatch: (id: string, fields: Record<string, unknown>) => Promise<Response>;
+}) {
+  const [form, setForm] = useState(initialForm);
+  const [saving, setSaving] = useState(false);
+  const textPrimary = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const textMuted = dm ? "text-[#98989D]" : "text-[#86868B]";
+  const inputCls = `w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+
+  const confirmar = async () => {
+    if (!form.cliente.trim() || !form.data || !form.para || !form.operador.trim()) {
+      onError("Preencha todos os campos da reserva");
+      return;
+    }
+    setSaving(true);
+    try {
+      const patch = {
+        reserva_cliente: form.cliente.trim(),
+        reserva_data: form.data,
+        reserva_para: form.para,
+        reserva_operador: form.operador.trim(),
+      };
+      await apiPatch(target.id, patch);
+      onSaved(patch);
+    } catch (err) {
+      onError(String(err instanceof Error ? err.message : err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && onClose()}>
+      <div className={`w-full max-w-md rounded-2xl p-6 ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#E5E5EA]"}`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={`text-base font-bold ${textPrimary}`}>Reservar Produto</h3>
+          <button onClick={() => !saving && onClose()} className={`${textMuted}`}>✕</button>
+        </div>
+        <div className={`mb-4 px-3 py-2 rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+          <p className={`text-sm font-semibold ${textPrimary}`}>{target.produto}</p>
+          <p className={`text-[11px] ${textMuted}`}>{target.cor || ""}{target.serial_no ? ` — SN: ${target.serial_no}` : ""}</p>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Cliente *</label>
+            <input
+              type="text"
+              value={form.cliente}
+              onChange={(e) => setForm(f => ({ ...f, cliente: e.target.value }))}
+              placeholder="Nome do cliente"
+              className={inputCls}
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Data da Reserva *</label>
+              <input type="date" value={form.data} onChange={(e) => setForm(f => ({ ...f, data: e.target.value }))} className={inputCls} />
             </div>
-            <div className={`mb-4 px-3 py-2 rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
-              <p className={`text-sm font-semibold ${textPrimary}`}>{reservaTarget.produto}</p>
-              <p className={`text-[11px] ${textMuted}`}>{reservaTarget.cor || ""}{reservaTarget.serial_no ? ` — SN: ${reservaTarget.serial_no}` : ""}</p>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Cliente *</label>
-                <input
-                  type="text"
-                  value={reservaForm.cliente}
-                  onChange={(e) => setReservaForm(f => ({ ...f, cliente: e.target.value }))}
-                  placeholder="Nome do cliente"
-                  className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Data da Reserva *</label>
-                  <input
-                    type="date"
-                    value={reservaForm.data}
-                    onChange={(e) => setReservaForm(f => ({ ...f, data: e.target.value }))}
-                    className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                  />
-                </div>
-                <div>
-                  <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Para Qual Dia *</label>
-                  <input
-                    type="date"
-                    value={reservaForm.para}
-                    onChange={(e) => setReservaForm(f => ({ ...f, para: e.target.value }))}
-                    className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Operador *</label>
-                <input
-                  type="text"
-                  value={reservaForm.operador}
-                  onChange={(e) => setReservaForm(f => ({ ...f, operador: e.target.value }))}
-                  placeholder="Quem fez a reserva"
-                  className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button
-                onClick={() => !reservaSaving && setReservaTarget(null)}
-                disabled={reservaSaving}
-                className={`flex-1 px-4 py-2.5 rounded-xl text-[13px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F2F2F7] text-[#1D1D1F]"}`}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={async () => {
-                  if (!reservaForm.cliente.trim() || !reservaForm.data || !reservaForm.para || !reservaForm.operador.trim()) {
-                    setMsg("❌ Preencha todos os campos da reserva");
-                    return;
-                  }
-                  setReservaSaving(true);
-                  try {
-                    const patch = {
-                      reserva_cliente: reservaForm.cliente.trim(),
-                      reserva_data: reservaForm.data,
-                      reserva_para: reservaForm.para,
-                      reserva_operador: reservaForm.operador.trim(),
-                    };
-                    await apiPatch(reservaTarget.id, patch);
-                    setEstoque(prev => prev.map(x => x.id === reservaTarget.id ? { ...x, ...patch } : x));
-                    setMsg(`✅ Reservado para ${patch.reserva_cliente}`);
-                    setReservaTarget(null);
-                    setDetailProduct(null);
-                  } catch (err) {
-                    setMsg("❌ " + String(err instanceof Error ? err.message : err));
-                  } finally {
-                    setReservaSaving(false);
-                  }
-                }}
-                disabled={reservaSaving}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-[#E8740E] text-white text-[13px] font-semibold hover:bg-[#F5A623] disabled:opacity-50"
-              >
-                {reservaSaving ? "Salvando..." : "Confirmar Reserva"}
-              </button>
+            <div>
+              <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Para Qual Dia *</label>
+              <input type="date" value={form.para} onChange={(e) => setForm(f => ({ ...f, para: e.target.value }))} className={inputCls} />
             </div>
           </div>
+          <div>
+            <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Operador *</label>
+            <input
+              type="text"
+              value={form.operador}
+              onChange={(e) => setForm(f => ({ ...f, operador: e.target.value }))}
+              placeholder="Quem fez a reserva"
+              className={inputCls}
+            />
+          </div>
         </div>
-      )}
+        <div className="flex gap-2 mt-5">
+          <button onClick={() => !saving && onClose()} disabled={saving} className={`flex-1 px-4 py-2.5 rounded-xl text-[13px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F2F2F7] text-[#1D1D1F]"}`}>
+            Cancelar
+          </button>
+          <button onClick={confirmar} disabled={saving} className="flex-1 px-4 py-2.5 rounded-xl bg-[#E8740E] text-white text-[13px] font-semibold hover:bg-[#F5A623] disabled:opacity-50">
+            {saving ? "Salvando..." : "Confirmar Reserva"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
