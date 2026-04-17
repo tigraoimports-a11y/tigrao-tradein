@@ -11,6 +11,7 @@ import type { Categoria } from "@/lib/categorias";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, MAC_MINI_NUCLEOS, MAC_MINI_RAMS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import BalancoSeminovosSection from "@/components/admin/BalancoSeminovosSection";
 import type { Banco } from "@/lib/admin-types";
 import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
 
@@ -1158,10 +1159,6 @@ export default function EstoquePage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showDiagnostico, setShowDiagnostico] = useState(false);
 
-  // Balance mode (seminovos)
-  const [balanceMode, setBalanceMode] = useState(false);
-  const [balanceSelected, setBalanceSelected] = useState<Set<string>>(new Set());
-  const [balanceApplying, setBalanceApplying] = useState(false);
 
   // IMEI search
   const [imeiSearch, setImeiSearch] = useState("");
@@ -2002,29 +1999,6 @@ export default function EstoquePage() {
     return res;
   };
 
-  const handleApplyBalance = async () => {
-    if (balanceSelected.size === 0) return;
-    const selectedItems = estoque.filter((p) => balanceSelected.has(p.id));
-    const totalCusto = selectedItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-    const totalQnt = selectedItems.reduce((s, p) => s + p.qnt, 0);
-    if (totalQnt === 0) return;
-    const avgCusto = Math.round(totalCusto / totalQnt);
-    if (!confirm(`Aplicar custo médio de ${fmt(avgCusto)} a ${balanceSelected.size} item(ns)?`)) return;
-    setBalanceApplying(true);
-    try {
-      for (const item of selectedItems) {
-        await apiPatch(item.id, { custo_unitario: avgCusto });
-      }
-      setEstoque((prev) => prev.map((p) => balanceSelected.has(p.id) ? { ...p, custo_unitario: avgCusto } : p));
-      setMsg(`Balanço aplicado: ${balanceSelected.size} item(ns) com custo ${fmt(avgCusto)}`);
-      setBalanceSelected(new Set());
-      setBalanceMode(false);
-    } catch {
-      setMsg("Erro ao aplicar balanço");
-    } finally {
-      setBalanceApplying(false);
-    }
-  };
 
   const handleUpdateQnt = async (item: ProdutoEstoque, newQnt: number) => {
     const newStatus = newQnt === 0 ? "ESGOTADO" : item.status === "ESGOTADO" ? "EM ESTOQUE" : item.status;
@@ -3197,14 +3171,6 @@ export default function EstoquePage() {
               🏷️ Imprimir Todas Etiquetas
             </button>
           )}
-          {isAdmin && tab === "seminovos" && !selectMode && (
-            <button
-              onClick={() => { setBalanceMode(!balanceMode); if (balanceMode) setBalanceSelected(new Set()); }}
-              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${balanceMode ? "bg-blue-500 text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-blue-500 hover:text-blue-500`}`}
-            >
-              {balanceMode ? "Cancelar Balanço" : "Balancear Preços"}
-            </button>
-          )}
 
           <div className="flex-1" />
 
@@ -3325,6 +3291,15 @@ export default function EstoquePage() {
           </div>
         )}
         </div>
+      )}
+
+      {/* Balanco Manual — agrupado por modelo+armazenamento (so na aba Seminovos) */}
+      {tab === "seminovos" && (
+        <BalancoSeminovosSection
+          password={password}
+          userNome={user?.nome || "sistema"}
+          onMsg={setMsg}
+        />
       )}
 
       {/* Preços Sugeridos por tipo */}
@@ -5298,33 +5273,6 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {/* Floating balance bar */}
-      {balanceMode && tab === "seminovos" && balanceSelected.size > 0 && (() => {
-        const selItems = estoque.filter((p) => balanceSelected.has(p.id));
-        const totalCusto = selItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-        const totalQnt = selItems.reduce((s, p) => s + p.qnt, 0);
-        const avgCusto = totalQnt > 0 ? Math.round(totalCusto / totalQnt) : 0;
-        return (
-          <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
-            <span className={`text-sm font-semibold ${textPrimary}`}>{balanceSelected.size} selecionado(s)</span>
-            <span className={`text-sm ${textSecondary}`}>Custo medio: <span className="font-bold text-blue-500">{fmt(avgCusto)}</span></span>
-            <button
-              onClick={handleApplyBalance}
-              disabled={balanceApplying}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
-            >
-              {balanceApplying ? "Aplicando..." : "Aplicar Balanço"}
-            </button>
-            <button
-              onClick={() => { setBalanceSelected(new Set()); setBalanceMode(false); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium ${textSecondary} hover:${textPrimary} transition-colors`}
-            >
-              Cancelar
-            </button>
-          </div>
-        );
-      })()}
-
       {/* Modal de detalhes do produto */}
       {detailProduct && (() => {
         const p = detailProduct;
@@ -6589,6 +6537,35 @@ export default function EstoquePage() {
                         <span className={`text-[13px] ${mS}`}>R$</span>
                         <input
                           type="text" inputMode="numeric"
+                          defaultValue={(p.custo_compra ?? p.custo_unitario) ? String(p.custo_compra ?? p.custo_unitario) : ""}
+                          placeholder="0"
+                          onBlur={async (e) => {
+                            const val = e.target.value.replace(/\D/g, "");
+                            const num = val ? parseInt(val) : null;
+                            const atual = p.custo_compra ?? p.custo_unitario;
+                            if (num !== atual) {
+                              await apiPatch(p.id, { custo_compra: num });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, custo_compra: num } : x));
+                              setDetailProduct({ ...p, custo_compra: num });
+                              showSaved("custo");
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className={`flex-1 text-[14px] font-bold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      </div>
+                    ) : (
+                      <p className={`text-[14px] font-bold ${mP} mt-0.5`}>{(p.custo_compra ?? p.custo_unitario) ? fmt(p.custo_compra ?? p.custo_unitario!) : "—"}</p>
+                    )}
+                    <p className={`text-[9px] ${mS} mt-0.5`}>O valor que entrou em estoque</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Balanço (Preço Médio)</p>
+                    {canEdit && isAdmin ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={`text-[13px] ${mS}`}>R$</span>
+                        <input
+                          type="text" inputMode="numeric"
                           defaultValue={p.custo_unitario ? String(p.custo_unitario) : ""}
                           placeholder="0"
                           onBlur={async (e) => {
@@ -6598,16 +6575,17 @@ export default function EstoquePage() {
                               await apiPatch(p.id, { custo_unitario: num });
                               setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, custo_unitario: num ?? 0 } : x));
                               setDetailProduct({ ...p, custo_unitario: num ?? 0 });
-                              showSaved("custo");
+                              showSaved("balanco");
                             }
                           }}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                          className={`flex-1 text-[14px] font-bold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                          className={`flex-1 text-[14px] font-bold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#E8740E]"} focus:border-[#E8740E] focus:outline-none`}
                         />
                       </div>
                     ) : (
-                      <p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p>
+                      <p className={`text-[14px] font-bold text-[#E8740E] mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p>
                     )}
+                    <p className={`text-[9px] ${mS} mt-0.5`}>Média após balanço</p>
                   </div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
