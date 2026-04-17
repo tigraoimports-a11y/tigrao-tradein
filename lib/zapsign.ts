@@ -60,7 +60,8 @@ export async function criarDocumentoEAssinar(params: {
   // Se definido em env, o nome/email desse usuário aparece na mensagem ao signatário.
   // Útil pra usar um usuário "contato@tigraoimports.com" com nome "Responsável Financeiro"
   // em vez do owner "tigraoimports@gmail.com".
-  const createdBy = process.env.ZAPSIGN_CREATED_BY_EMAIL;
+  // TEMPORARIAMENTE HARDCODED pra diagnosticar problema de env var
+  const createdBy = process.env.ZAPSIGN_CREATED_BY_EMAIL || "contato@tigraoimports.com";
 
   const payload: Record<string, unknown> = {
     name: params.nome,
