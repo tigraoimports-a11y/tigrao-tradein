@@ -175,7 +175,8 @@ export async function GET(req: NextRequest) {
     const groups = new Map<string, Grupo>();
     for (const raw of (itemsDetalhados || []) as unknown as Row[]) {
       const cc = Number(raw.custo_compra || 0);
-      if (cc <= 0) continue;
+      // Nao pulamos mais unidades sem custo_compra — mostramos elas pro user ver.
+      // Elas so nao entram no calculo de media ponderada (q/cc=0 nao altera).
       const modeloBase = getModeloBase(raw.produto, raw.categoria);
       const key = `${raw.categoria}|${modeloBase}`;
       const g = groups.get(key) || {
@@ -189,8 +190,11 @@ export async function GET(req: NextRequest) {
         unidades: [] as Unidade[],
       };
       const q = Number(raw.qnt || 0);
-      g.qnt += q;
-      g.custoTotal += q * cc;
+      // So soma quando tem custo_compra valido (unidades sem custo ficam listadas mas nao contam).
+      if (cc > 0) {
+        g.qnt += q;
+        g.custoTotal += q * cc;
+      }
       g.unidades.push({
         id: raw.id,
         produto: raw.produto,
