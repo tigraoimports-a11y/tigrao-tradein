@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     supabase
       .from("vendas")
       .select(
-        "preco_vendido, custo, lucro, is_brinde, status_pagamento, forma, banco, bandeira, qnt_parcelas, valor_comprovante, entrada_pix, entrada_especie, credito_lojista_usado, data"
+        "preco_vendido, custo, lucro, is_brinde, status_pagamento, forma, banco, banco_pix, bandeira, qnt_parcelas, valor_comprovante, entrada_pix, entrada_especie, credito_lojista_usado, data"
       )
       .gte("data", primeiroDia)
       .lte("data", ultimoDia),
@@ -129,6 +129,27 @@ export async function GET(request: Request) {
   // e excluindo credito de lojista e valor de troca, que nao sao dinheiro que entra).
   const vendasPorDia: Record<string, { faturamento: number; custo: number; lucro: number; qtd: number; liquido: number }> = {};
 
+  // Recebido BRUTO por dia/banco/forma — pra tela de conferencia o operador
+  // comparar com o extrato dos bancos. Valores sao o que o cliente pagou
+  // (sem descontar taxa da maquininha).
+  interface RecebidoBruto {
+    itau_pix: number;
+    itau_credito: number;
+    infinite_pix: number;
+    infinite_credito: number;
+    infinite_debito: number;
+    mp_credito: number;
+    mp_pix: number;
+    especie: number;
+  }
+  const zeroBruto = (): RecebidoBruto => ({
+    itau_pix: 0, itau_credito: 0,
+    infinite_pix: 0, infinite_credito: 0, infinite_debito: 0,
+    mp_credito: 0, mp_pix: 0,
+    especie: 0,
+  });
+  const recebidoPorDia: Record<string, RecebidoBruto> = {};
+
   // Pre-calcula taxa de cada venda (paraleliza as chamadas async)
   const taxaPorVenda = await Promise.all(
     vendasValidas.map(async (v) => {
@@ -172,6 +193,55 @@ export async function GET(request: Request) {
     vendasPorDia[d].lucro += Number(v.lucro) || 0;
     vendasPorDia[d].qtd += 1;
     vendasPorDia[d].liquido += liquidoVenda;
+
+    // ---- Agregar BRUTO por banco/forma pra conferencia ----
+    if (!recebidoPorDia[d]) recebidoPorDia[d] = zeroBruto();
+    const r = recebidoPorDia[d];
+    const banco = String(v.banco || "").toUpperCase();
+    const forma = String(v.forma || "").toUpperCase();
+    const qntParc = Number(v.qnt_parcelas) || 0;
+
+    // Parte principal (valor_comprovante)
+    if (compVal > 0) {
+      if (forma === "PIX") {
+        // PIX puro, banco guarda onde caiu
+        if (banco === "ITAU") r.itau_pix += compVal;
+        else if (banco === "INFINITE") r.infinite_pix += compVal;
+        else if (banco === "MERCADO_PAGO") r.mp_pix += compVal;
+      } else if (forma === "DINHEIRO") {
+        r.especie += compVal;
+      } else if (forma === "DEBITO") {
+        if (banco === "INFINITE") r.infinite_debito += compVal;
+        else if (banco === "ITAU") r.itau_credito += compVal; // itau nao tem separacao debito
+      } else {
+        // CARTAO / LINK — considera credito
+        if (banco === "ITAU") r.itau_credito += compVal;
+        else if (banco === "INFINITE") {
+          // Infinite debito sem parcelas
+          if (qntParc === 0 || qntParc === 1) r.infinite_credito += compVal;
+          else r.infinite_credito += compVal;
+        }
+        else if (banco === "MERCADO_PAGO") r.mp_credito += compVal;
+      }
+    } else if (forma === "PIX") {
+      // PIX total = preco (sem credito lojista)
+      const valPix = Math.max(0, preco - credito);
+      if (banco === "ITAU") r.itau_pix += valPix;
+      else if (banco === "INFINITE") r.infinite_pix += valPix;
+      else if (banco === "MERCADO_PAGO") r.mp_pix += valPix;
+    } else if (forma === "DINHEIRO") {
+      r.especie += Math.max(0, preco - credito);
+    }
+
+    // Entradas adicionais (pix/especie)
+    const bancoPix = String(v.banco_pix || "").toUpperCase();
+    if (entradaPix > 0) {
+      if (bancoPix === "ITAU") r.itau_pix += entradaPix;
+      else if (bancoPix === "INFINITE") r.infinite_pix += entradaPix;
+      else if (bancoPix === "MERCADO_PAGO") r.mp_pix += entradaPix;
+      else r.itau_pix += entradaPix; // fallback
+    }
+    if (entradaEspecie > 0) r.especie += entradaEspecie;
   }
 
   // ---------- Processar gastos ----------
@@ -292,6 +362,7 @@ export async function GET(request: Request) {
     vendas_lucro: number;
     vendas_liquido: number;
     vendas_qtd: number;
+    recebido: RecebidoBruto;
     gastos: number;
     saldo_itau_base: number;
     saldo_inf_base: number;
@@ -315,6 +386,7 @@ export async function GET(request: Request) {
     const iso = d.toISOString().slice(0, 10);
     const saldo = saldosDiarios.find((s) => s.data === iso);
     const vd = vendasPorDia[iso] || { faturamento: 0, custo: 0, lucro: 0, qtd: 0, liquido: 0 };
+    const rb = recebidoPorDia[iso] || zeroBruto();
     diasDoMes.push({
       data: iso,
       vendas_faturamento: vd.faturamento,
@@ -322,6 +394,7 @@ export async function GET(request: Request) {
       vendas_lucro: vd.lucro,
       vendas_liquido: vd.liquido,
       vendas_qtd: vd.qtd,
+      recebido: rb,
       gastos: gastosPorDia[iso] || 0,
       saldo_itau_base: Number(saldo?.itau_base) || 0,
       saldo_inf_base: Number(saldo?.inf_base) || 0,

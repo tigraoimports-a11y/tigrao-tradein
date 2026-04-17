@@ -99,6 +99,16 @@ interface AuditoriaData {
     vendas_lucro: number;
     vendas_liquido: number;
     vendas_qtd: number;
+    recebido: {
+      itau_pix: number;
+      itau_credito: number;
+      infinite_pix: number;
+      infinite_credito: number;
+      infinite_debito: number;
+      mp_credito: number;
+      mp_pix: number;
+      especie: number;
+    };
     gastos: number;
     saldo_itau_base: number;
     saldo_inf_base: number;
@@ -522,6 +532,68 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
 // TAB: Conferencia Diaria
 // ====================================================================
 
+interface RecebidoBrutoDia {
+  itau_pix: number;
+  itau_credito: number;
+  infinite_pix: number;
+  infinite_credito: number;
+  infinite_debito: number;
+  mp_credito: number;
+  mp_pix: number;
+  especie: number;
+}
+
+// Card que mostra recebido do sistema + manual lado-a-lado (quando existe)
+function RecebidoBancosGrid({ recebido, conferMap, dataKey }: { recebido: RecebidoBrutoDia; conferMap: Record<string, ConferenciaDia>; dataKey: string }) {
+  const c = conferMap[dataKey];
+  const row = (label: string, sis: number, man: number | null) => {
+    const diff = man !== null ? man - sis : 0;
+    const ok = Math.abs(diff) < 1;
+    return (
+      <div className="flex items-center justify-between text-xs py-0.5">
+        <span className="text-[#86868B]">{label}</span>
+        <div className="flex items-center gap-3 font-mono">
+          <span className="text-[#1D1D1F] w-24 text-right">{money(sis)}</span>
+          {man !== null ? (
+            <span className={`w-24 text-right ${ok ? "text-green-600" : "text-red-600"}`}>{money(man)}</span>
+          ) : (
+            <span className="text-[#C7C7CC] w-24 text-right">—</span>
+          )}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* Header */}
+      <div className="col-span-full flex items-center justify-end text-[10px] font-bold text-[#86868B] uppercase pb-1 border-b border-[#E5E5EA]">
+        <span className="w-24 text-right">Sistema</span>
+        <span className="w-24 text-right ml-3">Manual</span>
+      </div>
+      <div className="bg-white rounded-lg p-3 border border-[#E5E5EA]">
+        <p className="text-xs font-bold mb-1">🏦 ITAÚ</p>
+        {row("Pix", recebido.itau_pix, c ? c.itau_pix : null)}
+        {row("Crédito", recebido.itau_credito, c ? c.itau_credito : null)}
+      </div>
+      <div className="bg-white rounded-lg p-3 border border-[#E5E5EA]">
+        <p className="text-xs font-bold mb-1">🏦 INFINITEPAY</p>
+        {row("Pix", recebido.infinite_pix, c ? c.infinite_pix : null)}
+        {row("Crédito", recebido.infinite_credito, c ? c.infinite_credito : null)}
+        {row("Débito", recebido.infinite_debito, c ? c.infinite_debito : null)}
+      </div>
+      <div className="bg-white rounded-lg p-3 border border-[#E5E5EA]">
+        <p className="text-xs font-bold mb-1">🏦 MERCADO PAGO</p>
+        {row("Crédito (link)", recebido.mp_credito, c ? c.mp_credito : null)}
+        {row("Pix", recebido.mp_pix, c ? c.mp_pix : null)}
+      </div>
+      <div className="bg-white rounded-lg p-3 border border-[#E5E5EA]">
+        <p className="text-xs font-bold mb-1">💵 ESPÉCIE</p>
+        {row("Dinheiro", recebido.especie, c ? c.especie : null)}
+      </div>
+    </div>
+  );
+}
+
 // Utilitario: soma total manual do dia (ignora especie negativa, que e deposito)
 function totalManualDia(c: ConferenciaDia | undefined): number {
   if (!c) return 0;
@@ -695,15 +767,25 @@ function TabDiario({ data, password, userNome }: { data: AuditoriaData; password
                       </button>
                     </td>
                   </tr>
-                  {isExpanded && dia.tem_saldo && (
+                  {isExpanded && (
                     <tr className="bg-[#F5F5F7]">
-                      <td colSpan={9} className="px-6 pb-4 pt-2 border-t border-[#E5E5EA]">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          <BancoMiniCard label="Itau" icon="🏦" abertura={dia.saldo_itau_base} fechamento={dia.saldo_itau} />
-                          <BancoMiniCard label="Infinite" icon="💳" abertura={dia.saldo_inf_base} fechamento={dia.saldo_inf} />
-                          <BancoMiniCard label="Mercado Pago" icon="💚" abertura={dia.saldo_mp_base} fechamento={dia.saldo_mp} />
-                          <BancoMiniCard label="Especie" icon="💵" abertura={dia.saldo_esp_base} fechamento={dia.saldo_esp} />
+                      <td colSpan={9} className="px-6 pb-4 pt-3 border-t border-[#E5E5EA]">
+                        {/* Recebimentos do sistema por banco/forma */}
+                        <div className="mb-4">
+                          <h4 className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">💰 Sistema calculou recebido (bruto)</h4>
+                          <RecebidoBancosGrid recebido={dia.recebido} conferMap={conferMap} dataKey={dia.data} />
                         </div>
+                        {dia.tem_saldo && (
+                          <div>
+                            <h4 className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">🏦 Saldos bancários (abertura → fechamento)</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <BancoMiniCard label="Itau" icon="🏦" abertura={dia.saldo_itau_base} fechamento={dia.saldo_itau} />
+                              <BancoMiniCard label="Infinite" icon="💳" abertura={dia.saldo_inf_base} fechamento={dia.saldo_inf} />
+                              <BancoMiniCard label="Mercado Pago" icon="💚" abertura={dia.saldo_mp_base} fechamento={dia.saldo_mp} />
+                              <BancoMiniCard label="Especie" icon="💵" abertura={dia.saldo_esp_base} fechamento={dia.saldo_esp} />
+                            </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -735,19 +817,24 @@ function TabDiario({ data, password, userNome }: { data: AuditoriaData; password
       </div>
 
       {/* Modal de conferencia */}
-      {confDia && (
-        <ConferenciaModal
-          data={confDia}
-          conferAtual={conferMap[confDia]}
-          faturamentoSistema={data.dias.find(d => d.data === confDia)?.vendas_faturamento || 0}
-          liquidoSistema={data.dias.find(d => d.data === confDia)?.vendas_liquido || 0}
-          gastosSistema={data.dias.find(d => d.data === confDia)?.gastos || 0}
-          password={password}
-          userNome={userNome}
-          onClose={() => setConfDia(null)}
-          onSaved={() => { refreshConferencia(); setConfDia(null); }}
-        />
-      )}
+      {confDia && (() => {
+        const dDia = data.dias.find(d => d.data === confDia);
+        const zeroR: RecebidoBrutoDia = { itau_pix: 0, itau_credito: 0, infinite_pix: 0, infinite_credito: 0, infinite_debito: 0, mp_credito: 0, mp_pix: 0, especie: 0 };
+        return (
+          <ConferenciaModal
+            data={confDia}
+            conferAtual={conferMap[confDia]}
+            faturamentoSistema={dDia?.vendas_faturamento || 0}
+            liquidoSistema={dDia?.vendas_liquido || 0}
+            gastosSistema={dDia?.gastos || 0}
+            recebidoSistema={dDia?.recebido || zeroR}
+            password={password}
+            userNome={userNome}
+            onClose={() => setConfDia(null)}
+            onSaved={() => { refreshConferencia(); setConfDia(null); }}
+          />
+        );
+      })()}
 
       {/* Gastos por categoria */}
       <div className="bg-white rounded-2xl border border-[#D2D2D7] shadow-sm overflow-hidden">
@@ -1060,6 +1147,7 @@ interface ConferenciaModalProps {
   faturamentoSistema: number;
   liquidoSistema: number;
   gastosSistema: number;
+  recebidoSistema: RecebidoBrutoDia;
   password: string;
   userNome: string;
   onClose: () => void;
@@ -1072,6 +1160,7 @@ function ConferenciaModal({
   faturamentoSistema,
   liquidoSistema,
   gastosSistema,
+  recebidoSistema,
   password,
   userNome,
   onClose,
@@ -1134,22 +1223,31 @@ function ConferenciaModal({
     }
   };
 
-  const Input = ({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) => (
-    <div className="flex items-center gap-2">
-      <label className="text-xs text-[#86868B] flex-1">{label}</label>
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-[#86868B]">R$</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={value === 0 ? "" : value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          onChange={(e) => onChange(parseNum(e.target.value))}
-          placeholder="0,00"
-          className="w-28 px-2 py-1 rounded border border-[#D2D2D7] text-right font-mono text-sm focus:outline-none focus:border-[#E8740E]"
-        />
+  const Input = ({ label, value, onChange, sistema }: { label: string; value: number; onChange: (v: number) => void; sistema: number }) => {
+    const diff = value - sistema;
+    const diffOk = Math.abs(diff) < 1;
+    return (
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-[#86868B] flex-1">{label}</label>
+        <span className="text-[10px] text-[#86868B] w-24 text-right font-mono" title="Sistema calculou">
+          {sistema > 0 ? money(sistema) : "—"}
+        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-[#86868B]">R$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={value === 0 ? "" : value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            onChange={(e) => onChange(parseNum(e.target.value))}
+            placeholder="0,00"
+            className={`w-28 px-2 py-1 rounded border text-right font-mono text-sm focus:outline-none ${
+              value > 0 && !diffOk ? "border-red-400 focus:border-red-500" : "border-[#D2D2D7] focus:border-[#E8740E]"
+            }`}
+          />
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -1165,12 +1263,18 @@ function ConferenciaModal({
 
         {/* Grupos de bancos */}
         <div className="p-6 space-y-5">
+          {/* Cabecalho com Sistema/Manual */}
+          <div className="flex items-center justify-end gap-2 text-[10px] font-bold text-[#86868B] uppercase">
+            <span className="w-24 text-right">Sistema</span>
+            <span className="w-36 text-right">Manual</span>
+          </div>
+
           {/* ITAU */}
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 ITAÚ</h3>
             <div className="space-y-2">
-              <Input label="Pix" value={form.itau_pix} onChange={(v) => setForm({ ...form, itau_pix: v })} />
-              <Input label="Crédito" value={form.itau_credito} onChange={(v) => setForm({ ...form, itau_credito: v })} />
+              <Input label="Pix" value={form.itau_pix} onChange={(v) => setForm({ ...form, itau_pix: v })} sistema={recebidoSistema.itau_pix} />
+              <Input label="Crédito" value={form.itau_credito} onChange={(v) => setForm({ ...form, itau_credito: v })} sistema={recebidoSistema.itau_credito} />
             </div>
           </div>
 
@@ -1178,9 +1282,9 @@ function ConferenciaModal({
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 INFINITEPAY</h3>
             <div className="space-y-2">
-              <Input label="Pix" value={form.infinite_pix} onChange={(v) => setForm({ ...form, infinite_pix: v })} />
-              <Input label="Crédito" value={form.infinite_credito} onChange={(v) => setForm({ ...form, infinite_credito: v })} />
-              <Input label="Débito" value={form.infinite_debito} onChange={(v) => setForm({ ...form, infinite_debito: v })} />
+              <Input label="Pix" value={form.infinite_pix} onChange={(v) => setForm({ ...form, infinite_pix: v })} sistema={recebidoSistema.infinite_pix} />
+              <Input label="Crédito" value={form.infinite_credito} onChange={(v) => setForm({ ...form, infinite_credito: v })} sistema={recebidoSistema.infinite_credito} />
+              <Input label="Débito" value={form.infinite_debito} onChange={(v) => setForm({ ...form, infinite_debito: v })} sistema={recebidoSistema.infinite_debito} />
             </div>
           </div>
 
@@ -1188,8 +1292,8 @@ function ConferenciaModal({
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 MERCADO PAGO</h3>
             <div className="space-y-2">
-              <Input label="Crédito (link)" value={form.mp_credito} onChange={(v) => setForm({ ...form, mp_credito: v })} />
-              <Input label="Pix" value={form.mp_pix} onChange={(v) => setForm({ ...form, mp_pix: v })} />
+              <Input label="Crédito (link)" value={form.mp_credito} onChange={(v) => setForm({ ...form, mp_credito: v })} sistema={recebidoSistema.mp_credito} />
+              <Input label="Pix" value={form.mp_pix} onChange={(v) => setForm({ ...form, mp_pix: v })} sistema={recebidoSistema.mp_pix} />
             </div>
           </div>
 
@@ -1197,7 +1301,7 @@ function ConferenciaModal({
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-1">💵 ESPÉCIE</h3>
             <p className="text-[10px] text-[#86868B] mb-3">Negativos = depósito interno, ignorados no total</p>
-            <Input label="Dinheiro" value={form.especie} onChange={(v) => setForm({ ...form, especie: v })} />
+            <Input label="Dinheiro" value={form.especie} onChange={(v) => setForm({ ...form, especie: v })} sistema={recebidoSistema.especie} />
           </div>
 
           {/* Observacao */}
