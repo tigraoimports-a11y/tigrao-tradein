@@ -158,6 +158,29 @@ export default function EntregasPage() {
   const vendedoresList = useVendedores(password);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
+  // ID pra destacar (vem de /admin/vendas?destacar=XXX ao clicar 'Ver entrega')
+  const [destacarId, setDestacarId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("destacar");
+    if (id) setDestacarId(id);
+  }, []);
+
+  // Quando as entregas carregam E temos um destacarId, rola ate o card e
+  // destaca por 3 segundos. Util pra botao 'Ver entrega' em /admin/vendas.
+  useEffect(() => {
+    if (!destacarId || entregas.length === 0) return;
+    const el = document.getElementById(`entrega-${destacarId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-4", "ring-[#E8740E]", "ring-offset-2");
+      setTimeout(() => {
+        el.classList.remove("ring-4", "ring-[#E8740E]", "ring-offset-2");
+      }, 3000);
+    }
+  }, [destacarId, entregas.length]);
   const [weekOffset, setWeekOffset] = useState(0);
   // Visualização: "dia" (default) mostra um único dia com divisão por motoboy;
   // "semana" mostra o calendário semanal completo (visão geral).
@@ -2231,6 +2254,7 @@ export default function EntregasPage() {
           return (
             <button
               key={e.id}
+              id={`entrega-${e.id}`}
               onClick={() => {
                 if (modoSelecao) {
                   const next = new Set(entregasSelecionadas);
