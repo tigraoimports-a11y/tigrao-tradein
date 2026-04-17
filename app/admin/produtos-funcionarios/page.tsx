@@ -85,8 +85,7 @@ interface EstoqueItem {
 }
 
 export default function ProdutosFuncionariosPage() {
-  const { user } = useAdmin();
-  const password = typeof window !== "undefined" ? localStorage.getItem("admin_password") || "" : "";
+  const { user, password } = useAdmin();
   const userName = user?.nome || "sistema";
 
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
