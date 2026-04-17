@@ -6537,8 +6537,6 @@ export default function EstoquePage() {
                         <span className={`text-[13px] ${mS}`}>R$</span>
                         <input
                           type="text" inputMode="numeric"
-                          // Mostra custo_compra (valor que entrou em estoque).
-                          // Fallback pro custo_unitario em itens legados sem custo_compra.
                           defaultValue={(p.custo_compra ?? p.custo_unitario) ? String(p.custo_compra ?? p.custo_unitario) : ""}
                           placeholder="0"
                           onBlur={async (e) => {
@@ -6546,8 +6544,6 @@ export default function EstoquePage() {
                             const num = val ? parseInt(val) : null;
                             const atual = p.custo_compra ?? p.custo_unitario;
                             if (num !== atual) {
-                              // Atualiza custo_compra (o que entrou em estoque). NAO mexe em custo_unitario
-                              // pra nao alterar balancos ja aplicados — isso e feito via Balanco Manual.
                               await apiPatch(p.id, { custo_compra: num });
                               setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, custo_compra: num } : x));
                               setDetailProduct({ ...p, custo_compra: num });
@@ -6561,11 +6557,35 @@ export default function EstoquePage() {
                     ) : (
                       <p className={`text-[14px] font-bold ${mP} mt-0.5`}>{(p.custo_compra ?? p.custo_unitario) ? fmt(p.custo_compra ?? p.custo_unitario!) : "—"}</p>
                     )}
-                    {p.custo_compra != null && p.custo_unitario && Math.abs(p.custo_compra - p.custo_unitario) > 0.5 && (
-                      <p className={`text-[10px] ${mS} mt-0.5`} title="Custo medio apos balanco ponderado">
-                        Balanço: <span className="font-mono text-[#E8740E]">{fmt(p.custo_unitario)}</span>
-                      </p>
+                    <p className={`text-[9px] ${mS} mt-0.5`}>O valor que entrou em estoque</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Balanço (Preço Médio)</p>
+                    {canEdit && isAdmin ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={`text-[13px] ${mS}`}>R$</span>
+                        <input
+                          type="text" inputMode="numeric"
+                          defaultValue={p.custo_unitario ? String(p.custo_unitario) : ""}
+                          placeholder="0"
+                          onBlur={async (e) => {
+                            const val = e.target.value.replace(/\D/g, "");
+                            const num = val ? parseInt(val) : null;
+                            if (num !== p.custo_unitario) {
+                              await apiPatch(p.id, { custo_unitario: num });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, custo_unitario: num ?? 0 } : x));
+                              setDetailProduct({ ...p, custo_unitario: num ?? 0 });
+                              showSaved("balanco");
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className={`flex-1 text-[14px] font-bold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#E8740E]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      </div>
+                    ) : (
+                      <p className={`text-[14px] font-bold text-[#E8740E] mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p>
                     )}
+                    <p className={`text-[9px] ${mS} mt-0.5`}>Média após balanço</p>
                   </div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
