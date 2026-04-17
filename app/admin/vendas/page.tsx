@@ -1256,11 +1256,12 @@ export default function VendasPage() {
       return;
     }
 
-    // Collect all products: cart items + current form
-    // Permite venda pendente sem produto da compra definido ainda (só troca/cliente/pagamento)
+    // Collect all products: cart items + current form (se form tem produto novo,
+    // inclui mesmo se ja tem itens no carrinho — usuario pode estar adicionando
+    // um produto a mais sem clicar em "+ Adicionar ao Carrinho" antes de salvar).
     const allProducts: ProdutoCarrinho[] = [...produtosCarrinho];
     const hasFormContent = !!(form.produto || form.troca_produto || trocaRow.produto || parseFloat(form.produto_na_troca) > 0);
-    if (hasFormContent && produtosCarrinho.length === 0) {
+    if (hasFormContent) {
       allProducts.push(getCurrentProductFields());
     }
 
@@ -1390,7 +1391,8 @@ export default function VendasPage() {
     if (editandoVendaId) {
       try {
         // Edição de grupo (múltiplas vendas)
-        if (editandoGrupoIds.length > 1 && allProducts.length === editandoGrupoIds.length) {
+        // Agora suporta adicionar/remover produtos: PATCH existentes, POST novos, DELETE removidos.
+        if (editandoGrupoIds.length > 1 || (editandoGrupoIds.length >= 1 && allProducts.length > editandoGrupoIds.length)) {
           // Build payloads and redistribute valor_comprovante/preco_vendido proportionally
           const groupPayloads: Record<string, unknown>[] = allProducts.map(p => buildPayload(p));
           const comprovanteTotal = Number(groupPayloads[0]?.valor_comprovante || 0);
@@ -1432,8 +1434,16 @@ export default function VendasPage() {
             }
           }
 
+          // Descobrir grupo_id original (pra novos itens vincularem ao mesmo grupo)
+          const primeiraVenda = vendas.find(v => v.id === editandoGrupoIds[0]);
+          const grupoIdOriginal = (primeiraVenda as unknown as { grupo_id?: string })?.grupo_id
+            || editandoGrupoIds[0]; // fallback: usa id da primeira venda como grupo_id sintetico
+
           let allOk = true;
-          for (let i = 0; i < editandoGrupoIds.length; i++) {
+
+          // 1. PATCH nos produtos que casam com vendas existentes
+          const nPatch = Math.min(allProducts.length, editandoGrupoIds.length);
+          for (let i = 0; i < nPatch; i++) {
             const res = await fetch("/api/vendas", {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "x-admin-password": password },
@@ -1442,7 +1452,38 @@ export default function VendasPage() {
             const json = await res.json();
             if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido")); break; }
           }
+
+          // 2. POST novos produtos (se allProducts.length > editandoGrupoIds.length)
+          if (allOk && allProducts.length > editandoGrupoIds.length) {
+            for (let i = editandoGrupoIds.length; i < allProducts.length; i++) {
+              const payload = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
+              const res = await fetch("/api/vendas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                body: JSON.stringify(payload),
+              });
+              const json = await res.json();
+              if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao criar novo item: " + (json.error || "erro desconhecido")); break; }
+            }
+          }
+
+          // 3. DELETE vendas removidas (se allProducts.length < editandoGrupoIds.length)
+          if (allOk && allProducts.length < editandoGrupoIds.length) {
+            for (let i = allProducts.length; i < editandoGrupoIds.length; i++) {
+              const res = await fetch(`/api/vendas?id=${editandoGrupoIds[i]}`, {
+                method: "DELETE",
+                headers: { "x-admin-password": password },
+              });
+              if (!res.ok) { allOk = false; setMsg("Erro ao remover item"); break; }
+            }
+          }
+
           if (allOk) {
+            const msgFinal = allProducts.length === editandoGrupoIds.length
+              ? `${editandoGrupoIds.length} vendas atualizadas com sucesso!`
+              : allProducts.length > editandoGrupoIds.length
+                ? `${editandoGrupoIds.length} atualizadas + ${allProducts.length - editandoGrupoIds.length} novas criadas!`
+                : `${allProducts.length} atualizadas + ${editandoGrupoIds.length - allProducts.length} removidas!`;
             setEditandoVendaId(null);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
@@ -1470,7 +1511,7 @@ export default function VendasPage() {
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
-            setMsg(`${editandoGrupoIds.length} vendas atualizadas com sucesso!`);
+            setMsg(msgFinal);
             fetchVendas();
             fetchEstoque();
           }
