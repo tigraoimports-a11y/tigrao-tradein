@@ -31,20 +31,23 @@ export async function recalcBalancos(opts?: {
 
   const { data: items, error } = await sb
     .from("estoque")
-    .select("id, categoria, produto, cor, qnt, custo_compra, custo_unitario")
+    .select("id, categoria, produto, cor, tipo, qnt, custo_compra, custo_unitario")
     .eq("status", "EM ESTOQUE")
     .gt("qnt", 0)
     .range(0, 49999);
 
   if (error || !items || items.length === 0) return { groups: 0, updated: 0 };
 
-  type Row = { id: string; categoria: string; produto: string; cor: string | null; qnt: number; custo_compra: number; custo_unitario: number };
+  type Row = { id: string; categoria: string; produto: string; cor: string | null; tipo: string | null; qnt: number; custo_compra: number; custo_unitario: number };
   const groups = new Map<string, Row[]>();
   for (const raw of items as unknown as Row[]) {
     const cc = Number(raw.custo_compra || 0);
     if (cc <= 0) continue;
-    // Pular SEMINOVOS no balanco automatico (feito manual via /admin/usados)
-    if (excludeSeminovos && String(raw.categoria || "").toUpperCase() === "SEMINOVOS") continue;
+    const isSeminovo = String(raw.tipo || "").toUpperCase() === "SEMINOVO";
+    // Pular SEMINOVO no balanco automatico (feito manual via /admin/usados)
+    if (excludeSeminovos && isSeminovo) continue;
+    // Modo manual (onlyModelos): so processa items de seminovo
+    if (onlySet && !isSeminovo) continue;
     // Usa getModeloBase para agrupar de forma consistente com o restante do sistema
     const modeloBase = getModeloBase(raw.produto, raw.categoria);
     const key = `${raw.categoria || ""}|${modeloBase}`;
