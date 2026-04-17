@@ -1159,10 +1159,6 @@ export default function EstoquePage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showDiagnostico, setShowDiagnostico] = useState(false);
 
-  // Balance mode (seminovos)
-  const [balanceMode, setBalanceMode] = useState(false);
-  const [balanceSelected, setBalanceSelected] = useState<Set<string>>(new Set());
-  const [balanceApplying, setBalanceApplying] = useState(false);
 
   // IMEI search
   const [imeiSearch, setImeiSearch] = useState("");
@@ -2003,29 +1999,6 @@ export default function EstoquePage() {
     return res;
   };
 
-  const handleApplyBalance = async () => {
-    if (balanceSelected.size === 0) return;
-    const selectedItems = estoque.filter((p) => balanceSelected.has(p.id));
-    const totalCusto = selectedItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-    const totalQnt = selectedItems.reduce((s, p) => s + p.qnt, 0);
-    if (totalQnt === 0) return;
-    const avgCusto = Math.round(totalCusto / totalQnt);
-    if (!confirm(`Aplicar custo médio de ${fmt(avgCusto)} a ${balanceSelected.size} item(ns)?`)) return;
-    setBalanceApplying(true);
-    try {
-      for (const item of selectedItems) {
-        await apiPatch(item.id, { custo_unitario: avgCusto });
-      }
-      setEstoque((prev) => prev.map((p) => balanceSelected.has(p.id) ? { ...p, custo_unitario: avgCusto } : p));
-      setMsg(`Balanço aplicado: ${balanceSelected.size} item(ns) com custo ${fmt(avgCusto)}`);
-      setBalanceSelected(new Set());
-      setBalanceMode(false);
-    } catch {
-      setMsg("Erro ao aplicar balanço");
-    } finally {
-      setBalanceApplying(false);
-    }
-  };
 
   const handleUpdateQnt = async (item: ProdutoEstoque, newQnt: number) => {
     const newStatus = newQnt === 0 ? "ESGOTADO" : item.status === "ESGOTADO" ? "EM ESTOQUE" : item.status;
@@ -3196,14 +3169,6 @@ export default function EstoquePage() {
               className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${bgCard} border ${borderCard} text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]`}
             >
               🏷️ Imprimir Todas Etiquetas
-            </button>
-          )}
-          {isAdmin && tab === "seminovos" && !selectMode && (
-            <button
-              onClick={() => { setBalanceMode(!balanceMode); if (balanceMode) setBalanceSelected(new Set()); }}
-              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${balanceMode ? "bg-blue-500 text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-blue-500 hover:text-blue-500`}`}
-            >
-              {balanceMode ? "Cancelar Balanço" : "Balancear Preços"}
             </button>
           )}
 
@@ -5307,33 +5272,6 @@ export default function EstoquePage() {
           </button>
         </div>
       )}
-
-      {/* Floating balance bar */}
-      {balanceMode && tab === "seminovos" && balanceSelected.size > 0 && (() => {
-        const selItems = estoque.filter((p) => balanceSelected.has(p.id));
-        const totalCusto = selItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-        const totalQnt = selItems.reduce((s, p) => s + p.qnt, 0);
-        const avgCusto = totalQnt > 0 ? Math.round(totalCusto / totalQnt) : 0;
-        return (
-          <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
-            <span className={`text-sm font-semibold ${textPrimary}`}>{balanceSelected.size} selecionado(s)</span>
-            <span className={`text-sm ${textSecondary}`}>Custo medio: <span className="font-bold text-blue-500">{fmt(avgCusto)}</span></span>
-            <button
-              onClick={handleApplyBalance}
-              disabled={balanceApplying}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
-            >
-              {balanceApplying ? "Aplicando..." : "Aplicar Balanço"}
-            </button>
-            <button
-              onClick={() => { setBalanceSelected(new Set()); setBalanceMode(false); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium ${textSecondary} hover:${textPrimary} transition-colors`}
-            >
-              Cancelar
-            </button>
-          </div>
-        );
-      })()}
 
       {/* Modal de detalhes do produto */}
       {detailProduct && (() => {
