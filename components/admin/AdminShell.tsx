@@ -26,6 +26,8 @@ interface AdminContextType {
   setSidebarCollapsed: (v: boolean) => void;
   /** Returns headers object with auth + user info for API calls */
   apiHeaders: (extra?: Record<string, string>) => Record<string, string>;
+  /** Re-busca permissoes/abas_ocultas do servidor e atualiza o context. Chame apos editar o proprio user. */
+  refreshUser: () => Promise<void>;
 }
 
 const AdminContext = createContext<AdminContextType>({
@@ -37,6 +39,7 @@ const AdminContext = createContext<AdminContextType>({
   sidebarCollapsed: false,
   setSidebarCollapsed: () => {},
   apiHeaders: () => ({}),
+  refreshUser: async () => {},
 });
 
 export function useAdmin() {
@@ -215,6 +218,29 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     ...extra,
   }), [password, user?.nome, user?.role, user?.permissoes]);
 
+  // Re-busca o proprio user do servidor (permissoes, abas_ocultas, etc) e atualiza o context.
+  // Usado apos o admin editar os proprios dados, pra refletir mudancas sem precisar recarregar.
+  const refreshUser = useCallback(async () => {
+    if (!user?.login || !password) return;
+    try {
+      const res = await fetch("/api/auth?login=" + encodeURIComponent(user.login), {
+        headers: { "x-admin-password": password },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.user) {
+        const updated: UserInfo = {
+          ...user,
+          permissoes: data.user.permissoes ?? [],
+          role: data.user.role,
+          abas_ocultas: data.user.abas_ocultas ?? [],
+        };
+        setUser(updated);
+        localStorage.setItem("admin_user", JSON.stringify(updated));
+      }
+    } catch { /* silent */ }
+  }, [user, password]);
+
   if (!ready) return null;
 
   // Login screen
@@ -283,6 +309,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       sidebarCollapsed,
       setSidebarCollapsed,
       apiHeaders: apiHeadersFn,
+      refreshUser,
     }}>
       <div
         className={`min-h-screen overflow-x-hidden transition-colors duration-300 admin-themed ${adminTheme} ${darkMode ? "admin-dark" : ""}`}
