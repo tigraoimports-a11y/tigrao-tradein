@@ -23,6 +23,7 @@ export default function VendasPage() {
   const vendedoresList = useVendedores(password);
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [termosPorVenda, setTermosPorVenda] = useState<Record<string, { id: string; status: string; zapsign_sign_url?: string | null; signed_pdf_url?: string | null }>>({});
   const [loading, setLoading] = useState(true);
   const VENDAS_TABS = ["nova", "andamento", "programadas", "hoje", "finalizadas", "correios"] as const;
   const [tab, setTab] = useTabParam<"nova" | "andamento" | "programadas" | "hoje" | "finalizadas" | "correios">("nova", VENDAS_TABS);
@@ -558,7 +559,30 @@ export default function VendasPage() {
     setLoading(false);
   }, [password, filtroAno, filtroMes, filtroDia, filtroCpf]);
 
-  useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
+  // Busca os termos de procedencia (apenas os com zapsign enviado) pra mostrar badge nas vendas
+  const fetchTermos = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/termo-procedencia?limit=200", {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const termos = (json.data || []) as Array<{ id: string; venda_id?: string | null; status: string; zapsign_sign_url?: string | null; signed_pdf_url?: string | null; created_at: string }>;
+        // Pega o mais recente por venda_id
+        const map: Record<string, { id: string; status: string; zapsign_sign_url?: string | null; signed_pdf_url?: string | null }> = {};
+        for (const t of termos) {
+          if (!t.venda_id) continue;
+          // Se ja tem um termo pra essa venda, mantem o mais recente (array ja vem ordenado desc)
+          if (!map[t.venda_id]) {
+            map[t.venda_id] = { id: t.id, status: t.status, zapsign_sign_url: t.zapsign_sign_url, signed_pdf_url: t.signed_pdf_url };
+          }
+        }
+        setTermosPorVenda(map);
+      }
+    } catch { /* silent */ }
+  }, [password]);
+
+  useEffect(() => { if (password) { fetchVendas(); fetchTermos(); } }, [password, fetchVendas, fetchTermos]);
 
   // Auto-transição: vendas PROGRAMADAS cuja data já chegou → mover para AGUARDANDO
   const transicionadasRef = useRef<Set<string>>(new Set());
@@ -5270,6 +5294,12 @@ export default function VendasPage() {
                                                 const json = await res.json();
                                                 if (json.ok) {
                                                   setMsg(`Termo enviado! Cliente vai receber link no WhatsApp pra assinar.`);
+                                                  if (json.data?.id) {
+                                                    setTermosPorVenda((prev) => ({
+                                                      ...prev,
+                                                      [v.id]: { id: json.data.id, status: "ENVIADO", zapsign_sign_url: json.sign_url ?? json.data?.zapsign_sign_url, signed_pdf_url: null },
+                                                    }));
+                                                  }
                                                 } else {
                                                   setMsg("Erro: " + (json.error || "falha ao enviar"));
                                                 }
@@ -5280,6 +5310,45 @@ export default function VendasPage() {
                                           >
                                             📱 Enviar pra Assinar Digital
                                           </button>
+                                          {/* Badge de status do termo de procedencia (aparece se foi enviado) */}
+                                          {(() => {
+                                            const termo = termosPorVenda[v.id];
+                                            if (!termo || (termo.status !== "ENVIADO" && termo.status !== "ASSINADO" && termo.status !== "RECUSADO")) return null;
+                                            if (termo.status === "ASSINADO") {
+                                              return (
+                                                <a
+                                                  href={termo.signed_pdf_url || "#"}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 border border-green-300 hover:bg-green-200 transition-colors"
+                                                  title="Termo assinado pelo cliente — clique para baixar o PDF assinado"
+                                                >
+                                                  ✅ Termo Assinado
+                                                </a>
+                                              );
+                                            }
+                                            if (termo.status === "RECUSADO") {
+                                              return (
+                                                <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 border border-red-300">
+                                                  ⚠️ Termo Recusado
+                                                </span>
+                                              );
+                                            }
+                                            // ENVIADO — aguardando cliente
+                                            return (
+                                              <a
+                                                href={termo.zapsign_sign_url || "#"}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition-colors"
+                                                title="Aguardando cliente assinar — clique para abrir o link"
+                                              >
+                                                ⏳ Aguardando Assinatura
+                                              </a>
+                                            );
+                                          })()}
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
