@@ -45,6 +45,7 @@ export async function PATCH(request: Request) {
     "modelo_usado", "storage_usado", "cor_usado", "avaliacao_usado", "condicao_linhas",
     "modelo_usado2", "storage_usado2", "cor_usado2", "avaliacao_usado2", "condicao_linhas2",
     "diferenca", "preco_novo", "vendedor", "forma_pagamento",
+    "nome", "whatsapp",
   ];
   for (const k of editableFields) {
     if (k in patch) allowed[k] = patch[k];
