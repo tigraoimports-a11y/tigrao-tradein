@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 // ---------- Helpers ----------
@@ -97,6 +97,7 @@ interface AuditoriaData {
     vendas_faturamento: number;
     vendas_custo: number;
     vendas_lucro: number;
+    vendas_liquido: number;
     vendas_qtd: number;
     gastos: number;
     saldo_itau_base: number;
@@ -109,6 +110,21 @@ interface AuditoriaData {
     saldo_esp: number;
     tem_saldo: boolean;
   }>;
+}
+
+export interface ConferenciaDia {
+  data: string;
+  itau_pix: number;
+  itau_credito: number;
+  infinite_pix: number;
+  infinite_credito: number;
+  infinite_debito: number;
+  mp_credito: number;
+  mp_pix: number;
+  especie: number;
+  observacao: string | null;
+  preenchido_por: string | null;
+  updated_at: string;
 }
 
 // ---------- Page ----------
@@ -221,7 +237,7 @@ export default function AuditoriaPage() {
       {!loading && data && tab === "patrimonio" && (
         <TabPatrimonio data={data} nomeMes={nomeMes} />
       )}
-      {!loading && data && tab === "diario" && <TabDiario data={data} />}
+      {!loading && data && tab === "diario" && <TabDiario data={data} password={password} userNome={user?.nome || "sistema"} />}
       {!loading && data && tab === "estoque" && <TabEstoque data={data} />}
     </div>
   );
@@ -506,11 +522,55 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
 // TAB: Conferencia Diaria
 // ====================================================================
 
-function TabDiario({ data }: { data: AuditoriaData }) {
+// Utilitario: soma total manual do dia (ignora especie negativa, que e deposito)
+function totalManualDia(c: ConferenciaDia | undefined): number {
+  if (!c) return 0;
+  const especieEfetiva = c.especie > 0 ? c.especie : 0;
+  return (
+    c.itau_pix + c.itau_credito +
+    c.infinite_pix + c.infinite_credito + c.infinite_debito +
+    c.mp_credito + c.mp_pix +
+    especieEfetiva
+  );
+}
+
+function TabDiario({ data, password, userNome }: { data: AuditoriaData; password: string; userNome: string }) {
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [conferMap, setConferMap] = useState<Record<string, ConferenciaDia>>({});
+  const [confDia, setConfDia] = useState<string | null>(null); // data sendo conferida no modal
   const hoje = new Date().toISOString().slice(0, 10);
 
   const diasReversed = [...data.dias].reverse();
+
+  // Fetch conferencia manual do mes atual do data
+  useEffect(() => {
+    if (!data.mes) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/conferencia-diaria?mes=${data.mes}`, {
+          headers: { "x-admin-password": password },
+          cache: "no-store",
+        });
+        const j = await res.json();
+        const map: Record<string, ConferenciaDia> = {};
+        for (const c of (j.data || []) as ConferenciaDia[]) map[c.data] = c;
+        setConferMap(map);
+      } catch { /* silent */ }
+    })();
+  }, [data.mes, password]);
+
+  const refreshConferencia = async () => {
+    try {
+      const res = await fetch(`/api/admin/conferencia-diaria?mes=${data.mes}`, {
+        headers: { "x-admin-password": password },
+        cache: "no-store",
+      });
+      const j = await res.json();
+      const map: Record<string, ConferenciaDia> = {};
+      for (const c of (j.data || []) as ConferenciaDia[]) map[c.data] = c;
+      setConferMap(map);
+    } catch { /* silent */ }
+  };
 
   return (
     <div className="space-y-4">
@@ -537,27 +597,15 @@ function TabDiario({ data }: { data: AuditoriaData }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#E5E5EA] bg-[#F5F5F7]">
-                <th className="px-4 py-2.5 text-left text-[10px] font-bold text-[#86868B] uppercase">
-                  Data
-                </th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase">
-                  Vendas
-                </th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase">
-                  Faturamento
-                </th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase">
-                  Lucro
-                </th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase">
-                  Gastos
-                </th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase">
-                  Saldo Total
-                </th>
-                <th className="px-4 py-2.5 text-center text-[10px] font-bold text-[#86868B] uppercase">
-                  Status
-                </th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Data</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Vendas</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Faturamento</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Lucro</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Recebido Liq.</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Gastos</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Saldo Total</th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Status</th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-bold text-[#86868B] uppercase whitespace-nowrap">Conferência</th>
               </tr>
             </thead>
             <tbody>
@@ -571,93 +619,95 @@ function TabDiario({ data }: { data: AuditoriaData }) {
                   { weekday: "short" }
                 );
 
-                return (
-                  <tr key={dia.data} className="group">
-                    <td colSpan={7} className="p-0">
-                      {/* Linha principal */}
-                      <button
-                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
-                        className={`w-full flex items-center text-left hover:bg-[#F5F5F7] transition-colors ${
-                          isHoje ? "bg-orange-50" : ""
-                        } ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
-                      >
-                        <span className="px-4 py-3 flex-1 min-w-[130px]">
-                          <span className="font-medium text-[#1D1D1F]">
-                            {new Date(dia.data + "T12:00:00").toLocaleDateString("pt-BR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                            })}
-                          </span>
-                          <span className="ml-1.5 text-[10px] text-[#86868B] uppercase">
-                            {diaSemana}
-                          </span>
-                          {isHoje && (
-                            <span className="ml-2 text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded-full font-bold">
-                              HOJE
-                            </span>
-                          )}
-                        </span>
-                        <span className="px-4 py-3 w-[80px] text-right font-medium text-[#1D1D1F]">
-                          {dia.vendas_qtd || "—"}
-                        </span>
-                        <span className="px-4 py-3 w-[120px] text-right font-mono text-[#1D1D1F]">
-                          {dia.vendas_faturamento > 0 ? money(dia.vendas_faturamento) : "—"}
-                        </span>
-                        <span className="px-4 py-3 w-[110px] text-right font-mono text-green-700">
-                          {dia.vendas_lucro > 0 ? money(dia.vendas_lucro) : "—"}
-                        </span>
-                        <span className="px-4 py-3 w-[110px] text-right font-mono text-red-600">
-                          {dia.gastos > 0 ? money(dia.gastos) : "—"}
-                        </span>
-                        <span className="px-4 py-3 w-[130px] text-right font-mono font-semibold text-[#1D1D1F]">
-                          {dia.tem_saldo ? money(saldoTotal) : "—"}
-                        </span>
-                        <span className="px-4 py-3 w-[80px] text-center">
-                          {dia.tem_saldo ? (
-                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">
-                              OK
-                            </span>
-                          ) : (
-                            <span className="text-[10px] bg-gray-100 text-[#86868B] px-2 py-1 rounded-full font-bold">
-                              —
-                            </span>
-                          )}
-                        </span>
-                      </button>
+                const confer = conferMap[dia.data];
+                const manualTotal = totalManualDia(confer);
+                const diff = manualTotal - dia.vendas_faturamento;
+                const conferido = manualTotal > 0;
+                const diffOk = Math.abs(diff) < 1;
 
-                      {/* Detalhes expandidos */}
-                      {isExpanded && dia.tem_saldo && (
-                        <div className="px-6 pb-4 pt-2 bg-[#F5F5F7] border-t border-[#E5E5EA]">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <BancoMiniCard
-                              label="Itau"
-                              icon="🏦"
-                              abertura={dia.saldo_itau_base}
-                              fechamento={dia.saldo_itau}
-                            />
-                            <BancoMiniCard
-                              label="Infinite"
-                              icon="💳"
-                              abertura={dia.saldo_inf_base}
-                              fechamento={dia.saldo_inf}
-                            />
-                            <BancoMiniCard
-                              label="Mercado Pago"
-                              icon="💚"
-                              abertura={dia.saldo_mp_base}
-                              fechamento={dia.saldo_mp}
-                            />
-                            <BancoMiniCard
-                              label="Especie"
-                              icon="💵"
-                              abertura={dia.saldo_esp_base}
-                              fechamento={dia.saldo_esp}
-                            />
-                          </div>
-                        </div>
+                return (
+                  <React.Fragment key={dia.data}>
+                  <tr className="group border-b border-[#F5F5F7]">
+                    <td className={`px-3 py-2.5 whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}>
+                      <span className="font-medium text-[#1D1D1F]">
+                        {new Date(dia.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                      </span>
+                      <span className="ml-1.5 text-[10px] text-[#86868B] uppercase">{diaSemana}</span>
+                      {isHoje && (
+                        <span className="ml-2 text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded-full font-bold">HOJE</span>
                       )}
                     </td>
+                    <td className={`px-3 py-2.5 text-right font-medium text-[#1D1D1F] whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}>
+                      {dia.vendas_qtd || "—"}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right font-mono text-[#1D1D1F] whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}>
+                      {dia.vendas_faturamento > 0 ? money(dia.vendas_faturamento) : "—"}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right font-mono text-green-700 whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}>
+                      {dia.vendas_lucro > 0 ? money(dia.vendas_lucro) : "—"}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right font-mono text-blue-700 whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}
+                        title="Recebido liquido: faturamento descontadas taxas de cartao/MP">
+                      {dia.vendas_liquido > 0 ? money(dia.vendas_liquido) : "—"}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right font-mono text-red-600 whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}>
+                      {dia.gastos > 0 ? money(dia.gastos) : "—"}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right font-mono font-semibold text-[#1D1D1F] whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}>
+                      {dia.tem_saldo ? money(saldoTotal) : "—"}
+                    </td>
+                    <td className={`px-3 py-2.5 text-center whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                        onClick={() => setExpandido(isExpanded ? null : dia.data)}
+                        style={{ cursor: "pointer" }}>
+                      {dia.tem_saldo ? (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">OK</span>
+                      ) : (
+                        <span className="text-[10px] bg-gray-100 text-[#86868B] px-2 py-1 rounded-full font-bold">—</span>
+                      )}
+                    </td>
+                    <td className={`px-3 py-2.5 text-center whitespace-nowrap ${isHoje ? "bg-orange-50" : ""} ${isExpanded ? "bg-[#F5F5F7]" : ""}`}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfDia(dia.data); }}
+                        className={`text-[10px] px-2 py-1 rounded-lg font-bold ${
+                          conferido
+                            ? diffOk
+                              ? "bg-green-100 text-green-700 hover:bg-green-200"
+                              : "bg-red-100 text-red-700 hover:bg-red-200"
+                            : "bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20"
+                        }`}
+                        title={conferido ? `Manual: ${money(manualTotal)} | Dif: ${money(diff)}` : "Ainda não conferido"}
+                      >
+                        {conferido ? (diffOk ? "✓ Conferido" : `⚠ Dif ${diff >= 0 ? "+" : ""}${money(diff)}`) : "📋 Conferir"}
+                      </button>
+                    </td>
                   </tr>
+                  {isExpanded && dia.tem_saldo && (
+                    <tr className="bg-[#F5F5F7]">
+                      <td colSpan={9} className="px-6 pb-4 pt-2 border-t border-[#E5E5EA]">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <BancoMiniCard label="Itau" icon="🏦" abertura={dia.saldo_itau_base} fechamento={dia.saldo_itau} />
+                          <BancoMiniCard label="Infinite" icon="💳" abertura={dia.saldo_inf_base} fechamento={dia.saldo_inf} />
+                          <BancoMiniCard label="Mercado Pago" icon="💚" abertura={dia.saldo_mp_base} fechamento={dia.saldo_mp} />
+                          <BancoMiniCard label="Especie" icon="💵" abertura={dia.saldo_esp_base} fechamento={dia.saldo_esp} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -666,25 +716,38 @@ function TabDiario({ data }: { data: AuditoriaData }) {
 
         {/* Totalizador */}
         <div className="px-5 py-4 border-t-2 border-[#1D1D1F] bg-[#FAFAFA]">
-          <div className="flex items-center text-sm font-bold">
-            <span className="flex-1 text-[#1D1D1F]">TOTAL DO MES</span>
-            <span className="w-[80px] text-right text-[#1D1D1F]">{data.vendas.total}</span>
-            <span className="w-[120px] text-right font-mono text-[#1D1D1F]">
-              {money(data.vendas.faturamento)}
-            </span>
-            <span className="w-[110px] text-right font-mono text-green-700">
-              {money(data.vendas.lucro)}
-            </span>
-            <span className="w-[110px] text-right font-mono text-red-600">
-              {money(data.gastos.total)}
-            </span>
-            <span className="w-[130px] text-right font-mono text-[#1D1D1F]">
-              {money(data.saldo_atual.total)}
-            </span>
-            <span className="w-[80px]" />
-          </div>
+          <table className="w-full text-sm font-bold">
+            <tbody>
+              <tr>
+                <td className="px-3 py-2 text-[#1D1D1F] whitespace-nowrap">TOTAL DO MES</td>
+                <td className="px-3 py-2 text-right text-[#1D1D1F] whitespace-nowrap">{data.vendas.total}</td>
+                <td className="px-3 py-2 text-right font-mono text-[#1D1D1F] whitespace-nowrap">{money(data.vendas.faturamento)}</td>
+                <td className="px-3 py-2 text-right font-mono text-green-700 whitespace-nowrap">{money(data.vendas.lucro)}</td>
+                <td className="px-3 py-2 text-right font-mono text-blue-700 whitespace-nowrap">{money(data.dias.reduce((s, d) => s + (d.vendas_liquido || 0), 0))}</td>
+                <td className="px-3 py-2 text-right font-mono text-red-600 whitespace-nowrap">{money(data.gastos.total)}</td>
+                <td className="px-3 py-2 text-right font-mono text-[#1D1D1F] whitespace-nowrap">{money(data.saldo_atual.total)}</td>
+                <td className="px-3 py-2" />
+                <td className="px-3 py-2" />
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Modal de conferencia */}
+      {confDia && (
+        <ConferenciaModal
+          data={confDia}
+          conferAtual={conferMap[confDia]}
+          faturamentoSistema={data.dias.find(d => d.data === confDia)?.vendas_faturamento || 0}
+          liquidoSistema={data.dias.find(d => d.data === confDia)?.vendas_liquido || 0}
+          gastosSistema={data.dias.find(d => d.data === confDia)?.gastos || 0}
+          password={password}
+          userNome={userNome}
+          onClose={() => setConfDia(null)}
+          onSaved={() => { refreshConferencia(); setConfDia(null); }}
+        />
+      )}
 
       {/* Gastos por categoria */}
       <div className="bg-white rounded-2xl border border-[#D2D2D7] shadow-sm overflow-hidden">
@@ -981,6 +1044,235 @@ function BancoMiniCard({
             {dif > 0 ? "+" : ""}
             {money(dif)}
           </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ====================================================================
+// Modal: Conferir Recebimentos do dia
+// ====================================================================
+
+interface ConferenciaModalProps {
+  data: string;
+  conferAtual: ConferenciaDia | undefined;
+  faturamentoSistema: number;
+  liquidoSistema: number;
+  gastosSistema: number;
+  password: string;
+  userNome: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function ConferenciaModal({
+  data,
+  conferAtual,
+  faturamentoSistema,
+  liquidoSistema,
+  gastosSistema,
+  password,
+  userNome,
+  onClose,
+  onSaved,
+}: ConferenciaModalProps) {
+  const [form, setForm] = useState({
+    itau_pix: conferAtual?.itau_pix || 0,
+    itau_credito: conferAtual?.itau_credito || 0,
+    infinite_pix: conferAtual?.infinite_pix || 0,
+    infinite_credito: conferAtual?.infinite_credito || 0,
+    infinite_debito: conferAtual?.infinite_debito || 0,
+    mp_credito: conferAtual?.mp_credito || 0,
+    mp_pix: conferAtual?.mp_pix || 0,
+    especie: conferAtual?.especie || 0,
+    observacao: conferAtual?.observacao || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const parseNum = (s: string): number => {
+    const n = parseFloat(s.replace(/\./g, "").replace(",", "."));
+    return isFinite(n) ? n : 0;
+  };
+
+  // Total manual: soma tudo positivo. Especie negativa = deposito interno, ignora.
+  const especieEfetiva = form.especie > 0 ? form.especie : 0;
+  const totalManual =
+    form.itau_pix + form.itau_credito +
+    form.infinite_pix + form.infinite_credito + form.infinite_debito +
+    form.mp_credito + form.mp_pix +
+    especieEfetiva;
+
+  const diferencaVsFat = totalManual - faturamentoSistema;
+  const diferencaVsLiq = totalManual - liquidoSistema;
+  const lucroReal = totalManual - gastosSistema;
+
+  const dataFormatada = new Date(data + "T12:00:00").toLocaleDateString("pt-BR", {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+  });
+
+  const salvar = async () => {
+    setSaving(true);
+    setErro(null);
+    try {
+      const res = await fetch("/api/admin/conferencia-diaria", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": password,
+          "x-admin-user": encodeURIComponent(userNome),
+        },
+        body: JSON.stringify({ data, ...form }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setErro(j.error || "Erro ao salvar"); setSaving(false); return; }
+      onSaved();
+    } catch (e) {
+      setErro(String(e));
+      setSaving(false);
+    }
+  };
+
+  const Input = ({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) => (
+    <div className="flex items-center gap-2">
+      <label className="text-xs text-[#86868B] flex-1">{label}</label>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-[#86868B]">R$</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value === 0 ? "" : value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          onChange={(e) => onChange(parseNum(e.target.value))}
+          placeholder="0,00"
+          className="w-28 px-2 py-1 rounded border border-[#D2D2D7] text-right font-mono text-sm focus:outline-none focus:border-[#E8740E]"
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-[#E5E5EA] flex items-center justify-between sticky top-0 bg-white">
+          <div>
+            <h2 className="text-lg font-bold text-[#1D1D1F]">📋 Conferir Recebimentos</h2>
+            <p className="text-xs text-[#86868B] mt-0.5 capitalize">{dataFormatada}</p>
+          </div>
+          <button onClick={onClose} className="text-2xl text-[#86868B] hover:text-[#1D1D1F]">×</button>
+        </div>
+
+        {/* Grupos de bancos */}
+        <div className="p-6 space-y-5">
+          {/* ITAU */}
+          <div className="bg-[#F5F5F7] rounded-xl p-4">
+            <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 ITAÚ</h3>
+            <div className="space-y-2">
+              <Input label="Pix" value={form.itau_pix} onChange={(v) => setForm({ ...form, itau_pix: v })} />
+              <Input label="Crédito" value={form.itau_credito} onChange={(v) => setForm({ ...form, itau_credito: v })} />
+            </div>
+          </div>
+
+          {/* INFINITEPAY */}
+          <div className="bg-[#F5F5F7] rounded-xl p-4">
+            <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 INFINITEPAY</h3>
+            <div className="space-y-2">
+              <Input label="Pix" value={form.infinite_pix} onChange={(v) => setForm({ ...form, infinite_pix: v })} />
+              <Input label="Crédito" value={form.infinite_credito} onChange={(v) => setForm({ ...form, infinite_credito: v })} />
+              <Input label="Débito" value={form.infinite_debito} onChange={(v) => setForm({ ...form, infinite_debito: v })} />
+            </div>
+          </div>
+
+          {/* MERCADO PAGO */}
+          <div className="bg-[#F5F5F7] rounded-xl p-4">
+            <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 MERCADO PAGO</h3>
+            <div className="space-y-2">
+              <Input label="Crédito (link)" value={form.mp_credito} onChange={(v) => setForm({ ...form, mp_credito: v })} />
+              <Input label="Pix" value={form.mp_pix} onChange={(v) => setForm({ ...form, mp_pix: v })} />
+            </div>
+          </div>
+
+          {/* ESPECIE */}
+          <div className="bg-[#F5F5F7] rounded-xl p-4">
+            <h3 className="text-sm font-bold text-[#1D1D1F] mb-1">💵 ESPÉCIE</h3>
+            <p className="text-[10px] text-[#86868B] mb-3">Negativos = depósito interno, ignorados no total</p>
+            <Input label="Dinheiro" value={form.especie} onChange={(v) => setForm({ ...form, especie: v })} />
+          </div>
+
+          {/* Observacao */}
+          <div>
+            <label className="text-xs text-[#86868B] block mb-1">Observação (opcional)</label>
+            <textarea
+              value={form.observacao}
+              onChange={(e) => setForm({ ...form, observacao: e.target.value })}
+              rows={2}
+              className="w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+              placeholder="Observações deste dia..."
+            />
+          </div>
+
+          {/* Resumo comparativo */}
+          <div className="bg-gradient-to-br from-[#F5F5F7] to-white border border-[#D2D2D7] rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[#86868B]">TOTAL MANUAL</span>
+              <span className="font-mono font-bold text-[#1D1D1F]">{money(totalManual)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[#86868B]">Sistema (faturamento)</span>
+              <span className="font-mono text-[#1D1D1F]">{money(faturamentoSistema)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[#86868B]">Sistema (líquido c/ taxas)</span>
+              <span className="font-mono text-blue-700">{money(liquidoSistema)}</span>
+            </div>
+            <div className="border-t border-[#E5E5EA] pt-2 mt-2 space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#86868B]">Diferença vs Faturamento</span>
+                <span className={`font-mono font-bold ${Math.abs(diferencaVsFat) < 1 ? "text-green-600" : "text-red-600"}`}>
+                  {diferencaVsFat >= 0 ? "+" : ""}{money(diferencaVsFat)} {Math.abs(diferencaVsFat) < 1 ? "✅" : "❌"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#86868B]">Diferença vs Líquido</span>
+                <span className={`font-mono ${Math.abs(diferencaVsLiq) < 50 ? "text-green-600" : "text-orange-600"}`}>
+                  {diferencaVsLiq >= 0 ? "+" : ""}{money(diferencaVsLiq)}
+                </span>
+              </div>
+            </div>
+            <div className="border-t border-[#E5E5EA] pt-2 mt-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#86868B]">Gastos do dia</span>
+                <span className="font-mono text-red-600">{money(gastosSistema)}</span>
+              </div>
+              <div className="flex items-center justify-between text-base mt-1">
+                <span className="font-bold text-[#1D1D1F]">📉 LUCRO REAL</span>
+                <span className={`font-mono font-bold ${lucroReal >= 0 ? "text-green-700" : "text-red-600"}`}>
+                  {money(lucroReal)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {erro && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{erro}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-[#E5E5EA] flex items-center justify-end gap-2 sticky bottom-0 bg-white">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium"
+            disabled={saving}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={salvar}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm bg-[#E8740E] text-white font-bold hover:bg-[#D06A0D] disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "💾 Salvar"}
+          </button>
         </div>
       </div>
     </div>
