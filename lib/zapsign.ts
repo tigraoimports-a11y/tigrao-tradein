@@ -62,6 +62,9 @@ export async function criarDocumentoEAssinar(params: {
     lang: "pt-br",
     disable_signer_emails: params.signatario.send_automatic_whatsapp ?? true,
     brand_primary_color: "#E8740E",
+    // Remetente que aparece na mensagem ("TIGRAO IMPORTS via ZapSign"),
+    // no lugar do email tigraoimports@gmail.com.
+    brand_name: "TIGRÃO IMPORTS",
     signers: [
       {
         name: params.signatario.name,
