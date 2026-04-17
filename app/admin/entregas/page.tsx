@@ -116,35 +116,57 @@ function formatPagamentoDisplay(
   const fp = formaPagamento.trim();
   const total = Number(valorTotal || valor || 0);
   const entrada = Number(entradaCol || 0);
-  // Label da entrada (Pix / Espécie / Transferência)
+  // Detecta entrada Pix/Especie/Transferencia e o banco (se tiver)
+  // Formatos suportados:
+  //   'Entrada R$ X via Pix (ITAU) + 10x no Cartão'  <- novo (link-compras)
+  //   'Entrada PIX R$ X + 10x no Cartão'             <- antigo (vendas admin)
+  //   'Entrada Espécie R$ X + ...'
   let labelEntrada = "Entrada";
-  if (/\+\s*pix/i.test(fp)) labelEntrada = "Entrada PIX";
-  else if (/\+\s*esp[eé]cie/i.test(fp)) labelEntrada = "Entrada Espécie";
-  else if (/\+\s*transfer/i.test(fp)) labelEntrada = "Entrada Transferência";
+  let bancoEntrada: string | null = null;
+  const matchPixBanco = fp.match(/via\s+Pix\s*\(([^)]+)\)/i);
+  if (matchPixBanco) {
+    labelEntrada = "Entrada PIX";
+    bancoEntrada = matchPixBanco[1].trim().toUpperCase();
+  } else if (/via\s+Pix/i.test(fp) || /\+\s*pix/i.test(fp) || /Entrada\s+PIX/i.test(fp)) {
+    labelEntrada = "Entrada PIX";
+  } else if (/\+\s*esp[eé]cie/i.test(fp) || /via\s+Dinheiro/i.test(fp) || /Entrada\s+Esp[eé]cie/i.test(fp)) {
+    labelEntrada = "Entrada Espécie";
+  } else if (/\+\s*transfer/i.test(fp)) {
+    labelEntrada = "Entrada Transferência";
+  }
   // Extrai cartões "Nx no Cartão (MAQ)" — 1 ou 2 ocorrências
-  const cartaoRegex = /(\d+)x\s+no\s+(?:Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
-  const cartoes: { parcelas: number; maquina: string }[] = [];
+  const cartaoRegex = /(\d+)x\s+no\s+(Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
+  const cartoes: { parcelas: number; maquina: string; tipo: "Cartão" | "Link" }[] = [];
   let m;
   while ((m = cartaoRegex.exec(fp)) !== null) {
-    cartoes.push({ parcelas: parseInt(m[1]), maquina: (m[2] || "").trim() });
+    const tipo = /link/i.test(m[2]) ? "Link" : "Cartão" as const;
+    let maq = (m[3] || "").trim();
+    // Se eh Link, a maquina e Mercado Pago (implicito) — adiciona pra deixar claro no motoboy
+    if (!maq && tipo === "Link") maq = "Mercado Pago";
+    cartoes.push({ parcelas: parseInt(m[1]), maquina: maq, tipo });
   }
   const baseCartoes = Math.max(0, total - entrada);
   const linhas: string[] = [fp];
-  if (entrada > 0) linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}`);
+  if (entrada > 0) {
+    const bancoSuffix = bancoEntrada ? ` — ${bancoEntrada}` : "";
+    linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}${bancoSuffix}`);
+  }
   if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
     const c = cartoes[0];
     const vParc = baseCartoes / c.parcelas;
+    const maqSuffix = c.maquina ? ` — ${c.maquina}` : "";
     if (c.parcelas > 1) {
-      linhas.push(`   • ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(baseCartoes)}`);
+      linhas.push(`   • ${c.parcelas}x de ${fmtBRL(vParc)} — total ${fmtBRL(baseCartoes)}${maqSuffix}`);
     } else {
-      linhas.push(`   • Cartão${c.maquina ? ` (${c.maquina})` : ""}: ${fmtBRL(baseCartoes)}`);
+      linhas.push(`   • ${c.tipo}: ${fmtBRL(baseCartoes)}${maqSuffix}`);
     }
   } else if (cartoes.length === 2) {
     // Sem granularidade de valores nos dois cartões — aproxima 50/50
     const metade = baseCartoes / 2;
     cartoes.forEach((c, i) => {
       const vParc = c.parcelas > 0 ? metade / c.parcelas : 0;
-      linhas.push(`   • Cartão ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(metade)}`);
+      const maqSuffix = c.maquina ? ` — ${c.maquina}` : "";
+      linhas.push(`   • ${c.tipo} ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)} — total ${fmtBRL(metade)}${maqSuffix}`);
     });
   } else if (entrada === 0 && valor != null) {
     linhas.push(`   • ${fmtBRL(Number(valor))}`);

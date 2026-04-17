@@ -15,7 +15,7 @@ function getUser(request: Request) {
 export async function POST(request: Request) {
   if (!auth(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json();
-  const { venda_id, data_entrega, horario, entregador, observacao } = body || {};
+  const { venda_id, data_entrega, horario, entregador, observacao, vendedor: vendedorOverride } = body || {};
   if (!venda_id || !data_entrega) {
     return NextResponse.json({ error: "venda_id e data_entrega obrigatórios" }, { status: 400 });
   }
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
         if (comp > 0) return comp + totalEntrada;
         return Number(venda.preco_vendido || 0) || null;
       })(),
-      vendedor: venda.vendedor || null,
+      vendedor: (vendedorOverride && String(vendedorOverride).trim()) || venda.vendedor || null,
     })
     .select()
     .single();
