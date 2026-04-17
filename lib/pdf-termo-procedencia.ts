@@ -152,19 +152,12 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
     const sigW = contentW * 0.45;
     const sigX1 = leftMargin + (contentW - sigW) / 2;
 
-    // Declarante
+    // Declarante — unica assinatura. O termo e uma declaracao unilateral do
+    // cliente, assinada digitalmente via ZapSign (SMS + selfie).
     doc.lineWidth(0.5).strokeColor("#333333")
       .moveTo(sigX1, y).lineTo(sigX1 + sigW, y).stroke();
     doc.fontSize(9).font("Helvetica").fillColor("#555555");
     doc.text("Assinatura do Declarante", sigX1, y + 5, { width: sigW, align: "center" });
-
-    y = doc.y + 40;
-
-    // Representante
-    doc.lineWidth(0.5).strokeColor("#333333")
-      .moveTo(sigX1, y).lineTo(sigX1 + sigW, y).stroke();
-    doc.fontSize(9).font("Helvetica").fillColor("#555555");
-    doc.text("Assinatura do Representante da Tigrão Imports LTDA", sigX1, y + 5, { width: sigW, align: "center" });
 
     doc.end();
   });
