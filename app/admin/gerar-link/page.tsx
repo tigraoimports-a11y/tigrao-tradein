@@ -1788,7 +1788,7 @@ export default function GerarLinkPage() {
                     return [...opcoes].map(n => <option key={n} value={n}>{n}</option>);
                   })()}
                 </select>
-                <p className="text-[10px] text-[#86868B] mt-1">Quem fecha a venda e recebe a comissão pela entrega</p>
+                <p className="text-[10px] text-[#86868B] mt-1">Vendedor responsável pelo contato com o cliente</p>
               </div>
               <div>
                 <label className="text-[11px] text-[#86868B] font-semibold">Observação (opcional)</label>
@@ -2027,7 +2027,7 @@ export default function GerarLinkPage() {
                   )}
                   {l.cliente_preencheu_em && !l.entrega_id && (
                     <button
-                      onClick={() => { setEncaminharLink(l); setEncaminharData(new Date().toISOString().slice(0, 10)); setEncaminharVendedor(l.vendedor || user?.nome || ""); }}
+                      onClick={() => { setEncaminharLink(l); setEncaminharData(new Date().toISOString().slice(0, 10)); setEncaminharVendedor("Bianca"); }}
                       className="text-xs px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 font-medium"
                     >
                       → Encaminhar entrega

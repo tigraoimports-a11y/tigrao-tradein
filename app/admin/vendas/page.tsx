@@ -6099,8 +6099,9 @@ function EncaminharEntregaModal({
 }) {
   // Data default: data_programada se houver, senao hoje
   const defaultData = venda.data_programada || new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-  // Vendedor default: o vendedor atual da venda, senao o usuario logado
-  const defaultVendedor = venda.vendedor || userNome;
+  // Vendedor default: Bianca (principal responsavel pelos formularios).
+  // Operador pode sobrescrever pelo select se for outra pessoa atendendo.
+  const defaultVendedor = "Bianca";
   const [dataEntrega, setDataEntrega] = useState(defaultData);
   const [horario, setHorario] = useState("");
   const [vendedor, setVendedor] = useState(defaultVendedor);
@@ -6184,7 +6185,7 @@ function EncaminharEntregaModal({
                 <option key={nome} value={nome}>{nome}</option>
               ))}
             </select>
-            <p className="text-[10px] text-[#86868B] mt-1">Quem fechou a venda / quem recebe a comissão</p>
+            <p className="text-[10px] text-[#86868B] mt-1">Vendedor responsável pelo contato com o cliente</p>
           </div>
 
           <div>
