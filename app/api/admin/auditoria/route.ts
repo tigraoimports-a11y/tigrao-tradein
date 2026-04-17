@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getTaxaAsync, calcularLiquido } from "@/lib/taxas";
 
 function auth(request: Request) {
   const pw = request.headers.get("x-admin-password");
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
     supabase
       .from("vendas")
       .select(
-        "preco_vendido, custo, lucro, is_brinde, status_pagamento, forma, banco, data"
+        "preco_vendido, custo, lucro, is_brinde, status_pagamento, forma, banco, bandeira, qnt_parcelas, valor_comprovante, entrada_pix, entrada_especie, credito_lojista_usado, data"
       )
       .gte("data", primeiroDia)
       .lte("data", ultimoDia),
@@ -124,14 +125,53 @@ export async function GET(request: Request) {
   );
 
   // Vendas por dia (pra cruzar com saldos)
-  const vendasPorDia: Record<string, { faturamento: number; custo: number; lucro: number; qtd: number }> = {};
-  for (const v of vendasValidas) {
+  // liquido = valor que efetivamente caiu em caixa/conta (descontadas taxas de cartao,
+  // e excluindo credito de lojista e valor de troca, que nao sao dinheiro que entra).
+  const vendasPorDia: Record<string, { faturamento: number; custo: number; lucro: number; qtd: number; liquido: number }> = {};
+
+  // Pre-calcula taxa de cada venda (paraleliza as chamadas async)
+  const taxaPorVenda = await Promise.all(
+    vendasValidas.map(async (v) => {
+      const compVal = Number(v.valor_comprovante) || 0;
+      if (compVal <= 0) return 0;
+      try {
+        return await getTaxaAsync(
+          String(v.banco || ""),
+          v.bandeira ? String(v.bandeira) : null,
+          Number(v.qnt_parcelas) || null,
+          String(v.forma || "")
+        );
+      } catch { return 0; }
+    })
+  );
+
+  for (let i = 0; i < vendasValidas.length; i++) {
+    const v = vendasValidas[i];
     const d = v.data;
-    if (!vendasPorDia[d]) vendasPorDia[d] = { faturamento: 0, custo: 0, lucro: 0, qtd: 0 };
-    vendasPorDia[d].faturamento += Number(v.preco_vendido) || 0;
+    if (!vendasPorDia[d]) vendasPorDia[d] = { faturamento: 0, custo: 0, lucro: 0, qtd: 0, liquido: 0 };
+
+    const preco = Number(v.preco_vendido) || 0;
+    const compVal = Number(v.valor_comprovante) || 0;
+    const entradaPix = Number(v.entrada_pix) || 0;
+    const entradaEspecie = Number(v.entrada_especie) || 0;
+    const credito = Number(v.credito_lojista_usado) || 0;
+    const taxa = taxaPorVenda[i];
+
+    // Parte em cartao descontada a taxa da maquininha
+    const liqCartao = compVal > 0 ? calcularLiquido(compVal, taxa) : 0;
+    // Soma de tudo que entrou em caixa (cartao liquido + PIX + dinheiro)
+    let liquidoVenda = liqCartao + entradaPix + entradaEspecie;
+    // Se nao tem cartao nem entrada, e forma e PIX/DINHEIRO: o resto do preco que
+    // nao foi credito de lojista cai em caixa.
+    if (liquidoVenda === 0 && (v.forma === "PIX" || v.forma === "DINHEIRO")) {
+      liquidoVenda = Math.max(0, preco - credito);
+    }
+
+    vendasPorDia[d].faturamento += preco;
     vendasPorDia[d].custo += Number(v.custo) || 0;
     vendasPorDia[d].lucro += Number(v.lucro) || 0;
     vendasPorDia[d].qtd += 1;
+    vendasPorDia[d].liquido += liquidoVenda;
   }
 
   // ---------- Processar gastos ----------
@@ -250,6 +290,7 @@ export async function GET(request: Request) {
     vendas_faturamento: number;
     vendas_custo: number;
     vendas_lucro: number;
+    vendas_liquido: number;
     vendas_qtd: number;
     gastos: number;
     saldo_itau_base: number;
@@ -273,12 +314,13 @@ export async function GET(request: Request) {
   ) {
     const iso = d.toISOString().slice(0, 10);
     const saldo = saldosDiarios.find((s) => s.data === iso);
-    const vd = vendasPorDia[iso] || { faturamento: 0, custo: 0, lucro: 0, qtd: 0 };
+    const vd = vendasPorDia[iso] || { faturamento: 0, custo: 0, lucro: 0, qtd: 0, liquido: 0 };
     diasDoMes.push({
       data: iso,
       vendas_faturamento: vd.faturamento,
       vendas_custo: vd.custo,
       vendas_lucro: vd.lucro,
+      vendas_liquido: vd.liquido,
       vendas_qtd: vd.qtd,
       gastos: gastosPorDia[iso] || 0,
       saldo_itau_base: Number(saldo?.itau_base) || 0,
