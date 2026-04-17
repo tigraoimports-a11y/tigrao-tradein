@@ -16,7 +16,7 @@ function getUser(request: Request) {
 export async function POST(request: Request) {
   if (!auth(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json();
-  const { link_id, data_entrega, horario, entregador, observacao } = body || {};
+  const { link_id, data_entrega, horario, entregador, observacao, vendedor: vendedorOverride } = body || {};
   if (!link_id || !data_entrega) {
     return NextResponse.json({ error: "link_id e data_entrega obrigatórios" }, { status: 400 });
   }
@@ -130,30 +130,34 @@ export async function POST(request: Request) {
   obsParts.push(`Encaminhada do link ${link.short_code}`);
   const observacaoFinal = obsParts.filter(Boolean).join("\n");
 
-  // Vendedor da entrega: se quem esta encaminhando e um vendedor com
-  // recebe_links=true (ex: Bianca triando links da Paloma), ele vira o vendedor
-  // da entrega. Caso contrario (admin Nicolas, ou vendedor sem recebe_links),
-  // mantem o vendedor original do link.
+  // Vendedor da entrega:
+  //  1. Se operador escolheu explicitamente no modal (vendedorOverride) → usa esse
+  //  2. Senao, se quem esta encaminhando tem recebe_links=true (Bianca/André) → usa ele
+  //  3. Fallback: mantem o vendedor original do link
   let vendedorFinal: string | null = link.vendedor || null;
-  try {
-    const userLogado = getUser(request);
-    if (userLogado && userLogado !== "Sistema") {
-      const { data: cfg } = await supabase
-        .from("tradein_config")
-        .select("labels")
-        .limit(1)
-        .maybeSingle();
-      const labels = (cfg?.labels || {}) as Record<string, unknown>;
-      const recebeMap = (labels._whatsapp_vendedores_recebe_links || {}) as Record<string, boolean>;
-      const norm = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const userKey = norm(userLogado);
-      // Procura match case-insensitive e sem acento
-      const recebe = Object.entries(recebeMap).some(([nome, flag]) => norm(nome) === userKey && flag === true);
-      if (recebe) {
-        vendedorFinal = userLogado;
+  if (vendedorOverride && String(vendedorOverride).trim()) {
+    vendedorFinal = String(vendedorOverride).trim();
+  } else {
+    try {
+      const userLogado = getUser(request);
+      if (userLogado && userLogado !== "Sistema") {
+        const { data: cfg } = await supabase
+          .from("tradein_config")
+          .select("labels")
+          .limit(1)
+          .maybeSingle();
+        const labels = (cfg?.labels || {}) as Record<string, unknown>;
+        const recebeMap = (labels._whatsapp_vendedores_recebe_links || {}) as Record<string, boolean>;
+        const norm = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const userKey = norm(userLogado);
+        // Procura match case-insensitive e sem acento
+        const recebe = Object.entries(recebeMap).some(([nome, flag]) => norm(nome) === userKey && flag === true);
+        if (recebe) {
+          vendedorFinal = userLogado;
+        }
       }
-    }
-  } catch { /* silent: fallback ja e link.vendedor */ }
+    } catch { /* silent: fallback ja e link.vendedor */ }
+  }
 
   const { data: entrega, error: e2 } = await supabase
     .from("entregas")
@@ -176,15 +180,13 @@ export async function POST(request: Request) {
         const base = isCartao && parcelasNum > 0
           ? `${parcelasNum}x no ${forma === "Link de Pagamento" ? "Link" : "Cartão"}`
           : forma;
-        // Se tem entrada (Pix/Especie geralmente), mostra separadamente — motoboy
-        // e o resumo da entrega precisam ver a quebra (ex: "Entrada R$ 500 via Pix + 10x no Cartão")
+        // Se tem entrada (Pix/Especie), mostra separadamente pro motoboy saber
+        // a quebra (ex: "Entrada R$ 500 via Pix + 10x no Cartão"). Banco do Pix
+        // nao interessa no texto do motoboy — e info interna.
         if (entradaVal > 0) {
-          const bancoEntrada = String(link.banco_pix || preench.banco_pix || "ITAU").toUpperCase();
-          // Detecta se entrada eh Pix (default) ou dinheiro. Nos links de compra
-          // a entrada tipicamente e PIX, mas conferimos formaPagamento do preench.
           const formaEntrada = String(preench.forma_entrada || "PIX").toUpperCase();
           const labelForma = formaEntrada.includes("ESPEC") || formaEntrada.includes("DINHEIRO") ? "Dinheiro" : "Pix";
-          return `Entrada R$ ${entradaVal.toLocaleString("pt-BR")} via ${labelForma}${bancoEntrada && labelForma === "Pix" ? ` (${bancoEntrada})` : ""} + ${base}`;
+          return `Entrada R$ ${entradaVal.toLocaleString("pt-BR")} via ${labelForma} + ${base}`;
         }
         return base;
       })(),

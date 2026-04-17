@@ -116,18 +116,14 @@ function formatPagamentoDisplay(
   const fp = formaPagamento.trim();
   const total = Number(valorTotal || valor || 0);
   const entrada = Number(entradaCol || 0);
-  // Detecta entrada Pix/Especie/Transferencia e o banco (se tiver)
+  // Detecta entrada Pix/Especie/Transferencia
   // Formatos suportados:
-  //   'Entrada R$ X via Pix (ITAU) + 10x no Cartão'  <- novo (link-compras)
-  //   'Entrada PIX R$ X + 10x no Cartão'             <- antigo (vendas admin)
+  //   'Entrada R$ X via Pix + 10x no Cartão'        <- novo (link-compras)
+  //   'Entrada PIX R$ X + 10x no Cartão'            <- antigo (vendas admin)
   //   'Entrada Espécie R$ X + ...'
+  // Banco do Pix nao interessa no texto do motoboy — info interna.
   let labelEntrada = "Entrada";
-  let bancoEntrada: string | null = null;
-  const matchPixBanco = fp.match(/via\s+Pix\s*\(([^)]+)\)/i);
-  if (matchPixBanco) {
-    labelEntrada = "Entrada PIX";
-    bancoEntrada = matchPixBanco[1].trim().toUpperCase();
-  } else if (/via\s+Pix/i.test(fp) || /\+\s*pix/i.test(fp) || /Entrada\s+PIX/i.test(fp)) {
+  if (/via\s+Pix/i.test(fp) || /\+\s*pix/i.test(fp) || /Entrada\s+PIX/i.test(fp)) {
     labelEntrada = "Entrada PIX";
   } else if (/\+\s*esp[eé]cie/i.test(fp) || /via\s+Dinheiro/i.test(fp) || /Entrada\s+Esp[eé]cie/i.test(fp)) {
     labelEntrada = "Entrada Espécie";
@@ -148,8 +144,7 @@ function formatPagamentoDisplay(
   const baseCartoes = Math.max(0, total - entrada);
   const linhas: string[] = [fp];
   if (entrada > 0) {
-    const bancoSuffix = bancoEntrada ? ` — ${bancoEntrada}` : "";
-    linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}${bancoSuffix}`);
+    linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}`);
   }
   if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
     const c = cartoes[0];
