@@ -89,19 +89,23 @@ export default function BalancoSeminovosSection({
 
   const toggleGrupoInteiro = (g: BalancoGrupo) => {
     const next = new Set(idsSelecionados);
-    const todasMarcadas = g.unidades.every(u => next.has(u.id));
+    // Ignora unidades sem custo_compra no toggle do grupo
+    const elegiveis = g.unidades.filter(u => Number(u.custo_compra) > 0);
+    const todasMarcadas = elegiveis.length > 0 && elegiveis.every(u => next.has(u.id));
     if (todasMarcadas) {
-      g.unidades.forEach(u => next.delete(u.id));
+      elegiveis.forEach(u => next.delete(u.id));
     } else {
-      g.unidades.forEach(u => next.add(u.id));
+      elegiveis.forEach(u => next.add(u.id));
     }
     setIdsSelecionados(next);
   };
 
-  // Calcula preview do novo custo medio das unidades selecionadas
+  // Calcula preview do novo custo medio das unidades selecionadas.
+  // Unidades sem custo_compra (cc<=0) nao entram no calculo — espelha o backend.
   const unidadesSelecionadas = grupos.flatMap(g => g.unidades).filter(u => idsSelecionados.has(u.id));
-  const totalQntSel = unidadesSelecionadas.reduce((s, u) => s + u.qnt, 0);
-  const totalCustoSel = unidadesSelecionadas.reduce((s, u) => s + u.qnt * u.custo_compra, 0);
+  const unidadesValidas = unidadesSelecionadas.filter(u => Number(u.custo_compra) > 0 && Number(u.qnt) > 0);
+  const totalQntSel = unidadesValidas.reduce((s, u) => s + u.qnt, 0);
+  const totalCustoSel = unidadesValidas.reduce((s, u) => s + u.qnt * u.custo_compra, 0);
   const novoCustoMedio = totalQntSel > 0 ? Math.round((totalCustoSel / totalQntSel) * 100) / 100 : 0;
 
   const abrirConfirmacao = () => {
@@ -245,19 +249,22 @@ export default function BalancoSeminovosSection({
                               {g.unidades.map((u) => {
                                 const selecionada = idsSelecionados.has(u.id);
                                 const grade = extractGrade(u.observacao);
+                                const semCusto = !(Number(u.custo_compra) > 0);
                                 return (
                                   <tr
                                     key={u.id}
-                                    className={`border-b border-[#F5F5F7] hover:bg-white cursor-pointer ${selecionada ? "bg-orange-50" : ""}`}
-                                    onClick={() => toggleUnidade(u.id)}
+                                    className={`border-b border-[#F5F5F7] ${semCusto ? "opacity-60 bg-yellow-50" : "hover:bg-white cursor-pointer"} ${selecionada ? "bg-orange-50" : ""}`}
+                                    onClick={() => { if (!semCusto) toggleUnidade(u.id); }}
+                                    title={semCusto ? "Sem custo_compra — não pode entrar no cálculo de média" : ""}
                                   >
                                     <td className="px-3 py-2">
                                       <input
                                         type="checkbox"
                                         checked={selecionada}
+                                        disabled={semCusto}
                                         onChange={() => toggleUnidade(u.id)}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="w-4 h-4 accent-[#E8740E]"
+                                        className="w-4 h-4 accent-[#E8740E] disabled:cursor-not-allowed"
                                       />
                                     </td>
                                     <td className="px-3 py-2 font-mono text-[11px] text-[#1D1D1F]">
@@ -275,7 +282,9 @@ export default function BalancoSeminovosSection({
                                       ) : <span className="text-[#86868B]">—</span>}
                                     </td>
                                     <td className="px-3 py-2 text-right font-mono text-[#1D1D1F]">{u.qnt}</td>
-                                    <td className="px-3 py-2 text-right font-mono text-[#1D1D1F]">{fmt(u.custo_compra)}</td>
+                                    <td className="px-3 py-2 text-right font-mono text-[#1D1D1F]">
+                                      {semCusto ? <span className="text-yellow-700 text-[11px]">sem custo</span> : fmt(u.custo_compra)}
+                                    </td>
                                     <td className="px-3 py-2 text-right font-mono text-[#86868B]">{fmt(u.custo_unitario)}</td>
                                   </tr>
                                 );
