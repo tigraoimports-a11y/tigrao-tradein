@@ -354,6 +354,42 @@ function CompraForm() {
   const [trocaCond, setTrocaCond] = useState(trocaCondParam);
   const [descTroca, setDescTroca] = useState("");
 
+  // Prints dos aparelhos da troca (N° Série + IMEI da tela Ajustes > Sobre)
+  type PrintTipo = "serial" | "imei";
+  type PrintSlot = { tipo: PrintTipo; aparelho: 1 | 2; label: string };
+  const [printsUrls, setPrintsUrls] = useState<Record<string, string>>({});
+  const [printsUploading, setPrintsUploading] = useState<Record<string, boolean>>({});
+  const [printsErro, setPrintsErro] = useState<Record<string, string>>({});
+  const temSegundoAparelho = !!trocaProduto2Param;
+
+  async function uploadPrint(slot: PrintSlot, file: File) {
+    if (!shortCode) {
+      setPrintsErro((p) => ({ ...p, [`${slot.tipo}${slot.aparelho}`]: "Link de compra inválido" }));
+      return;
+    }
+    const key = `${slot.tipo}${slot.aparelho}`;
+    setPrintsUploading((p) => ({ ...p, [key]: true }));
+    setPrintsErro((p) => ({ ...p, [key]: "" }));
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("short_code", shortCode);
+      fd.append("tipo", slot.tipo);
+      fd.append("aparelho", String(slot.aparelho));
+      const res = await fetch("/api/link-compras/upload-print", { method: "POST", body: fd });
+      const json = await res.json();
+      if (json.ok) {
+        setPrintsUrls((p) => ({ ...p, [key]: json.url }));
+      } else {
+        setPrintsErro((p) => ({ ...p, [key]: json.error || "Falha no upload" }));
+      }
+    } catch {
+      setPrintsErro((p) => ({ ...p, [key]: "Erro ao enviar" }));
+    } finally {
+      setPrintsUploading((p) => ({ ...p, [key]: false }));
+    }
+  }
+
   // Honeypot anti-bot: campo oculto via CSS que só bots preenchem.
   // Se vier com valor no submit, o backend descarta a submissão (200 fake).
   const [honeypot, setHoneypot] = useState("");
@@ -422,6 +458,18 @@ function CompraForm() {
     if (formaPagamento.includes("Cartao") && !parcelas && !pagamentoPagoParam) {
       alert("Selecione o numero de parcelas antes de enviar.");
       return;
+    }
+
+    // Valida prints do aparelho na troca (obrigatorios quando ha troca + link de compra)
+    if (temTroca && shortCode) {
+      if (!printsUrls.serial1 || !printsUrls.imei1) {
+        alert("Envie os prints do Nº de Série e IMEI do seu aparelho (Ajustes > Geral > Sobre).");
+        return;
+      }
+      if (temSegundoAparelho && (!printsUrls.serial2 || !printsUrls.imei2)) {
+        alert("Envie os prints do Nº de Série e IMEI do segundo aparelho também.");
+        return;
+      }
     }
 
     // Janela de agendamento: rejeita datas fora de [min, max] e domingos.
@@ -1334,6 +1382,67 @@ function CompraForm() {
                   <textarea required value={descTroca} onChange={(e) => setDescTroca(e.target.value)}
                     placeholder="Ex: iPhone 15 Pro Max 256GB, bateria 90%, sem marcas de uso" rows={3}
                     className={`${inputCls} resize-none`} />
+                </div>
+              )}
+
+              {/* Prints dos aparelhos da troca — necessarios pro Termo de Procedencia */}
+              {temTroca && shortCode && (
+                <div className="mt-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                  <p className="text-sm font-semibold text-[#1D1D1F] mb-1">📸 Prints do seu aparelho (obrigatório)</p>
+                  <p className="text-xs text-[#6E6E73] mb-3">
+                    No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong> e tire 2 prints:
+                    um mostrando o <strong>Nº de Série</strong> e outro mostrando o <strong>IMEI</strong>.
+                    Isso agiliza a entrega e garante que os dados do aparelho fiquem corretos no contrato.
+                  </p>
+
+                  {([
+                    { tipo: "serial", aparelho: 1, label: "Nº de Série (aparelho 1)" },
+                    { tipo: "imei", aparelho: 1, label: "IMEI (aparelho 1)" },
+                    ...(temSegundoAparelho ? [
+                      { tipo: "serial", aparelho: 2, label: "Nº de Série (aparelho 2)" },
+                      { tipo: "imei", aparelho: 2, label: "IMEI (aparelho 2)" },
+                    ] : []),
+                  ] as PrintSlot[]).map((slot) => {
+                    const key = `${slot.tipo}${slot.aparelho}`;
+                    const url = printsUrls[key];
+                    const uploading = printsUploading[key];
+                    const erro = printsErro[key];
+                    return (
+                      <div key={key} className="mb-3 last:mb-0">
+                        <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">{slot.label} *</label>
+                        {url ? (
+                          <div className="flex items-center gap-2">
+                            <img src={url} alt={slot.label} className="w-14 h-14 rounded-lg object-cover border border-[#D2D2D7]" />
+                            <span className="text-xs text-green-600 font-semibold">✓ Enviado</span>
+                            <button
+                              type="button"
+                              onClick={() => setPrintsUrls((p) => { const n = { ...p }; delete n[key]; return n; })}
+                              className="text-xs text-red-600 hover:underline ml-auto"
+                            >
+                              Trocar
+                            </button>
+                          </div>
+                        ) : (
+                          <label className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${uploading ? "border-[#D2D2D7] bg-[#F5F5F7]" : "border-[#E8740E]/50 bg-white hover:bg-[#FFF5EB]"}`}>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="sr-only"
+                              disabled={uploading}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) uploadPrint(slot, f);
+                              }}
+                            />
+                            <span className="text-sm text-[#E8740E] font-medium">
+                              {uploading ? "⏳ Enviando..." : "📤 Selecionar print"}
+                            </span>
+                          </label>
+                        )}
+                        {erro && <p className="text-xs text-red-600 mt-1">{erro}</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

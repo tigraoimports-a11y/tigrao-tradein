@@ -183,6 +183,10 @@ export default function AdminPage() {
     troca_valor2: number | null;
     troca_condicao2: string | null;
     troca_cor2: string | null;
+    troca_print_serial_url: string | null;
+    troca_print_imei_url: string | null;
+    troca_print_serial2_url: string | null;
+    troca_print_imei2_url: string | null;
     simulacao_id: string | null;
     entrega_id: string | null;
     observacao: string | null;
@@ -910,6 +914,39 @@ export default function AdminPage() {
                       {(trocaVal + trocaVal2) > 0 && trocaNome2 && (
                         <div className="border-t border-purple-300 pt-1.5 mt-1">
                           <Row label="Total Troca" value={`R$ ${(trocaVal + trocaVal2).toLocaleString("pt-BR")}`} color="text-purple-800 font-bold" />
+                        </div>
+                      )}
+
+                      {/* Prints dos aparelhos (Nº Série + IMEI) — tela Ajustes > Sobre do iPhone */}
+                      {(h.troca_print_serial_url || h.troca_print_imei_url || h.troca_print_serial2_url || h.troca_print_imei2_url) && (
+                        <div className="border-t border-purple-300 pt-2 mt-2">
+                          <p className="text-[10px] font-bold uppercase text-purple-700 mb-2">📸 Prints enviados pelo cliente</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {h.troca_print_serial_url && (
+                              <a href={h.troca_print_serial_url} target="_blank" rel="noopener noreferrer" className="block">
+                                <p className="text-[10px] text-purple-700 mb-0.5">Nº Série — Aparelho 1</p>
+                                <img src={h.troca_print_serial_url} alt="Serial 1" className="w-full rounded-lg border border-purple-300 hover:border-purple-500 object-cover max-h-40" />
+                              </a>
+                            )}
+                            {h.troca_print_imei_url && (
+                              <a href={h.troca_print_imei_url} target="_blank" rel="noopener noreferrer" className="block">
+                                <p className="text-[10px] text-purple-700 mb-0.5">IMEI — Aparelho 1</p>
+                                <img src={h.troca_print_imei_url} alt="IMEI 1" className="w-full rounded-lg border border-purple-300 hover:border-purple-500 object-cover max-h-40" />
+                              </a>
+                            )}
+                            {h.troca_print_serial2_url && (
+                              <a href={h.troca_print_serial2_url} target="_blank" rel="noopener noreferrer" className="block">
+                                <p className="text-[10px] text-purple-700 mb-0.5">Nº Série — Aparelho 2</p>
+                                <img src={h.troca_print_serial2_url} alt="Serial 2" className="w-full rounded-lg border border-purple-300 hover:border-purple-500 object-cover max-h-40" />
+                              </a>
+                            )}
+                            {h.troca_print_imei2_url && (
+                              <a href={h.troca_print_imei2_url} target="_blank" rel="noopener noreferrer" className="block">
+                                <p className="text-[10px] text-purple-700 mb-0.5">IMEI — Aparelho 2</p>
+                                <img src={h.troca_print_imei2_url} alt="IMEI 2" className="w-full rounded-lg border border-purple-300 hover:border-purple-500 object-cover max-h-40" />
+                              </a>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
