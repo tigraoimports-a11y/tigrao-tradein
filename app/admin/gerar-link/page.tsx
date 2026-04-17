@@ -581,6 +581,7 @@ export default function GerarLinkPage() {
   const [encaminharData, setEncaminharData] = useState("");
   const [encaminharHorario, setEncaminharHorario] = useState("");
   const [encaminharObs, setEncaminharObs] = useState("");
+  const [encaminharVendedor, setEncaminharVendedor] = useState("");
 
   function editarLink(l: LinkCompra) {
     reutilizarLink(l);
@@ -708,12 +709,13 @@ export default function GerarLinkPage() {
           data_entrega: encaminharData,
           horario: encaminharHorario || null,
           observacao: encaminharObs || null,
+          vendedor: encaminharVendedor || null,
         }),
       });
       const j = await res.json();
       if (!res.ok) { alert("Erro: " + (j.error || res.status)); return; }
       setEncaminharLink(null);
-      setEncaminharData(""); setEncaminharHorario(""); setEncaminharObs("");
+      setEncaminharData(""); setEncaminharHorario(""); setEncaminharObs(""); setEncaminharVendedor("");
       fetchHistorico();
       alert("✅ Entrega criada com sucesso!");
     } catch (e) { alert("Erro: " + String(e)); }
@@ -1770,10 +1772,29 @@ export default function GerarLinkPage() {
                 <input type="time" value={encaminharHorario} onChange={(e) => setEncaminharHorario(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
               </div>
               <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Vendedor responsável *</label>
+                <select
+                  value={encaminharVendedor}
+                  onChange={(e) => setEncaminharVendedor(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1"
+                >
+                  <option value="">— Selecionar vendedor —</option>
+                  {(() => {
+                    const opcoes = new Set<string>();
+                    if (encaminharLink?.vendedor) opcoes.add(encaminharLink.vendedor);
+                    for (const v of vendedoresList) {
+                      if (v.ativo !== false && v.nome) opcoes.add(v.nome);
+                    }
+                    return [...opcoes].map(n => <option key={n} value={n}>{n}</option>);
+                  })()}
+                </select>
+                <p className="text-[10px] text-[#86868B] mt-1">Vendedor responsável pelo contato com o cliente</p>
+              </div>
+              <div>
                 <label className="text-[11px] text-[#86868B] font-semibold">Observação (opcional)</label>
                 <textarea value={encaminharObs} onChange={(e) => setEncaminharObs(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
               </div>
-              <button onClick={encaminharParaEntrega} disabled={!encaminharData} className="w-full py-2.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600 disabled:opacity-50">
+              <button onClick={encaminharParaEntrega} disabled={!encaminharData || !encaminharVendedor} className="w-full py-2.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600 disabled:opacity-50">
                 Criar entrega
               </button>
             </div>
@@ -2006,7 +2027,7 @@ export default function GerarLinkPage() {
                   )}
                   {l.cliente_preencheu_em && !l.entrega_id && (
                     <button
-                      onClick={() => { setEncaminharLink(l); setEncaminharData(new Date().toISOString().slice(0, 10)); }}
+                      onClick={() => { setEncaminharLink(l); setEncaminharData(new Date().toISOString().slice(0, 10)); setEncaminharVendedor("Bianca"); }}
                       className="text-xs px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 font-medium"
                     >
                       → Encaminhar entrega

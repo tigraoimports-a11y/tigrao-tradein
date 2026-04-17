@@ -36,7 +36,12 @@ interface SimulacaoRow {
   cor_usado?: string | null;
   avaliacao_usado: number;
   diferenca: number;
-  status: "GOSTEI" | "SAIR";
+  status: "GOSTEI" | "SAIR" | "INVALIDO";
+  motivo_invalido?: string | null;
+  obs_invalido?: string | null;
+  respondido_wa?: boolean | null;
+  marcado_invalido_em?: string | null;
+  marcado_invalido_por?: string | null;
   forma_pagamento: string | null;
   condicao_linhas: string[] | null;
   // 2º aparelho na troca
@@ -125,15 +130,17 @@ export default function AdminPage() {
   const { password, user } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SimulacaoRow[] | null>(null);
-  const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR" | "PENDENTE">("todos");
+  const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR" | "INVALIDO" | "PENDENTE">("todos");
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [modalRow, setModalRow] = useState<SimulacaoRow | null>(null);
-  const [editingWa, setEditingWa] = useState<{ id: string; valor: string } | null>(null);
-  const [savingWa, setSavingWa] = useState(false);
+  // Modais de edicao (WhatsApp + Marcar invalido)
+  const [editWaRow, setEditWaRow] = useState<SimulacaoRow | null>(null);
+  const [invalidarRow, setInvalidarRow] = useState<SimulacaoRow | null>(null);
+  const [desfazerRow, setDesfazerRow] = useState<SimulacaoRow | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
@@ -483,6 +490,7 @@ export default function AdminPage() {
   const total = data.length;
   const gostei = data.filter((d) => d.status === "GOSTEI").length;
   const saiu = data.filter((d) => d.status === "SAIR").length;
+  const invalidos = data.filter((d) => d.status === "INVALIDO").length;
   const conversao = total > 0 ? Math.round((gostei / total) * 100) : 0;
   const ticketMedio = total > 0
     ? Math.round(data.reduce((acc, d) => acc + d.diferenca, 0) / total)
@@ -1370,7 +1378,7 @@ export default function AdminPage() {
           {/* Table header */}
           <div className="px-5 py-4 border-b border-[#D2D2D7] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
             <div className="flex gap-2 flex-wrap">
-              {(["todos", "GOSTEI", "SAIR", "PENDENTE"] as const).map((t) => (
+              {(["todos", "GOSTEI", "SAIR", "INVALIDO", "PENDENTE"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1380,6 +1388,8 @@ export default function AdminPage() {
                         ? "bg-green-100 text-green-700"
                         : t === "SAIR"
                         ? "bg-red-100 text-red-600"
+                        : t === "INVALIDO"
+                        ? "bg-gray-200 text-gray-700"
                         : t === "PENDENTE"
                         ? "bg-yellow-100 text-yellow-700"
                         : "bg-orange-100 text-[#E8740E]"
@@ -1392,6 +1402,8 @@ export default function AdminPage() {
                     ? `Fecharam (${gostei})`
                     : t === "SAIR"
                     ? `Saíram (${saiu})`
+                    : t === "INVALIDO"
+                    ? `Inválidos (${invalidos})`
                     : `Pendente (${pendente})`}
                 </button>
               ))}
@@ -1503,7 +1515,10 @@ export default function AdminPage() {
                   </tr>
                 ) : (
                   filtered.map((row) => (
-                    <tr key={row.id} onClick={() => { setModalRow(row); setModalParcelasVisiveis(null); setEditMode(false); }} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
+                    <tr key={row.id} onClick={() => { setModalRow(row); setModalParcelasVisiveis(null); setEditMode(false); }} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${
+                      selected.has(row.id) ? "bg-orange-50" :
+                      row.status === "INVALIDO" ? "bg-gray-100 opacity-60" : ""
+                    }`}>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -1557,80 +1572,17 @@ export default function AdminPage() {
                       <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
                       <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">{row.nome}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        {editingWa?.id === row.id ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              value={editingWa.valor}
-                              onChange={(e) => setEditingWa({ id: row.id, valor: e.target.value })}
-                              placeholder="(21) 9XXXX-XXXX"
-                              autoFocus
-                              className="px-2 py-1 rounded border border-[#E8740E] text-xs w-36 focus:outline-none"
-                              onKeyDown={async (e) => {
-                                if (e.key === "Escape") { setEditingWa(null); return; }
-                                if (e.key !== "Enter") return;
-                                // Fall through to save logic below
-                                (e.currentTarget.nextElementSibling as HTMLButtonElement)?.click();
-                              }}
-                            />
-                            <button
-                              disabled={savingWa}
-                              onClick={async () => {
-                                const raw = editingWa.valor.replace(/\D/g, "");
-                                if (raw.length < 10) { alert("WhatsApp invalido. Inclua DDD + numero."); return; }
-                                setSavingWa(true);
-                                try {
-                                  const res = await fetch("/api/admin/simulacoes", {
-                                    method: "PATCH",
-                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                    body: JSON.stringify({ id: row.id, whatsapp: editingWa.valor }),
-                                  });
-                                  const j = await res.json();
-                                  if (!j.ok) { alert("Erro: " + (j.error || "falha")); setSavingWa(false); return; }
-                                  setData((prev) => prev ? prev.map((r) => r.id === row.id ? { ...r, whatsapp: editingWa.valor } : r) : prev);
-                                  setEditingWa(null);
-                                } catch (err) {
-                                  alert("Erro de conexao: " + String(err));
-                                }
-                                setSavingWa(false);
-                              }}
-                              className="text-xs text-green-600 hover:text-green-800 px-1"
-                              title="Salvar"
-                            >
-                              {savingWa ? "..." : "✓"}
-                            </button>
-                            <button
-                              onClick={() => setEditingWa(null)}
-                              className="text-xs text-[#86868B] hover:text-red-500 px-1"
-                              title="Cancelar"
-                            >
-                              ✕
-                            </button>
-                          </div>
+                        {row.whatsapp && row.whatsapp.replace(/\D/g, "").length >= 10 ? (
+                          <a
+                            href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-600 hover:underline whitespace-nowrap"
+                          >
+                            {row.whatsapp}
+                          </a>
                         ) : (
-                          <div className="flex items-center gap-1 group">
-                            {row.whatsapp && row.whatsapp.replace(/\D/g, "").length >= 10 ? (
-                              <a
-                                href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-green-600 hover:underline whitespace-nowrap"
-                              >
-                                {row.whatsapp}
-                              </a>
-                            ) : (
-                              <span className="text-red-500 text-xs font-medium whitespace-nowrap">⚠ {row.whatsapp || "(vazio)"}</span>
-                            )}
-                            {user?.role === "admin" && (
-                              <button
-                                onClick={() => setEditingWa({ id: row.id, valor: row.whatsapp || "" })}
-                                className="text-xs text-[#86868B] hover:text-[#E8740E] opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Editar WhatsApp"
-                              >
-                                ✏️
-                              </button>
-                            )}
-                          </div>
+                          <span className="text-red-500 text-xs font-medium whitespace-nowrap">⚠ {row.whatsapp || "(vazio)"}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -1649,9 +1601,22 @@ export default function AdminPage() {
                       <td className="px-4 py-3 text-[#E8740E] font-bold whitespace-nowrap">{fmt(row.diferenca)}</td>
                       <td className="px-4 py-3 text-[#6E6E73] text-xs max-w-[160px] truncate">{row.forma_pagamento || "—"}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${row.status === "GOSTEI" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-                          {row.status === "GOSTEI" ? "Fechou" : "Saiu"}
+                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${
+                          row.status === "GOSTEI" ? "bg-green-100 text-green-700" :
+                          row.status === "INVALIDO" ? "bg-gray-200 text-gray-700" :
+                          "bg-red-100 text-red-600"
+                        }`} title={row.status === "INVALIDO" && row.motivo_invalido ? `Motivo: ${row.motivo_invalido}` : undefined}>
+                          {row.status === "GOSTEI" ? "Fechou" : row.status === "INVALIDO" ? "🚫 Inválido" : "Saiu"}
                         </span>
+                        {user?.role === "admin" && row.status !== "INVALIDO" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setInvalidarRow(row); }}
+                            className="ml-2 text-[10px] text-[#86868B] hover:text-red-600 hover:underline"
+                            title="Marcar esse lead como invalido pra troca"
+                          >
+                            🚫 Marcar inválido
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <button
@@ -1763,6 +1728,52 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* Modal: Editar WhatsApp */}
+      {editWaRow && (
+        <EditWhatsAppModal
+          row={editWaRow}
+          password={password}
+          userNome={user?.nome || "sistema"}
+          onClose={() => setEditWaRow(null)}
+          onSaved={(novo) => {
+            setData((prev) => prev ? prev.map((r) => r.id === editWaRow.id ? { ...r, whatsapp: novo } : r) : prev);
+            // Se o modal de detalhes esta aberto pra esse mesmo cliente, atualiza la tambem
+            setModalRow((prev) => prev && prev.id === editWaRow.id ? { ...prev, whatsapp: novo } : prev);
+            setEditWaRow(null);
+          }}
+        />
+      )}
+
+      {/* Modal: Desfazer inválido */}
+      {desfazerRow && (
+        <DesfazerInvalidoModal
+          row={desfazerRow}
+          password={password}
+          userNome={user?.nome || "sistema"}
+          onClose={() => setDesfazerRow(null)}
+          onSaved={(patch) => {
+            setData((prev) => prev ? prev.map((r) => r.id === desfazerRow.id ? { ...r, ...patch } : r) : prev);
+            setModalRow((prev) => prev && prev.id === desfazerRow.id ? { ...prev, ...patch } : prev);
+            setDesfazerRow(null);
+          }}
+        />
+      )}
+
+      {/* Modal: Marcar como inválido */}
+      {invalidarRow && (
+        <InvalidarModal
+          row={invalidarRow}
+          password={password}
+          userNome={user?.nome || "sistema"}
+          onClose={() => setInvalidarRow(null)}
+          onSaved={(patch) => {
+            setData((prev) => prev ? prev.map((r) => r.id === invalidarRow.id ? { ...r, ...patch } : r) : prev);
+            setModalRow((prev) => prev && prev.id === invalidarRow.id ? { ...prev, ...patch } : prev);
+            setInvalidarRow(null);
+          }}
+        />
+      )}
+
       {/* Detail Modal */}
       {modalRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setModalRow(null)}>
@@ -1785,17 +1796,73 @@ export default function AdminPage() {
 
               {/* Status badge */}
               <div>
-                <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${modalRow.status === "GOSTEI" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-                  {modalRow.status === "GOSTEI" ? "Fechou pedido" : "Saiu sem fechar"}
+                <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  modalRow.status === "GOSTEI" ? "bg-green-100 text-green-700" :
+                  modalRow.status === "INVALIDO" ? "bg-gray-200 text-gray-700" :
+                  "bg-red-100 text-red-600"
+                }`}>
+                  {modalRow.status === "GOSTEI" ? "Fechou pedido" : modalRow.status === "INVALIDO" ? "🚫 Inválido" : "Saiu sem fechar"}
                 </span>
                 {modalRow.vendedor && (
                   <span className="ml-2 px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{modalRow.vendedor}</span>
                 )}
               </div>
 
+              {/* Banner INVALIDO (se marcado) */}
+              {modalRow.status === "INVALIDO" && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h3 className="text-sm font-bold text-red-700 flex items-center gap-2">🚫 Lead marcado como Inválido</h3>
+                    <div className="flex items-center gap-2">
+                      {modalRow.respondido_wa && (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">✅ Já respondido no WhatsApp</span>
+                      )}
+                      {user?.role === "admin" && (
+                        <button
+                          onClick={() => setDesfazerRow(modalRow)}
+                          className="text-[10px] bg-white border border-red-300 text-red-700 hover:bg-red-100 px-2 py-1 rounded-lg font-semibold"
+                          title="Desfazer marcacao"
+                        >
+                          🔄 Desfazer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {modalRow.motivo_invalido && (
+                    <div className="text-sm">
+                      <span className="text-red-600 font-semibold">Motivo:</span>{" "}
+                      <span className="text-[#1D1D1F]">{modalRow.motivo_invalido}</span>
+                    </div>
+                  )}
+                  {modalRow.obs_invalido && (
+                    <div className="text-sm">
+                      <span className="text-red-600 font-semibold">Observação:</span>{" "}
+                      <span className="text-[#1D1D1F] whitespace-pre-wrap">{modalRow.obs_invalido}</span>
+                    </div>
+                  )}
+                  {(modalRow.marcado_invalido_por || modalRow.marcado_invalido_em) && (
+                    <p className="text-[10px] text-red-500/80">
+                      Marcado {modalRow.marcado_invalido_por ? `por ${modalRow.marcado_invalido_por}` : ""}
+                      {modalRow.marcado_invalido_em ? ` em ${new Date(modalRow.marcado_invalido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Customer info */}
               <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
-                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Cliente</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Cliente</h3>
+                  {user?.role === "admin" && (
+                    <button
+                      onClick={() => setEditWaRow(modalRow)}
+                      className="text-xs text-[#86868B] hover:text-[#E8740E] transition-colors"
+                      title="Editar contato"
+                    >
+                      ✏️ Editar contato
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-[#86868B]">Nome:</span>
@@ -1803,7 +1870,11 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <span className="text-[#86868B]">WhatsApp:</span>
-                    <p className="text-[#1D1D1F] font-medium">{modalRow.whatsapp}</p>
+                    {modalRow.whatsapp && modalRow.whatsapp.replace(/\D/g, "").length >= 10 ? (
+                      <p className="text-[#1D1D1F] font-medium">{modalRow.whatsapp}</p>
+                    ) : (
+                      <p className="text-red-500 font-medium text-xs">⚠ {modalRow.whatsapp || "(vazio)"}</p>
+                    )}
                   </div>
                   {modalRow.instagram && (
                     <div className="col-span-2">
@@ -2814,6 +2885,325 @@ function SimuladorInterno({ password }: { password: string }) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ====================================================================
+// Modal: Editar WhatsApp do cliente
+// ====================================================================
+
+function EditWhatsAppModal({
+  row,
+  password,
+  userNome,
+  onClose,
+  onSaved,
+}: {
+  row: SimulacaoRow;
+  password: string;
+  userNome: string;
+  onClose: () => void;
+  onSaved: (novoWa: string) => void;
+}) {
+  const [valor, setValor] = useState(row.whatsapp || "");
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const salvar = async () => {
+    setErro(null);
+    const raw = valor.replace(/\D/g, "");
+    if (raw.length < 10) { setErro("WhatsApp inválido. Inclua DDD + número (ex: (21) 9XXXX-XXXX)."); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/simulacoes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userNome) },
+        body: JSON.stringify({ id: row.id, whatsapp: valor }),
+      });
+      const j = await res.json();
+      if (!j.ok) { setErro(j.error || "Erro ao salvar"); setSaving(false); return; }
+      onSaved(valor);
+    } catch (e) {
+      setErro(String(e));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-[#1D1D1F]">✏️ Editar contato</h2>
+          <button onClick={onClose} className="text-2xl text-[#86868B] hover:text-[#1D1D1F]">×</button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide">Cliente</label>
+            <p className="text-sm text-[#1D1D1F] mt-1">{row.nome}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide">WhatsApp atual</label>
+            <p className="text-sm text-[#6E6E73] mt-1 font-mono">{row.whatsapp || "(vazio)"}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide">Novo WhatsApp</label>
+            <input
+              type="text"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder="(21) 9XXXX-XXXX"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") salvar(); if (e.key === "Escape") onClose(); }}
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm"
+            />
+            <p className="text-[10px] text-[#86868B] mt-1">Formato: DDD + 9 dígitos</p>
+          </div>
+
+          {erro && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{erro}</p>}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-[#E5E5EA]">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium">Cancelar</button>
+          <button onClick={salvar} disabled={saving} className="px-4 py-2 rounded-lg text-sm bg-[#E8740E] text-white font-bold hover:bg-[#D06A0D] disabled:opacity-50">
+            {saving ? "Salvando..." : "💾 Salvar alteração"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ====================================================================
+// Modal: Marcar simulacao como INVALIDO
+// ====================================================================
+
+const MOTIVOS_INVALIDO = [
+  "Aparelho não aceito (modelo)",
+  "Aparelho com defeito",
+  "Já teve manutenção",
+  "Tela paralela",
+  "Cliente desistiu",
+  "Outro",
+] as const;
+
+function InvalidarModal({
+  row,
+  password,
+  userNome,
+  onClose,
+  onSaved,
+}: {
+  row: SimulacaoRow;
+  password: string;
+  userNome: string;
+  onClose: () => void;
+  onSaved: (patch: Partial<SimulacaoRow>) => void;
+}) {
+  const [motivo, setMotivo] = useState<string>("");
+  const [outroMotivo, setOutroMotivo] = useState("");
+  const [obs, setObs] = useState("");
+  const [respondido, setRespondido] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const salvar = async () => {
+    setErro(null);
+    if (!motivo) { setErro("Selecione um motivo."); return; }
+    const motivoFinal = motivo === "Outro" ? (outroMotivo.trim() || "Outro") : motivo;
+    setSaving(true);
+    try {
+      const patch = {
+        status: "INVALIDO" as const,
+        motivo_invalido: motivoFinal,
+        obs_invalido: obs.trim() || null,
+        respondido_wa: respondido,
+        marcado_invalido_em: new Date().toISOString(),
+        marcado_invalido_por: userNome,
+      };
+      const res = await fetch("/api/admin/simulacoes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userNome) },
+        body: JSON.stringify({ id: row.id, ...patch }),
+      });
+      const j = await res.json();
+      if (!j.ok) { setErro(j.error || "Erro ao salvar"); setSaving(false); return; }
+      onSaved(patch);
+    } catch (e) {
+      setErro(String(e));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-[#1D1D1F]">🚫 Marcar como Inválido</h2>
+          <button onClick={onClose} className="text-2xl text-[#86868B] hover:text-[#1D1D1F]">×</button>
+        </div>
+
+        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+          <p className="text-sm font-medium text-[#1D1D1F]">{row.nome}</p>
+          <p className="text-xs text-[#6E6E73] mt-0.5">{row.whatsapp} · {row.modelo_usado} {row.storage_usado}</p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide block mb-2">Motivo da recusa</label>
+            <select
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm"
+            >
+              <option value="">— Selecionar motivo —</option>
+              {MOTIVOS_INVALIDO.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+
+          {motivo === "Outro" && (
+            <div>
+              <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide block mb-2">Especifique</label>
+              <input
+                type="text"
+                value={outroMotivo}
+                onChange={(e) => setOutroMotivo(e.target.value)}
+                placeholder="Ex: cliente sumiu, não tinha NF..."
+                className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide block mb-2">Observação interna (opcional)</label>
+            <textarea
+              value={obs}
+              onChange={(e) => setObs(e.target.value)}
+              rows={3}
+              placeholder="Detalhes pra você lembrar depois..."
+              className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm resize-none"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-3 rounded-lg hover:bg-gray-100">
+            <input
+              type="checkbox"
+              checked={respondido}
+              onChange={(e) => setRespondido(e.target.checked)}
+              className="w-4 h-4 accent-[#E8740E]"
+            />
+            <span className="text-sm text-[#1D1D1F]">✅ Já respondido no WhatsApp</span>
+          </label>
+
+          {erro && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{erro}</p>}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-[#E5E5EA]">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium">Cancelar</button>
+          <button onClick={salvar} disabled={saving} className="px-4 py-2 rounded-lg text-sm bg-red-600 text-white font-bold hover:bg-red-700 disabled:opacity-50">
+            {saving ? "Salvando..." : "🚫 Marcar Inválido"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ====================================================================
+// Modal: Desfazer marcacao de INVALIDO
+// ====================================================================
+
+function DesfazerInvalidoModal({
+  row,
+  password,
+  userNome,
+  onClose,
+  onSaved,
+}: {
+  row: SimulacaoRow;
+  password: string;
+  userNome: string;
+  onClose: () => void;
+  onSaved: (patch: Partial<SimulacaoRow>) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const desfazer = async (novoStatus: "GOSTEI" | "SAIR") => {
+    setErro(null);
+    setSaving(true);
+    try {
+      const patch = {
+        status: novoStatus,
+        motivo_invalido: null,
+        obs_invalido: null,
+        respondido_wa: false,
+        marcado_invalido_em: null,
+        marcado_invalido_por: null,
+      };
+      const res = await fetch("/api/admin/simulacoes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userNome) },
+        body: JSON.stringify({ id: row.id, ...patch }),
+      });
+      const j = await res.json();
+      if (!j.ok) { setErro(j.error || "Erro ao desfazer"); setSaving(false); return; }
+      onSaved(patch as Partial<SimulacaoRow>);
+    } catch (e) {
+      setErro(String(e));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-[#1D1D1F]">🔄 Desfazer Inválido</h2>
+          <button onClick={onClose} className="text-2xl text-[#86868B] hover:text-[#1D1D1F]">×</button>
+        </div>
+
+        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+          <p className="text-sm font-medium text-[#1D1D1F]">{row.nome}</p>
+          <p className="text-xs text-[#6E6E73] mt-0.5">{row.whatsapp}</p>
+          {row.motivo_invalido && (
+            <p className="text-xs text-red-600 mt-1">Marcado como: <strong>{row.motivo_invalido}</strong></p>
+          )}
+        </div>
+
+        <p className="text-sm text-[#1D1D1F] mb-4">
+          Pra qual status devolver esta simulação?
+        </p>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => desfazer("GOSTEI")}
+            disabled={saving}
+            className="w-full text-left px-4 py-3 rounded-xl border-2 border-green-300 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
+          >
+            <p className="text-sm font-bold text-green-700">✅ Fechou pedido</p>
+            <p className="text-xs text-green-600/80">Cliente deu GOSTEI na simulação e pode prosseguir com a compra</p>
+          </button>
+
+          <button
+            onClick={() => desfazer("SAIR")}
+            disabled={saving}
+            className="w-full text-left px-4 py-3 rounded-xl border-2 border-red-300 bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
+          >
+            <p className="text-sm font-bold text-red-700">❌ Saiu sem fechar</p>
+            <p className="text-xs text-red-600/80">Cliente não fechou, mas não foi por problema do aparelho</p>
+          </button>
+        </div>
+
+        {erro && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg mt-3">{erro}</p>}
+
+        <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-[#E5E5EA]">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium">Cancelar</button>
+        </div>
       </div>
     </div>
   );

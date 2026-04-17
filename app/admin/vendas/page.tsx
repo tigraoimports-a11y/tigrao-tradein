@@ -10,6 +10,7 @@ import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offl
 import type { Venda } from "@/lib/admin-types";
 import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
+import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 
@@ -19,6 +20,7 @@ const VENDAS_PASSWORD = "tigrao$vendas";
 
 export default function VendasPage() {
   const { password, user, darkMode } = useAdmin();
+  const vendedoresList = useVendedores(password);
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,7 @@ export default function VendasPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [reajusteId, setReajusteId] = useState<string | null>(null);
+  const [encaminharVenda, setEncaminharVenda] = useState<Venda | null>(null);
   const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX", observacao: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
@@ -5432,39 +5435,28 @@ export default function VendasPage() {
                                             ❌ Cancelar Venda
                                           </button>
                                         )}
-                                        {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
-                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && (v.local === "ENTREGA" || v.local === "RETIRADA") && (
+                                        {/* Botão Encaminhar Entrega — SO aparece se ainda nao tem entrega vinculada */}
+                                        {!v.entrega_id && (v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && (v.local === "ENTREGA" || v.local === "RETIRADA") && (
                                           <button
-                                            onClick={async (e) => {
+                                            onClick={(e) => {
                                               e.stopPropagation();
-                                              const defaultDate = v.data_programada
-                                                ? new Date(v.data_programada + "T12:00:00").toLocaleDateString("pt-BR")
-                                                : new Date().toLocaleDateString("pt-BR");
-                                              const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", defaultDate);
-                                              if (!dataEntrega) return;
-                                              // Converter DD/MM/AAAA para YYYY-MM-DD
-                                              const parts = dataEntrega.split("/");
-                                              const dataISO = parts.length === 3 ? `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}` : dataEntrega;
-                                              try {
-                                                const res = await fetch("/api/admin/vendas/encaminhar-entrega", {
-                                                  method: "POST",
-                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                  body: JSON.stringify({ venda_id: v.id, data_entrega: dataISO }),
-                                                });
-                                                const json = await res.json();
-                                                if (res.ok) {
-                                                  setMsg("📦 Entrega criada com sucesso!");
-                                                } else {
-                                                  setMsg(`Erro: ${json.error || "Falha ao criar entrega"}`);
-                                                }
-                                              } catch {
-                                                setMsg("Erro ao encaminhar para entrega");
-                                              }
+                                              setEncaminharVenda(v);
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
                                           >
                                             📦 {v.status_pagamento === "PROGRAMADA" || v.data_programada ? "Agendar Entrega" : "Encaminhar Entrega"}
                                           </button>
+                                        )}
+                                        {/* Botao 'Ver entrega' quando ja tem entrega vinculada */}
+                                        {v.entrega_id && (
+                                          <a
+                                            href={`/admin/entregas?destacar=${v.entrega_id}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-700 border border-green-300 bg-green-50 hover:bg-green-100 transition-colors inline-flex items-center gap-1"
+                                            title="Abrir entrega vinculada"
+                                          >
+                                            🚚 Ver entrega
+                                          </a>
                                         )}
                                         {/* Botão Reajuste — só admin */}
                                         {podeVerHistorico && <button
@@ -6130,6 +6122,164 @@ export default function VendasPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Encaminhar Entrega (com select de vendedor) */}
+      {encaminharVenda && (
+        <EncaminharEntregaModal
+          venda={encaminharVenda}
+          vendedores={vendedoresList}
+          password={password}
+          userNome={user?.nome || "sistema"}
+          onClose={() => setEncaminharVenda(null)}
+          onSaved={(entregaId) => {
+            setVendas(prev => prev.map(x => x.id === encaminharVenda.id ? { ...x, entrega_id: entregaId } : x));
+            setMsg("📦 Entrega criada com sucesso!");
+            setEncaminharVenda(null);
+          }}
+          onConflito={() => {
+            setMsg("⚠️ Esta venda já tem uma entrega vinculada.");
+            fetchVendas();
+            setEncaminharVenda(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ====================================================================
+// Modal: Encaminhar Entrega (data + horario + vendedor + observacao)
+// ====================================================================
+
+function EncaminharEntregaModal({
+  venda,
+  vendedores,
+  password,
+  userNome,
+  onClose,
+  onSaved,
+  onConflito,
+}: {
+  venda: Venda;
+  vendedores: Array<{ nome: string; numero?: string; ativo?: boolean }>;
+  password: string;
+  userNome: string;
+  onClose: () => void;
+  onSaved: (entregaId: string) => void;
+  onConflito: () => void;
+}) {
+  // Data default: data_programada se houver, senao hoje
+  const defaultData = venda.data_programada || new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  // Vendedor default: Bianca (principal responsavel pelos formularios).
+  // Operador pode sobrescrever pelo select se for outra pessoa atendendo.
+  const defaultVendedor = "Bianca";
+  const [dataEntrega, setDataEntrega] = useState(defaultData);
+  const [horario, setHorario] = useState("");
+  const [vendedor, setVendedor] = useState(defaultVendedor);
+  const [observacao, setObservacao] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const vendedoresAtivos = vendedores.filter(v => v.ativo !== false).map(v => v.nome);
+  // Garantir que o default apareca na lista mesmo se for admin/sistema
+  const opcoesVendedor = Array.from(new Set([defaultVendedor, ...vendedoresAtivos].filter(Boolean)));
+
+  const salvar = async () => {
+    setErro(null);
+    if (!dataEntrega) { setErro("Informe a data"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/vendas/encaminhar-entrega", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userNome) },
+        body: JSON.stringify({
+          venda_id: venda.id,
+          data_entrega: dataEntrega,
+          horario: horario || undefined,
+          vendedor: vendedor || undefined,
+          observacao: observacao || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.status === 409) { onConflito(); return; }
+      if (!res.ok) { setErro(json.error || "Falha ao criar entrega"); setSaving(false); return; }
+      onSaved(json.entrega?.id || "");
+    } catch (e) {
+      setErro(String(e));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-[#1D1D1F]">📦 Encaminhar Entrega</h2>
+          <button onClick={onClose} className="text-2xl text-[#86868B] hover:text-[#1D1D1F]">×</button>
+        </div>
+
+        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+          <p className="text-sm font-medium text-[#1D1D1F]">{venda.cliente}</p>
+          <p className="text-xs text-[#6E6E73] mt-0.5">{venda.produto}</p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide block mb-1">Data da entrega</label>
+            <input
+              type="date"
+              value={dataEntrega}
+              onChange={(e) => setDataEntrega(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide block mb-1">Horário (opcional)</label>
+            <input
+              type="text"
+              value={horario}
+              onChange={(e) => setHorario(e.target.value)}
+              placeholder="Ex: 14:00 ou 14h a 16h"
+              className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide block mb-1">Vendedor responsável</label>
+            <select
+              value={vendedor}
+              onChange={(e) => setVendedor(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm"
+            >
+              {opcoesVendedor.map((nome) => (
+                <option key={nome} value={nome}>{nome}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-[#86868B] mt-1">Vendedor responsável pelo contato com o cliente</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wide block mb-1">Observação (opcional)</label>
+            <textarea
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              rows={2}
+              placeholder="Algo especial pro motoboy..."
+              className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] focus:outline-none focus:border-[#E8740E] text-sm resize-none"
+            />
+          </div>
+
+          {erro && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{erro}</p>}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-[#E5E5EA]">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium">Cancelar</button>
+          <button onClick={salvar} disabled={saving} className="px-4 py-2 rounded-lg text-sm bg-[#E8740E] text-white font-bold hover:bg-[#D06A0D] disabled:opacity-50">
+            {saving ? "Criando..." : "📦 Criar entrega"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

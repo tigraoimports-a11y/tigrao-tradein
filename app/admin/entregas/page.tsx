@@ -116,35 +116,52 @@ function formatPagamentoDisplay(
   const fp = formaPagamento.trim();
   const total = Number(valorTotal || valor || 0);
   const entrada = Number(entradaCol || 0);
-  // Label da entrada (Pix / Espécie / Transferência)
+  // Detecta entrada Pix/Especie/Transferencia
+  // Formatos suportados:
+  //   'Entrada R$ X via Pix + 10x no Cartão'        <- novo (link-compras)
+  //   'Entrada PIX R$ X + 10x no Cartão'            <- antigo (vendas admin)
+  //   'Entrada Espécie R$ X + ...'
+  // Banco do Pix nao interessa no texto do motoboy — info interna.
   let labelEntrada = "Entrada";
-  if (/\+\s*pix/i.test(fp)) labelEntrada = "Entrada PIX";
-  else if (/\+\s*esp[eé]cie/i.test(fp)) labelEntrada = "Entrada Espécie";
-  else if (/\+\s*transfer/i.test(fp)) labelEntrada = "Entrada Transferência";
+  if (/via\s+Pix/i.test(fp) || /\+\s*pix/i.test(fp) || /Entrada\s+PIX/i.test(fp)) {
+    labelEntrada = "Entrada PIX";
+  } else if (/\+\s*esp[eé]cie/i.test(fp) || /via\s+Dinheiro/i.test(fp) || /Entrada\s+Esp[eé]cie/i.test(fp)) {
+    labelEntrada = "Entrada Espécie";
+  } else if (/\+\s*transfer/i.test(fp)) {
+    labelEntrada = "Entrada Transferência";
+  }
   // Extrai cartões "Nx no Cartão (MAQ)" — 1 ou 2 ocorrências
-  const cartaoRegex = /(\d+)x\s+no\s+(?:Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
-  const cartoes: { parcelas: number; maquina: string }[] = [];
+  const cartaoRegex = /(\d+)x\s+no\s+(Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
+  const cartoes: { parcelas: number; maquina: string; tipo: "Cartão" | "Link" }[] = [];
   let m;
   while ((m = cartaoRegex.exec(fp)) !== null) {
-    cartoes.push({ parcelas: parseInt(m[1]), maquina: (m[2] || "").trim() });
+    const tipo = /link/i.test(m[2]) ? "Link" : "Cartão" as const;
+    let maq = (m[3] || "").trim();
+    // Se eh Link, a maquina e Mercado Pago (implicito) — adiciona pra deixar claro no motoboy
+    if (!maq && tipo === "Link") maq = "Mercado Pago";
+    cartoes.push({ parcelas: parseInt(m[1]), maquina: maq, tipo });
   }
   const baseCartoes = Math.max(0, total - entrada);
   const linhas: string[] = [fp];
-  if (entrada > 0) linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}`);
+  if (entrada > 0) {
+    linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}`);
+  }
   if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
     const c = cartoes[0];
     const vParc = baseCartoes / c.parcelas;
+    const maqSuffix = c.maquina ? ` — ${c.maquina}` : "";
     if (c.parcelas > 1) {
-      linhas.push(`   • ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(baseCartoes)}`);
+      linhas.push(`   • ${c.parcelas}x de ${fmtBRL(vParc)} — total ${fmtBRL(baseCartoes)}${maqSuffix}`);
     } else {
-      linhas.push(`   • Cartão${c.maquina ? ` (${c.maquina})` : ""}: ${fmtBRL(baseCartoes)}`);
+      linhas.push(`   • ${c.tipo}: ${fmtBRL(baseCartoes)}${maqSuffix}`);
     }
   } else if (cartoes.length === 2) {
     // Sem granularidade de valores nos dois cartões — aproxima 50/50
     const metade = baseCartoes / 2;
     cartoes.forEach((c, i) => {
       const vParc = c.parcelas > 0 ? metade / c.parcelas : 0;
-      linhas.push(`   • Cartão ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(metade)}`);
+      const maqSuffix = c.maquina ? ` — ${c.maquina}` : "";
+      linhas.push(`   • ${c.tipo} ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)} — total ${fmtBRL(metade)}${maqSuffix}`);
     });
   } else if (entrada === 0 && valor != null) {
     linhas.push(`   • ${fmtBRL(Number(valor))}`);
@@ -158,6 +175,29 @@ export default function EntregasPage() {
   const vendedoresList = useVendedores(password);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
+  // ID pra destacar (vem de /admin/vendas?destacar=XXX ao clicar 'Ver entrega')
+  const [destacarId, setDestacarId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("destacar");
+    if (id) setDestacarId(id);
+  }, []);
+
+  // Quando as entregas carregam E temos um destacarId, rola ate o card e
+  // destaca por 3 segundos. Util pra botao 'Ver entrega' em /admin/vendas.
+  useEffect(() => {
+    if (!destacarId || entregas.length === 0) return;
+    const el = document.getElementById(`entrega-${destacarId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-4", "ring-[#E8740E]", "ring-offset-2");
+      setTimeout(() => {
+        el.classList.remove("ring-4", "ring-[#E8740E]", "ring-offset-2");
+      }, 3000);
+    }
+  }, [destacarId, entregas.length]);
   const [weekOffset, setWeekOffset] = useState(0);
   // Visualização: "dia" (default) mostra um único dia com divisão por motoboy;
   // "semana" mostra o calendário semanal completo (visão geral).
@@ -2231,6 +2271,7 @@ export default function EntregasPage() {
           return (
             <button
               key={e.id}
+              id={`entrega-${e.id}`}
               onClick={() => {
                 if (modoSelecao) {
                   const next = new Set(entregasSelecionadas);
@@ -2666,12 +2707,44 @@ export default function EntregasPage() {
                     })()}
                   </div>
                 )}
-                {e.vendedor && (
-                  <div className="text-sm">
-                    <span className="text-[#86868B]">Vendedor: </span>
-                    <span className="text-[#1D1D1F]">{e.vendedor}</span>
-                  </div>
-                )}
+                <div className="text-sm flex items-center gap-2 flex-wrap">
+                  <span className="text-[#86868B]">Vendedor: </span>
+                  <select
+                    value={e.vendedor || ""}
+                    onChange={async (ev) => {
+                      const novoVendedor = ev.target.value || null;
+                      // Otimista: atualiza local imediato
+                      setEntregas(prev => prev.map(x => x.id === e.id ? { ...x, vendedor: novoVendedor } : x));
+                      if (selectedEntrega?.id === e.id) setSelectedEntrega({ ...selectedEntrega, vendedor: novoVendedor });
+                      try {
+                        const res = await fetch("/api/admin/entregas", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json", ...apiHeaders() },
+                          body: JSON.stringify({ id: e.id, vendedor: novoVendedor }),
+                        });
+                        if (!res.ok) {
+                          // Reverte se deu erro
+                          setEntregas(prev => prev.map(x => x.id === e.id ? { ...x, vendedor: e.vendedor } : x));
+                          alert("Erro ao atualizar vendedor");
+                        }
+                      } catch {
+                        setEntregas(prev => prev.map(x => x.id === e.id ? { ...x, vendedor: e.vendedor } : x));
+                        alert("Erro de conexão");
+                      }
+                    }}
+                    className={`px-2 py-1 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] focus:outline-none focus:border-[#E8740E]`}
+                  >
+                    <option value="">— Nenhum —</option>
+                    {(() => {
+                      const opcoes = new Set<string>();
+                      if (e.vendedor) opcoes.add(e.vendedor);
+                      for (const v of vendedoresList) {
+                        if (v.ativo !== false && v.nome) opcoes.add(v.nome);
+                      }
+                      return [...opcoes].map((n) => <option key={n} value={n}>{n}</option>);
+                    })()}
+                  </select>
+                </div>
                 {e.observacao && (
                   <div className="text-sm p-3 bg-[#F5F5F7] rounded-lg">
                     <span className="text-[#86868B]">Obs: </span>

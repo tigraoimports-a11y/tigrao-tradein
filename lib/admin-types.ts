@@ -95,6 +95,10 @@ export interface Venda {
   codigo_rastreio: string | null;
   // Histórico de pagamentos (vendas programadas com múltiplos pagamentos)
   pagamento_historia: { tipo: string; valor: number; data: string; forma: string; banco: string; obs?: string }[];
+  // Entrega vinculada (preenchido quando a venda e encaminhada pra entrega)
+  entrega_id: string | null;
+  // Vendedor responsavel pela venda
+  vendedor: string | null;
 }
 
 export interface Reajuste {
