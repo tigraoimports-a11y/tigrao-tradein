@@ -176,15 +176,13 @@ export async function POST(request: Request) {
         const base = isCartao && parcelasNum > 0
           ? `${parcelasNum}x no ${forma === "Link de Pagamento" ? "Link" : "Cartão"}`
           : forma;
-        // Se tem entrada (Pix/Especie geralmente), mostra separadamente — motoboy
-        // e o resumo da entrega precisam ver a quebra (ex: "Entrada R$ 500 via Pix + 10x no Cartão")
+        // Se tem entrada (Pix/Especie), mostra separadamente pro motoboy saber
+        // a quebra (ex: "Entrada R$ 500 via Pix + 10x no Cartão"). Banco do Pix
+        // nao interessa no texto do motoboy — e info interna.
         if (entradaVal > 0) {
-          const bancoEntrada = String(link.banco_pix || preench.banco_pix || "ITAU").toUpperCase();
-          // Detecta se entrada eh Pix (default) ou dinheiro. Nos links de compra
-          // a entrada tipicamente e PIX, mas conferimos formaPagamento do preench.
           const formaEntrada = String(preench.forma_entrada || "PIX").toUpperCase();
           const labelForma = formaEntrada.includes("ESPEC") || formaEntrada.includes("DINHEIRO") ? "Dinheiro" : "Pix";
-          return `Entrada R$ ${entradaVal.toLocaleString("pt-BR")} via ${labelForma}${bancoEntrada && labelForma === "Pix" ? ` (${bancoEntrada})` : ""} + ${base}`;
+          return `Entrada R$ ${entradaVal.toLocaleString("pt-BR")} via ${labelForma} + ${base}`;
         }
         return base;
       })(),
