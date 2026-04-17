@@ -30,7 +30,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export default function UsuariosPage() {
-  const { password, user } = useAdmin();
+  const { password, user, refreshUser } = useAdmin();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -207,6 +207,9 @@ export default function UsuariosPage() {
           prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: current } : usr)
         );
         setMsg("Erro: " + json.error);
+      } else if (u.id === user?.id) {
+        // Editou as proprias abas — refresh do context pra atualizar menu lateral
+        refreshUser();
       }
     } catch {
       setUsuarios((prev) =>
@@ -242,6 +245,9 @@ export default function UsuariosPage() {
           prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: current } : usr)
         );
         setMsg("Erro: " + json.error);
+      } else if (u.id === user?.id) {
+        // Editou as proprias abas — refresh do context pra atualizar menu lateral
+        refreshUser();
       }
     } catch {
       setUsuarios((prev) =>
@@ -572,7 +578,7 @@ export default function UsuariosPage() {
                   </div>
                   <p className="text-[10px] text-[#86868B] mt-3">
                     {(u.abas_ocultas ?? []).length} aba(s) oculta(s)
-                    {u.id === user?.id && " — Recarregue a pagina pra ver o menu atualizado"}
+                    {u.id === user?.id && " — menu lateral atualiza automaticamente"}
                   </p>
                 </div>
               )}
