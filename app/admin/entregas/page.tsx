@@ -2707,12 +2707,44 @@ export default function EntregasPage() {
                     })()}
                   </div>
                 )}
-                {e.vendedor && (
-                  <div className="text-sm">
-                    <span className="text-[#86868B]">Vendedor: </span>
-                    <span className="text-[#1D1D1F]">{e.vendedor}</span>
-                  </div>
-                )}
+                <div className="text-sm flex items-center gap-2 flex-wrap">
+                  <span className="text-[#86868B]">Vendedor: </span>
+                  <select
+                    value={e.vendedor || ""}
+                    onChange={async (ev) => {
+                      const novoVendedor = ev.target.value || null;
+                      // Otimista: atualiza local imediato
+                      setEntregas(prev => prev.map(x => x.id === e.id ? { ...x, vendedor: novoVendedor } : x));
+                      if (selectedEntrega?.id === e.id) setSelectedEntrega({ ...selectedEntrega, vendedor: novoVendedor });
+                      try {
+                        const res = await fetch("/api/admin/entregas", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json", ...apiHeaders() },
+                          body: JSON.stringify({ id: e.id, vendedor: novoVendedor }),
+                        });
+                        if (!res.ok) {
+                          // Reverte se deu erro
+                          setEntregas(prev => prev.map(x => x.id === e.id ? { ...x, vendedor: e.vendedor } : x));
+                          alert("Erro ao atualizar vendedor");
+                        }
+                      } catch {
+                        setEntregas(prev => prev.map(x => x.id === e.id ? { ...x, vendedor: e.vendedor } : x));
+                        alert("Erro de conexão");
+                      }
+                    }}
+                    className={`px-2 py-1 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] focus:outline-none focus:border-[#E8740E]`}
+                  >
+                    <option value="">— Nenhum —</option>
+                    {(() => {
+                      const opcoes = new Set<string>();
+                      if (e.vendedor) opcoes.add(e.vendedor);
+                      for (const v of vendedoresList) {
+                        if (v.ativo !== false && v.nome) opcoes.add(v.nome);
+                      }
+                      return [...opcoes].map((n) => <option key={n} value={n}>{n}</option>);
+                    })()}
+                  </select>
+                </div>
                 {e.observacao && (
                   <div className="text-sm p-3 bg-[#F5F5F7] rounded-lg">
                     <span className="text-[#86868B]">Obs: </span>
