@@ -84,6 +84,9 @@ interface AuditoriaData {
   estoque: {
     valor_atual: number;
     qtd_atual: number;
+    em_loja: { valor: number; qtd: number };
+    a_caminho: { valor: number; qtd: number };
+    pendencias: { valor: number; qtd: number };
     por_categoria: Array<{ categoria: string; qtd: number; valor: number }>;
     estoque_base: number;
     gastos_fornecedor: number;
@@ -435,10 +438,33 @@ function TabPatrimonio({ data, nomeMes }: { data: AuditoriaData; nomeMes: string
           <Divisor />
 
           <LinhaBalanco
-            label={`Estoque (${data.estoque.qtd_atual} itens)`}
+            label={`Estoque Total (${data.estoque.qtd_atual} itens)`}
             valor={data.estoque.valor_atual}
             icon="📦"
           />
+          <div className="pl-6 space-y-1">
+            <LinhaBalanco
+              label={`Em Estoque (${data.estoque.em_loja?.qtd || 0})`}
+              valor={data.estoque.em_loja?.valor || 0}
+              sub
+            />
+            {(data.estoque.a_caminho?.valor || 0) > 0 && (
+              <LinhaBalanco
+                label={`A Caminho (${data.estoque.a_caminho.qtd})`}
+                valor={data.estoque.a_caminho.valor}
+                sub
+                cor="text-blue-600"
+              />
+            )}
+            {(data.estoque.pendencias?.valor || 0) > 0 && (
+              <LinhaBalanco
+                label={`Pendencias (${data.estoque.pendencias.qtd})`}
+                valor={data.estoque.pendencias.valor}
+                sub
+                cor="text-amber-600"
+              />
+            )}
+          </div>
           <LinhaBalanco
             label="Recebiveis Pendentes"
             valor={data.recebiveis_pendentes}
@@ -897,8 +923,12 @@ function TabEstoque({ data }: { data: AuditoriaData }) {
     <div className="space-y-5">
       {/* Cards resumo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MiniCard label="Itens em Estoque" valor={String(est.qtd_atual)} icon="📦" />
-        <MiniCard label="Valor Estoque (custo)" valor={money(est.valor_atual)} icon="💰" />
+        <MiniCard label="Total em Estoque" valor={`${est.qtd_atual} itens — ${money(est.valor_atual)}`} icon="📦" />
+        <MiniCard label="Em Loja" valor={`${est.em_loja?.qtd || 0} itens — ${money(est.em_loja?.valor || 0)}`} icon="🏪" />
+        <MiniCard label="A Caminho" valor={`${est.a_caminho?.qtd || 0} itens — ${money(est.a_caminho?.valor || 0)}`} icon="🚚" cor="text-blue-600" />
+        <MiniCard label="Pendencias" valor={`${est.pendencias?.qtd || 0} itens — ${money(est.pendencias?.valor || 0)}`} icon="🔄" cor="text-amber-600" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MiniCard
           label="Compras Fornecedor"
           valor={money(est.gastos_fornecedor)}

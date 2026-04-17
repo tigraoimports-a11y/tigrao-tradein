@@ -85,11 +85,13 @@ export async function GET(request: Request) {
       .limit(1)
       .single(),
 
-    // 6. Estoque atual (EM ESTOQUE)
+    // 6. Estoque atual (EM ESTOQUE + A CAMINHO + PENDENTE)
+    // Todos representam patrimonio: EM ESTOQUE = na loja, A CAMINHO = pago
+    // mas em transito, PENDENTE = troca em processamento.
     supabase
       .from("estoque")
-      .select("categoria, custo_unitario, qnt, produto, status")
-      .eq("status", "EM ESTOQUE"),
+      .select("categoria, custo_unitario, qnt, produto, status, tipo")
+      .in("status", ["EM ESTOQUE", "A CAMINHO", "PENDENTE"]),
 
     // 7. Recebiveis (fiado_parcelas nao recebidas)
     supabase
@@ -291,19 +293,31 @@ export async function GET(request: Request) {
 
   // ---------- Processar estoque ----------
 
-  const estoqueAtivo = estoqueRes.data || [];
-  const valorEstoque = estoqueAtivo.reduce(
-    (s, e) => s + (Number(e.custo_unitario) || 0) * (Number(e.qnt) || 1),
-    0
+  const estoqueTodos = estoqueRes.data || [];
+  // Separar em 3 grupos (mesma logica do dashboard)
+  const estoqueEmLoja = estoqueTodos.filter(
+    (e) => e.tipo !== "A_CAMINHO" && e.tipo !== "PENDENCIA"
   );
-  const qtdEstoque = estoqueAtivo.reduce(
-    (s, e) => s + (Number(e.qnt) || 1),
-    0
-  );
+  const estoqueACaminho = estoqueTodos.filter((e) => e.tipo === "A_CAMINHO");
+  const estoquePendencias = estoqueTodos.filter((e) => e.tipo === "PENDENCIA");
 
-  // Agrupar por categoria
+  const somaValor = (arr: typeof estoqueTodos) =>
+    arr.reduce((s, e) => s + (Number(e.custo_unitario) || 0) * (Number(e.qnt) || 1), 0);
+  const somaQtd = (arr: typeof estoqueTodos) =>
+    arr.reduce((s, e) => s + (Number(e.qnt) || 1), 0);
+
+  const valorEstoque = somaValor(estoqueEmLoja);
+  const qtdEstoque = somaQtd(estoqueEmLoja);
+  const valorACaminho = somaValor(estoqueACaminho);
+  const qtdACaminho = somaQtd(estoqueACaminho);
+  const valorPendencias = somaValor(estoquePendencias);
+  const qtdPendencias = somaQtd(estoquePendencias);
+  const valorEstoqueTotal = valorEstoque + valorACaminho + valorPendencias;
+  const qtdEstoqueTotal = qtdEstoque + qtdACaminho + qtdPendencias;
+
+  // Agrupar por categoria (todos os itens, nao so em loja)
   const estCatMap: Record<string, { qtd: number; valor: number }> = {};
-  for (const e of estoqueAtivo) {
+  for (const e of estoqueTodos) {
     const cat = e.categoria || "OUTROS";
     if (!estCatMap[cat]) estCatMap[cat] = { qtd: 0, valor: 0 };
     const q = Number(e.qnt) || 1;
@@ -347,8 +361,8 @@ export async function GET(request: Request) {
   const patrimonioEsperado =
     patrimonioBase + lucroVendas - gastosOperacionais - distribuicao + totalReajustes;
 
-  // Patrimonio atual = saldos em conta + estoque (custo) + recebiveis
-  const patrimonioAtual = totalSaldos + valorEstoque + recebiveisPendentes;
+  // Patrimonio atual = saldos em conta + estoque TOTAL (em loja + a caminho + pendencias) + recebiveis
+  const patrimonioAtual = totalSaldos + valorEstoqueTotal + recebiveisPendentes;
 
   // Diferenca
   const diferenca = patrimonioAtual - patrimonioEsperado;
@@ -445,14 +459,17 @@ export async function GET(request: Request) {
       total: totalSaldos,
     },
     estoque: {
-      valor_atual: valorEstoque,
-      qtd_atual: qtdEstoque,
+      valor_atual: valorEstoqueTotal,
+      qtd_atual: qtdEstoqueTotal,
+      em_loja: { valor: valorEstoque, qtd: qtdEstoque },
+      a_caminho: { valor: valorACaminho, qtd: qtdACaminho },
+      pendencias: { valor: valorPendencias, qtd: qtdPendencias },
       por_categoria: estoquePorCategoria,
       estoque_base: estoqueBase,
       gastos_fornecedor: gastosFornecedor,
       custo_vendas: custoVendas,
       estoque_esperado: estoqueBase + gastosFornecedor - custoVendas,
-      diferenca_estoque: valorEstoque - (estoqueBase + gastosFornecedor - custoVendas),
+      diferenca_estoque: valorEstoqueTotal - (estoqueBase + gastosFornecedor - custoVendas),
     },
     recebiveis_pendentes: recebiveisPendentes,
     dias: diasDoMes,
