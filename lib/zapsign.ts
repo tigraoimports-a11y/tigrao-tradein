@@ -46,6 +46,12 @@ export async function criarDocumentoEAssinar(params: {
 }): Promise<ZapSignDoc> {
   const token = getToken();
 
+  // Mensagem customizada pro WhatsApp/email do signatario.
+  // Restricoes do ZapSign: sem quebras de linha, tabs ou mais de 4 espacos consecutivos.
+  // A mensagem complementa o link de assinatura que o ZapSign envia automaticamente.
+  const nomeCliente = params.signatario.name.split(" ")[0] || "Cliente";
+  const customMessage = `Ola ${nomeCliente}! A TigraoImports esta enviando o Termo de Procedencia do seu aparelho para assinatura digital. Ao clicar no link, voce recebera um codigo por SMS para autenticar e assinar o documento. Qualquer duvida, entre em contato conosco.`;
+
   const payload = {
     name: params.nome,
     base64_pdf: params.pdfBase64,
@@ -62,6 +68,7 @@ export async function criarDocumentoEAssinar(params: {
         email: params.signatario.email,
         send_automatic_whatsapp: params.signatario.send_automatic_whatsapp ?? true,
         send_automatic_email: params.signatario.send_automatic_email ?? false,
+        custom_message: customMessage,
       },
     ],
   };
