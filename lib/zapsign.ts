@@ -56,16 +56,21 @@ export async function criarDocumentoEAssinar(params: {
   const nomeCliente = params.signatario.name.split(" ")[0] || "Cliente";
   const customMessage = `Ola ${nomeCliente}! A TigraoImports esta enviando o Termo de Procedencia do seu aparelho para assinatura digital. Clique no link, digite o codigo SMS e tire uma selfie para autenticar e assinar o documento. Qualquer duvida, entre em contato conosco.`;
 
-  const payload = {
+  // Qual usuário da organização aparece como criador/remetente do documento.
+  // Se definido em env, o nome/email desse usuário aparece na mensagem ao signatário.
+  // Útil pra usar um usuário "contato@tigraoimports.com" com nome "Responsável Financeiro"
+  // em vez do owner "tigraoimports@gmail.com".
+  const createdBy = process.env.ZAPSIGN_CREATED_BY_EMAIL;
+
+  const payload: Record<string, unknown> = {
     name: params.nome,
     base64_pdf: params.pdfBase64,
     lang: "pt-br",
     disable_signer_emails: params.signatario.send_automatic_whatsapp ?? true,
     brand_primary_color: "#E8740E",
-    // Remetente que aparece na mensagem. Combinado com "da empresa TIGRÃO IMPORTS"
-    // do painel do ZapSign, vira: "Responsável Financeiro via ZapSign, da empresa
-    // TIGRÃO IMPORTS, enviou o documento..." — evita a redundância do email.
+    // Remetente do EMAIL (campo From). Não afeta a mensagem do WhatsApp.
     brand_name: "Responsável Financeiro",
+    ...(createdBy ? { created_by: createdBy } : {}),
     signers: [
       {
         name: params.signatario.name,
