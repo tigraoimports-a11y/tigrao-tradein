@@ -1283,14 +1283,25 @@ export default function VendasPage() {
       return;
     }
 
-    // Collect all products: cart items + current form (se form tem produto novo,
-    // inclui mesmo se ja tem itens no carrinho — usuario pode estar adicionando
-    // um produto a mais sem clicar em "+ Adicionar ao Carrinho" antes de salvar).
+    // Collect all products: cart items + current form.
+    // Regra: so inclui o form como venda adicional se tiver um PRODUTO NOVO preenchido
+    // (form.produto). Dados so de troca/trocaRow NAO geram venda nova — sao copiados
+    // pro primeiro item do carrinho via globalTroca (linhas 1315-1322).
+    // Bug fixado: cliente com carrinho + so troca no form global criava venda fantasma
+    // sem produto (R$ 0 em tudo).
+    // Pra o cenario sem carrinho (venda apenas de troca/so-troca-value), aceita se
+    // o usuario preencheu explicitamente alguma informacao de produto/troca.
     const allProducts: ProdutoCarrinho[] = [...produtosCarrinho];
-    const hasFormContent = !!(form.produto || form.troca_produto || trocaRow.produto || parseFloat(form.produto_na_troca) > 0);
-    if (hasFormContent) {
+    const formTemProduto = !!form.produto;
+    const formSoTemTroca = !form.produto && !!(form.troca_produto || trocaRow.produto || parseFloat(form.produto_na_troca) > 0);
+    if (formTemProduto) {
+      allProducts.push(getCurrentProductFields());
+    } else if (formSoTemTroca && produtosCarrinho.length === 0) {
+      // Sem carrinho e so tem troca — aceita (caso de so-troca-valor, sem produto novo)
       allProducts.push(getCurrentProductFields());
     }
+    // Se tem carrinho E form so tem troca: troca vai pro primeiro item via globalTroca
+    // abaixo. Nao cria venda fantasma.
 
     if (allProducts.length === 0) {
       setMsg("Preencha ao menos o produto da compra, da troca ou adicione ao carrinho");
