@@ -11,6 +11,7 @@ import type { Categoria } from "@/lib/categorias";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, MAC_MINI_NUCLEOS, MAC_MINI_RAMS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import BalancoSeminovosSection from "@/components/admin/BalancoSeminovosSection";
 import type { Banco } from "@/lib/admin-types";
 import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
 
@@ -3325,6 +3326,15 @@ export default function EstoquePage() {
           </div>
         )}
         </div>
+      )}
+
+      {/* Balanco Manual — agrupado por modelo+armazenamento (so na aba Seminovos) */}
+      {tab === "seminovos" && (
+        <BalancoSeminovosSection
+          password={password}
+          userNome={user?.nome || "sistema"}
+          onMsg={setMsg}
+        />
       )}
 
       {/* Preços Sugeridos por tipo */}
