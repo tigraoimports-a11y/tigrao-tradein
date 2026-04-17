@@ -2633,8 +2633,10 @@ export default function EstoquePage() {
     setImportingInitial(false);
   };
 
-  // Reservados: produtos movidos para a aba Reservas (ficam escondidos das outras listas)
-  const isReservado = (p: ProdutoEstoque) => !!p.reserva_cliente;
+  // Reservados: produtos movidos para a aba Reservas (ficam escondidos das outras listas).
+  // Exclui ESGOTADOS — se foi vendido, a reserva cumpriu o papel (mesmo que os campos ainda
+  // estejam preenchidos em itens legados antes do fix do endpoint de venda).
+  const isReservado = (p: ProdutoEstoque) => !!p.reserva_cliente && p.status !== "ESGOTADO" && p.qnt > 0;
   const reservados = estoque.filter(isReservado);
 
   // Filtrar por tipo (sempre excluindo reservados)
