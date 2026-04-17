@@ -1571,29 +1571,18 @@ export default function AdminPage() {
                       <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
                       <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">{row.nome}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 group">
-                          {row.whatsapp && row.whatsapp.replace(/\D/g, "").length >= 10 ? (
-                            <a
-                              href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-green-600 hover:underline whitespace-nowrap"
-                            >
-                              {row.whatsapp}
-                            </a>
-                          ) : (
-                            <span className="text-red-500 text-xs font-medium whitespace-nowrap">⚠ {row.whatsapp || "(vazio)"}</span>
-                          )}
-                          {user?.role === "admin" && (
-                            <button
-                              onClick={() => setEditWaRow(row)}
-                              className="text-xs text-[#86868B] hover:text-[#E8740E] opacity-60 hover:opacity-100 ml-1 transition-opacity"
-                              title="Editar contato"
-                            >
-                              ✏️
-                            </button>
-                          )}
-                        </div>
+                        {row.whatsapp && row.whatsapp.replace(/\D/g, "").length >= 10 ? (
+                          <a
+                            href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-600 hover:underline whitespace-nowrap"
+                          >
+                            {row.whatsapp}
+                          </a>
+                        ) : (
+                          <span className="text-red-500 text-xs font-medium whitespace-nowrap">⚠ {row.whatsapp || "(vazio)"}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {row.vendedor ? (
@@ -1747,6 +1736,8 @@ export default function AdminPage() {
           onClose={() => setEditWaRow(null)}
           onSaved={(novo) => {
             setData((prev) => prev ? prev.map((r) => r.id === editWaRow.id ? { ...r, whatsapp: novo } : r) : prev);
+            // Se o modal de detalhes esta aberto pra esse mesmo cliente, atualiza la tambem
+            setModalRow((prev) => prev && prev.id === editWaRow.id ? { ...prev, whatsapp: novo } : prev);
             setEditWaRow(null);
           }}
         />
@@ -1761,6 +1752,7 @@ export default function AdminPage() {
           onClose={() => setInvalidarRow(null)}
           onSaved={(patch) => {
             setData((prev) => prev ? prev.map((r) => r.id === invalidarRow.id ? { ...r, ...patch } : r) : prev);
+            setModalRow((prev) => prev && prev.id === invalidarRow.id ? { ...prev, ...patch } : prev);
             setInvalidarRow(null);
           }}
         />
@@ -1788,17 +1780,62 @@ export default function AdminPage() {
 
               {/* Status badge */}
               <div>
-                <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${modalRow.status === "GOSTEI" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-                  {modalRow.status === "GOSTEI" ? "Fechou pedido" : "Saiu sem fechar"}
+                <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  modalRow.status === "GOSTEI" ? "bg-green-100 text-green-700" :
+                  modalRow.status === "INVALIDO" ? "bg-gray-200 text-gray-700" :
+                  "bg-red-100 text-red-600"
+                }`}>
+                  {modalRow.status === "GOSTEI" ? "Fechou pedido" : modalRow.status === "INVALIDO" ? "🚫 Inválido" : "Saiu sem fechar"}
                 </span>
                 {modalRow.vendedor && (
                   <span className="ml-2 px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{modalRow.vendedor}</span>
                 )}
               </div>
 
+              {/* Banner INVALIDO (se marcado) */}
+              {modalRow.status === "INVALIDO" && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-red-700 flex items-center gap-2">🚫 Lead marcado como Inválido</h3>
+                    {modalRow.respondido_wa && (
+                      <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">✅ Já respondido no WhatsApp</span>
+                    )}
+                  </div>
+                  {modalRow.motivo_invalido && (
+                    <div className="text-sm">
+                      <span className="text-red-600 font-semibold">Motivo:</span>{" "}
+                      <span className="text-[#1D1D1F]">{modalRow.motivo_invalido}</span>
+                    </div>
+                  )}
+                  {modalRow.obs_invalido && (
+                    <div className="text-sm">
+                      <span className="text-red-600 font-semibold">Observação:</span>{" "}
+                      <span className="text-[#1D1D1F] whitespace-pre-wrap">{modalRow.obs_invalido}</span>
+                    </div>
+                  )}
+                  {(modalRow.marcado_invalido_por || modalRow.marcado_invalido_em) && (
+                    <p className="text-[10px] text-red-500/80">
+                      Marcado {modalRow.marcado_invalido_por ? `por ${modalRow.marcado_invalido_por}` : ""}
+                      {modalRow.marcado_invalido_em ? ` em ${new Date(modalRow.marcado_invalido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Customer info */}
               <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
-                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Cliente</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Cliente</h3>
+                  {user?.role === "admin" && (
+                    <button
+                      onClick={() => setEditWaRow(modalRow)}
+                      className="text-xs text-[#86868B] hover:text-[#E8740E] transition-colors"
+                      title="Editar contato"
+                    >
+                      ✏️ Editar contato
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-[#86868B]">Nome:</span>
@@ -1806,7 +1843,11 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <span className="text-[#86868B]">WhatsApp:</span>
-                    <p className="text-[#1D1D1F] font-medium">{modalRow.whatsapp}</p>
+                    {modalRow.whatsapp && modalRow.whatsapp.replace(/\D/g, "").length >= 10 ? (
+                      <p className="text-[#1D1D1F] font-medium">{modalRow.whatsapp}</p>
+                    ) : (
+                      <p className="text-red-500 font-medium text-xs">⚠ {modalRow.whatsapp || "(vazio)"}</p>
+                    )}
                   </div>
                   {modalRow.instagram && (
                     <div className="col-span-2">
