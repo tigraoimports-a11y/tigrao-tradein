@@ -43,6 +43,7 @@ export const NAV: NavEntry[] = [
     label: "Produtos", icon: "\u{1F4E6}",
     items: [
       { href: "/admin/estoque", label: "Estoque", icon: "\u{1F4E6}", pageKey: "estoque" },
+      { href: "/admin/produtos-funcionarios", label: "Produtos c/ Funcionários", icon: "\u{1F465}", pageKey: "produtos_funcionarios" },
       { href: "/admin/etiquetas", label: "Etiquetas", icon: "\u{1F3F7}\uFE0F", pageKey: "etiquetas" },
       { href: "/admin/etiquetas-preco", label: "Etiquetas de Preco", icon: "\u{1F4B0}", pageKey: "etiquetas_preco" },
       { href: "/admin/impressao-produtos", label: "Impressão Produtos", icon: "🖨️", pageKey: "impressao_produtos" },
