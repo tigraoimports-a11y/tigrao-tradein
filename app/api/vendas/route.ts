@@ -356,16 +356,24 @@ export async function POST(req: NextRequest) {
 
   // Descontar do estoque se veio de um produto cadastrado
   if (estoqueId) {
-    const { data: item } = await supabase.from("estoque").select("qnt,produto,tipo").eq("id", estoqueId).single();
+    const { data: item } = await supabase.from("estoque").select("qnt,produto,tipo,reserva_cliente").eq("id", estoqueId).single();
     if (item) {
       const novaQnt = Math.max(0, Number(item.qnt) - 1);
       // Seminovos e Novos: marcar como ESGOTADO ao chegar em qnt=0 (nunca deletar)
       // Isso preserva o ID do item e permite rastreabilidade completa (retorno ao estoque na devolução)
-      await supabase.from("estoque").update({
+      // Quando esgota, limpa a reserva (venda concretizada → reserva cumpriu seu papel).
+      const updatePayload: Record<string, unknown> = {
         qnt: novaQnt,
         status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
         updated_at: new Date().toISOString(),
-      }).eq("id", estoqueId);
+      };
+      if (novaQnt === 0 && item.reserva_cliente) {
+        updatePayload.reserva_cliente = null;
+        updatePayload.reserva_data = null;
+        updatePayload.reserva_para = null;
+        updatePayload.reserva_operador = null;
+      }
+      await supabase.from("estoque").update(updatePayload).eq("id", estoqueId);
       await logActivity(
         usuario,
         novaQnt === 0 ? "Esgotou do estoque (auto)" : "Removeu do estoque (auto)",
