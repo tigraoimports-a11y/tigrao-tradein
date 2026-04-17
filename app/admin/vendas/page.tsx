@@ -5036,6 +5036,19 @@ export default function VendasPage() {
                                               setEditandoGrupoIds([]);
                                               setEditandoVendaId(v.id);
                                             }
+                                            // Preservar flag de venda programada no form — senao o PATCH
+                                            // zerava data_programada e mudava status pra AGUARDANDO ao salvar.
+                                            if (primaryVenda.status_pagamento === "PROGRAMADA" || primaryVenda.data_programada) {
+                                              setVendaProgramada(true);
+                                              setDataProgramada(primaryVenda.data_programada || "");
+                                              setProgramadaJaPago(primaryVenda.status_pagamento === "FINALIZADO");
+                                              setProgramadaComSinal(Number(primaryVenda.sinal_antecipado) > 0);
+                                            } else {
+                                              setVendaProgramada(false);
+                                              setDataProgramada("");
+                                              setProgramadaJaPago(false);
+                                              setProgramadaComSinal(false);
+                                            }
                                             setTab("nova");
                                             window.scrollTo({ top: 0, behavior: "smooth" });
                                           }}

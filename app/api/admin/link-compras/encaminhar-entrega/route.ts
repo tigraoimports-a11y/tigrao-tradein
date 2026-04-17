@@ -130,6 +130,31 @@ export async function POST(request: Request) {
   obsParts.push(`Encaminhada do link ${link.short_code}`);
   const observacaoFinal = obsParts.filter(Boolean).join("\n");
 
+  // Vendedor da entrega: se quem esta encaminhando e um vendedor com
+  // recebe_links=true (ex: Bianca triando links da Paloma), ele vira o vendedor
+  // da entrega. Caso contrario (admin Nicolas, ou vendedor sem recebe_links),
+  // mantem o vendedor original do link.
+  let vendedorFinal: string | null = link.vendedor || null;
+  try {
+    const userLogado = getUser(request);
+    if (userLogado && userLogado !== "Sistema") {
+      const { data: cfg } = await supabase
+        .from("tradein_config")
+        .select("labels")
+        .limit(1)
+        .maybeSingle();
+      const labels = (cfg?.labels || {}) as Record<string, unknown>;
+      const recebeMap = (labels._whatsapp_vendedores_recebe_links || {}) as Record<string, boolean>;
+      const norm = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const userKey = norm(userLogado);
+      // Procura match case-insensitive e sem acento
+      const recebe = Object.entries(recebeMap).some(([nome, flag]) => norm(nome) === userKey && flag === true);
+      if (recebe) {
+        vendedorFinal = userLogado;
+      }
+    }
+  } catch { /* silent: fallback ja e link.vendedor */ }
+
   const { data: entrega, error: e2 } = await supabase
     .from("entregas")
     .insert({
@@ -154,7 +179,7 @@ export async function POST(request: Request) {
       entrada: entradaVal > 0 ? entradaVal : null,
       parcelas: parcelasNum > 0 ? parcelasNum : null,
       valor_total: valorFinal > 0 ? valorFinal : (valorBase > 0 ? valorBase : null),
-      vendedor: link.vendedor || null,
+      vendedor: vendedorFinal,
     })
     .select()
     .single();

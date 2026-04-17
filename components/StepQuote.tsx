@@ -356,7 +356,9 @@ export default function StepQuote(p: StepQuoteProps) {
                     cliente_nome: clienteNome || null,
                     cliente_telefone: clienteWhatsApp || null,
                     produto: `${newModel} ${newStorage}`.trim(),
-                    cor: usedColor || null,
+                    // Simulador nao pede cor do produto novo ao cliente — fica null,
+                    // vendedor acerta a cor por WhatsApp depois e edita o link.
+                    cor: null,
                     valor: Math.round(newPrice),
                     troca_produto: usedModel ? `${usedModel} ${usedStorage || ""}`.trim() : null,
                     troca_valor: Math.round(valor1),

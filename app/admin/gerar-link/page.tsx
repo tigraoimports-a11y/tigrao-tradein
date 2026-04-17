@@ -368,6 +368,7 @@ export default function GerarLinkPage() {
   const [histBusca, setHistBusca] = useState("");
   const [histTipo, setHistTipo] = useState<"" | "COMPRA" | "TROCA">("");
   const [histArquivado, setHistArquivado] = useState<"0" | "1">("0");
+  const [histStatus, setHistStatus] = useState<"" | "ATIVO" | "PREENCHIDO" | "ENCAMINHADO">("");
 
   async function fetchHistorico() {
     if (!adminPw) return;
@@ -376,8 +377,9 @@ export default function GerarLinkPage() {
       const params = new URLSearchParams();
       if (histBusca.trim()) params.set("q", histBusca.trim());
       if (histTipo) params.set("tipo", histTipo);
+      if (histStatus) params.set("status", histStatus);
       params.set("arquivado", histArquivado);
-      const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders() });
+      const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders(), cache: "no-store" });
       const j = await res.json();
       const rows = (j.data || []).map((r: LinkCompra & { produtos_extras: unknown }) => {
         let pe: string[] | null = null;
@@ -394,7 +396,7 @@ export default function GerarLinkPage() {
 
   useEffect(() => {
     if (aba === "historico") fetchHistorico();
-  }, [aba, histBusca, histTipo, histArquivado]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aba, histBusca, histTipo, histArquivado, histStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function arquivarLink(id: string, arquivado: boolean) {
     await fetch("/api/admin/link-compras", {
@@ -1814,24 +1816,33 @@ export default function GerarLinkPage() {
               <option value="COMPRA">🛒 Só compra</option>
               <option value="TROCA">🔄 Com troca</option>
             </select>
+            <select value={histStatus} onChange={(e) => setHistStatus(e.target.value as "" | "ATIVO" | "PREENCHIDO" | "ENCAMINHADO")} className={inputCls} style={{ maxWidth: 180 }}>
+              <option value="">Todos status</option>
+              <option value="ATIVO">⏳ Aguardando</option>
+              <option value="PREENCHIDO">📝 Preenchido</option>
+              <option value="ENCAMINHADO">✅ Entrega criada</option>
+            </select>
             <select value={histArquivado} onChange={(e) => setHistArquivado(e.target.value as "0" | "1")} className={inputCls} style={{ maxWidth: 160 }}>
               <option value="0">Ativos</option>
               <option value="1">Arquivados</option>
             </select>
+            <button
+              onClick={() => fetchHistorico()}
+              disabled={histLoading}
+              className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20 transition-colors disabled:opacity-50"
+              title="Atualizar lista"
+            >
+              {histLoading ? "..." : "🔄 Atualizar"}
+            </button>
           </div>
 
           {histLoading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
           {!histLoading && histLinks.length === 0 && <p className="text-xs text-[#86868B] text-center py-6">Nenhum link encontrado.</p>}
 
           {(() => {
-            // Esconde links onde o cliente já preencheu o form de compra — esses
-            // aparecem em /admin/simulacoes → Histórico de Formulários. Aqui
-            // mantemos só o que ainda está "Aguardando" (ninguém preencheu).
-            // Preenchido = tem cliente_dados_preenchidos (JSONB) E cliente_preencheu_em.
-            const visiveis = histLinks.filter(l => !(l.cliente_dados_preenchidos && l.cliente_preencheu_em));
-            if (!histLoading && visiveis.length === 0 && histLinks.length > 0) {
-              return <p className="text-xs text-[#86868B] text-center py-6">Todos os links encontrados já foram preenchidos. Consulte em <strong>Simulações → Histórico de Formulários</strong>.</p>;
-            }
+            // Mostra TODOS os links (Aguardando, Preenchido, Entrega criada).
+            // Operador filtra via o dropdown "Status" em cima se quiser ver só um tipo.
+            const visiveis = histLinks;
             return (
           <div className="space-y-2">
             {visiveis.map((l) => (

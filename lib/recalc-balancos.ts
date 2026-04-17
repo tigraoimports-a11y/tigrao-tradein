@@ -6,9 +6,24 @@ import { getModeloBase } from "./produto-display";
  * os produtos EM ESTOQUE, agrupados por (categoria + modelo base via getModeloBase).
  *
  * Pode ser chamado internamente por qualquer route sem HTTP round-trip.
+ *
+ * Opcoes:
+ * - excludeSeminovos: se true (default), NAO mexe em produtos com categoria SEMINOVOS.
+ *   Balanco de seminovos e manual (via /admin/usados), pra evitar distorcao no
+ *   controle financeiro quando chegam produtos de troca com custos diferentes.
+ * - onlyModelos: se passado, recalcula APENAS os modelos listados (modelo base
+ *   retornado por getModeloBase). Ignora outros. Use pra balanco manual seletivo.
+ *
  * Retorna { groups, updated }.
  */
-export async function recalcBalancos(): Promise<{ groups: number; updated: number }> {
+export async function recalcBalancos(opts?: {
+  excludeSeminovos?: boolean;
+  onlyModelos?: Array<{ categoria: string; modeloBase: string }>;
+}): Promise<{ groups: number; updated: number }> {
+  const excludeSeminovos = opts?.excludeSeminovos !== false; // default true
+  const onlyModelos = opts?.onlyModelos;
+  const onlySet = onlyModelos ? new Set(onlyModelos.map(m => `${m.categoria}|${m.modeloBase}`)) : null;
+
   const sb = createClient(
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.SUPABASE_SERVICE_ROLE_KEY || "",
@@ -28,9 +43,13 @@ export async function recalcBalancos(): Promise<{ groups: number; updated: numbe
   for (const raw of items as unknown as Row[]) {
     const cc = Number(raw.custo_compra || 0);
     if (cc <= 0) continue;
+    // Pular SEMINOVOS no balanco automatico (feito manual via /admin/usados)
+    if (excludeSeminovos && String(raw.categoria || "").toUpperCase() === "SEMINOVOS") continue;
     // Usa getModeloBase para agrupar de forma consistente com o restante do sistema
     const modeloBase = getModeloBase(raw.produto, raw.categoria);
     const key = `${raw.categoria || ""}|${modeloBase}`;
+    // Se filtro de modelos, so processa os selecionados
+    if (onlySet && !onlySet.has(key)) continue;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(raw);
   }
