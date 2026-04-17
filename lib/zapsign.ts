@@ -13,11 +13,15 @@ export interface ZapSignSigner {
   name: string;
   phone_country?: string; // "55"
   phone_number: string; // DDD + numero, só dígitos
-  auth_mode?: "assinaturaTela" | "assinaturaTela-tokenSms" | "assinaturaTela-tokenEmail" | "assinaturaTela-bioSelfie";
+  auth_mode?: "assinaturaTela" | "assinaturaTela-tokenSms" | "assinaturaTela-tokenEmail";
   cpf?: string;
   email?: string;
   send_automatic_whatsapp?: boolean;
   send_automatic_email?: boolean;
+  /** Pede selfie do signatario no momento da assinatura (validade juridica reforcada) */
+  require_selfie_photo?: boolean;
+  /** Pede foto de documento de identidade */
+  require_document_photo?: boolean;
 }
 
 export interface ZapSignDoc {
@@ -50,7 +54,7 @@ export async function criarDocumentoEAssinar(params: {
   // Restricoes do ZapSign: sem quebras de linha, tabs ou mais de 4 espacos consecutivos.
   // A mensagem complementa o link de assinatura que o ZapSign envia automaticamente.
   const nomeCliente = params.signatario.name.split(" ")[0] || "Cliente";
-  const customMessage = `Ola ${nomeCliente}! A TigraoImports esta enviando o Termo de Procedencia do seu aparelho para assinatura digital. Ao clicar no link, voce recebera um codigo por SMS para autenticar e assinar o documento. Qualquer duvida, entre em contato conosco.`;
+  const customMessage = `Ola ${nomeCliente}! A TigraoImports esta enviando o Termo de Procedencia do seu aparelho para assinatura digital. Clique no link, digite o codigo SMS e tire uma selfie para autenticar e assinar o documento. Qualquer duvida, entre em contato conosco.`;
 
   const payload = {
     name: params.nome,
@@ -69,6 +73,9 @@ export async function criarDocumentoEAssinar(params: {
         send_automatic_whatsapp: params.signatario.send_automatic_whatsapp ?? true,
         send_automatic_email: params.signatario.send_automatic_email ?? false,
         custom_message: customMessage,
+        // Selfie obrigatoria pra reforcar validade juridica — prova visual do signatario
+        require_selfie_photo: params.signatario.require_selfie_photo ?? true,
+        require_document_photo: params.signatario.require_document_photo ?? false,
       },
     ],
   };
