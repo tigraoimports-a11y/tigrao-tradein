@@ -12,6 +12,8 @@ export interface UserInfo {
   login: string;
   role: "admin" | "equipe" | "estoque" | "vendedor" | "visualizador";
   permissoes?: string[];
+  /** Hrefs do menu lateral que o usuario quer ocultar (so visual, nao bloqueia acesso) */
+  abas_ocultas?: string[];
 }
 
 interface AdminContextType {
@@ -88,7 +90,12 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             headers: { "x-admin-password": savedPw },
           }).then(r => r.ok ? r.json() : null).then(data => {
             if (data?.user?.permissoes) {
-              const updated = { ...p, permissoes: data.user.permissoes, role: data.user.role };
+              const updated = {
+                ...p,
+                permissoes: data.user.permissoes,
+                role: data.user.role,
+                abas_ocultas: data.user.abas_ocultas ?? [],
+              };
               setUser(updated);
               localStorage.setItem("admin_user", JSON.stringify(updated));
             }
@@ -286,7 +293,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         }}
       >
         {/* Sidebar Navigation */}
-        <AdminNav userRole={user.role} userPermissoes={user.permissoes} />
+        <AdminNav userRole={user.role} userPermissoes={user.permissoes} abasOcultas={user.abas_ocultas} />
 
         {/* Main content area — offset by sidebar width */}
         <div className={`${sidebarCollapsed ? "lg:ml-[60px]" : "lg:ml-[220px]"} print:ml-0 min-h-screen flex flex-col transition-all duration-200`}>

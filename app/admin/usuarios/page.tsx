@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { PAGE_GROUPS } from "@/lib/permissions";
+import { NAV } from "@/components/admin/nav-config";
 
 interface Usuario {
   id: string;
@@ -12,6 +13,7 @@ interface Usuario {
   role: string;
   ativo: boolean;
   permissoes: string[];
+  abas_ocultas: string[];
   created_at: string;
 }
 
@@ -34,6 +36,7 @@ export default function UsuariosPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [expandedAbas, setExpandedAbas] = useState<string | null>(null);
 
   // New user form
   const [showNew, setShowNew] = useState(false);
@@ -56,6 +59,7 @@ export default function UsuariosPage() {
         setUsuarios((json.data ?? []).map((u: Record<string, unknown>) => ({
           ...u,
           permissoes: Array.isArray(u.permissoes) ? u.permissoes : [],
+          abas_ocultas: Array.isArray(u.abas_ocultas) ? u.abas_ocultas : [],
         })));
       }
     } catch { /* ignore */ }
@@ -172,6 +176,76 @@ export default function UsuariosPage() {
     } catch {
       setUsuarios((prev) =>
         prev.map((usr) => usr.id === u.id ? { ...usr, permissoes: current } : usr)
+      );
+      setMsg("Erro de conexao");
+    }
+    setSaving(null);
+  };
+
+  // Toggle ocultar/mostrar uma aba pra um usuario.
+  // abas_ocultas guarda os hrefs DESMARCADOS (ocultos). Vazio = mostra tudo.
+  const handleAbaOcultaToggle = async (u: Usuario, href: string) => {
+    const current = u.abas_ocultas ?? [];
+    const next = current.includes(href)
+      ? current.filter((h) => h !== href)
+      : [...current, href];
+
+    setUsuarios((prev) =>
+      prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: next } : usr)
+    );
+
+    setSaving(u.id);
+    try {
+      const res = await fetch("/api/admin/usuarios", {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ id: u.id, abas_ocultas: next }),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        setUsuarios((prev) =>
+          prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: current } : usr)
+        );
+        setMsg("Erro: " + json.error);
+      }
+    } catch {
+      setUsuarios((prev) =>
+        prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: current } : usr)
+      );
+      setMsg("Erro de conexao");
+    }
+    setSaving(null);
+  };
+
+  // Oculta/mostra todas as abas de um grupo de uma vez
+  const handleAbasOcultasGrupoToggle = async (u: Usuario, hrefs: string[]) => {
+    const current = u.abas_ocultas ?? [];
+    const todasOcultas = hrefs.every((h) => current.includes(h));
+    const next = todasOcultas
+      ? current.filter((h) => !hrefs.includes(h))
+      : [...new Set([...current, ...hrefs])];
+
+    setUsuarios((prev) =>
+      prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: next } : usr)
+    );
+
+    setSaving(u.id);
+    try {
+      const res = await fetch("/api/admin/usuarios", {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ id: u.id, abas_ocultas: next }),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        setUsuarios((prev) =>
+          prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: current } : usr)
+        );
+        setMsg("Erro: " + json.error);
+      }
+    } catch {
+      setUsuarios((prev) =>
+        prev.map((usr) => usr.id === u.id ? { ...usr, abas_ocultas: current } : usr)
       );
       setMsg("Erro de conexao");
     }
@@ -330,7 +404,7 @@ export default function UsuariosPage() {
                 {/* Permissoes toggle button (not for admin users or self) */}
                 {u.role !== "admin" && u.id !== user?.id && (
                   <button
-                    onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}
+                    onClick={() => { setExpandedUser(expandedUser === u.id ? null : u.id); setExpandedAbas(null); }}
                     className={`px-3 py-1 rounded-lg text-xs border transition-colors ${
                       expandedUser === u.id
                         ? "text-[#E8740E] border-[#E8740E]/30 bg-[#FFF5EB]"
@@ -347,6 +421,19 @@ export default function UsuariosPage() {
                     Acesso total
                   </span>
                 )}
+
+                {/* Abas visiveis toggle button (pra todos, inclusive admin e self) */}
+                <button
+                  onClick={() => { setExpandedAbas(expandedAbas === u.id ? null : u.id); setExpandedUser(null); }}
+                  className={`px-3 py-1 rounded-lg text-xs border transition-colors ${
+                    expandedAbas === u.id
+                      ? "text-[#E8740E] border-[#E8740E]/30 bg-[#FFF5EB]"
+                      : "text-[#86868B] border-[#E8E8ED] hover:bg-[#F5F5F7]"
+                  }`}
+                  title="Ocultar abas do menu lateral para este usuario (preferencia visual)"
+                >
+                  Abas {expandedAbas === u.id ? "\u25B2" : "\u25BC"}
+                </button>
 
                 {/* Toggle ativo */}
                 {u.id !== user?.id && (
@@ -409,6 +496,83 @@ export default function UsuariosPage() {
                   </div>
                   <p className="text-[10px] text-[#86868B] mt-3">
                     {(u.permissoes ?? []).length} permissao(oes) ativa(s) de {PAGE_GROUPS.flatMap(g => g.pages).length} total
+                  </p>
+                </div>
+              )}
+
+              {/* Abas ocultas panel — desmarca as abas que o usuario NAO quer ver */}
+              {expandedAbas === u.id && (
+                <div className="px-4 pb-4 border-t border-[#F0F0F5] pt-3">
+                  <p className="text-[11px] text-[#86868B] mb-3">
+                    Marcar = aba visivel no menu lateral. Desmarcar = oculta. Nao bloqueia acesso direto via URL.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {NAV.map((entry) => {
+                      if (!("items" in entry)) {
+                        // Item solto (Dashboard)
+                        const item = entry;
+                        const oculta = (u.abas_ocultas ?? []).includes(item.href);
+                        return (
+                          <div key={item.href} className="bg-[#FAFAFA] rounded-xl p-3 border border-[#F0F0F5]">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={!oculta}
+                                onChange={() => handleAbaOcultaToggle(u, item.href)}
+                                className="w-4 h-4 rounded accent-[#E8740E]"
+                              />
+                              <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-wider">
+                                {item.icon} {item.label}
+                              </span>
+                            </label>
+                          </div>
+                        );
+                      }
+                      // Grupo com sub-items
+                      const items = entry.items || [];
+                      const hrefs = items.map((i) => i.href);
+                      const abasOcs = u.abas_ocultas || [];
+                      const todasOcultas = hrefs.length > 0 && hrefs.every((h) => abasOcs.includes(h));
+                      const algumasOcultas = !todasOcultas && hrefs.some((h) => abasOcs.includes(h));
+                      return (
+                        <div key={entry.label} className="bg-[#FAFAFA] rounded-xl p-3 border border-[#F0F0F5]">
+                          <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={!todasOcultas}
+                              ref={(el) => { if (el) el.indeterminate = algumasOcultas; }}
+                              onChange={() => handleAbasOcultasGrupoToggle(u, hrefs)}
+                              className="w-4 h-4 rounded accent-[#E8740E]"
+                            />
+                            <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-wider">
+                              {entry.icon} {entry.label}
+                            </span>
+                          </label>
+                          <div className="space-y-1.5 ml-1">
+                            {items.map((item) => {
+                              const oculta = abasOcs.includes(item.href);
+                              return (
+                                <label key={item.href} className="flex items-center gap-2 cursor-pointer group">
+                                  <input
+                                    type="checkbox"
+                                    checked={!oculta}
+                                    onChange={() => handleAbaOcultaToggle(u, item.href)}
+                                    className="w-3.5 h-3.5 rounded accent-[#E8740E]"
+                                  />
+                                  <span className="text-xs text-[#6E6E73] group-hover:text-[#1D1D1F] transition-colors">
+                                    {item.label}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-[#86868B] mt-3">
+                    {(u.abas_ocultas ?? []).length} aba(s) oculta(s)
+                    {u.id === user?.id && " — Recarregue a pagina pra ver o menu atualizado"}
                   </p>
                 </div>
               )}

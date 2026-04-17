@@ -12,12 +12,25 @@ export async function GET(req: NextRequest) {
   const login = req.nextUrl.searchParams.get("login");
   if (!login) return NextResponse.json({ error: "login required" }, { status: 400 });
 
-  const { data: user } = await supabase
+  const primary = await supabase
     .from("usuarios")
-    .select("id, nome, login, role, permissoes")
+    .select("id, nome, login, role, permissoes, abas_ocultas")
     .eq("login", login.toLowerCase().trim())
     .eq("ativo", true)
     .single();
+
+  let user: { id: string; nome: string; login: string; role: string; permissoes?: unknown; abas_ocultas?: unknown } | null = primary.data;
+
+  // Fallback: coluna abas_ocultas pode nao existir ainda
+  if (!user) {
+    const fallback = await supabase
+      .from("usuarios")
+      .select("id, nome, login, role, permissoes")
+      .eq("login", login.toLowerCase().trim())
+      .eq("ativo", true)
+      .single();
+    user = fallback.data;
+  }
 
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -28,6 +41,7 @@ export async function GET(req: NextRequest) {
       login: user.login,
       role: user.role,
       permissoes: user.permissoes ?? [],
+      abas_ocultas: user.abas_ocultas ?? [],
     },
   });
 }
@@ -87,6 +101,7 @@ export async function POST(req: NextRequest) {
       login: user.login,
       role: user.role,
       permissoes: user.permissoes ?? [],
+      abas_ocultas: user.abas_ocultas ?? [],
     },
     apiToken,
   });
