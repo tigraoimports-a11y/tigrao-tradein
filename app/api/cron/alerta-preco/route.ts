@@ -24,6 +24,18 @@ function normalizarNome(nome: string): string {
     .replace(/\s+/g, " ");
 }
 
+// Primeiro nome normalizado: "CAMILLA PIMENTEL" → "CAMILLA"
+function primeiroNomeNorm(nome: string): string {
+  return normalizarNome(nome).split(" ")[0] || "";
+}
+
+// Normaliza telefone: so digitos, remove DDI 55
+function normalizarTelefone(tel: string): string {
+  let t = (tel || "").replace(/\D/g, "");
+  if (t.length > 11 && t.startsWith("55")) t = t.substring(2);
+  return t;
+}
+
 // Envia mensagem via Z-API (instancia de follow-up)
 async function enviarWhatsApp(phone: string, message: string): Promise<boolean> {
   const instanceId = process.env.ZAPI_FOLLOWUP_INSTANCE_ID;
@@ -109,17 +121,63 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Nenhuma simulacao elegivel" });
     }
 
-    // 3. Buscar vendas dos ultimos 30 dias pra cruzar (quem ja comprou)
+    // 3. Buscar vendas dos ultimos 90 dias pra cruzar (quem ja comprou)
+    // Janela ampla pra pegar clientes que compraram antes
+    const noventaDias = new Date();
+    noventaDias.setDate(noventaDias.getDate() - 90);
+    const dataLimiteVendas = noventaDias.toISOString();
+
     const { data: vendas } = await supabase
       .from("vendas")
-      .select("cliente")
-      .gte("created_at", dataLimite);
+      .select("cliente, telefone")
+      .gte("created_at", dataLimiteVendas);
 
-    // Montar set de nomes normalizados de quem ja comprou
-    const clientesQueCompraram = new Set<string>();
+    const nomesQueCompraram = new Set<string>();
+    const primeirosNomesQueCompraram = new Set<string>();
+    const telefonesQueCompraram = new Set<string>();
     if (vendas) {
       for (const v of vendas) {
-        if (v.cliente) clientesQueCompraram.add(normalizarNome(v.cliente));
+        if (v.cliente) {
+          nomesQueCompraram.add(normalizarNome(v.cliente));
+          const pn = primeiroNomeNorm(v.cliente);
+          if (pn.length >= 4) primeirosNomesQueCompraram.add(pn);
+        }
+        if (v.telefone) {
+          const t = normalizarTelefone(v.telefone);
+          if (t.length >= 10) telefonesQueCompraram.add(t);
+        }
+      }
+    }
+
+    // Tambem buscar link_compras dos ultimos 90 dias (tem telefone bem preenchido)
+    const { data: links } = await supabase
+      .from("link_compras")
+      .select("cliente_nome, cliente_telefone")
+      .gte("created_at", dataLimiteVendas);
+    if (links) {
+      for (const l of links) {
+        if (l.cliente_nome) nomesQueCompraram.add(normalizarNome(l.cliente_nome));
+        if (l.cliente_telefone) {
+          const t = normalizarTelefone(l.cliente_telefone);
+          if (t.length >= 10) telefonesQueCompraram.add(t);
+        }
+      }
+    }
+
+    // Telefones que ja demonstraram interesse (GOSTEI) em QUALQUER simulacao
+    // Se o cliente ja clicou GOSTEI alguma vez, provavelmente comprou ou esta em
+    // negociacao ativa — nao precisa alerta automatico
+    const { data: gosteis } = await supabase
+      .from("simulacoes")
+      .select("whatsapp")
+      .eq("status", "GOSTEI");
+    const telefonesQueGostaram = new Set<string>();
+    if (gosteis) {
+      for (const g of gosteis) {
+        if (g.whatsapp) {
+          const t = normalizarTelefone(g.whatsapp);
+          if (t.length >= 10) telefonesQueGostaram.add(t);
+        }
       }
     }
 
@@ -132,9 +190,20 @@ export async function GET(req: NextRequest) {
     for (const s of simsElegiveis) {
       if (!s.whatsapp || !s.modelo_novo || !s.storage_novo || !s.preco_novo) continue;
 
-      // Verificar se o cliente ja comprou (match por nome)
+      // Verificar se o cliente ja comprou ou ja demonstrou interesse
       const nomeNorm = normalizarNome(s.nome);
-      if (clientesQueCompraram.has(nomeNorm)) {
+      const pNome = primeiroNomeNorm(s.nome);
+      const telNorm = normalizarTelefone(s.whatsapp || "");
+
+      const jaComprouPorTel = telNorm.length >= 10 && telefonesQueCompraram.has(telNorm);
+      const jaComprouPorNome = nomeNorm && nomesQueCompraram.has(nomeNorm);
+      // Match por primeiro nome: so vale se a simulacao tem so o primeiro nome
+      // (pra evitar falsos positivos com sobrenomes diferentes)
+      const simSoPrimeiroNome = nomeNorm.split(" ").length === 1;
+      const jaComprouPorPrimeiroNome = simSoPrimeiroNome && pNome.length >= 4 && primeirosNomesQueCompraram.has(pNome);
+      const jaGostou = telNorm.length >= 10 && telefonesQueGostaram.has(telNorm);
+
+      if (jaComprouPorTel || jaComprouPorNome || jaComprouPorPrimeiroNome || jaGostou) {
         jaCompraram++;
         // Marcar como enviado pra nao checar de novo
         await supabase
