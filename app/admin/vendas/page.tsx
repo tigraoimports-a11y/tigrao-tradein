@@ -766,7 +766,7 @@ export default function VendasPage() {
     const trc1 = parseFloat(form.produto_na_troca) || 0;
     const trc2 = parseFloat(form.produto_na_troca2) || 0;
     const trc = trc1 + trc2;
-    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
+    const taxaAlt = getTaxa((form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
     const liqAlt = taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal;
     let liqPrinc = 0;
     if (compVal > 0) {
@@ -891,7 +891,7 @@ export default function VendasPage() {
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
     // Segundo cartão (comp_alt) — sempre incluído quando preenchido
     const compAltVal = parseFloat(form.comp_alt) || 0;
-    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
+    const taxaAlt = compAltVal > 0 ? getTaxa((form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
     const liqAlt = compAltVal > 0 ? (taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal) : 0;
     // Trocas: no modo carrinho, somar de todos os produtos do carrinho + form global
     const trcForm1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
@@ -3198,7 +3198,7 @@ export default function VendasPage() {
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
                           const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
                           const compAltDisp = parseFloat(form.comp_alt) || 0;
-                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
+                          const taxaAltDisp = compAltDisp > 0 ? getTaxa((form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
                           const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
                           return (
                           <>
@@ -3236,7 +3236,16 @@ export default function VendasPage() {
                       }} placeholder="Valor total do link" className={inputCls} /></div>
                       <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                         <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
+<<<<<<< Updated upstream
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+=======
+                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
+                          const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
+                          const compAltDisp = parseFloat(form.comp_alt) || 0;
+                          const taxaAltDisp = compAltDisp > 0 ? getTaxa((form.forma_alt || "CARTAO") === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || "CARTAO") as "CARTAO" | "LINK") : 0;
+                          const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
+                          return (
+>>>>>>> Stashed changes
                           <>
                             <span>Liquido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
                             {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
@@ -3350,7 +3359,7 @@ export default function VendasPage() {
               </label>
               {form.banco_alt && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                  <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => { const v = e.target.value; setForm(f => ({ ...f, forma_alt: v, banco_alt: v === "LINK" ? "MERCADO_PAGO" : (f.banco_alt === "MERCADO_PAGO" ? "ITAU" : f.banco_alt || "ITAU") })); }} className={selectCls}>
                     <option value="CARTAO">Maquina Cartão</option>
                     <option value="LINK">Link Mercado Pago</option>
                   </select></div>
@@ -3772,7 +3781,7 @@ export default function VendasPage() {
                 </label>
                 {form.banco_alt && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                    <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => { const v = e.target.value; setForm(f => ({ ...f, forma_alt: v, banco_alt: v === "LINK" ? "MERCADO_PAGO" : (f.banco_alt === "MERCADO_PAGO" ? "ITAU" : f.banco_alt || "ITAU") })); }} className={selectCls}>
                       <option value="CARTAO">Maquina Cartão</option>
                       <option value="LINK">Link Mercado Pago</option>
                     </select></div>
@@ -3974,7 +3983,7 @@ export default function VendasPage() {
             let receitaReal = totalVendido; // fallback: soma dos preços vendidos
             if (gComp > 0 && taxa > 0) {
               const liqPrincipal = calcularLiquido(gComp, taxa);
-              const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
+              const taxaAlt = gCompAlt > 0 ? getTaxa((form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
               const liqAlt = gCompAlt > 0 ? (taxaAlt > 0 ? calcularLiquido(gCompAlt, taxaAlt) : gCompAlt) : 0;
               receitaReal = liqPrincipal + liqAlt + gPixE + gEspecieE + gTrocaE;
             }
