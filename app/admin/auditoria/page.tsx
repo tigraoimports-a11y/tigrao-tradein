@@ -90,6 +90,7 @@ interface AuditoriaData {
     por_categoria: Array<{ categoria: string; qtd: number; valor: number }>;
     estoque_base: number;
     gastos_fornecedor: number;
+    trocas_recebidas: number;
     custo_vendas: number;
     estoque_esperado: number;
     diferenca_estoque: number;
@@ -962,6 +963,14 @@ function TabEstoque({ data }: { data: AuditoriaData }) {
             cor="text-green-700"
             icon="🛒"
           />
+          {(est.trocas_recebidas || 0) > 0 && (
+            <LinhaBalanco
+              label="(+) Trocas Recebidas"
+              valor={est.trocas_recebidas}
+              cor="text-green-700"
+              icon="🔄"
+            />
+          )}
           <LinhaBalanco
             label="(-) Custo Mercadoria Vendida"
             valor={-est.custo_vendas}

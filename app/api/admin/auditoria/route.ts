@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     supabase
       .from("vendas")
       .select(
-        "preco_vendido, custo, lucro, is_brinde, status_pagamento, forma, banco, banco_pix, bandeira, qnt_parcelas, valor_comprovante, entrada_pix, entrada_especie, credito_lojista_usado, data"
+        "preco_vendido, custo, lucro, is_brinde, status_pagamento, forma, banco, banco_pix, bandeira, qnt_parcelas, valor_comprovante, entrada_pix, entrada_especie, credito_lojista_usado, produto_na_troca, produto_na_troca2, data"
       )
       .gte("data", primeiroDia)
       .lte("data", ultimoDia),
@@ -123,6 +123,19 @@ export async function GET(request: Request) {
   );
   const lucroVendas = vendasValidas.reduce(
     (s, v) => s + (Number(v.lucro) || 0),
+    0
+  );
+
+  // Trocas recebidas — aparelhos usados que o cliente entregou na venda.
+  // Eles entram no estoque (PENDENCIA/SEMINOVO) mas nao passam pela tabela
+  // de gastos, entao o calculo de "Estoque Esperado" precisa somar isso.
+  const parseTroca = (val: unknown): number => {
+    if (!val) return 0;
+    const cleaned = String(val).replace(/[^0-9.,]/g, "").replace(",", ".");
+    return parseFloat(cleaned) || 0;
+  };
+  const trocasRecebidas = vendasValidas.reduce(
+    (s, v) => s + parseTroca(v.produto_na_troca) + parseTroca(v.produto_na_troca2),
     0
   );
 
@@ -467,9 +480,10 @@ export async function GET(request: Request) {
       por_categoria: estoquePorCategoria,
       estoque_base: estoqueBase,
       gastos_fornecedor: gastosFornecedor,
+      trocas_recebidas: trocasRecebidas,
       custo_vendas: custoVendas,
-      estoque_esperado: estoqueBase + gastosFornecedor - custoVendas,
-      diferenca_estoque: valorEstoqueTotal - (estoqueBase + gastosFornecedor - custoVendas),
+      estoque_esperado: estoqueBase + gastosFornecedor + trocasRecebidas - custoVendas,
+      diferenca_estoque: valorEstoqueTotal - (estoqueBase + gastosFornecedor + trocasRecebidas - custoVendas),
     },
     recebiveis_pendentes: recebiveisPendentes,
     dias: diasDoMes,
