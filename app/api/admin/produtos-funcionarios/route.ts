@@ -92,10 +92,13 @@ export async function POST(req: NextRequest) {
       imei = item.imei;
       valorTotal = Number(item.custo_compra || item.custo_unitario || 0);
 
-      // Marca item como COM_FUNCIONARIO (sai do estoque disponivel)
+      // Marca item como COM_FUNCIONARIO — MANTEM qnt=1 porque o produto ainda
+      // eh patrimonio da empresa (nao foi vendido, apenas cedido/emprestado).
+      // Status 'COM_FUNCIONARIO' garante que ele nao aparece em listas de
+      // 'estoque disponivel' (/admin/estoque filtra por status='EM ESTOQUE'),
+      // mas continua contando no patrimonio total (qnt * custo_unitario).
       await supabase.from("estoque").update({
         status: "COM_FUNCIONARIO",
-        qnt: 0,
         updated_at: new Date().toISOString(),
       }).eq("id", estoque_id);
     }
@@ -182,11 +185,10 @@ export async function PATCH(req: NextRequest) {
     if (!antes) return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
 
     if (devolver) {
-      // Retorna ao estoque se tinha origem
+      // Retorna ao estoque se tinha origem — so precisa trocar o status (qnt nunca foi zerado).
       if (antes.estoque_id) {
         await supabase.from("estoque").update({
           status: "EM ESTOQUE",
-          qnt: 1,
           updated_at: new Date().toISOString(),
         }).eq("id", antes.estoque_id);
       }
@@ -254,11 +256,10 @@ export async function DELETE(req: NextRequest) {
       .from("produtos_funcionarios").select("*").eq("id", id).single();
     if (!antes) return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
 
-    // Retorna ao estoque
+    // Retorna ao estoque — so troca o status (qnt sempre se manteve).
     if (antes.estoque_id) {
       await supabase.from("estoque").update({
         status: "EM ESTOQUE",
-        qnt: 1,
         updated_at: new Date().toISOString(),
       }).eq("id", antes.estoque_id);
     }
