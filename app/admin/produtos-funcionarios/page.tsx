@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { hojeBR } from "@/lib/date-utils";
+import { getTaxa, calcularLiquido } from "@/lib/taxas";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -85,8 +86,7 @@ interface EstoqueItem {
 }
 
 export default function ProdutosFuncionariosPage() {
-  const { user } = useAdmin();
-  const password = typeof window !== "undefined" ? localStorage.getItem("admin_password") || "" : "";
+  const { user, password } = useAdmin();
   const userName = user?.nome || "sistema";
 
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
@@ -419,12 +419,25 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
   const [percentual, setPercentual] = useState(50);
   const [observacao, setObservacao] = useState("");
   const [dataSaida, setDataSaida] = useState(hojeBR());
-  // Pagamento inicial
+  // Pagamento (estilo Vendas)
   const [registrarPagamento, setRegistrarPagamento] = useState(false);
-  const [pagForma, setPagForma] = useState("PIX");
-  const [pagConta, setPagConta] = useState("ITAU");
-  const [pagParcelas, setPagParcelas] = useState(1);
-  const [pagValor, setPagValor] = useState("");
+  // Forma principal
+  const [formaPrinc, setFormaPrinc] = useState<"CARTAO" | "LINK" | "PIX" | "ESPECIE" | "DEBITO" | "DESCONTO_FOLHA">("PIX");
+  const [bancoPrinc, setBancoPrinc] = useState("ITAU");
+  const [bandeiraPrinc, setBandeiraPrinc] = useState("VISA");
+  const [parcelasPrinc, setParcelasPrinc] = useState(1);
+  const [valorComprPrinc, setValorComprPrinc] = useState("");
+  // Misto
+  const [entradaPix, setEntradaPix] = useState("");
+  const [bancoPix, setBancoPix] = useState("ITAU");
+  const [entradaEspecie, setEntradaEspecie] = useState("");
+  // 2o cartao/link
+  const [usarSegundo, setUsarSegundo] = useState(false);
+  const [forma2, setForma2] = useState<"CARTAO" | "LINK">("CARTAO");
+  const [banco2, setBanco2] = useState("ITAU");
+  const [bandeira2, setBandeira2] = useState("VISA");
+  const [parc2, setParc2] = useState(1);
+  const [comp2, setComp2] = useState("");
   const [pagObs, setPagObs] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -432,26 +445,24 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
   useEffect(() => {
     if (tipo !== "estoque") return;
     (async () => {
-      // Busca todos sem filtro (URL com espaco pode falhar em alguns browsers), depois filtra client-side.
-      const res = await fetch("/api/estoque", {
+      const res = await fetch("/api/estoque?status=EM ESTOQUE", {
         headers: { "x-admin-password": password },
       });
       const j = await res.json();
       if (j.data) {
-        setEstoqueItems((j.data as EstoqueItem[]).filter(i => i.status === "EM ESTOQUE" && Number(i.qnt) > 0));
+        setEstoqueItems((j.data as EstoqueItem[]).filter(i => i.status === "EM ESTOQUE" && i.qnt > 0));
       }
     })();
   }, [tipo, password]);
 
   const filtered = useMemo(() => {
-    if (!busca.trim()) return estoqueItems.slice(0, 50);
+    if (!busca.trim()) return estoqueItems.slice(0, 30);
     const q = busca.toLowerCase();
     return estoqueItems.filter(i =>
       i.produto.toLowerCase().includes(q) ||
       (i.serial_no || "").toLowerCase().includes(q) ||
-      (i.imei || "").toLowerCase().includes(q) ||
       (i.cor || "").toLowerCase().includes(q)
-    ).slice(0, 50);
+    ).slice(0, 30);
   }, [estoqueItems, busca]);
 
   const valorBase = tipo === "estoque"
@@ -494,26 +505,60 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
       const j = await res.json();
       if (!j.ok) { setErr(j.error || "Erro ao salvar"); return; }
 
-      // Se marcou registrar pagamento inicial, posta pagamento
-      const valorPagNum = Number((pagValor || "").replace(/\D/g, ""));
-      if (registrarPagamento && valorPagNum > 0 && j.data?.id) {
-        const resPag = await fetch("/api/admin/produtos-funcionarios/pagamento", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-          body: JSON.stringify({
-            produto_funcionario_id: j.data.id,
-            data: dataSaida,
-            valor: valorPagNum,
-            forma: pagForma,
-            conta: (pagForma === "PIX" || pagForma === "CARTAO") ? pagConta : null,
-            parcelas: pagParcelas,
+      // Se marcou registrar pagamento, posta um registro por forma usada
+      if (registrarPagamento && j.data?.id) {
+        const vinculoId = j.data.id as string;
+        const pagamentos: Array<{ forma: string; conta: string | null; parcelas: number; valor: number; valor_liquido: number; observacao: string | null }> = [];
+        const vPrinc = Number((valorComprPrinc || "").replace(/\D/g, ""));
+        const vPix = Number((entradaPix || "").replace(/\D/g, ""));
+        const vEsp = Number((entradaEspecie || "").replace(/\D/g, ""));
+        const v2 = Number((comp2 || "").replace(/\D/g, ""));
+
+        // Principal
+        if (vPrinc > 0) {
+          let tx = 0;
+          if (formaPrinc === "CARTAO" || formaPrinc === "LINK") {
+            tx = getTaxa(formaPrinc === "LINK" ? "MERCADO_PAGO" : bancoPrinc, bandeiraPrinc || null, parcelasPrinc, "CARTAO");
+          } else if (formaPrinc === "DEBITO") tx = 0.75;
+          const liquido = tx > 0 ? calcularLiquido(vPrinc, tx) : vPrinc;
+          pagamentos.push({
+            forma: formaPrinc,
+            conta: formaPrinc === "LINK" ? "MERCADO_PAGO" : (formaPrinc === "CARTAO" ? bancoPrinc : formaPrinc === "PIX" ? bancoPrinc : null),
+            parcelas: (formaPrinc === "CARTAO" || formaPrinc === "LINK") ? parcelasPrinc : 1,
+            valor: vPrinc,
+            valor_liquido: Math.round(liquido),
             observacao: pagObs || null,
-          }),
-        });
-        const jPag = await resPag.json();
-        if (!jPag.ok) {
-          setErr(`Vínculo criado, mas falhou o pagamento: ${jPag.error || "erro"}`);
-          // Ainda assim chama onSaved pra refetch
+          });
+        }
+        // Entrada Pix (se misto)
+        if (vPix > 0 && formaPrinc !== "PIX") {
+          pagamentos.push({ forma: "PIX", conta: bancoPix, parcelas: 1, valor: vPix, valor_liquido: vPix, observacao: null });
+        }
+        // Entrada Espécie (se misto)
+        if (vEsp > 0 && formaPrinc !== "ESPECIE") {
+          pagamentos.push({ forma: "ESPECIE", conta: null, parcelas: 1, valor: vEsp, valor_liquido: vEsp, observacao: null });
+        }
+        // 2o cartão/link
+        if (usarSegundo && v2 > 0) {
+          const tx2 = getTaxa(forma2 === "LINK" ? "MERCADO_PAGO" : banco2, bandeira2 || null, parc2, "CARTAO");
+          const liq2 = tx2 > 0 ? calcularLiquido(v2, tx2) : v2;
+          pagamentos.push({
+            forma: forma2,
+            conta: forma2 === "LINK" ? "MERCADO_PAGO" : banco2,
+            parcelas: parc2,
+            valor: v2,
+            valor_liquido: Math.round(liq2),
+            observacao: "2ª forma de pagamento",
+          });
+        }
+
+        // Posta cada pagamento
+        for (const p of pagamentos) {
+          await fetch("/api/admin/produtos-funcionarios/pagamento", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+            body: JSON.stringify({ produto_funcionario_id: vinculoId, data: dataSaida, ...p }),
+          });
         }
       }
       onSaved();
@@ -558,9 +603,7 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
                         <span className="text-xs font-mono text-[#E8740E]">{fmt(Number(item.custo_compra ?? item.custo_unitario ?? 0))}</span>
                       </div>
                       <p className="text-xs text-[#86868B]">
-                        {item.cor || "—"}
-                        {item.serial_no ? ` • SN: ${item.serial_no}` : ""}
-                        {item.imei ? ` • IMEI: ${item.imei}` : ""}
+                        {item.cor || "—"} {item.serial_no ? `• SN: ${item.serial_no}` : ""}
                       </p>
                     </div>
                   ))}
@@ -662,61 +705,183 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
             />
           </div>
 
-          {/* Pagamento inicial — so aparece quando ha valor a ser pago pelo funcionario */}
+          {/* Pagamento — bloco completo estilo Vendas */}
           {valorFunc > 0 && (
             <div className="pt-3 border-t border-[#E8E8ED]">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={registrarPagamento} onChange={e => {
-                  setRegistrarPagamento(e.target.checked);
-                  if (e.target.checked && !pagValor) setPagValor(String(Math.round(valorFunc)));
-                }} className="w-4 h-4 accent-[#E8740E]" />
-                <span className="text-sm font-semibold text-[#1D1D1F]">💰 Registrar pagamento inicial?</span>
+                <input type="checkbox" checked={registrarPagamento} onChange={e => setRegistrarPagamento(e.target.checked)} className="w-4 h-4 accent-[#E8740E]" />
+                <span className="text-sm font-semibold text-[#1D1D1F]">💰 Como o funcionário pagou?</span>
               </label>
-              <p className="text-[11px] text-[#86868B] mt-1 ml-6">Marque se o funcionário ja pagou algo no ato. Saldo restante fica pendente.</p>
+              <p className="text-[11px] text-[#86868B] mt-1 ml-6">Marque pra registrar o(s) pagamento(s) no ato. Saldo restante fica pendente.</p>
 
-              {registrarPagamento && (
+              {registrarPagamento && (() => {
+                const vPrinc = Number((valorComprPrinc || "").replace(/\D/g, ""));
+                const vPix = Number((entradaPix || "").replace(/\D/g, ""));
+                const vEsp = Number((entradaEspecie || "").replace(/\D/g, ""));
+                const v2 = Number((comp2 || "").replace(/\D/g, ""));
+                const taxaPrinc = (formaPrinc === "CARTAO" || formaPrinc === "LINK")
+                  ? getTaxa(formaPrinc === "LINK" ? "MERCADO_PAGO" : bancoPrinc, bandeiraPrinc || null, parcelasPrinc, "CARTAO")
+                  : formaPrinc === "DEBITO" ? 0.75 : 0;
+                const liqPrinc = vPrinc > 0 && taxaPrinc > 0 ? calcularLiquido(vPrinc, taxaPrinc) : vPrinc;
+                const taxa2 = usarSegundo && v2 > 0 ? getTaxa(forma2 === "LINK" ? "MERCADO_PAGO" : banco2, bandeira2 || null, parc2, "CARTAO") : 0;
+                const liq2 = usarSegundo && v2 > 0 && taxa2 > 0 ? calcularLiquido(v2, taxa2) : (usarSegundo ? v2 : 0);
+                const totalRecebido = Math.round(liqPrinc + vPix + vEsp + liq2);
+                return (
                 <div className="mt-3 p-3 bg-[#F9F9FB] rounded-lg space-y-3">
+                  {/* Forma principal */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Forma</label>
-                      <select value={pagForma} onChange={e => setPagForma(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Forma principal</label>
+                      <select value={formaPrinc} onChange={e => { const v = e.target.value as typeof formaPrinc; setFormaPrinc(v); if (v === "LINK") setBancoPrinc("MERCADO_PAGO"); else if (bancoPrinc === "MERCADO_PAGO") setBancoPrinc("ITAU"); }} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
                         <option value="PIX">Pix</option>
                         <option value="CARTAO">Cartão (máquina)</option>
                         <option value="LINK">Link Mercado Pago</option>
-                        <option value="DINHEIRO">Dinheiro</option>
+                        <option value="ESPECIE">Espécie (dinheiro)</option>
+                        <option value="DEBITO">Débito</option>
                         <option value="DESCONTO_FOLHA">Desconto em folha</option>
-                        <option value="OUTRO">Outro</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Valor (R$)</label>
-                      <input type="text" inputMode="numeric" value={pagValor} onChange={e => setPagValor(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" placeholder={`Ate ${fmt(valorFunc)}`} />
-                    </div>
-                  </div>
-
-                  {(pagForma === "PIX" || pagForma === "CARTAO") && (
-                    <div className="grid grid-cols-2 gap-3">
+                    {(formaPrinc === "CARTAO" || formaPrinc === "DEBITO") && (
                       <div>
-                        <label className="text-[10px] uppercase text-[#86868B] font-semibold">{pagForma === "PIX" ? "Conta Pix" : "Maquina"}</label>
-                        <select value={pagConta} onChange={e => setPagConta(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                        <label className="text-[10px] uppercase text-[#86868B] font-semibold">Máquina</label>
+                        <select value={bancoPrinc} onChange={e => setBancoPrinc(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
                           <option value="ITAU">Itaú</option>
                           <option value="INFINITEPAY">InfinitePay</option>
                           <option value="MERCADOPAGO">Mercado Pago</option>
                         </select>
                       </div>
-                      {pagForma === "CARTAO" && (
+                    )}
+                    {formaPrinc === "PIX" && (
+                      <div>
+                        <label className="text-[10px] uppercase text-[#86868B] font-semibold">Conta Pix</label>
+                        <select value={bancoPrinc} onChange={e => setBancoPrinc(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                          <option value="ITAU">Itaú</option>
+                          <option value="INFINITEPAY">InfinitePay</option>
+                          <option value="MERCADOPAGO">Mercado Pago</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  {(formaPrinc === "CARTAO" || formaPrinc === "LINK") && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] uppercase text-[#86868B] font-semibold">Parcelas</label>
+                        <input type="number" min={1} max={24} value={parcelasPrinc} onChange={e => setParcelasPrinc(Number(e.target.value))} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                      </div>
+                      {formaPrinc === "CARTAO" && (
                         <div>
-                          <label className="text-[10px] uppercase text-[#86868B] font-semibold">Parcelas</label>
-                          <input type="number" min={1} max={24} value={pagParcelas} onChange={e => setPagParcelas(Number(e.target.value))} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                          <label className="text-[10px] uppercase text-[#86868B] font-semibold">Bandeira</label>
+                          <select value={bandeiraPrinc} onChange={e => setBandeiraPrinc(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                            <option value="VISA">Visa</option>
+                            <option value="MASTERCARD">Mastercard</option>
+                            <option value="ELO">Elo</option>
+                            <option value="AMEX">Amex</option>
+                            <option value="HIPERCARD">Hipercard</option>
+                          </select>
                         </div>
                       )}
+                      <div>
+                        <label className="text-[10px] uppercase text-[#86868B] font-semibold">Valor no comprovante (R$)</label>
+                        <input type="text" inputMode="numeric" value={valorComprPrinc} onChange={e => setValorComprPrinc(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" placeholder="Ex: 5000" />
+                      </div>
+                    </div>
+                  )}
+                  {(formaPrinc === "PIX" || formaPrinc === "ESPECIE" || formaPrinc === "DEBITO" || formaPrinc === "DESCONTO_FOLHA") && (
+                    <div>
+                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Valor (R$)</label>
+                      <input type="text" inputMode="numeric" value={valorComprPrinc} onChange={e => setValorComprPrinc(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" placeholder={`Até ${fmt(valorFunc)}`} />
                     </div>
                   )}
 
-                  {pagForma === "LINK" && (
-                    <div>
-                      <label className="text-[10px] uppercase text-[#86868B] font-semibold">Parcelas do Link</label>
-                      <input type="number" min={1} max={24} value={pagParcelas} onChange={e => setPagParcelas(Number(e.target.value))} className="mt-1 w-32 px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                  {/* Pagamento misto */}
+                  {formaPrinc !== "PIX" && formaPrinc !== "ESPECIE" && (
+                    <div className="pt-2 border-t border-[#E5E5EA]">
+                      <p className="text-[11px] text-[#86868B] mb-2">Pagamento misto? (opcional)</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] uppercase text-[#86868B]">Entrada Pix (R$)</label>
+                          <input type="text" inputMode="numeric" value={entradaPix} onChange={e => setEntradaPix(e.target.value)} placeholder="0" className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                        </div>
+                        {Number(entradaPix) > 0 && (
+                          <div>
+                            <label className="text-[10px] uppercase text-[#86868B]">Conta Pix</label>
+                            <select value={bancoPix} onChange={e => setBancoPix(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                              <option value="ITAU">Itaú</option>
+                              <option value="INFINITEPAY">InfinitePay</option>
+                              <option value="MERCADOPAGO">Mercado Pago</option>
+                            </select>
+                          </div>
+                        )}
+                        <div>
+                          <label className="text-[10px] uppercase text-[#86868B]">Entrada Espécie (R$)</label>
+                          <input type="text" inputMode="numeric" value={entradaEspecie} onChange={e => setEntradaEspecie(e.target.value)} placeholder="0" className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2º cartão/link */}
+                  <div className="pt-2 border-t border-[#E5E5EA]">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input type="checkbox" checked={usarSegundo} onChange={e => setUsarSegundo(e.target.checked)} className="accent-[#E8740E]" />
+                      <span>2º cartão/link?</span>
+                    </label>
+                    {usarSegundo && (
+                      <div className="mt-2 grid grid-cols-4 gap-3">
+                        <div>
+                          <label className="text-[10px] uppercase text-[#86868B]">Forma</label>
+                          <select value={forma2} onChange={e => { const v = e.target.value as typeof forma2; setForma2(v); if (v === "LINK") setBanco2("MERCADO_PAGO"); else if (banco2 === "MERCADO_PAGO") setBanco2("ITAU"); }} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                            <option value="CARTAO">Máquina</option>
+                            <option value="LINK">Link MP</option>
+                          </select>
+                        </div>
+                        {forma2 === "CARTAO" && (
+                          <div>
+                            <label className="text-[10px] uppercase text-[#86868B]">Máquina</label>
+                            <select value={banco2} onChange={e => setBanco2(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                              <option value="ITAU">Itaú</option>
+                              <option value="INFINITEPAY">InfinitePay</option>
+                              <option value="MERCADOPAGO">Mercado Pago</option>
+                            </select>
+                          </div>
+                        )}
+                        <div>
+                          <label className="text-[10px] uppercase text-[#86868B]">Parcelas</label>
+                          <input type="number" min={1} max={24} value={parc2} onChange={e => setParc2(Number(e.target.value))} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] uppercase text-[#86868B]">Valor (R$)</label>
+                          <input type="text" inputMode="numeric" value={comp2} onChange={e => setComp2(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Resumo */}
+                  {totalRecebido > 0 && (
+                    <div className="p-2 rounded-lg bg-white border border-[#E8E8ED] text-xs space-y-1">
+                      {vPrinc > 0 && (
+                        <div className="flex justify-between">
+                          <span>{formaPrinc === "CARTAO" ? "💳" : formaPrinc === "LINK" ? "🔗" : formaPrinc === "PIX" ? "💸" : formaPrinc === "ESPECIE" ? "💵" : "📋"} {formaPrinc} {taxaPrinc > 0 ? `• Taxa ${taxaPrinc.toFixed(2)}% • Bruto ${fmt(vPrinc)}` : ""}</span>
+                          <span className="font-mono font-bold">→ {fmt(liqPrinc)}</span>
+                        </div>
+                      )}
+                      {vPix > 0 && formaPrinc !== "PIX" && <div className="flex justify-between"><span>💸 Pix entrada</span><span className="font-mono">{fmt(vPix)}</span></div>}
+                      {vEsp > 0 && formaPrinc !== "ESPECIE" && <div className="flex justify-between"><span>💵 Espécie entrada</span><span className="font-mono">{fmt(vEsp)}</span></div>}
+                      {usarSegundo && v2 > 0 && (
+                        <div className="flex justify-between">
+                          <span>{forma2 === "LINK" ? "🔗" : "💳"} 2ª forma {taxa2 > 0 ? `• Taxa ${taxa2.toFixed(2)}%` : ""}</span>
+                          <span className="font-mono font-bold">→ {fmt(liq2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-1 border-t border-[#E5E5EA] font-bold">
+                        <span>✅ Total recebido hoje</span>
+                        <span className="font-mono text-green-700">{fmt(totalRecebido)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-[#86868B]">
+                        <span>Saldo a pagar</span>
+                        <span className="font-mono">{fmt(Math.max(0, valorFunc - totalRecebido))}</span>
+                      </div>
                     </div>
                   )}
 
@@ -725,7 +890,8 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
                     <input type="text" value={pagObs} onChange={e => setPagObs(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
