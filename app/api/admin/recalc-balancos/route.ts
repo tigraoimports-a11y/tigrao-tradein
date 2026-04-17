@@ -43,16 +43,19 @@ export async function POST(req: NextRequest) {
       const { supabase } = await import("@/lib/supabase");
       const { data: itens, error } = await supabase
         .from("estoque")
-        .select("id, qnt, custo_compra")
+        .select("id, qnt, custo_compra, custo_unitario")
         .in("id", body.ids);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       if (!itens || itens.length === 0) return NextResponse.json({ error: "Nenhum item encontrado" }, { status: 404 });
-      // Calcula media ponderada pelas quantidades
+      // Calcula media ponderada pelas quantidades.
+      // Fallback: usa custo_unitario quando custo_compra estiver vazio (itens legados).
       let totalCusto = 0;
       let totalQnt = 0;
       for (const it of itens) {
         const q = Number(it.qnt || 0);
-        const c = Number(it.custo_compra || 0);
+        const ccRaw = Number(it.custo_compra || 0);
+        const cuRaw = Number(it.custo_unitario || 0);
+        const c = ccRaw > 0 ? ccRaw : cuRaw;
         if (c <= 0 || q <= 0) continue;
         totalCusto += q * c;
         totalQnt += q;
@@ -174,9 +177,11 @@ export async function GET(req: NextRequest) {
     }
     const groups = new Map<string, Grupo>();
     for (const raw of (itemsDetalhados || []) as unknown as Row[]) {
-      const cc = Number(raw.custo_compra || 0);
-      // Nao pulamos mais unidades sem custo_compra — mostramos elas pro user ver.
-      // Elas so nao entram no calculo de media ponderada (q/cc=0 nao altera).
+      // Fallback: itens legados so tinham custo_unitario (era o valor de compra no cadastro).
+      // Se custo_compra esta vazio mas custo_unitario existe, usa custo_unitario como cc efetivo.
+      const ccRaw = Number(raw.custo_compra || 0);
+      const cuRaw = Number(raw.custo_unitario || 0);
+      const cc = ccRaw > 0 ? ccRaw : cuRaw;
       const modeloBase = getModeloBase(raw.produto, raw.categoria);
       const key = `${raw.categoria}|${modeloBase}`;
       const g = groups.get(key) || {
