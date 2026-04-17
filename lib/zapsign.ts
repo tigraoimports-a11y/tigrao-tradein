@@ -62,9 +62,10 @@ export async function criarDocumentoEAssinar(params: {
     lang: "pt-br",
     disable_signer_emails: params.signatario.send_automatic_whatsapp ?? true,
     brand_primary_color: "#E8740E",
-    // Remetente que aparece na mensagem ("TIGRAO IMPORTS via ZapSign"),
-    // no lugar do email tigraoimports@gmail.com.
-    brand_name: "TIGRÃO IMPORTS",
+    // Remetente que aparece na mensagem. Combinado com "da empresa TIGRÃO IMPORTS"
+    // do painel do ZapSign, vira: "Responsável Financeiro via ZapSign, da empresa
+    // TIGRÃO IMPORTS, enviou o documento..." — evita a redundância do email.
+    brand_name: "Responsável Financeiro",
     signers: [
       {
         name: params.signatario.name,
