@@ -5204,7 +5204,78 @@ export default function VendasPage() {
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
                                           >
-                                            📜 Gerar Termo de Procedencia
+                                            📜 Gerar Termo (PDF)
+                                          </button>
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              // Montar aparelhos com IMEI/serial (reusa dados ja salvos na venda)
+                                              const aparelhos: { modelo: string; capacidade?: string; cor: string; imei: string; serial: string; condicao: string }[] = [];
+                                              if (v.troca_produto) {
+                                                aparelhos.push({
+                                                  modelo: v.troca_produto,
+                                                  capacidade: "",
+                                                  cor: v.troca_cor || "",
+                                                  imei: v.troca_imei || "",
+                                                  serial: v.troca_serial || "",
+                                                  condicao: [
+                                                    v.troca_bateria ? `Bateria ${v.troca_bateria}%` : "",
+                                                    v.troca_grade ? `Grade ${v.troca_grade}` : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (v.troca_produto2) {
+                                                aparelhos.push({
+                                                  modelo: v.troca_produto2,
+                                                  cor: v.troca_cor2 || "",
+                                                  imei: v.troca_imei2 || "",
+                                                  serial: v.troca_serial2 || "",
+                                                  condicao: [
+                                                    v.troca_bateria2 ? `Bateria ${v.troca_bateria2}%` : "",
+                                                    v.troca_grade2 ? `Grade ${v.troca_grade2}` : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (aparelhos.length === 0) { setMsg("Sem aparelhos de troca"); return; }
+
+                                              let whatsapp = v.telefone || "";
+                                              if (!whatsapp) {
+                                                const val = prompt(`WhatsApp de ${v.cliente} (DDD + numero):`);
+                                                if (val === null) return;
+                                                whatsapp = val.trim();
+                                              }
+                                              if (!/^\d{10,11}$/.test(whatsapp.replace(/\D/g, ""))) {
+                                                setMsg("WhatsApp invalido");
+                                                return;
+                                              }
+
+                                              if (!confirm(`Enviar termo para ${v.cliente} assinar no WhatsApp ${whatsapp}?\n\nCliente vai receber link + codigo SMS pra autenticar.`)) return;
+
+                                              try {
+                                                const res = await fetch("/api/admin/termo-procedencia", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({
+                                                    cliente_nome: v.cliente,
+                                                    cliente_cpf: v.cpf || "",
+                                                    cliente_whatsapp: whatsapp,
+                                                    aparelhos,
+                                                    venda_id: v.id,
+                                                    enviar_para_assinatura: true,
+                                                  }),
+                                                });
+                                                const json = await res.json();
+                                                if (json.ok) {
+                                                  setMsg(`Termo enviado! Cliente vai receber link no WhatsApp pra assinar.`);
+                                                } else {
+                                                  setMsg("Erro: " + (json.error || "falha ao enviar"));
+                                                }
+                                              } catch { setMsg("Erro ao enviar termo para assinatura"); }
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                            title="Envia termo pro cliente assinar digitalmente via WhatsApp + SMS (ZapSign)"
+                                          >
+                                            📱 Enviar pra Assinar Digital
                                           </button>
                                           <button
                                             onClick={(e) => {

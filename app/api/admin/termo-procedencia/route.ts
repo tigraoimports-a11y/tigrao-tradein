@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
 import { gerarTermoProcedenciaPDF, type AparelhoTermo } from "@/lib/pdf-termo-procedencia";
+import { criarDocumentoEAssinar } from "@/lib/zapsign";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const usuario = getUsuario(req);
 
-  let { cliente_nome, cliente_cpf, aparelhos, venda_id, encomenda_id, pendencia_id, cidade, gerar_pdf } = body;
+  let { cliente_nome, cliente_cpf, aparelhos, venda_id, encomenda_id, pendencia_id, cidade, gerar_pdf, cliente_whatsapp, enviar_para_assinatura } = body;
 
   // Se faltar nome/CPF, tentar buscar da venda ou encomenda vinculada
   if ((!cliente_nome || !cliente_cpf) && venda_id) {
@@ -97,6 +98,74 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   logActivity(usuario, "Criou termo de procedência", `Cliente: ${cliente_nome}, ${aparelhos.length} aparelho(s)`, "termos_procedencia", termo?.id).catch(() => {});
+
+  // Fluxo: enviar pra assinatura digital via ZapSign (recebe link por WhatsApp + SMS auth)
+  if (enviar_para_assinatura) {
+    // Buscar whatsapp se nao veio no body
+    if (!cliente_whatsapp && venda_id) {
+      const { data: venda } = await supabase.from("vendas").select("telefone").eq("id", venda_id).maybeSingle();
+      if (venda?.telefone) cliente_whatsapp = venda.telefone;
+    }
+    if (!cliente_whatsapp && encomenda_id) {
+      const { data: enc } = await supabase.from("encomendas").select("telefone,whatsapp").eq("id", encomenda_id).maybeSingle();
+      if (enc) cliente_whatsapp = enc.telefone || enc.whatsapp;
+    }
+
+    if (!cliente_whatsapp) {
+      return NextResponse.json({ error: "WhatsApp do cliente obrigatorio para enviar assinatura digital" }, { status: 400 });
+    }
+
+    try {
+      const pdfBuffer = await gerarTermoProcedenciaPDF({
+        clienteNome: cliente_nome.toUpperCase(),
+        clienteCPF: cliente_cpf,
+        aparelhos: aparelhos as AparelhoTermo[],
+        cidade: cidade || "Rio de Janeiro",
+      });
+      const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
+
+      // Normalizar telefone: só dígitos, sem DDI 55
+      let telNorm = String(cliente_whatsapp).replace(/\D/g, "");
+      if (telNorm.length > 11 && telNorm.startsWith("55")) telNorm = telNorm.substring(2);
+
+      const doc = await criarDocumentoEAssinar({
+        nome: `Termo de Procedencia - ${cliente_nome.toUpperCase()}`,
+        pdfBase64,
+        signatario: {
+          name: cliente_nome.toUpperCase(),
+          phone_country: "55",
+          phone_number: telNorm,
+          auth_mode: "assinaturaTela-tokenSms",
+          cpf: cliente_cpf || undefined,
+          send_automatic_whatsapp: true,
+          send_automatic_email: false,
+        },
+      });
+
+      const signer = doc.signers?.[0];
+
+      await supabase.from("termos_procedencia").update({
+        status: "ENVIADO",
+        zapsign_doc_token: doc.token,
+        zapsign_signer_token: signer?.token || null,
+        zapsign_sign_url: signer?.sign_url || null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", termo.id);
+
+      logActivity(usuario, "Enviou termo para assinatura digital", `Cliente: ${cliente_nome}, WhatsApp: ${telNorm}`, "termos_procedencia", termo.id).catch(() => {});
+
+      return NextResponse.json({
+        ok: true,
+        data: { ...termo, zapsign_doc_token: doc.token, zapsign_sign_url: signer?.sign_url, status: "ENVIADO" },
+        sign_url: signer?.sign_url,
+        message: "Termo enviado pelo WhatsApp. Cliente vai receber link e codigo SMS pra assinar.",
+      });
+    } catch (err) {
+      // Falhou o envio — remove o termo criado pra evitar lixo
+      await supabase.from("termos_procedencia").delete().eq("id", termo.id);
+      return NextResponse.json({ error: `Falha ao enviar pra assinatura: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+    }
+  }
 
   // Gerar PDF se solicitado (default: sim)
   if (gerar_pdf !== false) {
