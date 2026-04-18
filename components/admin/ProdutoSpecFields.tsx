@@ -180,7 +180,12 @@ export interface ProdutoRowState {
   serial_no: string;
   condicao: string; // "NOVO" | "NAO_ATIVADO" | "SEMINOVO"
   caixa: boolean;   // tem caixa original?
+  cabo: boolean;    // (SEMINOVO) tem cabo original?
+  fonte: boolean;   // (SEMINOVO) tem fonte original?
   grade: string;    // grade de qualidade: "A+" | "A" | "AB" | "B" | ""
+  bateria: string;  // (SEMINOVO) saude da bateria em %
+  garantia: string; // (SEMINOVO) data ou validade da garantia
+  observacao: string; // (SEMINOVO) detalhes adicionais
 }
 
 export function createEmptyProdutoRow(): ProdutoRowState {
@@ -199,7 +204,12 @@ export function createEmptyProdutoRow(): ProdutoRowState {
     serial_no: "",
     condicao: "NOVO",
     caixa: false,
+    cabo: false,
+    fonte: false,
     grade: "",
+    bateria: "",
+    garantia: "",
+    observacao: "",
   };
 }
 
@@ -503,41 +513,69 @@ export default function ProdutoSpecFields({
         </div>}
       </div>
 
-      {/* Caixa + Grade — só aparece quando não é Lacrado e não é modo compacto */}
+      {/* Seminovo/NaoAtivado extras: Caixa + Cabo + Fonte + Grade + Bateria + Garantia + Observacao */}
       {!compactMode && row.condicao !== "NOVO" && (
-        <div className="flex items-center gap-3">
-          {/* Caixa toggle */}
-          <button
-            type="button"
-            onClick={() => set("caixa", !row.caixa)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-              row.caixa
-                ? "bg-green-500/15 border-green-500/40 text-green-600"
+        <div className="space-y-3">
+          {/* Toggles: Caixa / Cabo / Fonte */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button type="button" onClick={() => set("caixa", !row.caixa)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                row.caixa ? "bg-green-500/15 border-green-500/40 text-green-600"
                 : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
-            }`}
-          >
-            📦 {row.caixa ? "Com caixa" : "Sem caixa"}
-          </button>
-          {/* Grade select */}
-          <div className="flex items-center gap-1.5">
-            <span className={`text-xs font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Grade</span>
-            {(["A+", "A", "AB", "B"] as const).map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => set("grade", row.grade === g ? "" : g)}
-                className={`px-2 h-7 min-w-[28px] rounded-lg text-xs font-bold border transition-colors ${
-                  row.grade === g
-                    ? g === "A+" ? "bg-amber-500/15 border-amber-500/40 text-amber-600"
-                      : g === "A" ? "bg-green-500/15 border-green-500/40 text-green-600"
-                      : g === "AB" ? "bg-yellow-500/15 border-yellow-500/40 text-yellow-600"
-                      : "bg-orange-500/15 border-orange-500/40 text-orange-600"
-                    : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
-                }`}
-              >
-                {g}
-              </button>
-            ))}
+              }`}>
+              📦 {row.caixa ? "Com caixa" : "Sem caixa"}
+            </button>
+            <button type="button" onClick={() => set("cabo", !row.cabo)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                row.cabo ? "bg-blue-500/15 border-blue-500/40 text-blue-600"
+                : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+              }`}>
+              🔌 {row.cabo ? "Com cabo" : "Sem cabo"}
+            </button>
+            <button type="button" onClick={() => set("fonte", !row.fonte)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                row.fonte ? "bg-purple-500/15 border-purple-500/40 text-purple-600"
+                : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+              }`}>
+              🔋 {row.fonte ? "Com fonte" : "Sem fonte"}
+            </button>
+            {/* Grade */}
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className={`text-xs font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Grade</span>
+              {(["A+", "A", "AB", "B"] as const).map((g) => (
+                <button key={g} type="button" onClick={() => set("grade", row.grade === g ? "" : g)}
+                  className={`px-2 h-7 min-w-[28px] rounded-lg text-xs font-bold border transition-colors ${
+                    row.grade === g
+                      ? g === "A+" ? "bg-amber-500/15 border-amber-500/40 text-amber-600"
+                        : g === "A" ? "bg-green-500/15 border-green-500/40 text-green-600"
+                        : g === "AB" ? "bg-yellow-500/15 border-yellow-500/40 text-yellow-600"
+                        : "bg-orange-500/15 border-orange-500/40 text-orange-600"
+                      : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+                  }`}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Bateria + Garantia (bateria apenas pra iPhones/iPads/Watch) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {(row.categoria === "IPHONES" || row.categoria === "IPADS" || row.categoria === "APPLE_WATCH") && (
+              <div>
+                <p className={labelCls}>Bateria %</p>
+                <input type="number" min={0} max={100} value={row.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 91" className={inputCls} />
+              </div>
+            )}
+            <div>
+              <p className={labelCls}>Garantia</p>
+              <input type="text" value={row.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} />
+            </div>
+          </div>
+
+          {/* Observacao */}
+          <div>
+            <p className={labelCls}>Observação</p>
+            <input type="text" value={row.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} />
           </div>
         </div>
       )}
