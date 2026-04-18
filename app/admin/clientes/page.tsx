@@ -132,11 +132,12 @@ function EstornosSection({ contatoNome, apiHeaders, dm }: { contatoNome: string;
 }
 
 export default function ClientesPage() {
-  const { password, darkMode: dm, apiHeaders } = useAdmin();
+  const { password, darkMode: dm, apiHeaders, user } = useAdmin();
+  const userName = user?.nome || "sistema";
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<"clientes" | "lojistas" | "fornecedores" | "notas">(() => {
+  const [tab, setTab] = useState<"clientes" | "lojistas" | "fornecedores" | "notas" | "funcionarios">(() => {
     const t = searchParams.get("tab");
-    if (t === "fornecedores" || t === "lojistas" || t === "notas") return t;
+    if (t === "fornecedores" || t === "lojistas" || t === "notas" || t === "funcionarios") return t;
     return "clientes";
   });
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
@@ -413,6 +414,7 @@ export default function ClientesPage() {
           { key: "clientes" as const, label: "Clientes" },
           { key: "lojistas" as const, label: "Lojistas" },
           { key: "fornecedores" as const, label: "Fornecedores" },
+          { key: "funcionarios" as const, label: "Funcionários" },
           { key: "notas" as const, label: "Notas Fiscais" },
         ]).map((t) => (
           <button
@@ -772,6 +774,11 @@ export default function ClientesPage() {
             </table>
           </div>
         </div>
+
+      ) : tab === "funcionarios" ? (
+
+      /* ============= FUNCIONARIOS TAB ============= */
+      <FuncionariosTab password={password} userName={userName} dm={dm} cardCls={cardCls} mP={mP} mS={mS} mM={mM} thCls={thCls} inputCls={inputCls} tableCls={tableCls} search={search} />
 
       ) : (<>
 
@@ -1291,6 +1298,273 @@ export default function ClientesPage() {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+/* =================== Funcionarios Tab =================== */
+
+interface Funcionario {
+  id: string;
+  nome: string;
+  cargo: "DONO" | "FUNCIONARIO" | "ENTREGADOR";
+  tag: string;
+  telefone: string | null;
+  email: string | null;
+  observacao: string | null;
+  ativo: boolean;
+  data_admissao: string | null;
+  data_desligamento: string | null;
+  created_at: string;
+}
+
+const CARGO_LABELS: Record<string, string> = {
+  DONO: "👑 Dono",
+  FUNCIONARIO: "👤 Funcionário",
+  ENTREGADOR: "🛵 Entregador",
+};
+const CARGO_COLORS: Record<string, string> = {
+  DONO: "bg-amber-100 text-amber-800",
+  FUNCIONARIO: "bg-blue-100 text-blue-800",
+  ENTREGADOR: "bg-purple-100 text-purple-800",
+};
+
+function FuncionariosTab({ password, userName, dm, cardCls, mP, mS, mM, thCls, inputCls, tableCls, search }: {
+  password: string;
+  userName: string;
+  dm: boolean;
+  cardCls: string;
+  mP: string;
+  mS: string;
+  mM: string;
+  thCls: string;
+  inputCls: string;
+  tableCls: string;
+  search: string;
+}) {
+  const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [mostrarInativos, setMostrarInativos] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [editForm, setEditForm] = useState<Partial<Funcionario> | null>(null);
+  const [novoForm, setNovoForm] = useState<{ nome: string; cargo: "DONO" | "FUNCIONARIO" | "ENTREGADOR"; telefone: string; email: string; observacao: string; data_admissao: string }>({
+    nome: "", cargo: "FUNCIONARIO", telefone: "", email: "", observacao: "", data_admissao: "",
+  });
+  const [mostrarCadastro, setMostrarCadastro] = useState(false);
+
+  const fetch_ = async () => {
+    if (!password) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/funcionarios?tag=TIGRAO", {
+        headers: { "x-admin-password": password },
+      });
+      const j = await res.json();
+      if (j.data) setFuncionarios(j.data);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { fetch_(); /* eslint-disable-next-line */ }, [password]);
+
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(() => setMsg(""), 3500);
+    return () => clearTimeout(t);
+  }, [msg]);
+
+  const filtered = funcionarios.filter(f => {
+    if (!mostrarInativos && !f.ativo) return false;
+    if (search.trim() && !f.nome.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const handleSalvarNovo = async () => {
+    if (!novoForm.nome.trim()) { setMsg("❌ Nome obrigatório"); return; }
+    const res = await fetch("/api/admin/funcionarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+      body: JSON.stringify({ ...novoForm, tag: "TIGRAO" }),
+    });
+    const j = await res.json();
+    if (!j.ok) { setMsg("❌ " + (j.error || "erro")); return; }
+    setMsg("✅ Funcionário cadastrado");
+    setNovoForm({ nome: "", cargo: "FUNCIONARIO", telefone: "", email: "", observacao: "", data_admissao: "" });
+    setMostrarCadastro(false);
+    fetch_();
+  };
+
+  const handleSalvarEdit = async () => {
+    if (!editForm?.id) return;
+    const res = await fetch("/api/admin/funcionarios", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+      body: JSON.stringify(editForm),
+    });
+    const j = await res.json();
+    if (!j.ok) { setMsg("❌ " + (j.error || "erro")); return; }
+    setMsg("✅ Atualizado");
+    setEditForm(null);
+    fetch_();
+  };
+
+  const handleToggleAtivo = async (f: Funcionario) => {
+    const novo = !f.ativo;
+    if (!confirm(`${novo ? "Reativar" : "Desativar"} ${f.nome}?`)) return;
+    const body = { id: f.id, ativo: novo, data_desligamento: novo ? null : new Date().toISOString().slice(0, 10) };
+    const res = await fetch("/api/admin/funcionarios", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+      body: JSON.stringify(body),
+    });
+    const j = await res.json();
+    if (j.ok) { setMsg(`✅ ${f.nome} ${novo ? "reativado" : "desativado"}`); fetch_(); }
+    else setMsg("❌ " + (j.error || "erro"));
+  };
+
+  return (
+    <div className="space-y-4">
+      {msg && <div className={`text-xs px-3 py-2 rounded-lg ${msg.startsWith("❌") ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-600"}`}>{msg}</div>}
+
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={mostrarInativos} onChange={e => setMostrarInativos(e.target.checked)} className="w-4 h-4 accent-[#E8740E]" />
+          <span className={`text-sm ${mS}`}>Mostrar inativos/desligados</span>
+        </label>
+        <button
+          onClick={() => setMostrarCadastro(!mostrarCadastro)}
+          className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D]"
+        >
+          {mostrarCadastro ? "✕ Cancelar" : "+ Novo Funcionário"}
+        </button>
+      </div>
+
+      {mostrarCadastro && (
+        <div className={`${cardCls} space-y-3`}>
+          <h3 className={`text-sm font-bold ${mP}`}>Cadastrar novo funcionário</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <p className={`text-[11px] uppercase ${mS} font-semibold mb-1`}>Nome *</p>
+              <input value={novoForm.nome} onChange={e => setNovoForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: João" className={inputCls} />
+            </div>
+            <div>
+              <p className={`text-[11px] uppercase ${mS} font-semibold mb-1`}>Cargo *</p>
+              <select value={novoForm.cargo} onChange={e => setNovoForm(f => ({ ...f, cargo: e.target.value as typeof f.cargo }))} className={inputCls}>
+                <option value="DONO">Dono</option>
+                <option value="FUNCIONARIO">Funcionário</option>
+                <option value="ENTREGADOR">Entregador</option>
+              </select>
+            </div>
+            <div>
+              <p className={`text-[11px] uppercase ${mS} font-semibold mb-1`}>Telefone</p>
+              <input value={novoForm.telefone} onChange={e => setNovoForm(f => ({ ...f, telefone: e.target.value }))} placeholder="(21) 9..." className={inputCls} />
+            </div>
+            <div>
+              <p className={`text-[11px] uppercase ${mS} font-semibold mb-1`}>Email</p>
+              <input value={novoForm.email} onChange={e => setNovoForm(f => ({ ...f, email: e.target.value }))} placeholder="email@..." className={inputCls} />
+            </div>
+            <div>
+              <p className={`text-[11px] uppercase ${mS} font-semibold mb-1`}>Data admissão</p>
+              <input type="date" value={novoForm.data_admissao} onChange={e => setNovoForm(f => ({ ...f, data_admissao: e.target.value }))} className={inputCls} />
+            </div>
+            <div>
+              <p className={`text-[11px] uppercase ${mS} font-semibold mb-1`}>Observação</p>
+              <input value={novoForm.observacao} onChange={e => setNovoForm(f => ({ ...f, observacao: e.target.value }))} placeholder="" className={inputCls} />
+            </div>
+          </div>
+          <button onClick={handleSalvarNovo} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D]">
+            Cadastrar
+          </button>
+        </div>
+      )}
+
+      <div className={tableCls}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+                {["Nome", "Cargo", "Telefone", "Email", "Admissão", "Status", ""].map((h) => (
+                  <th key={h} className={thCls}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>Carregando...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>Nenhum funcionário encontrado</td></tr>
+              ) : filtered.map((f) => (
+                <tr key={f.id} className={`border-b transition-colors ${dm ? "border-[#2C2C2E] hover:bg-[#2C2C2E]" : "border-[#F5F5F7] hover:bg-[#FAFAFA]"} ${!f.ativo ? "opacity-50" : ""}`}>
+                  <td className={`px-4 py-3 font-semibold ${mP}`}>{f.nome}</td>
+                  <td className={`px-4 py-3`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${CARGO_COLORS[f.cargo]}`}>{CARGO_LABELS[f.cargo]}</span>
+                  </td>
+                  <td className={`px-4 py-3 ${mS}`}>{f.telefone || "—"}</td>
+                  <td className={`px-4 py-3 ${mS}`}>{f.email || "—"}</td>
+                  <td className={`px-4 py-3 ${mS}`}>{f.data_admissao || "—"}</td>
+                  <td className={`px-4 py-3`}>
+                    {f.ativo ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">Ativo</span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">Desligado {f.data_desligamento ? `em ${f.data_desligamento}` : ""}</span>
+                    )}
+                  </td>
+                  <td className={`px-4 py-3 text-right`}>
+                    <button onClick={() => setEditForm(f)} className="text-xs px-2 py-1 rounded bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20 mr-1">✏️ Editar</button>
+                    <button onClick={() => handleToggleAtivo(f)} className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200">
+                      {f.ativo ? "Desativar" : "Reativar"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {editForm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setEditForm(null)}>
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E8E8ED] flex items-center justify-between">
+              <h3 className="font-bold text-[#1D1D1F]">Editar Funcionário</h3>
+              <button onClick={() => setEditForm(null)} className="text-[#86868B] hover:text-[#1D1D1F] text-lg">✕</button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><p className="text-[11px] uppercase text-[#86868B] font-semibold mb-1">Nome</p>
+                  <input value={editForm.nome || ""} onChange={e => setEditForm(f => f ? { ...f, nome: e.target.value } : f)} className="w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                </div>
+                <div><p className="text-[11px] uppercase text-[#86868B] font-semibold mb-1">Cargo</p>
+                  <select value={editForm.cargo || "FUNCIONARIO"} onChange={e => setEditForm(f => f ? { ...f, cargo: e.target.value as Funcionario["cargo"] } : f)} className="w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]">
+                    <option value="DONO">Dono</option>
+                    <option value="FUNCIONARIO">Funcionário</option>
+                    <option value="ENTREGADOR">Entregador</option>
+                  </select>
+                </div>
+                <div><p className="text-[11px] uppercase text-[#86868B] font-semibold mb-1">Telefone</p>
+                  <input value={editForm.telefone || ""} onChange={e => setEditForm(f => f ? { ...f, telefone: e.target.value } : f)} className="w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                </div>
+                <div><p className="text-[11px] uppercase text-[#86868B] font-semibold mb-1">Email</p>
+                  <input value={editForm.email || ""} onChange={e => setEditForm(f => f ? { ...f, email: e.target.value } : f)} className="w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                </div>
+                <div><p className="text-[11px] uppercase text-[#86868B] font-semibold mb-1">Data admissão</p>
+                  <input type="date" value={editForm.data_admissao || ""} onChange={e => setEditForm(f => f ? { ...f, data_admissao: e.target.value } : f)} className="w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                </div>
+                <div><p className="text-[11px] uppercase text-[#86868B] font-semibold mb-1">Data desligamento</p>
+                  <input type="date" value={editForm.data_desligamento || ""} onChange={e => setEditForm(f => f ? { ...f, data_desligamento: e.target.value } : f)} className="w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+                </div>
+              </div>
+              <div><p className="text-[11px] uppercase text-[#86868B] font-semibold mb-1">Observação</p>
+                <textarea rows={2} value={editForm.observacao || ""} onChange={e => setEditForm(f => f ? { ...f, observacao: e.target.value } : f)} className="w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" />
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-[#E8E8ED] bg-[#F9F9FB] flex gap-2 justify-end">
+              <button onClick={() => setEditForm(null)} className="px-4 py-2 rounded-lg bg-white border border-[#D2D2D7] text-sm font-semibold">Cancelar</button>
+              <button onClick={handleSalvarEdit} className="px-5 py-2 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D]">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
