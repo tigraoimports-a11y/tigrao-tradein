@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity-log";
+import { entregaFromLink } from "@/lib/entrega-from-link";
 
 function auth(request: Request) {
   const pw = request.headers.get("x-admin-password");
@@ -223,6 +224,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "short_code e produto são obrigatórios" }, { status: 400 });
   }
 
+  // Idempotencia: se ja existe link com esse short_code, nao cria novo.
+  // Protege contra caso do frontend perder `editingLinkId` e cair aqui em vez
+  // do PATCH — resultado seria duplicacao. Em vez de criar, retornamos o
+  // existente pra UI poder tratar.
+  const { data: existing } = await supabase
+    .from("link_compras")
+    .select("*")
+    .eq("short_code", payload.short_code)
+    .maybeSingle();
+  if (existing) {
+    return NextResponse.json({ ok: true, data: existing, isDuplicate: true });
+  }
+
   const { data, error } = await supabase.from("link_compras").insert(payload).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -260,8 +274,43 @@ export async function PATCH(request: Request) {
 
   const { error } = await supabase.from("link_compras").update(allowed).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  logActivity(getUser(request), "Atualizou link de compra", `ID ${id}`, "link_compras", id).catch(() => {});
-  return NextResponse.json({ ok: true });
+
+  // Sincroniza entrega vinculada (se existir): quando o admin edita um link
+  // ja encaminhado, a entrega fica com dados antigos. Aqui atualizamos em
+  // tempo real os campos derivados do link (produto, valor, forma, parcelas,
+  // entrada, detalhes_upgrade, tipo) na entrega correspondente.
+  //
+  // Campos que refletem preferencia do motoboy/entrega (data_entrega, horario,
+  // status, entregador, endereco) NAO sao sobrescritos aqui.
+  let entregaSincronizada = false;
+  try {
+    const { data: linkAtual } = await supabase
+      .from("link_compras")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (linkAtual?.entrega_id) {
+      const campos = entregaFromLink(linkAtual);
+      const updateEntrega: Record<string, unknown> = {
+        produto: campos.produto,
+        forma_pagamento: campos.forma_pagamento,
+        valor: campos.valor,
+        entrada: campos.entrada,
+        parcelas: campos.parcelas,
+        valor_total: campos.valor_total,
+        detalhes_upgrade: campos.detalhes_upgrade,
+        tipo: campos.tipo,
+      };
+      const { error: errEntrega } = await supabase
+        .from("entregas")
+        .update(updateEntrega)
+        .eq("id", linkAtual.entrega_id);
+      if (!errEntrega) entregaSincronizada = true;
+    }
+  } catch { /* best-effort: nao falha o PATCH do link */ }
+
+  logActivity(getUser(request), "Atualizou link de compra", `ID ${id}${entregaSincronizada ? " + entrega sincronizada" : ""}`, "link_compras", id).catch(() => {});
+  return NextResponse.json({ ok: true, entregaSincronizada });
 }
 
 // DELETE: remover definitivamente (prefira PATCH arquivado=true)
