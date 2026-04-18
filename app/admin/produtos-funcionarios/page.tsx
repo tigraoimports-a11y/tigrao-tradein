@@ -52,6 +52,7 @@ interface Vinculo {
   id: string;
   estoque_id: string | null;
   funcionario: string;
+  funcionario_id: string | null;
   produto: string;
   categoria: string | null;
   cor: string | null;
@@ -297,7 +298,16 @@ export default function ProdutosFuncionariosPage() {
               <div key={funcionario} className="bg-white rounded-2xl border border-[#E8E8ED] overflow-hidden">
                 <div className="px-5 py-3 bg-[#F9F9FB] border-b border-[#E8E8ED] flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-bold text-[#1D1D1F]">{funcionario}</h2>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-[#1D1D1F]">{funcionario}</h2>
+                      {items.every(v => v.funcionario_id) ? (
+                        <span className="text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded font-bold">TIGRAO</span>
+                      ) : items.some(v => v.funcionario_id) ? (
+                        <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded font-bold">PARCIAL</span>
+                      ) : (
+                        <span className="text-[9px] bg-red-100 text-red-700 border border-red-300 px-1.5 py-0.5 rounded font-bold" title="Este registro é texto livre — não casa com nenhum funcionário cadastrado">NÃO VINCULADO</span>
+                      )}
+                    </div>
                     <p className="text-xs text-[#86868B]">{items.length} produto(s)</p>
                   </div>
                   {pendente > 0 && (
