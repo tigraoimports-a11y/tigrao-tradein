@@ -1693,7 +1693,7 @@ export default function EstoquePage() {
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
     bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "", garantia: "",
-    origem_compra: "",
+    origem_compra: "", data_entrada: hojeBR(),
   });
 
   // Campos estruturados por categoria
@@ -2475,7 +2475,7 @@ export default function EstoquePage() {
           imei: p.imei || null,
           serial_no: p.serial_no || null,
           origem_compra: form.origem_compra || null,
-          data_entrada: hojeBR(),
+          data_entrada: form.data_entrada || hojeBR(),
           bateria: p.bateria ? parseInt(p.bateria) : null,
           garantia: p.garantia || null,
           observacao: obsFinal,
@@ -2520,7 +2520,7 @@ export default function EstoquePage() {
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null, serial_no: form.serial_no || null,
         garantia: form.garantia || null, origem_compra: form.origem_compra || null,
-        data_entrada: hojeBR(),
+        data_entrada: form.data_entrada || hojeBR(),
       }),
     });
     const json = await res.json();
@@ -3761,8 +3761,11 @@ export default function EstoquePage() {
             <p className={`text-[13px] mt-1 ${textSecondary}`}>Preencha os dados do produto para cadastrar no estoque</p>
           </div>
 
-          {/* Row 1: Categoria + Tipo */}
+          {/* Row 1: Categoria + Tipo + Data de entrada */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div><p className={labelCls}>Data de entrada</p>
+              <input type="date" value={form.data_entrada} onChange={(e) => set("data_entrada", e.target.value)} className={inputCls} />
+            </div>
             <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => {
               const newCat = e.target.value;
               set("categoria", newCat); set("produto", "");

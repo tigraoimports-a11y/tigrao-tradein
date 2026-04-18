@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const {
       estoque_id, manual, produto: produtoManual, categoria: catManual, cor: corManual,
       serial_no: serialManual, imei: imeiManual,
-      funcionario, tipo_acordo, percentual_funcionario, observacao, data_saida,
+      funcionario, funcionario_id, tipo_acordo, percentual_funcionario, observacao, data_saida,
       valor_total_manual,
     } = body;
 
@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
     const insertData = {
       estoque_id: estoque_id && !manual ? estoque_id : null,
       funcionario: funcionario.trim(),
+      funcionario_id: funcionario_id || null,
       produto: produto.trim(),
       categoria: categoria || null,
       cor: cor || null,
