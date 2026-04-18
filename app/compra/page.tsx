@@ -376,6 +376,13 @@ function CompraForm() {
       fd.append("short_code", shortCode);
       fd.append("tipo", slot.tipo);
       fd.append("aparelho", String(slot.aparelho));
+      // Passa dados da URL pra o backend criar o registro se nao existir
+      // (caso o cliente tenha vindo direto do simulador sem passar pelo link-compras-auto)
+      if (produtoParam) fd.append("produto", produtoParam);
+      if (nomeParam) fd.append("cliente_nome", nomeParam);
+      if (whatsappClienteParam) fd.append("cliente_telefone", whatsappClienteParam);
+      if (trocaProdutoParam) fd.append("troca_produto", trocaProdutoParam);
+      if (trocaValorParam) fd.append("troca_valor", trocaValorParam);
       const res = await fetch("/api/link-compras/upload-print", { method: "POST", body: fd });
       const json = await res.json();
       if (json.ok) {
