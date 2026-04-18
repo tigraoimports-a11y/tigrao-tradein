@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q")?.trim();
   const includeHistory = searchParams.get("history") === "true";
 
-  if (!q || q.length < 2) return NextResponse.json({ operacoes: [], contatos: [], estoque: [], vendas: [] });
+  if (!q || q.length < 2) return NextResponse.json({ operacoes: [], contatos: [], estoque: [], vendas: [], funcionarios: [] });
 
   const searchTerm = `%${q}%`;
 
@@ -59,6 +59,23 @@ export async function GET(req: NextRequest) {
   const contatos = [...contatosMap.values()].filter(c => c.nome.includes(q.toUpperCase())).slice(0, 15);
 
   const qUpper = q.toUpperCase();
+
+  // ── 3b. Buscar funcionarios (produtos_funcionarios.funcionario distinct) ──
+  const { data: funcResults } = await supabase
+    .from("produtos_funcionarios")
+    .select("funcionario")
+    .ilike("funcionario", searchTerm)
+    .limit(50);
+  const funcSet = new Set<string>();
+  for (const r of funcResults ?? []) {
+    const n = (r.funcionario || "").trim().toUpperCase();
+    if (n && n.includes(qUpper)) funcSet.add(n);
+  }
+  const funcionarios = [...funcSet].sort().slice(0, 10).map((nome) => ({
+    nome,
+    tag: "TIGRAO",
+    isTigrao: true,
+  }));
 
   // ── 4. Montar operações (vendas agrupadas por cliente+data) ──
   const opMap = new Map<string, {
@@ -200,5 +217,5 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ operacoes, contatos, estoque, vendas });
+  return NextResponse.json({ operacoes, contatos, estoque, vendas, funcionarios });
 }
