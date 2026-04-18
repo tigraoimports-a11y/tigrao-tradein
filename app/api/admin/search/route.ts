@@ -60,20 +60,18 @@ export async function GET(req: NextRequest) {
 
   const qUpper = q.toUpperCase();
 
-  // ── 3b. Buscar funcionarios (produtos_funcionarios.funcionario distinct) ──
+  // ── 3b. Buscar funcionarios cadastrados (tabela funcionarios) ──
   const { data: funcResults } = await supabase
-    .from("produtos_funcionarios")
-    .select("funcionario")
-    .ilike("funcionario", searchTerm)
-    .limit(50);
-  const funcSet = new Set<string>();
-  for (const r of funcResults ?? []) {
-    const n = (r.funcionario || "").trim().toUpperCase();
-    if (n && n.includes(qUpper)) funcSet.add(n);
-  }
-  const funcionarios = [...funcSet].sort().slice(0, 10).map((nome) => ({
-    nome,
-    tag: "TIGRAO",
+    .from("funcionarios")
+    .select("id, nome, cargo, tag, ativo")
+    .ilike("nome", searchTerm)
+    .eq("ativo", true)
+    .limit(10);
+  const funcionarios = (funcResults ?? []).map((f) => ({
+    id: f.id as string,
+    nome: (f.nome || "").toUpperCase(),
+    cargo: f.cargo as string,
+    tag: (f.tag as string) || "TIGRAO",
     isTigrao: true,
   }));
 

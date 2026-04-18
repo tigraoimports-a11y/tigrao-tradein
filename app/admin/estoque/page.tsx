@@ -1720,9 +1720,6 @@ export default function EstoquePage() {
   type BancoValores = Record<Banco, string>;
   const emptyBancoValores = (): BancoValores => ({ ITAU: "", INFINITE: "", MERCADO_PAGO: "", ESPECIE: "" });
   const [pedidoProdutos, setPedidoProdutos] = useState<ProdutoRowState[]>([createEmptyProdutoRow()]);
-  // Vincular a funcionario ao cadastrar (opcional)
-  const [vincularFuncionario, setVincularFuncionario] = useState(false);
-  const [funcForm, setFuncForm] = useState({ funcionario: "", tipoAcordo: "CEDIDO" as "CEDIDO" | "PARCIAL" | "TOTAL" | "SUBSIDIADO" | "OUTRO", percentual: 50, observacao: "" });
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
   const [descricaoGasto, setDescricaoGasto] = useState("");
   const totalPagamento = BANCOS.reduce((s, b) => s + (parseFloat(bancoValores[b]) || 0), 0);
@@ -2494,34 +2491,12 @@ export default function EstoquePage() {
       } else { errorMsg = json.error; }
     }
 
-    // Vincular a funcionário se marcado
-    if (vincularFuncionario && funcForm.funcionario.trim() && savedIds.length > 0) {
-      const pct = Math.max(0, Math.min(100, Number(funcForm.percentual)));
-      for (const estoqueId of savedIds) {
-        try {
-          await fetch("/api/admin/produtos-funcionarios", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-            body: JSON.stringify({
-              estoque_id: estoqueId,
-              funcionario: funcForm.funcionario.trim(),
-              tipo_acordo: funcForm.tipoAcordo,
-              percentual_funcionario: pct,
-              observacao: funcForm.observacao.trim() || "Vinculado ao cadastrar no estoque",
-              data_saida: hojeBR(),
-            }),
-          });
-        } catch { /* silent */ }
-      }
-    }
+    void savedIds;
 
     if (successCount > 0) {
       const mergeInfo = mergeMessages.length > 0 ? ` | ${mergeMessages.join(" | ")}` : "";
-      const funcInfo = vincularFuncionario && funcForm.funcionario.trim() ? ` + vinculado a ${funcForm.funcionario.trim()}` : "";
-      setMsg(`${successCount} produto(s) adicionados${status === "A CAMINHO" ? " como A Caminho" : " ao estoque"}${funcInfo}!${mergeInfo}${errorMsg ? ` (${errorMsg})` : ""}`);
+      setMsg(`${successCount} produto(s) adicionados${status === "A CAMINHO" ? " como A Caminho" : " ao estoque"}!${mergeInfo}${errorMsg ? ` (${errorMsg})` : ""}`);
       setPedidoProdutos([createEmptyProdutoRow()]);
-      setVincularFuncionario(false);
-      setFuncForm({ funcionario: "", tipoAcordo: "CEDIDO", percentual: 50, observacao: "" });
       fetchEstoque();
       setFilterCat(pedidoProdutos[0]?.categoria || "");
     } else {
@@ -3875,62 +3850,14 @@ export default function EstoquePage() {
                 </button>
               </div>
 
-              {/* Vincular a funcionário (opcional) — aparece pra NOVO, SEMINOVO e NAO_ATIVADO */}
-              {form.tipo !== "A_CAMINHO" && (
-                <div className={`p-4 rounded-xl border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={vincularFuncionario} onChange={e => setVincularFuncionario(e.target.checked)} className="w-4 h-4 accent-[#E8740E]" />
-                    <span className={`text-sm font-semibold ${textPrimary}`}>👥 Já vincular a um funcionário?</span>
-                  </label>
-                  <p className={`text-[11px] ${textSecondary} mt-1 ml-6`}>
-                    Marque se o produto vai direto pra um colaborador (cedido/parcial/etc). Sai do estoque disponível e entra em /admin/produtos-funcionarios.
-                  </p>
-                  {vincularFuncionario && (
-                    <div className="mt-3 pl-6 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className={labelCls}>Funcionário</p>
-                          <input type="text" value={funcForm.funcionario} onChange={e => setFuncForm(f => ({ ...f, funcionario: e.target.value }))} placeholder="Ex: Paloma" className={inputCls} />
-                        </div>
-                        <div>
-                          <p className={labelCls}>Tipo de acordo</p>
-                          <select value={funcForm.tipoAcordo} onChange={e => setFuncForm(f => ({ ...f, tipoAcordo: e.target.value as typeof f.tipoAcordo }))} className={inputCls}>
-                            <option value="CEDIDO">Cedido (empresa paga 100%)</option>
-                            <option value="PARCIAL">Pagamento parcial</option>
-                            <option value="TOTAL">Pagamento total</option>
-                            <option value="SUBSIDIADO">Subsidiado pela empresa</option>
-                            <option value="OUTRO">Outro</option>
-                          </select>
-                        </div>
-                      </div>
-                      {(funcForm.tipoAcordo === "PARCIAL" || funcForm.tipoAcordo === "SUBSIDIADO") && (
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-[11px] uppercase ${textSecondary} font-bold`}>Funcionário paga</span>
-                            <span className="text-sm font-bold text-[#E8740E]">{funcForm.percentual}%</span>
-                          </div>
-                          <input type="range" min={10} max={100} step={5} value={funcForm.percentual} onChange={e => setFuncForm(f => ({ ...f, percentual: Number(e.target.value) }))} className="w-full accent-[#E8740E]" />
-                        </div>
-                      )}
-                      <div>
-                        <p className={labelCls}>Observação do acordo</p>
-                        <textarea rows={2} value={funcForm.observacao} onChange={e => setFuncForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: Empresa cedeu pra uso no trabalho. Funcionário devolve ao sair." className={inputCls} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               <button onClick={handleSubmitMulti} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
                 {form.tipo === "A_CAMINHO"
                   ? `Adicionar ${pedidoProdutos.length} como A Caminho`
-                  : vincularFuncionario && funcForm.funcionario.trim()
-                    ? `Adicionar ${pedidoProdutos.length} e vincular a ${funcForm.funcionario.trim()}`
-                    : form.tipo === "SEMINOVO"
-                      ? `Adicionar ${pedidoProdutos.length} Seminovo${pedidoProdutos.length > 1 ? "s" : ""}`
-                      : form.tipo === "NAO_ATIVADO"
-                        ? `Adicionar ${pedidoProdutos.length} Não Ativado${pedidoProdutos.length > 1 ? "s" : ""}`
-                        : `Adicionar ${pedidoProdutos.length} ao Estoque`}
+                  : form.tipo === "SEMINOVO"
+                    ? `Adicionar ${pedidoProdutos.length} Seminovo${pedidoProdutos.length > 1 ? "s" : ""}`
+                    : form.tipo === "NAO_ATIVADO"
+                      ? `Adicionar ${pedidoProdutos.length} Não Ativado${pedidoProdutos.length > 1 ? "s" : ""}`
+                      : `Adicionar ${pedidoProdutos.length} ao Estoque`}
               </button>
             </div>
           ) : (
