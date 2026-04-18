@@ -182,7 +182,12 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
     serial_no: p.serial_no || "",
     condicao: condicaoInicial,
     caixa: caixaInicial,
+    cabo: !!(p.observacao && p.observacao.includes("[COM_CABO]")),
+    fonte: !!(p.observacao && p.observacao.includes("[COM_FONTE]")),
     grade: gradeInicial,
+    bateria: p.bateria ? String(p.bateria) : "",
+    garantia: p.garantia || "",
+    observacao: (p.observacao || "").replace(/\[GRADE_[^\]]+\]|\[COM_CAIXA\]|\[COM_CABO\]|\[COM_FONTE\]|\[NAO_ATIVADO\]|\[SEMINOVO\]/g, "").trim(),
   };
 }
 
