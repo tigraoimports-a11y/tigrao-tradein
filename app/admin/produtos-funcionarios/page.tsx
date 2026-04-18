@@ -492,6 +492,7 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const [estoqueItems, setEstoqueItems] = useState<EstoqueItem[]>([]);
+  const [funcionariosLista, setFuncionariosLista] = useState<{ id: string; nome: string; cargo: string }[]>([]);
   const [busca, setBusca] = useState("");
   const [estoqueSel, setEstoqueSel] = useState<EstoqueItem | null>(null);
   // Manual
@@ -542,6 +543,19 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
       }
     })();
   }, [tipo, password]);
+
+  // Carrega lista de funcionarios cadastrados (autocomplete)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/funcionarios?tag=TIGRAO&ativo=true", {
+          headers: { "x-admin-password": password },
+        });
+        const j = await res.json();
+        if (j.data) setFuncionariosLista(j.data);
+      } catch { /* silent */ }
+    })();
+  }, [password]);
 
   const filtered = useMemo(() => {
     if (!busca.trim()) return estoqueItems.slice(0, 30);
@@ -763,7 +777,18 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] uppercase text-[#86868B] font-semibold">Funcionário *</label>
-              <input type="text" value={funcionario} onChange={e => setFuncionario(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]" placeholder="Ex: Bianca" />
+              <input
+                type="text"
+                list="funcionarios-list"
+                value={funcionario}
+                onChange={e => setFuncionario(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]"
+                placeholder="Ex: Bianca"
+              />
+              <datalist id="funcionarios-list">
+                {funcionariosLista.map(f => <option key={f.id} value={f.nome}>{f.cargo}</option>)}
+              </datalist>
+              <p className="text-[10px] text-[#86868B] mt-0.5">Auto-completa com os cadastrados em /admin/clientes → Funcionários</p>
             </div>
             <div>
               <label className="text-[11px] uppercase text-[#86868B] font-semibold">Data de saída</label>
