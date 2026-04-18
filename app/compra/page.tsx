@@ -647,7 +647,7 @@ function CompraForm() {
     lines.push("");
     lines.push(`*▸ ENTREGA*`);
     if (vendedor) lines.push(`*Vendedor:* ${vendedor}`);
-    if (origem) lines.push(`*Indicação:* ${origem}`);
+    if (origem) lines.push(`*Como conheceu a loja:* ${origem}`);
     lines.push(`*Horário:* ${horario}`);
     if (dataEntrega) {
       const [y, m, d] = dataEntrega.split("-");
