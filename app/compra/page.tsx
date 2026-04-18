@@ -239,29 +239,18 @@ function CompraForm() {
     if (match) setPrecoAuto(match.precoPix);
   }, [produtoInput, allProducts, precoParam]);
 
-  // Fetch cores disponíveis do estoque para o produto selecionado
+  // Fetch cores disponíveis do estoque para o produto selecionado.
+  // Usa MATCH EXATO (startsWith com produto completo) pra evitar misturar cores de
+  // modelos diferentes. Se não achar nada, coresDisponiveis fica vazio e mostramos
+  // input manual pro cliente digitar a cor (ver seção "Escolha a cor").
   useEffect(() => {
     const prod = produtoInput || produtoParam;
     if (!prod) { setCoresDisponiveis([]); return; }
-    // Buscar no catálogo já carregado
     const cores = new Set<string>();
     for (const items of Object.values(catalogo)) {
       for (const item of items) {
         if (item.cor && item.produto.startsWith(prod)) {
           cores.add(item.cor.toUpperCase());
-        }
-      }
-    }
-    if (cores.size > 0) { setCoresDisponiveis([...cores].sort()); return; }
-    // Fallback: buscar todas as cores do catálogo cujo nome base corresponde
-    const prodLower = prod.toLowerCase();
-    for (const items of Object.values(catalogo)) {
-      for (const item of items) {
-        if (item.cor) {
-          const baseName = item.produto.replace(/ - .+$/, "").toLowerCase();
-          if (baseName === prodLower || prodLower.includes(baseName) || baseName.includes(prodLower)) {
-            cores.add(item.cor.toUpperCase());
-          }
         }
       }
     }
@@ -457,9 +446,9 @@ function CompraForm() {
       return;
     }
 
-    // Cor obrigatoria quando ha cores disponiveis no estoque — evita
-    // mensagens chegando sem cor e vendedor ter que perguntar depois.
-    if (coresDisponiveis.length > 0 && !corSel) {
+    // Cor sempre obrigatoria — se tem cores no estoque, cliente escolhe chip;
+    // senao, digita manualmente no input. Evita mensagens chegando sem cor.
+    if (!corSel || !corSel.trim()) {
       alert("Escolha a cor do produto antes de enviar.");
       document.getElementById("escolha-cor")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -748,7 +737,7 @@ function CompraForm() {
       setErroMp("Selecione o produto desejado.");
       return;
     }
-    if (coresDisponiveis.length > 0 && !corSel) {
+    if (!corSel || !corSel.trim()) {
       setErroMp("Escolha a cor do produto.");
       document.getElementById("escolha-cor")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -965,23 +954,31 @@ function CompraForm() {
               </>
             )}
 
-            {/* Seleção de cor — obrigatória quando há cores no estoque.
-                Antes só aparecia se (produtoInput || sem variantes). Removido o filtro
-                porque cliente vindo do simulador com produto pré-preenchido não via
-                a opção e o vendedor precisava perguntar por WhatsApp. */}
-            {coresDisponiveis.length > 0 && (
+            {/* Seleção de cor — obrigatória. Se há cores no estoque, mostra chips;
+                senão (produto sem variantes cadastradas), mostra input manual. */}
+            {(produtoInput || produtoParam) && (
               <div id="escolha-cor" className={`mt-3 pt-3 border-t ${!corSel ? "border-[#E8740E]" : "border-[#E8E8ED]"}`}>
                 <p className={`text-xs uppercase tracking-wider font-semibold mb-2 ${!corSel ? "text-[#E8740E]" : "text-[#86868B]"}`}>
                   Escolha a cor *{!corSel && <span className="ml-1 normal-case font-medium">(obrigatório)</span>}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {coresDisponiveis.map(cor => (
-                    <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
-                      {cor}
-                    </button>
-                  ))}
-                </div>
+                {coresDisponiveis.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {coresDisponiveis.map(cor => (
+                      <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                        {cor}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={corSel}
+                    onChange={(e) => setCorSel(e.target.value.toUpperCase())}
+                    placeholder="Ex: Preto, Azul, Titânio..."
+                    className={inputCls}
+                  />
+                )}
               </div>
             )}
           </>
