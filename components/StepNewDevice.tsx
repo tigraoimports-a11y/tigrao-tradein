@@ -419,7 +419,12 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       website: getHoneypotValue(),
                     }),
                   }).catch(() => {});
-                  const waNum = WHATSAPP_SEMINOVO;
+                  // whatsappNumber eh passado pelo TradeInCalculator ja com a
+                  // logica correta pra seminovos (prefere vendedor selecionado;
+                  // senao tradeinConfig.whatsapp_formularios_seminovos; senao
+                  // principal). O fallback WHATSAPP_SEMINOVO so entra se o prop
+                  // nao foi passado (componente usado standalone).
+                  const waNum = whatsappNumber || WHATSAPP_SEMINOVO;
                   const msg = encodeURIComponent(buildWhatsAppMsg());
                   window.location.href = `https://wa.me/${waNum}?text=${msg}`;
                 }}
