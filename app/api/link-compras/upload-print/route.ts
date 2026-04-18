@@ -28,14 +28,24 @@ export async function POST(req: NextRequest) {
     }
     const aparelhoNum = aparelho === "2" ? 2 : 1;
 
-    // Busca o link pra garantir que existe
-    const { data: link, error: linkErr } = await supabase
+    // Busca o link pra garantir que existe — tenta exato primeiro, depois case-insensitive
+    let { data: link, error: linkErr } = await supabase
       .from("link_compras")
       .select("id")
       .eq("short_code", shortCode)
       .maybeSingle();
+    if (!link && !linkErr) {
+      const retry = await supabase
+        .from("link_compras")
+        .select("id")
+        .ilike("short_code", shortCode)
+        .maybeSingle();
+      link = retry.data;
+      linkErr = retry.error;
+    }
     if (linkErr || !link) {
-      return NextResponse.json({ error: "link_compras nao encontrado" }, { status: 404 });
+      console.error(`[upload-print] link_compras nao encontrado. short_code recebido: "${shortCode}"`);
+      return NextResponse.json({ error: `link_compras nao encontrado (short_code: ${shortCode})` }, { status: 404 });
     }
 
     // Validar tamanho (max 5MB)
