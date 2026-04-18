@@ -1396,8 +1396,17 @@ export default function VendasPage() {
           ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
           : gForma === "DEBITO" ? 0.75
           : 0;
-        // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
-        payloads[0].preco_vendido = Math.round(gCompPrinc + gCompAlt + gEntradaPix + gEntradaEspecie + gTroca);
+        // Taxa do 2o cartão
+        const gTaxaAlt = getTaxa(
+          (form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"),
+          form.band_alt || null,
+          parseInt(form.parc_alt) || 0,
+          ((form.forma_alt || form.forma || "CARTAO") === "LINK" ? "CARTAO" : (form.forma_alt || form.forma || "CARTAO")) as "CARTAO" | "DEBITO"
+        );
+        // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa) — fix bug lucro exorbitante
+        const liquidoPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
+        const liquidoAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
+        payloads[0].preco_vendido = Math.round(liquidoPrinc + liquidoAlt + gEntradaPix + gEntradaEspecie + gTroca);
       }
     }
     if (payloads.length > 1) {
@@ -1417,16 +1426,26 @@ export default function VendasPage() {
             : gForma === "DEBITO" ? 0.75
             : 0;
 
-          // Cartão alternativo (2o cartão)
+          // Cartão alternativo (2o cartão) — taxa própria
           const gCompAlt = parseFloat(form.comp_alt) || 0;
+          const gTaxaAlt = gCompAlt > 0 ? getTaxa(
+            (form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"),
+            form.band_alt || null,
+            parseInt(form.parc_alt) || 0,
+            ((form.forma_alt || form.forma || "CARTAO") === "LINK" ? "CARTAO" : (form.forma_alt || form.forma || "CARTAO")) as "CARTAO" | "DEBITO"
+          ) : 0;
 
           // Add entradas (pix, especie) — these are global
           const gEntradaPix = parseFloat(form.entrada_pix) || 0;
           const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
           // Trocas são por produto — somar todas as trocas de todos os produtos
           const totalTrocas = payloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
-          // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
-          const totalRecebido = comprovanteTotal + gCompAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+
+          // Converter BRUTO dos cartões em LIQUIDO (descontando taxa) — fix bug lucro exorbitante
+          const liquidoCartao = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
+          const liquidoCartaoAlt = gCompAlt > 0 && gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
+          // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa)
+          const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
           let comprovanteDistribuido = 0;
           let vendidoDistribuido = 0;
@@ -1489,11 +1508,20 @@ export default function VendasPage() {
                 : gForma === "DEBITO" ? 0.75
                 : 0;
               const gCompAlt = parseFloat(form.comp_alt) || 0;
+              const gTaxaAlt = gCompAlt > 0 ? getTaxa(
+                (form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"),
+                form.band_alt || null,
+                parseInt(form.parc_alt) || 0,
+                ((form.forma_alt || form.forma || "CARTAO") === "LINK" ? "CARTAO" : (form.forma_alt || form.forma || "CARTAO")) as "CARTAO" | "DEBITO"
+              ) : 0;
               const gEntradaPix = parseFloat(form.entrada_pix) || 0;
               const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
               const totalTrocas = groupPayloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
-              // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
-              const totalRecebido = comprovanteTotal + gCompAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+              // Converter BRUTO dos cartões em LIQUIDO — fix bug lucro exorbitante
+              const liquidoCartao = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
+              const liquidoCartaoAlt = gCompAlt > 0 && gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
+              // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa)
+              const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
               let comprovanteDistribuido = 0;
               let vendidoDistribuido = 0;
@@ -5497,23 +5525,42 @@ export default function VendasPage() {
                                             onClick={async (e) => {
                                               e.stopPropagation();
                                               const isLojista = v.tipo === "ATACADO" || v.origem === "ATACADO";
+                                              // Cancelar TODAS as vendas do grupo (multi-produto)
+                                              const grupoIds = (v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id).map(gv => gv.id) : [v.id]);
+                                              const qtdProdutos = grupoIds.length;
+                                              const pluralTxt = qtdProdutos > 1 ? `de ${qtdProdutos} produtos` : "";
                                               let devolverComoCredito = false;
                                               if (isLojista) {
-                                                const r = confirm(`Cancelar venda de ${v.cliente}?\n\n✅ OK = Manter valor como CRÉDITO para o lojista (R$ ${Number(v.preco_vendido || 0).toLocaleString("pt-BR")})\n❌ Cancelar = apenas cancelar SEM creditar`);
+                                                const valorTotal = vendas.filter(gv => grupoIds.includes(gv.id)).reduce((s, gv) => s + Number(gv.preco_vendido || 0), 0);
+                                                const r = confirm(`Cancelar venda ${pluralTxt} de ${v.cliente}?\n\n✅ OK = Manter valor como CRÉDITO para o lojista (R$ ${valorTotal.toLocaleString("pt-BR")})\n❌ Cancelar = apenas cancelar SEM creditar`);
                                                 if (r) devolverComoCredito = true;
                                                 else {
-                                                  if (!confirm(`Cancelar SEM creditar?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                                  if (!confirm(`Cancelar ${pluralTxt} SEM creditar?\n\nIsso vai:\n- Marcar como cancelada\n- Devolver produto(s) ao estoque\n- Remover o seminovo do estoque (se houver troca)`)) return;
                                                 }
                                               } else {
-                                                if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                                if (!confirm(`Cancelar venda ${pluralTxt} de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Devolver produto(s) ao estoque\n- Remover o seminovo do estoque (se houver troca)`)) return;
                                               }
-                                              await fetch("/api/vendas", {
-                                                method: "DELETE",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, devolver_como_credito: devolverComoCredito }),
-                                              });
-                                              setVendas(prev => prev.filter(r => r.id !== v.id));
-                                              setMsg(devolverComoCredito ? "Venda cancelada! Valor creditado ao lojista." : "Venda cancelada!");
+                                              let allOk = true;
+                                              for (const vid of grupoIds) {
+                                                const res = await fetch("/api/vendas", {
+                                                  method: "DELETE",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({ id: vid, devolver_como_credito: devolverComoCredito }),
+                                                });
+                                                if (!res.ok) {
+                                                  const txt = await res.text().catch(() => "");
+                                                  console.error(`[Cancelar] Erro ao cancelar ${vid}:`, res.status, txt);
+                                                  allOk = false;
+                                                }
+                                              }
+                                              setVendas(prev => prev.filter(r => !grupoIds.includes(r.id)));
+                                              if (allOk) {
+                                                setMsg(devolverComoCredito
+                                                  ? `${qtdProdutos > 1 ? `${qtdProdutos} vendas canceladas` : "Venda cancelada"}! Valor creditado ao lojista.`
+                                                  : `${qtdProdutos > 1 ? `${qtdProdutos} vendas canceladas` : "Venda cancelada"}!`);
+                                              } else {
+                                                setMsg("⚠️ Algumas vendas não foram canceladas — verifique o console");
+                                              }
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
                                           >
