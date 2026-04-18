@@ -127,6 +127,7 @@ export interface Gasto {
   is_dep_esp: boolean;
   grupo_id: string | null;
   pedido_fornecedor_id: string | null;
+  funcionario: string | null;
 }
 
 export interface PedidoFornecedorItem {

@@ -39,6 +39,7 @@ interface GastoGrupo {
   hora: string | null;
   is_dep_esp: boolean;
   bancos: string;
+  funcionario: string | null;
 }
 
 function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
@@ -73,6 +74,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       hora: first.hora,
       is_dep_esp: first.is_dep_esp,
       bancos: items.map((i) => `${i.banco}: ${fmt(i.valor)}`).join(" | "),
+      funcionario: first.funcionario || null,
     });
   }
 
@@ -91,6 +93,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       hora: g.hora,
       is_dep_esp: g.is_dep_esp,
       bancos: g.banco || "—",
+      funcionario: g.funcionario || null,
     });
   }
 
@@ -625,6 +628,8 @@ export default function GastosPage() {
 
   // Fornecedores
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  // Funcionarios (para SALARIO)
+  const [funcionariosLista, setFuncionariosLista] = useState<{ nome: string; tag: string }[]>([]);
 
   // Form state
   const [form, setForm] = useState({
@@ -634,6 +639,7 @@ export default function GastosPage() {
     descricao: "",
     observacao: "",
     is_dep_esp: false,
+    funcionario: "",
     // Estorno
     contato_tipo: "cliente" as "cliente" | "fornecedor" | "atacado",
     contato_nome: "",
@@ -656,6 +662,7 @@ export default function GastosPage() {
     descricao: "",
     observacao: "",
     is_dep_esp: false,
+    funcionario: "",
   });
   const [editBancoValores, setEditBancoValores] = useState<BancoValores>(emptyBancoValores());
 
@@ -740,6 +747,13 @@ export default function GastosPage() {
           setAtacados(json.clientes ?? json.data ?? []);
         }
       } catch { /* ignore */ }
+      try {
+        const res = await fetch("/api/admin/funcionarios-list", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setFuncionariosLista(json.funcionarios ?? []);
+        }
+      } catch { /* ignore */ }
     })();
   }, [password]);
 
@@ -756,6 +770,7 @@ export default function GastosPage() {
   const isFornecedor = form.categoria === "FORNECEDOR";
   const isEstorno = form.categoria === "ESTORNO";
   const isReembolso = form.categoria === "REEMBOLSO";
+  const isSalario = form.categoria === "SALARIO";
 
   // Carrega vendas do contato selecionado para popular o dropdown de venda relacionada
   useEffect(() => {
@@ -797,6 +812,12 @@ export default function GastosPage() {
       }
     }
 
+    if (isSalario && !form.funcionario.trim()) {
+      setMsg("Selecione o funcionário");
+      setSaving(false);
+      return;
+    }
+
     const base = {
       data: form.data,
       hora: form.horario || null,
@@ -805,6 +826,7 @@ export default function GastosPage() {
       descricao: form.descricao || null,
       observacao: form.observacao || null,
       is_dep_esp: form.is_dep_esp,
+      funcionario: isSalario ? form.funcionario.trim().toUpperCase() : null,
       contato_nome: isEstorno ? form.contato_nome.trim().toUpperCase() : null,
       contato_tipo: isEstorno ? form.contato_tipo : null,
       venda_id: isEstorno && form.venda_id.trim() ? form.venda_id.trim() : null,
@@ -873,7 +895,7 @@ export default function GastosPage() {
         ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
         : "";
       setMsg(`Gasto registrado!${prodMsg}`);
-      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5), contato_nome: "", venda_id: "" }));
+      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5), contato_nome: "", venda_id: "", funcionario: "" }));
       setBancoValores(emptyBancoValores());
       setPedidoProdutos([]);
       fetchGastos();
@@ -893,6 +915,7 @@ export default function GastosPage() {
       categoria: g.categoria,
       observacao: g.observacao || "",
       is_dep_esp: g.is_dep_esp,
+      funcionario: g.funcionario || "",
     });
     const bv = emptyBancoValores();
     for (const item of g.items) {
@@ -922,6 +945,7 @@ export default function GastosPage() {
       descricao: editForm.descricao || null,
       observacao: editForm.observacao || null,
       is_dep_esp: editForm.is_dep_esp,
+      funcionario: editForm.categoria === "SALARIO" ? (editForm.funcionario || "").trim().toUpperCase() || null : null,
     };
 
     let payload;
@@ -1062,6 +1086,33 @@ export default function GastosPage() {
             <div><p className={labelCls}>Descricao</p><input value={form.descricao} onChange={(e) => set("descricao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
           </div>
+
+          {/* Bloco SALARIO — vincula ao funcionário */}
+          {isSalario && (
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-[#E8740E]/40 bg-[#E8740E]/5" : "border-[#E8740E]/30 bg-[#FFF8F0]"} space-y-2`}>
+              <div>
+                <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>👤 Salário — vincular ao funcionário</p>
+                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  O gasto fica vinculado ao funcionário selecionado. Use a observação pra registrar o motivo.
+                </p>
+              </div>
+              <div>
+                <p className={labelCls}>Funcionário <span className="text-red-500">*</span></p>
+                <input
+                  list="salario-funcionarios"
+                  value={form.funcionario}
+                  onChange={(e) => set("funcionario", e.target.value.toUpperCase())}
+                  placeholder="Comece a digitar para buscar..."
+                  className={`${inputCls} uppercase`}
+                />
+                <datalist id="salario-funcionarios">
+                  {funcionariosLista.map((f) => (
+                    <option key={f.nome} value={f.nome}>{f.tag}</option>
+                  ))}
+                </datalist>
+              </div>
+            </div>
+          )}
 
           {/* Bloco de Estorno — vínculo com contato */}
           {isEstorno && (
@@ -1411,6 +1462,15 @@ export default function GastosPage() {
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Observação</p>
                                 <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.observacao || "—"}</p>
                               </div>
+                              {g.categoria === "SALARIO" && g.funcionario && (
+                                <div className="col-span-2 md:col-span-3">
+                                  <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Funcionário</p>
+                                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
+                                    👤 {g.funcionario}
+                                    <span className="text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded">TIGRAO</span>
+                                  </span>
+                                </div>
+                              )}
                               {g.is_dep_esp && (
                                 <div className="col-span-2 md:col-span-3">
                                   <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
@@ -1441,6 +1501,23 @@ export default function GastosPage() {
                                 <div><p className={labelCls}>Descricao</p><input value={editForm.descricao} onChange={(e) => editSet("descricao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
                                 <div><p className={labelCls}>Observacao</p><input value={editForm.observacao} onChange={(e) => editSet("observacao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
                               </div>
+                              {editForm.categoria === "SALARIO" && (
+                                <div>
+                                  <p className={labelCls}>Funcionário</p>
+                                  <input
+                                    list="salario-funcionarios-edit"
+                                    value={editForm.funcionario}
+                                    onChange={(e) => editSet("funcionario", e.target.value.toUpperCase())}
+                                    placeholder="Comece a digitar para buscar..."
+                                    className={`${inputCls} uppercase`}
+                                  />
+                                  <datalist id="salario-funcionarios-edit">
+                                    {funcionariosLista.map((f) => (
+                                      <option key={f.nome} value={f.nome}>{f.tag}</option>
+                                    ))}
+                                  </datalist>
+                                </div>
+                              )}
                               <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
                                 {bancoInputGrid(editBancoValores, editSetBanco, inputCls)}
