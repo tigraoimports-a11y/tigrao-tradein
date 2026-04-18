@@ -1311,8 +1311,10 @@ export default function VendasPage() {
     // Forma de pagamento é opcional — se não preenchida, venda vai como "Em Andamento" (AGUARDANDO)
     // e o pagamento pode ser registrado depois na aba "Em Andamento"
 
-    // Validação: comprovante obrigatório para vendas no CARTÃO (só se tem permissão de ver histórico)
-    if (podeVerHistorico && (form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
+    // Validação: comprovante obrigatório para vendas no CARTÃO (só se tem permissão de ver histórico).
+    // No modo "Datas diferentes" cada pagamento em pagEntries tem sua propria forma/valor — nao
+    // existe um campo unico `valor_comprovante_input`, entao essa validacao nao se aplica.
+    if (!multiDatePagamento && podeVerHistorico && (form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
       setMsg("⚠️ Preencha o VALOR DO COMPROVANTE para vendas no cartão/débito");
       return;
     }
