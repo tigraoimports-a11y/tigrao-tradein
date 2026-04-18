@@ -36,6 +36,10 @@ export default function VendasPage() {
   const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX", observacao: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
+  // Guarda o estoque_id original da venda ao entrar em modo edição.
+  // Usado pra detectar se o admin trocou o produto (mesmo digitando manualmente
+  // sem vincular novo item do estoque). Permite devolver o antigo ao estoque.
+  const [estoqueIdOriginal, setEstoqueIdOriginal] = useState<string | null>(null);
   const [vendaProgramada, setVendaProgramada] = useState(false);
   const [programadaJaPago, setProgramadaJaPago] = useState(false);
   const [programadaComSinal, setProgramadaComSinal] = useState(false);
@@ -1151,8 +1155,16 @@ export default function VendasPage() {
       codigo_rastreio: form.local === "CORREIO" && form.codigo_rastreio ? form.codigo_rastreio.trim().toUpperCase() : null,
     };
 
+    // Estoque_id: sempre envia quando vinculou um item novo.
+    // Adicionalmente, se estamos editando uma venda e o admin MUDOU o produto
+    // (estoque_id atual difere do original — incluindo quando limpou vinculo
+    // digitando produto manualmente), envia null pra backend devolver o antigo.
     if (prodFields._estoqueId) {
       payload._estoque_id = prodFields._estoqueId;
+    } else if (editandoVendaId && estoqueIdOriginal && !prodFields._estoqueId) {
+      // Admin editou venda e desvinculou o produto — envia null explicitamente
+      // pra backend devolver o item antigo ao estoque
+      payload._estoque_id = null;
     }
 
     // Helper: build observacao with tags from checkboxes
@@ -1553,7 +1565,7 @@ export default function VendasPage() {
               : allProducts.length > editandoGrupoIds.length
                 ? `${editandoGrupoIds.length} atualizadas + ${allProducts.length - editandoGrupoIds.length} novas criadas!`
                 : `${allProducts.length} atualizadas + ${editandoGrupoIds.length - allProducts.length} removidas!`;
-            setEditandoVendaId(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -1595,7 +1607,7 @@ export default function VendasPage() {
           });
           const json = await res.json();
           if (json.ok || json.data) {
-            setEditandoVendaId(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -2153,7 +2165,7 @@ export default function VendasPage() {
               </div>
               <button
                 onClick={() => {
-                  setEditandoVendaId(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null);
                   setEditandoGrupoIds([]);
                   setProdutosCarrinho([]);
                   setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
@@ -2190,7 +2202,7 @@ export default function VendasPage() {
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
-                  setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
+                  setProdutosCarrinho([]); setEditandoVendaId(null); setEstoqueIdOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
@@ -2963,7 +2975,7 @@ export default function VendasPage() {
                   setProdutosCarrinho([]);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
-                  setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
@@ -5212,6 +5224,8 @@ export default function VendasPage() {
                                               setEditandoGrupoIds([]);
                                               setEditandoVendaId(v.id);
                                             }
+                                            // Guarda o estoque_id ORIGINAL da venda (pra detectar se trocou produto no submit)
+                                            setEstoqueIdOriginal((primaryVenda as unknown as { estoque_id?: string | null }).estoque_id || null);
                                             // Preservar flag de venda programada no form — senao o PATCH
                                             // zerava data_programada e mudava status pra AGUARDANDO ao salvar.
                                             if (primaryVenda.status_pagamento === "PROGRAMADA" || primaryVenda.data_programada) {
