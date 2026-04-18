@@ -649,7 +649,12 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  // Capturar estoque_id novo antes de deletar do fields
+  // Capturar estoque_id novo antes de deletar do fields.
+  // IMPORTANTE: '_estoque_id' in fields distingue "nao enviado" de "enviado como null":
+  //   - nao enviado: admin nao mexeu no produto, nao fazer nada
+  //   - enviado com valor: admin vinculou um novo item do estoque
+  //   - enviado como null: admin removeu o vinculo (produto mudou sem novo vinculo)
+  const estoqueIdFoiEnviado = "_estoque_id" in fields;
   const novoEstoqueId = fields._estoque_id || null;
 
   // Capturar crédito de lojista antes de remover campos virtuais
@@ -673,24 +678,26 @@ export async function PATCH(req: NextRequest) {
   const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto").eq("id", id).single();
   const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
 
-  // Se tem novo estoque_id, vincular na venda
-  if (novoEstoqueId) {
+  // Se o admin enviou _estoque_id (mesmo null), atualizar o vinculo na venda
+  if (estoqueIdFoiEnviado) {
     fields.estoque_id = novoEstoqueId;
   }
 
   // Todos os campos de troca existem na tabela vendas após migration 20260406_vendas_troca_serial_imei
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
 
-  // Se o produto foi trocado (estoque_id mudou), devolver o antigo ao estoque
-  if (!error && estoqueIdAnterior && novoEstoqueId && estoqueIdAnterior !== novoEstoqueId) {
+  // Se o produto foi trocado (estoque_id mudou — incluindo pra null quando admin
+  // digitou produto manual sem vincular novo item), devolver o antigo ao estoque.
+  if (!error && estoqueIdAnterior && estoqueIdFoiEnviado && estoqueIdAnterior !== novoEstoqueId) {
     const { data: itemAntigo } = await supabase.from("estoque").select("id, qnt").eq("id", estoqueIdAnterior).single();
     if (itemAntigo) {
       await supabase.from("estoque").update({
         qnt: Number(itemAntigo.qnt || 0) + 1,
         status: "EM ESTOQUE",
+        cliente: null,
         updated_at: new Date().toISOString(),
       }).eq("id", estoqueIdAnterior);
-      console.log(`[Vendas PATCH] Produto anterior devolvido ao estoque: ${estoqueIdAnterior}`);
+      console.log(`[Vendas PATCH] Produto anterior devolvido ao estoque: ${estoqueIdAnterior} (novo: ${novoEstoqueId || "nenhum"})`);
     }
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
