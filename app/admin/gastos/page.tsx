@@ -39,7 +39,7 @@ interface GastoGrupo {
   hora: string | null;
   is_dep_esp: boolean;
   bancos: string;
-  funcionario: string | null;
+  funcionario_id: string | null;
 }
 
 function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
@@ -74,7 +74,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       hora: first.hora,
       is_dep_esp: first.is_dep_esp,
       bancos: items.map((i) => `${i.banco}: ${fmt(i.valor)}`).join(" | "),
-      funcionario: first.funcionario || null,
+      funcionario_id: first.funcionario_id || null,
     });
   }
 
@@ -93,7 +93,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       hora: g.hora,
       is_dep_esp: g.is_dep_esp,
       bancos: g.banco || "—",
-      funcionario: g.funcionario || null,
+      funcionario_id: g.funcionario_id || null,
     });
   }
 
@@ -634,7 +634,7 @@ export default function GastosPage() {
   // Fornecedores
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   // Funcionarios (para SALARIO)
-  const [funcionariosLista, setFuncionariosLista] = useState<{ nome: string; tag: string }[]>([]);
+  const [funcionariosLista, setFuncionariosLista] = useState<{ id: string; nome: string; cargo: string; tag: string }[]>([]);
 
   // Form state
   const [form, setForm] = useState({
@@ -644,7 +644,7 @@ export default function GastosPage() {
     descricao: "",
     observacao: "",
     is_dep_esp: false,
-    funcionario: "",
+    funcionario_id: "",
     // Estorno
     contato_tipo: "cliente" as "cliente" | "fornecedor" | "atacado",
     contato_nome: "",
@@ -667,7 +667,7 @@ export default function GastosPage() {
     descricao: "",
     observacao: "",
     is_dep_esp: false,
-    funcionario: "",
+    funcionario_id: "",
   });
   const [editBancoValores, setEditBancoValores] = useState<BancoValores>(emptyBancoValores());
 
@@ -753,10 +753,10 @@ export default function GastosPage() {
         }
       } catch { /* ignore */ }
       try {
-        const res = await fetch("/api/admin/funcionarios-list", { headers: { "x-admin-password": password } });
+        const res = await fetch("/api/admin/funcionarios?tag=TIGRAO&ativo=true", { headers: { "x-admin-password": password } });
         if (res.ok) {
           const json = await res.json();
-          setFuncionariosLista(json.funcionarios ?? []);
+          setFuncionariosLista(json.data ?? []);
         }
       } catch { /* ignore */ }
     })();
@@ -817,7 +817,7 @@ export default function GastosPage() {
       }
     }
 
-    if (isSalario && !form.funcionario.trim()) {
+    if (isSalario && !form.funcionario_id) {
       setMsg("Selecione o funcionário");
       setSaving(false);
       return;
@@ -831,7 +831,7 @@ export default function GastosPage() {
       descricao: form.descricao || null,
       observacao: form.observacao || null,
       is_dep_esp: form.is_dep_esp,
-      funcionario: isSalario ? form.funcionario.trim().toUpperCase() : null,
+      funcionario_id: isSalario ? form.funcionario_id : null,
       contato_nome: isEstorno ? form.contato_nome.trim().toUpperCase() : null,
       contato_tipo: isEstorno ? form.contato_tipo : null,
       venda_id: isEstorno && form.venda_id.trim() ? form.venda_id.trim() : null,
@@ -900,7 +900,7 @@ export default function GastosPage() {
         ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
         : "";
       setMsg(`Gasto registrado!${prodMsg}`);
-      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5), contato_nome: "", venda_id: "", funcionario: "" }));
+      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5), contato_nome: "", venda_id: "", funcionario_id: "" }));
       setBancoValores(emptyBancoValores());
       setPedidoProdutos([]);
       fetchGastos();
@@ -920,7 +920,7 @@ export default function GastosPage() {
       categoria: g.categoria,
       observacao: g.observacao || "",
       is_dep_esp: g.is_dep_esp,
-      funcionario: g.funcionario || "",
+      funcionario_id: g.funcionario_id || "",
     });
     const bv = emptyBancoValores();
     for (const item of g.items) {
@@ -950,7 +950,7 @@ export default function GastosPage() {
       descricao: editForm.descricao || null,
       observacao: editForm.observacao || null,
       is_dep_esp: editForm.is_dep_esp,
-      funcionario: editForm.categoria === "SALARIO" ? (editForm.funcionario || "").trim().toUpperCase() || null : null,
+      funcionario_id: editForm.categoria === "SALARIO" ? (editForm.funcionario_id || null) : null,
     };
 
     let payload;
@@ -1103,18 +1103,16 @@ export default function GastosPage() {
               </div>
               <div>
                 <p className={labelCls}>Funcionário <span className="text-red-500">*</span></p>
-                <input
-                  list="salario-funcionarios"
-                  value={form.funcionario}
-                  onChange={(e) => set("funcionario", e.target.value.toUpperCase())}
-                  placeholder="Comece a digitar para buscar..."
-                  className={`${inputCls} uppercase`}
-                />
-                <datalist id="salario-funcionarios">
+                <select
+                  value={form.funcionario_id}
+                  onChange={(e) => set("funcionario_id", e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">— Selecionar —</option>
                   {funcionariosLista.map((f) => (
-                    <option key={f.nome} value={f.nome}>{f.tag}</option>
+                    <option key={f.id} value={f.id}>{f.nome.toUpperCase()} · {f.cargo} [{f.tag}]</option>
                   ))}
-                </datalist>
+                </select>
               </div>
             </div>
           )}
@@ -1467,15 +1465,18 @@ export default function GastosPage() {
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Observação</p>
                                 <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.observacao || "—"}</p>
                               </div>
-                              {g.categoria === "SALARIO" && g.funcionario && (
-                                <div className="col-span-2 md:col-span-3">
-                                  <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Funcionário</p>
-                                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
-                                    👤 {g.funcionario}
-                                    <span className="text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded">TIGRAO</span>
-                                  </span>
-                                </div>
-                              )}
+                              {g.categoria === "SALARIO" && g.funcionario_id && (() => {
+                                const f = funcionariosLista.find((x) => x.id === g.funcionario_id);
+                                return (
+                                  <div className="col-span-2 md:col-span-3">
+                                    <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Funcionário</p>
+                                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
+                                      👤 {f ? `${f.nome.toUpperCase()} · ${f.cargo}` : g.funcionario_id}
+                                      <span className="text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded">{f?.tag || "TIGRAO"}</span>
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                               {g.is_dep_esp && (
                                 <div className="col-span-2 md:col-span-3">
                                   <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
@@ -1509,18 +1510,16 @@ export default function GastosPage() {
                               {editForm.categoria === "SALARIO" && (
                                 <div>
                                   <p className={labelCls}>Funcionário</p>
-                                  <input
-                                    list="salario-funcionarios-edit"
-                                    value={editForm.funcionario}
-                                    onChange={(e) => editSet("funcionario", e.target.value.toUpperCase())}
-                                    placeholder="Comece a digitar para buscar..."
-                                    className={`${inputCls} uppercase`}
-                                  />
-                                  <datalist id="salario-funcionarios-edit">
+                                  <select
+                                    value={editForm.funcionario_id}
+                                    onChange={(e) => editSet("funcionario_id", e.target.value)}
+                                    className={inputCls}
+                                  >
+                                    <option value="">— Selecionar —</option>
                                     {funcionariosLista.map((f) => (
-                                      <option key={f.nome} value={f.nome}>{f.tag}</option>
+                                      <option key={f.id} value={f.id}>{f.nome.toUpperCase()} · {f.cargo} [{f.tag}]</option>
                                     ))}
-                                  </datalist>
+                                  </select>
                                 </div>
                               )}
                               <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
