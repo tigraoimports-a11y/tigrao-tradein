@@ -6,6 +6,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularBruto, calcularLiquido, calcularRecebimento } from "@/lib/taxas";
 import { useTabParam } from "@/lib/useTabParam";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
 import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
@@ -583,6 +584,10 @@ export default function VendasPage() {
   }, [password]);
 
   useEffect(() => { if (password) { fetchVendas(); fetchTermos(); } }, [password, fetchVendas, fetchTermos]);
+
+  // Auto-refresh dos termos a cada 20s pra badge mudar quando cliente assinar
+  // (o webhook ZapSign atualiza o banco mas a UI não sabe sem refetch)
+  useAutoRefetch(fetchTermos, !!password, 20000);
 
   // Auto-transição: vendas PROGRAMADAS cuja data já chegou → mover para AGUARDANDO
   const transicionadasRef = useRef<Set<string>>(new Set());
@@ -5201,115 +5206,9 @@ export default function VendasPage() {
                                         >
                                           ✏️ Editar
                                         </button>}
-                                        {/* Gerar Termo de Procedência — só quando há troca */}
+                                        {/* Enviar pra Assinar Digital — so quando ha troca. Botao "Gerar Termo (PDF)" foi
+                                            removido pois a assinatura digital via ZapSign substituiu o fluxo de papel. */}
                                         {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (<>
-                                          <button
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              // Se faltam S/N ou IMEI, pedir preenchimento via prompt
-                                              let serial1 = v.troca_serial || "";
-                                              let imei1 = v.troca_imei || "";
-                                              let serial2 = v.troca_serial2 || "";
-                                              let imei2 = v.troca_imei2 || "";
-                                              const falta1 = v.troca_produto && (!serial1 || !imei1);
-                                              const falta2 = v.troca_produto2 && (!serial2 || !imei2);
-                                              if (falta1 || falta2) {
-                                                // Mini formulário via prompts
-                                                if (falta1 && !serial1) {
-                                                  const val = prompt(`Número de Série de "${v.troca_produto}":`);
-                                                  if (val === null) return; // cancelou
-                                                  serial1 = val.trim();
-                                                }
-                                                if (falta1 && !imei1) {
-                                                  const val = prompt(`IMEI de "${v.troca_produto}":`);
-                                                  if (val === null) return;
-                                                  imei1 = val.trim();
-                                                }
-                                                if (falta2 && !serial2) {
-                                                  const val = prompt(`Número de Série de "${v.troca_produto2}":`);
-                                                  if (val === null) return;
-                                                  serial2 = val.trim();
-                                                }
-                                                if (falta2 && !imei2) {
-                                                  const val = prompt(`IMEI de "${v.troca_produto2}":`);
-                                                  if (val === null) return;
-                                                  imei2 = val.trim();
-                                                }
-                                                // Salvar na venda para não pedir de novo
-                                                const updates: Record<string, string> = {};
-                                                if (serial1 && !v.troca_serial) updates.troca_serial = serial1;
-                                                if (imei1 && !v.troca_imei) updates.troca_imei = imei1;
-                                                if (serial2 && !v.troca_serial2) updates.troca_serial2 = serial2;
-                                                if (imei2 && !v.troca_imei2) updates.troca_imei2 = imei2;
-                                                if (Object.keys(updates).length > 0) {
-                                                  await fetch("/api/vendas", {
-                                                    method: "PATCH",
-                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                    body: JSON.stringify({ id: v.id, ...updates }),
-                                                  }).catch(() => {});
-                                                  // Atualizar local
-                                                  setVendas(prev => prev.map(vv => vv.id === v.id ? { ...vv, ...updates } : vv));
-                                                }
-                                              }
-                                              const aparelhos: { modelo: string; capacidade?: string; cor: string; imei: string; serial: string; condicao: string }[] = [];
-                                              if (v.troca_produto) {
-                                                aparelhos.push({
-                                                  modelo: v.troca_produto,
-                                                  capacidade: "",
-                                                  cor: v.troca_cor || "",
-                                                  imei: imei1,
-                                                  serial: serial1,
-                                                  condicao: [
-                                                    v.troca_bateria ? `Bateria ${v.troca_bateria}%` : "",
-                                                    v.troca_grade ? `Grade ${v.troca_grade}` : "",
-                                                    v.troca_caixa === "SIM" ? "Com Caixa" : "",
-                                                    v.troca_cabo === "SIM" ? "Com Cabo" : "",
-                                                    v.troca_fonte === "SIM" ? "Com Fonte" : "",
-                                                  ].filter(Boolean).join(", "),
-                                                });
-                                              }
-                                              if (v.troca_produto2) {
-                                                aparelhos.push({
-                                                  modelo: v.troca_produto2,
-                                                  cor: v.troca_cor2 || "",
-                                                  imei: imei2,
-                                                  serial: serial2,
-                                                  condicao: [
-                                                    v.troca_bateria2 ? `Bateria ${v.troca_bateria2}%` : "",
-                                                    v.troca_grade2 ? `Grade ${v.troca_grade2}` : "",
-                                                  ].filter(Boolean).join(", "),
-                                                });
-                                              }
-                                              if (aparelhos.length === 0) return;
-                                              try {
-                                                const res = await fetch("/api/admin/termo-procedencia", {
-                                                  method: "POST",
-                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                  body: JSON.stringify({
-                                                    cliente_nome: v.cliente,
-                                                    cliente_cpf: v.cpf || "",
-                                                    aparelhos,
-                                                    venda_id: v.id,
-                                                  }),
-                                                });
-                                                if (res.headers.get("content-type")?.includes("pdf")) {
-                                                  const blob = await res.blob();
-                                                  const url = URL.createObjectURL(blob);
-                                                  const a = document.createElement("a");
-                                                  a.href = url;
-                                                  a.download = `TERMO_PROCEDENCIA_${v.cliente.replace(/\s+/g, "_")}.pdf`;
-                                                  a.click();
-                                                  URL.revokeObjectURL(url);
-                                                } else {
-                                                  const json = await res.json();
-                                                  setMsg("Erro: " + (json.error || "falha ao gerar termo"));
-                                                }
-                                              } catch { setMsg("Erro ao gerar termo de procedencia"); }
-                                            }}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
-                                          >
-                                            📜 Gerar Termo (PDF)
-                                          </button>
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
