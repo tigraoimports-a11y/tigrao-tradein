@@ -503,7 +503,7 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
   const [imei, setImei] = useState("");
   const [valorTotalManual, setValorTotalManual] = useState("");
   // Shared
-  const [funcionario, setFuncionario] = useState("");
+  const [funcionarioId, setFuncionarioId] = useState("");
   const [tipoAcordo, setTipoAcordo] = useState<TipoAcordo>("PARCIAL");
   const [percentual, setPercentual] = useState(50);
   const [observacao, setObservacao] = useState("");
@@ -581,7 +581,10 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
 
   const handleSalvar = async () => {
     setErr("");
-    if (!funcionario.trim()) { setErr("Informe o funcionário"); return; }
+    if (!funcionarioId) { setErr("Selecione o funcionário"); return; }
+    const funcObj = funcionariosLista.find((x) => x.id === funcionarioId);
+    if (!funcObj) { setErr("Funcionário inválido"); return; }
+    const funcionario = funcObj.nome;
     if (!observacao.trim()) { setErr("Observação obrigatória"); return; }
     if (tipo === "estoque" && !estoqueSel) { setErr("Selecione um item do estoque"); return; }
     if (tipo === "manual" && !produto.trim()) { setErr("Informe o produto"); return; }
@@ -590,13 +593,13 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
     try {
       const body = tipo === "estoque" ? {
         estoque_id: estoqueSel!.id,
-        funcionario, tipo_acordo: tipoAcordo, percentual_funcionario: percentual,
+        funcionario, funcionario_id: funcionarioId, tipo_acordo: tipoAcordo, percentual_funcionario: percentual,
         observacao, data_saida: dataSaida,
       } : {
         manual: true,
         produto, categoria, cor: cor || null, serial_no: serial || null, imei: imei || null,
         valor_total_manual: valorBase,
-        funcionario, tipo_acordo: tipoAcordo, percentual_funcionario: percentual,
+        funcionario, funcionario_id: funcionarioId, tipo_acordo: tipoAcordo, percentual_funcionario: percentual,
         observacao, data_saida: dataSaida,
       };
       const res = await fetch("/api/admin/produtos-funcionarios", {
@@ -777,18 +780,17 @@ function ModalVincular({ tipo, password, userName, onClose, onSaved }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] uppercase text-[#86868B] font-semibold">Funcionário *</label>
-              <input
-                type="text"
-                list="funcionarios-list"
-                value={funcionario}
-                onChange={e => setFuncionario(e.target.value)}
+              <select
+                value={funcionarioId}
+                onChange={e => setFuncionarioId(e.target.value)}
                 className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-[#D2D2D7]"
-                placeholder="Ex: Bianca"
-              />
-              <datalist id="funcionarios-list">
-                {funcionariosLista.map(f => <option key={f.id} value={f.nome}>{f.cargo}</option>)}
-              </datalist>
-              <p className="text-[10px] text-[#86868B] mt-0.5">Auto-completa com os cadastrados em /admin/clientes → Funcionários</p>
+              >
+                <option value="">— Selecionar —</option>
+                {funcionariosLista.map(f => (
+                  <option key={f.id} value={f.id}>{f.nome.toUpperCase()} · {f.cargo}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-[#86868B] mt-0.5">Cadastre novos em /admin/clientes → Funcionários</p>
             </div>
             <div>
               <label className="text-[11px] uppercase text-[#86868B] font-semibold">Data de saída</label>
