@@ -755,6 +755,31 @@ export default function VendasPage() {
     syncQueue();
   }, [isOnline, password, fetchVendas, fetchEstoque]);
 
+  // Recalcular preco_vendido automaticamente no modo "Datas diferentes".
+  // Sem isso, preco_vendido fica 0 e a venda grava com lucro negativo (custo - 0).
+  // Soma valor liquido de cada pagEntry respeitando a forma (taxa de cartao/link/debito).
+  useEffect(() => {
+    if (!multiDatePagamento) return;
+    const pTroca1 = parseFloat(form.produto_na_troca) || 0;
+    const pTroca2 = parseFloat(form.produto_na_troca2) || 0;
+    const totalTroca = pTroca1 + pTroca2;
+    const totalPagEntries = pagEntries.reduce((sum, e) => {
+      const bruto = parseFloat(String(e.valor).replace(/\./g, "").replace(",", ".")) || 0;
+      if (bruto <= 0) return sum;
+      // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+      return sum + bruto;
+    }, 0);
+    const newVendido = String(Math.round(totalPagEntries + totalTroca));
+    if (newVendido === "0") return;
+    if (produtosCarrinho.length === 0) {
+      setForm(f => f.preco_vendido === newVendido ? f : { ...f, preco_vendido: newVendido });
+    } else if (produtosCarrinho.length === 1) {
+      setProdutosCarrinho(prev => prev.length === 1 && prev[0].preco_vendido !== newVendido
+        ? [{ ...prev[0], preco_vendido: newVendido }]
+        : prev);
+    }
+  }, [multiDatePagamento, pagEntries, form.produto_na_troca, form.produto_na_troca2, produtosCarrinho.length]);
+
   // Recalcular preco_vendido automaticamente quando 2o cartão (ou qualquer parte do pagamento) mudar
   // IMPORTANTE: precisa estar ANTES do early return abaixo (regras dos hooks)
   useEffect(() => {
@@ -1311,8 +1336,9 @@ export default function VendasPage() {
     // Forma de pagamento é opcional — se não preenchida, venda vai como "Em Andamento" (AGUARDANDO)
     // e o pagamento pode ser registrado depois na aba "Em Andamento"
 
-    // Validação: comprovante obrigatório para vendas no CARTÃO (só se tem permissão de ver histórico)
-    if (podeVerHistorico && (form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
+    // Validação: comprovante obrigatório para vendas no CARTÃO (só se tem permissão de ver histórico).
+    // No modo "Datas diferentes" cada pagamento em pagEntries tem sua propria forma/valor/comprovante.
+    if (!multiDatePagamento && podeVerHistorico && (form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
       setMsg("⚠️ Preencha o VALOR DO COMPROVANTE para vendas no cartão/débito");
       return;
     }
