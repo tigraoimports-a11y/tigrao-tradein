@@ -1454,9 +1454,13 @@ export default function VendasPage() {
     // MODO EDIÇÃO: atualizar venda(s) existente(s) via PATCH
     if (editandoVendaId) {
       try {
-        // Edição de grupo (múltiplas vendas)
+        // IDs das vendas originais: se entrou como grupo, usa editandoGrupoIds;
+        // se entrou como single, usa [editandoVendaId]. Isso garante que mesmo
+        // vendas single podem ser expandidas pra grupo ao editar.
+        const idsOriginais = editandoGrupoIds.length > 0 ? editandoGrupoIds : [editandoVendaId];
+        // Edicao de grupo: quando tem >1 produto no final OU mais de 1 venda original
         // Agora suporta adicionar/remover produtos: PATCH existentes, POST novos, DELETE removidos.
-        if (editandoGrupoIds.length > 1 || (editandoGrupoIds.length >= 1 && allProducts.length > editandoGrupoIds.length)) {
+        if (allProducts.length > 1 || idsOriginais.length > 1) {
           // Build payloads and redistribute valor_comprovante/preco_vendido proportionally
           const groupPayloads: Record<string, unknown>[] = allProducts.map(p => buildPayload(p));
           const comprovanteTotal = Number(groupPayloads[0]?.valor_comprovante || 0);
@@ -1498,28 +1502,35 @@ export default function VendasPage() {
             }
           }
 
-          // Descobrir grupo_id original (pra novos itens vincularem ao mesmo grupo)
-          const primeiraVenda = vendas.find(v => v.id === editandoGrupoIds[0]);
+          // Descobrir grupo_id original (pra novos itens vincularem ao mesmo grupo).
+          // Se era venda single sem grupo_id, usa o id da venda como grupo_id sintetico
+          // e garante que a venda original tambem fique com esse grupo_id.
+          const primeiraVenda = vendas.find(v => v.id === idsOriginais[0]);
           const grupoIdOriginal = (primeiraVenda as unknown as { grupo_id?: string })?.grupo_id
-            || editandoGrupoIds[0]; // fallback: usa id da primeira venda como grupo_id sintetico
+            || idsOriginais[0];
+          // Se expandindo de single pra group, propaga o grupo_id na venda original tambem
+          const precisaPropagar = !((primeiraVenda as unknown as { grupo_id?: string })?.grupo_id) && allProducts.length > idsOriginais.length;
 
           let allOk = true;
 
           // 1. PATCH nos produtos que casam com vendas existentes
-          const nPatch = Math.min(allProducts.length, editandoGrupoIds.length);
+          const nPatch = Math.min(allProducts.length, idsOriginais.length);
           for (let i = 0; i < nPatch; i++) {
+            const payload = precisaPropagar && i === 0
+              ? { ...groupPayloads[i], grupo_id: grupoIdOriginal }
+              : groupPayloads[i];
             const res = await fetch("/api/vendas", {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "x-admin-password": password },
-              body: JSON.stringify({ id: editandoGrupoIds[i], ...groupPayloads[i] }),
+              body: JSON.stringify({ id: idsOriginais[i], ...payload }),
             });
             const json = await res.json();
             if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido")); break; }
           }
 
-          // 2. POST novos produtos (se allProducts.length > editandoGrupoIds.length)
-          if (allOk && allProducts.length > editandoGrupoIds.length) {
-            for (let i = editandoGrupoIds.length; i < allProducts.length; i++) {
+          // 2. POST novos produtos (se allProducts.length > idsOriginais.length)
+          if (allOk && allProducts.length > idsOriginais.length) {
+            for (let i = idsOriginais.length; i < allProducts.length; i++) {
               const payload = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
               const res = await fetch("/api/vendas", {
                 method: "POST",
@@ -1531,10 +1542,10 @@ export default function VendasPage() {
             }
           }
 
-          // 3. DELETE vendas removidas (se allProducts.length < editandoGrupoIds.length)
-          if (allOk && allProducts.length < editandoGrupoIds.length) {
-            for (let i = allProducts.length; i < editandoGrupoIds.length; i++) {
-              const res = await fetch(`/api/vendas?id=${editandoGrupoIds[i]}`, {
+          // 3. DELETE vendas removidas (se allProducts.length < idsOriginais.length)
+          if (allOk && allProducts.length < idsOriginais.length) {
+            for (let i = allProducts.length; i < idsOriginais.length; i++) {
+              const res = await fetch(`/api/vendas?id=${idsOriginais[i]}`, {
                 method: "DELETE",
                 headers: { "x-admin-password": password },
               });
@@ -1543,11 +1554,11 @@ export default function VendasPage() {
           }
 
           if (allOk) {
-            const msgFinal = allProducts.length === editandoGrupoIds.length
-              ? `${editandoGrupoIds.length} vendas atualizadas com sucesso!`
-              : allProducts.length > editandoGrupoIds.length
-                ? `${editandoGrupoIds.length} atualizadas + ${allProducts.length - editandoGrupoIds.length} novas criadas!`
-                : `${allProducts.length} atualizadas + ${editandoGrupoIds.length - allProducts.length} removidas!`;
+            const msgFinal = allProducts.length === idsOriginais.length
+              ? `${idsOriginais.length} venda${idsOriginais.length === 1 ? '' : 's'} atualizada${idsOriginais.length === 1 ? '' : 's'} com sucesso!`
+              : allProducts.length > idsOriginais.length
+                ? `${idsOriginais.length} atualizada${idsOriginais.length === 1 ? '' : 's'} + ${allProducts.length - idsOriginais.length} nova${allProducts.length - idsOriginais.length === 1 ? '' : 's'} criada${allProducts.length - idsOriginais.length === 1 ? '' : 's'}!`
+                : `${allProducts.length} atualizada${allProducts.length === 1 ? '' : 's'} + ${idsOriginais.length - allProducts.length} removida${idsOriginais.length - allProducts.length === 1 ? '' : 's'}!`;
             setEditandoVendaId(null);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
