@@ -484,8 +484,27 @@ export default function GerarLinkPage() {
   }
 
   // === Editar link existente ===
-  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
-  const [editingShortCode, setEditingShortCode] = useState<string | null>(null);
+  // editingLinkId persiste em sessionStorage pra sobreviver a refresh/troca de
+  // aba — sem isso, o id ficava null e o click em "Gerar Link" caia no POST
+  // (criando duplicata) em vez do PATCH.
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem("gerar_link_editing_id");
+  });
+  const [editingShortCode, setEditingShortCode] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem("gerar_link_editing_short");
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (editingLinkId) sessionStorage.setItem("gerar_link_editing_id", editingLinkId);
+    else sessionStorage.removeItem("gerar_link_editing_id");
+  }, [editingLinkId]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (editingShortCode) sessionStorage.setItem("gerar_link_editing_short", editingShortCode);
+    else sessionStorage.removeItem("gerar_link_editing_short");
+  }, [editingShortCode]);
   const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
   const [editDados, setEditDados] = useState<Record<string, string>>({});
   const [editLink, setEditLink] = useState<Record<string, string>>({});
@@ -688,9 +707,19 @@ export default function GerarLinkPage() {
         }).catch(() => {}); // best-effort
       }
 
-      setPasteMsg(`✅ Link ${editingShortCode || editingLinkId.slice(0, 6)} atualizado.`);
+      // Checar se o backend reportou sincronizacao de entrega vinculada
+      let sufixoEntrega = "";
+      try {
+        const j = await res.clone().json();
+        if (j?.entregaSincronizada) sufixoEntrega = " (entrega atualizada)";
+      } catch { /* ignore */ }
+
+      setPasteMsg(`✅ Link ${editingShortCode || editingLinkId.slice(0, 6)} atualizado.${sufixoEntrega}`);
       setEditingLinkId(null);
       setEditingShortCode(null);
+      // Recarrega o historico pra UI refletir o estado atualizado do banco
+      // (antes, o state local ficava stale apos editar).
+      fetchHistorico();
       return true;
     } catch (e) {
       setPasteMsg(`❌ Erro: ${String(e)}`);
