@@ -457,6 +457,14 @@ function CompraForm() {
       return;
     }
 
+    // Cor obrigatoria quando ha cores disponiveis no estoque — evita
+    // mensagens chegando sem cor e vendedor ter que perguntar depois.
+    if (coresDisponiveis.length > 0 && !corSel) {
+      alert("Escolha a cor do produto antes de enviar.");
+      document.getElementById("escolha-cor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
     if (!formaPagamento) {
       alert("Selecione a forma de pagamento antes de enviar.");
       return;
@@ -740,6 +748,11 @@ function CompraForm() {
       setErroMp("Selecione o produto desejado.");
       return;
     }
+    if (coresDisponiveis.length > 0 && !corSel) {
+      setErroMp("Escolha a cor do produto.");
+      document.getElementById("escolha-cor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     const precoFinal = preco > 0 ? preco : precoAuto;
     if (!precoFinal || precoFinal <= 0) {
       setErroMp("Informe o valor do produto.");
@@ -952,10 +965,15 @@ function CompraForm() {
               </>
             )}
 
-            {/* Seleção de cor — cores reais do estoque */}
-            {(produtoInput || variantesDoBase.length === 0) && coresDisponiveis.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-[#E8E8ED]">
-                <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold mb-2">Escolha a cor</p>
+            {/* Seleção de cor — obrigatória quando há cores no estoque.
+                Antes só aparecia se (produtoInput || sem variantes). Removido o filtro
+                porque cliente vindo do simulador com produto pré-preenchido não via
+                a opção e o vendedor precisava perguntar por WhatsApp. */}
+            {coresDisponiveis.length > 0 && (
+              <div id="escolha-cor" className={`mt-3 pt-3 border-t ${!corSel ? "border-[#E8740E]" : "border-[#E8E8ED]"}`}>
+                <p className={`text-xs uppercase tracking-wider font-semibold mb-2 ${!corSel ? "text-[#E8740E]" : "text-[#86868B]"}`}>
+                  Escolha a cor *{!corSel && <span className="ml-1 normal-case font-medium">(obrigatório)</span>}
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {coresDisponiveis.map(cor => (
                     <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
