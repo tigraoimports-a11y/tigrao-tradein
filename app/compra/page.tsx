@@ -1409,8 +1409,18 @@ function CompraForm() {
               <p className="text-xs text-[#6E6E73] mb-3">
                 No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong> e tire 2 prints:
                 um mostrando o <strong>Nº de Série</strong> e outro mostrando o <strong>IMEI</strong>.
-                Isso agiliza a entrega e garante que os dados do aparelho fiquem corretos no contrato.
               </p>
+
+              {/* Explicação do POR QUE pedimos essa info — passa segurança ao cliente */}
+              <div className="mb-4 p-3 rounded-lg bg-white border border-amber-200">
+                <p className="text-xs font-semibold text-[#1D1D1F] mb-1.5">🔒 Por que pedimos essas informações?</p>
+                <ul className="text-[11px] text-[#6E6E73] space-y-1 list-none">
+                  <li>• <strong>Proteção mútua:</strong> registramos a procedência do aparelho de forma oficial, protegendo você e a nossa loja</li>
+                  <li>• <strong>Sem erros de digitação:</strong> o print garante que o Nº de Série e IMEI fiquem corretos no contrato</li>
+                  <li>• <strong>Agiliza a entrega:</strong> chegamos com o contrato pronto, sem precisar ficar anotando dados na hora</li>
+                  <li>• <strong>Seus dados estão seguros:</strong> usados só pra formalizar a troca e arquivados com segurança</li>
+                </ul>
+              </div>
 
               {([
                 { tipo: "serial", aparelho: 1, label: "Nº de Série (aparelho 1)" },
@@ -1461,6 +1471,29 @@ function CompraForm() {
                   </div>
                 );
               })}
+
+              {/* Aviso sobre o Termo de Procedência (aparece quando todos os prints foram enviados) */}
+              {(() => {
+                const todosEnviados = temSegundoAparelho
+                  ? !!(printsUrls.serial1 && printsUrls.imei1 && printsUrls.serial2 && printsUrls.imei2)
+                  : !!(printsUrls.serial1 && printsUrls.imei1);
+                if (!todosEnviados) return null;
+                return (
+                  <div className="mt-4 p-3 rounded-lg bg-green-50 border-2 border-green-300">
+                    <p className="text-xs font-bold text-green-800 mb-2">✅ Prints recebidos! Próximo passo:</p>
+                    <p className="text-[11px] text-[#1D1D1F] leading-relaxed mb-2">
+                      Como você vai dar um produto usado na troca, você receberá no seu <strong>WhatsApp</strong> um link
+                      do <strong>Termo de Procedência</strong> — um documento onde você declara ser o proprietário legítimo
+                      do aparelho que está nos entregando.
+                    </p>
+                    <p className="text-[11px] text-[#1D1D1F] leading-relaxed">
+                      A assinatura é <strong>digital</strong> e leva menos de 1 minuto: basta clicar no link,
+                      digitar o código SMS que vai chegar no seu celular e tirar uma selfie rápida. Tem
+                      validade jurídica completa e pode ser assinado tranquilamente enquanto aguarda o motoboy chegar.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
