@@ -180,7 +180,12 @@ export interface ProdutoRowState {
   serial_no: string;
   condicao: string; // "NOVO" | "NAO_ATIVADO" | "SEMINOVO"
   caixa: boolean;   // tem caixa original?
+  cabo: boolean;    // (SEMINOVO) tem cabo original?
+  fonte: boolean;   // (SEMINOVO) tem fonte original?
   grade: string;    // grade de qualidade: "A+" | "A" | "AB" | "B" | ""
+  bateria: string;  // (SEMINOVO) saude da bateria em %
+  garantia: string; // (SEMINOVO) data ou validade da garantia
+  observacao: string; // (SEMINOVO) detalhes adicionais
 }
 
 export function createEmptyProdutoRow(): ProdutoRowState {
@@ -199,7 +204,12 @@ export function createEmptyProdutoRow(): ProdutoRowState {
     serial_no: "",
     condicao: "NOVO",
     caixa: false,
+    cabo: false,
+    fonte: false,
     grade: "",
+    bateria: "",
+    garantia: "",
+    observacao: "",
   };
 }
 
@@ -238,9 +248,10 @@ export default function ProdutoSpecFields({
 
   // Client search state
   const [clienteQuery, setClienteQuery] = useState(row.cliente || "");
-  const [clienteSuggestions, setClienteSuggestions] = useState<string[]>([]);
+  const [clienteSuggestions, setClienteSuggestions] = useState<Array<{ nome: string; isTigrao?: boolean }>>([]);
   const [clienteLoading, setClienteLoading] = useState(false);
   const [showClienteSugg, setShowClienteSugg] = useState(false);
+  const [clienteIsTigrao, setClienteIsTigrao] = useState(false);
   const [linhaFiltro, setLinhaFiltro] = useState<string>("");
   const clienteDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -387,9 +398,11 @@ export default function ProdutoSpecFields({
   const hasStructured = STRUCTURED_CATS.includes(row.categoria);
 
   // Client search handler
+  // Nao seta row.cliente enquanto digita — so quando o usuario confirma via
+  // sugestao ou Enter. Assim o input nao some (bug anterior: digitar 1 letra
+  // ja colocava em "modo cliente selecionado" e escondia o campo).
   const handleClienteChange = (q: string) => {
     setClienteQuery(q);
-    set("cliente", q);
     setShowClienteSugg(true);
     if (clienteDebounceRef.current) clearTimeout(clienteDebounceRef.current);
     if (q.length < 2) { setClienteSuggestions([]); return; }
@@ -401,12 +414,29 @@ export default function ProdutoSpecFields({
         });
         if (res.ok) {
           const json = await res.json();
-          const names: string[] = (json.contatos || []).map((c: { nome: string }) => c.nome);
-          setClienteSuggestions(names.slice(0, 8));
+          const funcs = (json.funcionarios || []).map((f: { nome: string }) => ({ nome: f.nome, isTigrao: true }));
+          const contatos = (json.contatos || []).map((c: { nome: string }) => ({ nome: c.nome, isTigrao: false }));
+          // Dedupe (funcionarios tem precedencia pra mostrar tag TIGRAO)
+          const seen = new Set<string>();
+          const merged: Array<{ nome: string; isTigrao?: boolean }> = [];
+          for (const item of [...funcs, ...contatos]) {
+            const key = item.nome.toUpperCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(item);
+          }
+          setClienteSuggestions(merged.slice(0, 10));
         }
       } catch { /* ignore */ }
       setClienteLoading(false);
     }, 350);
+  };
+
+  const commitCliente = (nome: string, isTigrao = false) => {
+    setClienteQuery(nome);
+    set("cliente", nome);
+    setShowClienteSugg(false);
+    setClienteIsTigrao(isTigrao);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -503,41 +533,69 @@ export default function ProdutoSpecFields({
         </div>}
       </div>
 
-      {/* Caixa + Grade — só aparece quando não é Lacrado e não é modo compacto */}
+      {/* Seminovo/NaoAtivado extras: Caixa + Cabo + Fonte + Grade + Bateria + Garantia + Observacao */}
       {!compactMode && row.condicao !== "NOVO" && (
-        <div className="flex items-center gap-3">
-          {/* Caixa toggle */}
-          <button
-            type="button"
-            onClick={() => set("caixa", !row.caixa)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-              row.caixa
-                ? "bg-green-500/15 border-green-500/40 text-green-600"
+        <div className="space-y-3">
+          {/* Toggles: Caixa / Cabo / Fonte */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button type="button" onClick={() => set("caixa", !row.caixa)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                row.caixa ? "bg-green-500/15 border-green-500/40 text-green-600"
                 : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
-            }`}
-          >
-            📦 {row.caixa ? "Com caixa" : "Sem caixa"}
-          </button>
-          {/* Grade select */}
-          <div className="flex items-center gap-1.5">
-            <span className={`text-xs font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Grade</span>
-            {(["A+", "A", "AB", "B"] as const).map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => set("grade", row.grade === g ? "" : g)}
-                className={`px-2 h-7 min-w-[28px] rounded-lg text-xs font-bold border transition-colors ${
-                  row.grade === g
-                    ? g === "A+" ? "bg-amber-500/15 border-amber-500/40 text-amber-600"
-                      : g === "A" ? "bg-green-500/15 border-green-500/40 text-green-600"
-                      : g === "AB" ? "bg-yellow-500/15 border-yellow-500/40 text-yellow-600"
-                      : "bg-orange-500/15 border-orange-500/40 text-orange-600"
-                    : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
-                }`}
-              >
-                {g}
-              </button>
-            ))}
+              }`}>
+              📦 {row.caixa ? "Com caixa" : "Sem caixa"}
+            </button>
+            <button type="button" onClick={() => set("cabo", !row.cabo)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                row.cabo ? "bg-blue-500/15 border-blue-500/40 text-blue-600"
+                : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+              }`}>
+              🔌 {row.cabo ? "Com cabo" : "Sem cabo"}
+            </button>
+            <button type="button" onClick={() => set("fonte", !row.fonte)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                row.fonte ? "bg-purple-500/15 border-purple-500/40 text-purple-600"
+                : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+              }`}>
+              🔋 {row.fonte ? "Com fonte" : "Sem fonte"}
+            </button>
+            {/* Grade */}
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className={`text-xs font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Grade</span>
+              {(["A+", "A", "AB", "B"] as const).map((g) => (
+                <button key={g} type="button" onClick={() => set("grade", row.grade === g ? "" : g)}
+                  className={`px-2 h-7 min-w-[28px] rounded-lg text-xs font-bold border transition-colors ${
+                    row.grade === g
+                      ? g === "A+" ? "bg-amber-500/15 border-amber-500/40 text-amber-600"
+                        : g === "A" ? "bg-green-500/15 border-green-500/40 text-green-600"
+                        : g === "AB" ? "bg-yellow-500/15 border-yellow-500/40 text-yellow-600"
+                        : "bg-orange-500/15 border-orange-500/40 text-orange-600"
+                      : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+                  }`}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Bateria + Garantia (bateria apenas pra iPhones/iPads/Watch) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {(row.categoria === "IPHONES" || row.categoria === "IPADS" || row.categoria === "APPLE_WATCH") && (
+              <div>
+                <p className={labelCls}>Bateria %</p>
+                <input type="number" min={0} max={100} value={row.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 91" className={inputCls} />
+              </div>
+            )}
+            <div>
+              <p className={labelCls}>Garantia</p>
+              <input type="text" value={row.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} />
+            </div>
+          </div>
+
+          {/* Observacao */}
+          <div>
+            <p className={labelCls}>Observação</p>
+            <input type="text" value={row.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} />
           </div>
         </div>
       )}
@@ -549,7 +607,7 @@ export default function ProdutoSpecFields({
           <div className={`flex rounded-lg overflow-hidden border text-[11px] font-semibold ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
             <button
               type="button"
-              onClick={() => { set("cliente", ""); setClienteQuery(""); }}
+              onClick={() => { set("cliente", ""); setClienteQuery(""); setClienteIsTigrao(false); }}
               className={`px-3 py-1 transition-colors ${!row.cliente ? "bg-[#E8740E] text-white" : dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
             >
               Fornecedor
@@ -572,12 +630,15 @@ export default function ProdutoSpecFields({
           </select>
         ) : (
           /* Modo Cliente — mostra cliente selecionado com botão de limpar */
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${dm ? "bg-[#0071E3]/20 border border-[#0071E3]/40" : "bg-blue-50 border border-blue-200"}`}>
-            <span className="text-blue-500 text-sm">👤</span>
-            <span className={`flex-1 text-sm font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>{row.cliente}</span>
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${clienteIsTigrao ? (dm ? "bg-[#E8740E]/20 border border-[#E8740E]/40" : "bg-orange-50 border border-orange-200") : (dm ? "bg-[#0071E3]/20 border border-[#0071E3]/40" : "bg-blue-50 border border-blue-200")}`}>
+            <span className="text-sm">{clienteIsTigrao ? "👷" : "👤"}</span>
+            <span className={`flex-1 text-sm font-semibold ${clienteIsTigrao ? (dm ? "text-orange-300" : "text-orange-700") : (dm ? "text-blue-300" : "text-blue-700")}`}>{row.cliente}</span>
+            {clienteIsTigrao && (
+              <span className="text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded font-bold">TIGRAO</span>
+            )}
             <button
               type="button"
-              onClick={() => { set("cliente", ""); setClienteQuery(""); }}
+              onClick={() => { set("cliente", ""); setClienteQuery(""); setClienteIsTigrao(false); }}
               className="text-[10px] text-red-400 hover:text-red-600 font-bold"
             >
               ✕
@@ -590,11 +651,17 @@ export default function ProdutoSpecFields({
           <div className="relative">
             <input
               value={clienteQuery}
-              onChange={(e) => handleClienteChange(e.target.value)}
+              onChange={(e) => handleClienteChange(e.target.value.toUpperCase())}
               onFocus={() => clienteQuery.length >= 2 && setShowClienteSugg(true)}
               onBlur={() => setTimeout(() => setShowClienteSugg(false), 200)}
-              placeholder="🔍 Buscar cliente cadastrado pelo nome..."
-              className={`${inputCls} text-xs`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && clienteQuery.trim()) {
+                  e.preventDefault();
+                  commitCliente(clienteQuery.trim());
+                }
+              }}
+              placeholder="🔍 Buscar cliente ou funcionário pelo nome..."
+              className={`${inputCls} text-xs uppercase`}
               autoComplete="off"
             />
             {showClienteSugg && (clienteSuggestions.length > 0 || clienteLoading) && (
@@ -602,20 +669,24 @@ export default function ProdutoSpecFields({
                 {clienteLoading && (
                   <p className={`px-3 py-2 text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Buscando...</p>
                 )}
-                {clienteSuggestions.map((nome) => (
+                {clienteSuggestions.map((sug) => (
                   <button
-                    key={nome}
+                    key={sug.nome}
                     type="button"
-                    onMouseDown={() => {
-                      setClienteQuery(nome);
-                      set("cliente", nome);
-                      setShowClienteSugg(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${dm ? "hover:bg-[#3A3A3C] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`}
+                    onMouseDown={() => commitCliente(sug.nome, !!sug.isTigrao)}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between gap-2 ${dm ? "hover:bg-[#3A3A3C] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`}
                   >
-                    👤 {nome}
+                    <span>{sug.isTigrao ? "👷" : "👤"} {sug.nome}</span>
+                    {sug.isTigrao && (
+                      <span className="text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded font-bold">TIGRAO</span>
+                    )}
                   </button>
                 ))}
+                {!clienteLoading && clienteSuggestions.length === 0 && clienteQuery.length >= 2 && (
+                  <p className={`px-3 py-2 text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                    Nenhum resultado. Pressione Enter para usar &quot;{clienteQuery}&quot; mesmo assim.
+                  </p>
+                )}
               </div>
             )}
           </div>

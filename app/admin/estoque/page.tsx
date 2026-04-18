@@ -1693,7 +1693,7 @@ export default function EstoquePage() {
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
     bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "", garantia: "",
-    origem_compra: "",
+    origem_compra: "", data_entrada: hojeBR(),
   });
 
   // Campos estruturados por categoria
@@ -2439,12 +2439,25 @@ export default function EstoquePage() {
     let successCount = 0;
     let errorMsg = "";
     const mergeMessages: string[] = [];
+    const savedIds: string[] = [];
 
     for (const p of pedidoProdutos) {
       // Para categorias estruturadas, SEMPRE usar buildProdutoName (ignora p.produto livre)
       const isStructured = STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria));
       const nome = (isStructured ? buildProdutoNameFromSpec(p.categoria, p.spec, p.cor) : p.produto || "").toUpperCase();
       if (!nome) continue;
+
+      // Monta observacao com tags (grade/caixa/cabo/fonte) + texto livre
+      const obsParts: string[] = [];
+      if (p.observacao?.trim()) obsParts.push(p.observacao.trim());
+      if (p.grade) obsParts.push(`[GRADE_${p.grade}]`);
+      if (p.caixa) obsParts.push("[COM_CAIXA]");
+      if (p.cabo) obsParts.push("[COM_CABO]");
+      if (p.fonte) obsParts.push("[COM_FONTE]");
+      // tipo=A_CAMINHO com condicao diferente de NOVO: prefixa
+      if (form.tipo === "A_CAMINHO" && p.condicao && p.condicao !== "NOVO") obsParts.unshift(`[${p.condicao}]`);
+      const obsFinal = obsParts.length > 0 ? obsParts.join(" ") : null;
+
       const res = await fetch("/api/estoque", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
@@ -2453,27 +2466,32 @@ export default function EstoquePage() {
           categoria: p.categoria,
           qnt: parseInt(p.qnt) || 1,
           custo_unitario: parseFloat(p.custo_unitario) || 0,
+          custo_compra: parseFloat(p.custo_unitario) || 0,
           status,
           cor: p.cor || null,
           tipo,
           fornecedor: p.fornecedor || null,
+          cliente: p.cliente || null,
           imei: p.imei || null,
           serial_no: p.serial_no || null,
           origem_compra: form.origem_compra || null,
-          data_entrada: hojeBR(),
-          observacao: (form.tipo === "A_CAMINHO" && p.condicao && p.condicao !== "NOVO")
-            ? `[${p.condicao}]`
-            : null,
+          data_entrada: form.data_entrada || hojeBR(),
+          bateria: p.bateria ? parseInt(p.bateria) : null,
+          garantia: p.garantia || null,
+          observacao: obsFinal,
         }),
       });
       const json = await res.json();
       if (json.ok) {
         successCount++;
+        if (json.data?.[0]?.id) savedIds.push(json.data[0].id);
         if (json.merged && json.mergeDetails) {
           mergeMessages.push(`🔄 ${p.produto || nome}: ${json.mergeDetails.log}`);
         }
       } else { errorMsg = json.error; }
     }
+
+    void savedIds;
 
     if (successCount > 0) {
       const mergeInfo = mergeMessages.length > 0 ? ` | ${mergeMessages.join(" | ")}` : "";
@@ -2502,7 +2520,7 @@ export default function EstoquePage() {
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null, serial_no: form.serial_no || null,
         garantia: form.garantia || null, origem_compra: form.origem_compra || null,
-        data_entrada: hojeBR(),
+        data_entrada: form.data_entrada || hojeBR(),
       }),
     });
     const json = await res.json();
@@ -3743,8 +3761,11 @@ export default function EstoquePage() {
             <p className={`text-[13px] mt-1 ${textSecondary}`}>Preencha os dados do produto para cadastrar no estoque</p>
           </div>
 
-          {/* Row 1: Categoria + Tipo */}
+          {/* Row 1: Categoria + Tipo + Data de entrada */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div><p className={labelCls}>Data de entrada</p>
+              <input type="date" value={form.data_entrada} onChange={(e) => set("data_entrada", e.target.value)} className={inputCls} />
+            </div>
             <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => {
               const newCat = e.target.value;
               set("categoria", newCat); set("produto", "");
@@ -3764,7 +3785,13 @@ export default function EstoquePage() {
                 <option value="ACESSORIOS">Acessórios Seminovo</option>
               </select></div>
             ) : (
-              <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
+              <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => {
+                const novoTipo = e.target.value;
+                set("tipo", novoTipo);
+                // Sincroniza condicao dos produtos do carrinho com o tipo selecionado
+                const condicao = novoTipo === "NAO_ATIVADO" ? "NAO_ATIVADO" : novoTipo === "SEMINOVO" ? "SEMINOVO" : "NOVO";
+                setPedidoProdutos(prev => prev.map(p => ({ ...p, condicao })));
+              }} className={inputCls}>
                 <option value="NOVO">Novo (Lacrado)</option>
                 <option value="NAO_ATIVADO">Não Ativado</option>
                 <option value="SEMINOVO">Seminovo</option>
@@ -3773,8 +3800,8 @@ export default function EstoquePage() {
             )}
           </div>
 
-          {/* MODO MULTI-PRODUTO (NOVO e A_CAMINHO) */}
-          {(form.tipo === "NOVO" || form.tipo === "A_CAMINHO") && form.categoria !== "SEMINOVOS" ? (
+          {/* MODO MULTI-PRODUTO (NOVO, SEMINOVO, NAO_ATIVADO e A_CAMINHO) */}
+          {(form.tipo === "NOVO" || form.tipo === "A_CAMINHO" || form.tipo === "SEMINOVO" || form.tipo === "NAO_ATIVADO") && form.categoria !== "SEMINOVOS" ? (
             <div className="space-y-4">
               {form.tipo === "A_CAMINHO" && (
                 <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#E8740E]/20"}`}>
@@ -3827,7 +3854,13 @@ export default function EstoquePage() {
               </div>
 
               <button onClick={handleSubmitMulti} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
-                {form.tipo === "A_CAMINHO" ? `Adicionar ${pedidoProdutos.length} como A Caminho` : `Adicionar ${pedidoProdutos.length} ao Estoque`}
+                {form.tipo === "A_CAMINHO"
+                  ? `Adicionar ${pedidoProdutos.length} como A Caminho`
+                  : form.tipo === "SEMINOVO"
+                    ? `Adicionar ${pedidoProdutos.length} Seminovo${pedidoProdutos.length > 1 ? "s" : ""}`
+                    : form.tipo === "NAO_ATIVADO"
+                      ? `Adicionar ${pedidoProdutos.length} Não Ativado${pedidoProdutos.length > 1 ? "s" : ""}`
+                      : `Adicionar ${pedidoProdutos.length} ao Estoque`}
               </button>
             </div>
           ) : (

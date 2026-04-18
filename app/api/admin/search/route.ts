@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q")?.trim();
   const includeHistory = searchParams.get("history") === "true";
 
-  if (!q || q.length < 2) return NextResponse.json({ operacoes: [], contatos: [], estoque: [], vendas: [] });
+  if (!q || q.length < 2) return NextResponse.json({ operacoes: [], contatos: [], estoque: [], vendas: [], funcionarios: [] });
 
   const searchTerm = `%${q}%`;
 
@@ -59,6 +59,21 @@ export async function GET(req: NextRequest) {
   const contatos = [...contatosMap.values()].filter(c => c.nome.includes(q.toUpperCase())).slice(0, 15);
 
   const qUpper = q.toUpperCase();
+
+  // ── 3b. Buscar funcionarios cadastrados (tabela funcionarios) ──
+  const { data: funcResults } = await supabase
+    .from("funcionarios")
+    .select("id, nome, cargo, tag, ativo")
+    .ilike("nome", searchTerm)
+    .eq("ativo", true)
+    .limit(10);
+  const funcionarios = (funcResults ?? []).map((f) => ({
+    id: f.id as string,
+    nome: (f.nome || "").toUpperCase(),
+    cargo: f.cargo as string,
+    tag: (f.tag as string) || "TIGRAO",
+    isTigrao: true,
+  }));
 
   // ── 4. Montar operações (vendas agrupadas por cliente+data) ──
   const opMap = new Map<string, {
@@ -200,5 +215,5 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ operacoes, contatos, estoque, vendas });
+  return NextResponse.json({ operacoes, contatos, estoque, vendas, funcionarios });
 }

@@ -766,7 +766,7 @@ export default function VendasPage() {
     const trc1 = parseFloat(form.produto_na_troca) || 0;
     const trc2 = parseFloat(form.produto_na_troca2) || 0;
     const trc = trc1 + trc2;
-    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
+    const taxaAlt = getTaxa((form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
     const liqAlt = taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal;
     let liqPrinc = 0;
     if (compVal > 0) {
@@ -891,7 +891,7 @@ export default function VendasPage() {
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
     // Segundo cartão (comp_alt) — sempre incluído quando preenchido
     const compAltVal = parseFloat(form.comp_alt) || 0;
-    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
+    const taxaAlt = compAltVal > 0 ? getTaxa((form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
     const liqAlt = compAltVal > 0 ? (taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal) : 0;
     // Trocas: no modo carrinho, somar de todos os produtos do carrinho + form global
     const trcForm1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
@@ -1283,14 +1283,25 @@ export default function VendasPage() {
       return;
     }
 
-    // Collect all products: cart items + current form (se form tem produto novo,
-    // inclui mesmo se ja tem itens no carrinho — usuario pode estar adicionando
-    // um produto a mais sem clicar em "+ Adicionar ao Carrinho" antes de salvar).
+    // Collect all products: cart items + current form.
+    // Regra: so inclui o form como venda adicional se tiver um PRODUTO NOVO preenchido
+    // (form.produto). Dados so de troca/trocaRow NAO geram venda nova — sao copiados
+    // pro primeiro item do carrinho via globalTroca (linhas 1315-1322).
+    // Bug fixado: cliente com carrinho + so troca no form global criava venda fantasma
+    // sem produto (R$ 0 em tudo).
+    // Pra o cenario sem carrinho (venda apenas de troca/so-troca-value), aceita se
+    // o usuario preencheu explicitamente alguma informacao de produto/troca.
     const allProducts: ProdutoCarrinho[] = [...produtosCarrinho];
-    const hasFormContent = !!(form.produto || form.troca_produto || trocaRow.produto || parseFloat(form.produto_na_troca) > 0);
-    if (hasFormContent) {
+    const formTemProduto = !!form.produto;
+    const formSoTemTroca = !form.produto && !!(form.troca_produto || trocaRow.produto || parseFloat(form.produto_na_troca) > 0);
+    if (formTemProduto) {
+      allProducts.push(getCurrentProductFields());
+    } else if (formSoTemTroca && produtosCarrinho.length === 0) {
+      // Sem carrinho e so tem troca — aceita (caso de so-troca-valor, sem produto novo)
       allProducts.push(getCurrentProductFields());
     }
+    // Se tem carrinho E form so tem troca: troca vai pro primeiro item via globalTroca
+    // abaixo. Nao cria venda fantasma.
 
     if (allProducts.length === 0) {
       setMsg("Preencha ao menos o produto da compra, da troca ou adicione ao carrinho");
@@ -3193,25 +3204,55 @@ export default function VendasPage() {
                           }
                         }
                       }} placeholder="Valor da maquina" className={inputCls} /></div>
-                      <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
-                        <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
-                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
-                          const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
-                          const compAltDisp = parseFloat(form.comp_alt) || 0;
-                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
-                          const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
-                          return (
-                          <>
-                            <span>Liquido cartao: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqPrincDisp)}</strong></span>
-                            {liqAltDisp > 0 && <span>+ 2o cartao: <strong>{fmt(liqAltDisp)}</strong></span>}
-                            {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
-                            {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
-                            {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
-                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(liqPrincDisp + liqAltDisp + entradaPix + entradaEspecie + valorTroca))}</strong></span>
-                          </>
-                          );
-                        })()}
-                      </div>
+                      {(() => {
+                        const compPrincDisp = parseFloat(form.valor_comprovante_input) || 0;
+                        const liqPrincDisp = compPrincDisp > 0 ? calcularLiquido(compPrincDisp, taxa) : 0;
+                        const compAltDisp = parseFloat(form.comp_alt) || 0;
+                        const formaAlt = (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK";
+                        const bancoAlt = formaAlt === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU");
+                        const taxaAltDisp = compAltDisp > 0 ? getTaxa(bancoAlt, form.band_alt || null, parseInt(form.parc_alt) || 0, formaAlt) : 0;
+                        const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
+                        const bancoPrincLabel = (form.banco || "ITAU").replace("_", " ");
+                        const parcPrinc = parseInt(form.qnt_parcelas) || 1;
+                        const parcAlt = parseInt(form.parc_alt) || 1;
+                        const bancoAltLabel = formaAlt === "LINK" ? "Mercado Pago" : (form.banco_alt || "ITAU").replace("_", " ");
+                        const totalVendido = Math.round(liqPrincDisp + liqAltDisp + entradaPix + entradaEspecie + valorTroca);
+                        return (
+                          <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2.5 text-xs ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span>💳 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{bancoPrincLabel} {form.bandeira ? `(${form.bandeira})` : ""} {parcPrinc}x</strong></span>
+                                <span>• Taxa <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
+                                {compPrincDisp > 0 && <span>• Bruto {fmt(compPrincDisp)}</span>}
+                                {compPrincDisp > 0 && <span>→ Líquido <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqPrincDisp)}</strong></span>}
+                              </div>
+                              {compAltDisp > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  <span>{formaAlt === "LINK" ? "🔗" : "💳"} <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{formaAlt === "LINK" ? "Link Mercado Pago" : bancoAltLabel} {form.band_alt && formaAlt !== "LINK" ? `(${form.band_alt})` : ""} {parcAlt}x</strong></span>
+                                  {taxaAltDisp > 0 && <span>• Taxa <strong className="text-[#E8740E]">{taxaAltDisp.toFixed(2)}%</strong></span>}
+                                  <span>• Bruto {fmt(compAltDisp)}</span>
+                                  <span>→ Líquido <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqAltDisp)}</strong></span>
+                                </div>
+                              )}
+                              {entradaPix > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2"><span>💸 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>Pix</strong></span><span>• Valor {fmt(entradaPix)}</span></div>
+                              )}
+                              {entradaEspecie > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2"><span>💵 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>Espécie</strong></span><span>• Valor {fmt(entradaEspecie)}</span></div>
+                              )}
+                              {valorTroca > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2"><span>🔄 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>Troca</strong></span><span>• Valor {fmt(valorTroca)}</span></div>
+                              )}
+                              {compPrincDisp > 0 && (
+                                <div className={`pt-1.5 border-t ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"} flex items-center gap-2`}>
+                                  <span>✅ <strong>Total Vendido:</strong></span>
+                                  <strong className="text-green-600 text-sm">{fmt(totalVendido)}</strong>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                 </>
@@ -3234,18 +3275,54 @@ export default function VendasPage() {
                           }
                         }
                       }} placeholder="Valor total do link" className={inputCls} /></div>
-                      <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
-                        <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
-                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
-                          <>
-                            <span>Liquido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
-                            {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
-                            {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
-                            {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
-                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
-                          </>
-                        )}
-                      </div>
+                      {(() => {
+                        const compPrincDisp = parseFloat(form.valor_comprovante_input) || 0;
+                        const liqPrincDisp = compPrincDisp > 0 ? calcularLiquido(compPrincDisp, taxa) : 0;
+                        const compAltDisp = parseFloat(form.comp_alt) || 0;
+                        const formaAlt = (form.forma_alt || "CARTAO") as "CARTAO" | "LINK";
+                        const bancoAlt = formaAlt === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU");
+                        const taxaAltDisp = compAltDisp > 0 ? getTaxa(bancoAlt, form.band_alt || null, parseInt(form.parc_alt) || 0, formaAlt) : 0;
+                        const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
+                        const parcPrinc = parseInt(form.qnt_parcelas) || 1;
+                        const parcAlt = parseInt(form.parc_alt) || 1;
+                        const bancoAltLabel = formaAlt === "LINK" ? "Mercado Pago" : (form.banco_alt || "ITAU").replace("_", " ");
+                        const totalVendido = Math.round(liqPrincDisp + liqAltDisp + entradaPix + entradaEspecie + valorTroca);
+                        return (
+                          <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2.5 text-xs ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span>🔗 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>Link Mercado Pago {parcPrinc}x</strong></span>
+                                <span>• Taxa <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
+                                {compPrincDisp > 0 && <span>• Bruto {fmt(compPrincDisp)}</span>}
+                                {compPrincDisp > 0 && <span>→ Líquido <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqPrincDisp)}</strong></span>}
+                              </div>
+                              {compAltDisp > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  <span>{formaAlt === "LINK" ? "🔗" : "💳"} <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{formaAlt === "LINK" ? "Link Mercado Pago" : bancoAltLabel} {form.band_alt && formaAlt !== "LINK" ? `(${form.band_alt})` : ""} {parcAlt}x</strong></span>
+                                  {taxaAltDisp > 0 && <span>• Taxa <strong className="text-[#E8740E]">{taxaAltDisp.toFixed(2)}%</strong></span>}
+                                  <span>• Bruto {fmt(compAltDisp)}</span>
+                                  <span>→ Líquido <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqAltDisp)}</strong></span>
+                                </div>
+                              )}
+                              {entradaPix > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2"><span>💸 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>Pix</strong></span><span>• Valor {fmt(entradaPix)}</span></div>
+                              )}
+                              {entradaEspecie > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2"><span>💵 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>Espécie</strong></span><span>• Valor {fmt(entradaEspecie)}</span></div>
+                              )}
+                              {valorTroca > 0 && (
+                                <div className="flex flex-wrap items-center gap-x-2"><span>🔄 <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>Troca</strong></span><span>• Valor {fmt(valorTroca)}</span></div>
+                              )}
+                              {compPrincDisp > 0 && (
+                                <div className={`pt-1.5 border-t ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"} flex items-center gap-2`}>
+                                  <span>✅ <strong>Total Vendido:</strong></span>
+                                  <strong className="text-green-600 text-sm">{fmt(totalVendido)}</strong>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                 </>
@@ -3350,7 +3427,7 @@ export default function VendasPage() {
               </label>
               {form.banco_alt && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                  <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => { const v = e.target.value; setForm(f => ({ ...f, forma_alt: v, banco_alt: v === "LINK" ? "MERCADO_PAGO" : (f.banco_alt === "MERCADO_PAGO" ? "ITAU" : f.banco_alt || "ITAU") })); }} className={selectCls}>
                     <option value="CARTAO">Maquina Cartão</option>
                     <option value="LINK">Link Mercado Pago</option>
                   </select></div>
@@ -3772,7 +3849,7 @@ export default function VendasPage() {
                 </label>
                 {form.banco_alt && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                    <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => { const v = e.target.value; setForm(f => ({ ...f, forma_alt: v, banco_alt: v === "LINK" ? "MERCADO_PAGO" : (f.banco_alt === "MERCADO_PAGO" ? "ITAU" : f.banco_alt || "ITAU") })); }} className={selectCls}>
                       <option value="CARTAO">Maquina Cartão</option>
                       <option value="LINK">Link Mercado Pago</option>
                     </select></div>
@@ -3974,7 +4051,7 @@ export default function VendasPage() {
             let receitaReal = totalVendido; // fallback: soma dos preços vendidos
             if (gComp > 0 && taxa > 0) {
               const liqPrincipal = calcularLiquido(gComp, taxa);
-              const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
+              const taxaAlt = gCompAlt > 0 ? getTaxa((form.forma_alt || form.forma) === "LINK" ? "MERCADO_PAGO" : (form.banco_alt || "ITAU"), form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
               const liqAlt = gCompAlt > 0 ? (taxaAlt > 0 ? calcularLiquido(gCompAlt, taxaAlt) : gCompAlt) : 0;
               receitaReal = liqPrincipal + liqAlt + gPixE + gEspecieE + gTrocaE;
             }
