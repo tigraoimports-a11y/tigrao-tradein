@@ -79,7 +79,20 @@ export async function POST(req: NextRequest) {
             signedPdfUrl && `*PDF assinado:* ${signedPdfUrl}`,
           ].filter(Boolean).join("\n");
 
-          sendZApiMessage(destino, linhas).catch((err) => console.error("[ZapSign] erro notificar grupo:", err));
+          // AWAIT pra garantir que a mensagem seja enviada antes do Vercel
+          // matar o processo (fire-and-forget estava perdendo notificacoes).
+          // Tenta ate 3x em caso de falha transitoria (rate limit, timeout, etc).
+          let enviouOk = false;
+          for (let tentativa = 1; tentativa <= 3; tentativa++) {
+            try {
+              enviouOk = await sendZApiMessage(destino, linhas);
+              if (enviouOk) break;
+            } catch (err) {
+              console.error(`[ZapSign] tentativa ${tentativa}/3 falhou:`, err);
+            }
+            if (tentativa < 3) await new Promise(r => setTimeout(r, 1000 * tentativa));
+          }
+          if (!enviouOk) console.error("[ZapSign] FALHA ao notificar grupo apos 3 tentativas");
         }
       } catch (err) {
         console.error("[ZapSign] erro ao montar notificacao:", err);
@@ -102,7 +115,18 @@ export async function POST(req: NextRequest) {
             `*Cliente:* ${termo.cliente_nome}`,
             "Cliente recusou assinar o termo. Verificar com ele antes de entregar o produto.",
           ].join("\n");
-          sendZApiMessage(destino, linhas).catch((err) => console.error("[ZapSign] erro notificar recusa:", err));
+          // Mesmo pattern de retry da notificacao de assinado
+          let enviouOk = false;
+          for (let tentativa = 1; tentativa <= 3; tentativa++) {
+            try {
+              enviouOk = await sendZApiMessage(destino, linhas);
+              if (enviouOk) break;
+            } catch (err) {
+              console.error(`[ZapSign] tentativa ${tentativa}/3 falhou (recusa):`, err);
+            }
+            if (tentativa < 3) await new Promise(r => setTimeout(r, 1000 * tentativa));
+          }
+          if (!enviouOk) console.error("[ZapSign] FALHA ao notificar recusa apos 3 tentativas");
         }
       } catch (err) {
         console.error("[ZapSign] erro ao notificar recusa:", err);
