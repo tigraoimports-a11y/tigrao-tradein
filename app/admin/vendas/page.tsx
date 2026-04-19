@@ -1543,20 +1543,28 @@ export default function VendasPage() {
             }
           }
 
-          // Descobrir grupo_id original (pra novos itens vincularem ao mesmo grupo)
+          // Descobrir grupo_id original (pra novos itens vincularem ao mesmo grupo).
+          // Se a venda original nao tem grupo_id (era venda unica) e estamos adicionando
+          // novos produtos, gera um UUID real pra agrupar todos.
           const primeiraVenda = vendas.find(v => v.id === editandoGrupoIds[0]);
-          const grupoIdOriginal = (primeiraVenda as unknown as { grupo_id?: string })?.grupo_id
-            || editandoGrupoIds[0]; // fallback: usa id da primeira venda como grupo_id sintetico
+          const grupoIdExistente = (primeiraVenda as unknown as { grupo_id?: string })?.grupo_id;
+          const precisaCriarGrupo = !grupoIdExistente && allProducts.length > editandoGrupoIds.length;
+          const grupoIdOriginal = grupoIdExistente
+            || (precisaCriarGrupo ? crypto.randomUUID() : editandoGrupoIds[0]);
 
           let allOk = true;
 
-          // 1. PATCH nos produtos que casam com vendas existentes
+          // 1. PATCH nos produtos que casam com vendas existentes.
+          // Se estamos criando grupo novo (venda unica virando multi), propaga grupo_id
+          // pro PATCH pra original tambem entrar no mesmo grupo.
           const nPatch = Math.min(allProducts.length, editandoGrupoIds.length);
           for (let i = 0; i < nPatch; i++) {
+            const patchBody: Record<string, unknown> = { id: editandoGrupoIds[i], ...groupPayloads[i] };
+            if (precisaCriarGrupo) patchBody.grupo_id = grupoIdOriginal;
             const res = await fetch("/api/vendas", {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "x-admin-password": password },
-              body: JSON.stringify({ id: editandoGrupoIds[i], ...groupPayloads[i] }),
+              body: JSON.stringify(patchBody),
             });
             const json = await res.json();
             if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido")); break; }
@@ -5249,7 +5257,11 @@ export default function VendasPage() {
                                               // Campos de produto/troca já foram limpos no setForm acima (grupoVendas.length > 1 ? "" : ...)
                                             } else {
                                               setProdutosCarrinho([]);
-                                              setEditandoGrupoIds([]);
+                                              // Venda unica: registra o id em editandoGrupoIds pra
+                                              // habilitar o ramo multi-produto caso o admin adicione
+                                              // um 2o produto durante a edicao (antes era [] e o
+                                              // 2o produto era silenciosamente descartado).
+                                              setEditandoGrupoIds([v.id]);
                                               setEditandoVendaId(v.id);
                                             }
                                             // Guarda o estoque_id ORIGINAL da venda (pra detectar se trocou produto no submit)

@@ -5066,7 +5066,13 @@ export default function EstoquePage() {
                 allItems.forEach(p => {
                   const base = getModeloBase(p.produto, p.categoria, p.observacao).toUpperCase();
                   const cor = p.cor ? corParaPT(p.cor).toUpperCase() : "";
-                  const key = `${base}|||${cor}`;
+                  // Apple Watch: separa variantes com pulseira estilo milanês em card
+                  // proprio — produto/preco diferem do Ultra "normal" com pulseira ocean.
+                  const isMilanes = p.categoria === "APPLE_WATCH"
+                    && (/MILAN[EÊÉ]S/i.test(p.produto || "")
+                        || /MILAN[EÊÉ]S/i.test(p.observacao || ""));
+                  const variante = isMilanes ? "|||MILANES" : "";
+                  const key = `${base}|||${cor}${variante}`;
                   if (!grouped[key]) grouped[key] = [];
                   grouped[key].push(p);
                 });
@@ -5148,6 +5154,19 @@ export default function EstoquePage() {
                           <div className="flex-1 min-w-0">
                             <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
                             {corPt && <p className={`text-[10px] sm:text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                            {(() => {
+                              // Badge Milanês: formatProdutoDisplay remove "PULSEIRA ..." do nome,
+                              // entao marca cards com pulseira estilo milanes pra diferenciar do Ultra normal.
+                              const isMilanes = rep.categoria === "APPLE_WATCH"
+                                && (/MILAN[EÊÉ]S/i.test(rep.produto || "")
+                                    || /MILAN[EÊÉ]S/i.test(rep.observacao || ""));
+                              if (!isMilanes) return null;
+                              return (
+                                <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F2F2F7] text-[#636366]"}`}>
+                                  Pulseira Milanês
+                                </span>
+                              );
+                            })()}
                           </div>
                           <span className={`shrink-0 text-[10px] cursor-grab active:cursor-grabbing select-none ${textMuted} opacity-40 hover:opacity-100 transition-opacity`} title="Arrastar para reordenar">⠿</span>
                         </div>
