@@ -206,17 +206,22 @@ export function getModeloBase(produto: string, categoria: string): string {
     const sz = sizeW ? ` ${sizeW[1]}mm` : "";
     const isCell = /\+\s*CEL|GPS\s*\+\s*CEL|CELL|CELULAR/.test(p);
     const conn = isCell ? " GPS+CEL" : " GPS";
+    // Variante de pulseira Milanês (natural/preta/etc) eh um SKU diferente
+    // com preco/custo proprios. Separa em grupo distinto pra rebalance nao
+    // sobrescrever o balanco do milanes com a media do modelo regular.
+    const isMilanes = /MILAN[EÊÉ]S/.test(p);
+    const milanesSuffix = isMilanes ? " Milanês" : "";
     const ultraMatch = p.match(/ULTRA\s*(\d+)?/);
     if (ultraMatch) {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
-      return `Apple Watch Ultra${gen}${sz}`;
+      return `Apple Watch Ultra${gen}${sz}${milanesSuffix}`;
     }
     const seMatch = p.match(/\bSE(?!R)\s*(\d+)/);
-    if (seMatch && !has46or49) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
-    if (/\bSE(?!R)/.test(p) && !has46or49) return `Apple Watch SE${sz}${conn}`;
+    if (seMatch && !has46or49) return `Apple Watch SE ${seMatch[1]}${sz}${conn}${milanesSuffix}`;
+    if (/\bSE(?!R)/.test(p) && !has46or49) return `Apple Watch SE${sz}${conn}${milanesSuffix}`;
     const seriesMatch = p.match(/(?:SERIES\s*|\bS)(\d+)/);
-    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
-    if (has46or49) return `Apple Watch Series 11${sz}${conn}`;
+    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}${milanesSuffix}`;
+    if (has46or49) return `Apple Watch Series 11${sz}${conn}${milanesSuffix}`;
     return `Apple Watch${sz}${conn}`;
   }
   if (baseCat === "AIRPODS") {
