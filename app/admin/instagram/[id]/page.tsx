@@ -34,12 +34,6 @@ interface Post {
   created_at: string;
 }
 
-interface ImagemCandidata {
-  url: string;
-  source: string;
-  sourceUrl: string;
-}
-
 const STATUS_LABEL: Record<Post["status"], string> = {
   RASCUNHO: "📝 Rascunho",
   GERANDO: "⏳ Gerando...",
@@ -69,11 +63,9 @@ export default function InstagramPostPage() {
   const [hashtagsEdit, setHashtagsEdit] = useState("");
 
   // PR 2: imagens
-  const [buscandoImgs, setBuscandoImgs] = useState(false);
-  const [atribuindo, setAtribuindo] = useState(false);
+  const [ilustrando, setIlustrando] = useState(false);
+  const [reIlustrandoSlide, setReIlustrandoSlide] = useState<number | null>(null);
   const [renderizando, setRenderizando] = useState(false);
-  const [galeria, setGaleria] = useState<ImagemCandidata[]>([]);
-  const [slideAlvo, setSlideAlvo] = useState<number | null>(null);
   const [uploadingSlide, setUploadingSlide] = useState<number | null>(null);
   const uploadRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -122,54 +114,46 @@ export default function InstagramPostPage() {
     }
   };
 
-  const buscarImagens = async () => {
-    setBuscandoImgs(true);
-    setMsg("Buscando imagens nas fontes consultadas...");
+  const ilustrarSlides = async () => {
+    setIlustrando(true);
+    setMsg("Claude buscando imagem pra cada slide na web... (~1-2 min)");
     try {
-      const res = await fetch("/api/instagram/buscar-imagem", {
+      const res = await fetch("/api/instagram/ilustrar-slides", {
         method: "POST",
         headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ postId: id }),
       });
       const j = await res.json();
       if (!res.ok || !j.ok) {
-        setMsg("Erro: " + (j.error || "falha na busca"));
-        return;
-      }
-      setGaleria(j.imagens || []);
-      if ((j.imagens || []).length === 0) {
-        setMsg("Nenhuma imagem encontrada nas fontes. Use upload manual por slide.");
-      } else {
-        setMsg(`${j.imagens.length} imagens encontradas. Clique em "Atribuir automaticamente" ou escolha manual.`);
-      }
-    } finally {
-      setBuscandoImgs(false);
-    }
-  };
-
-  const atribuirAutomaticamente = async () => {
-    if (galeria.length === 0) {
-      setMsg("Busque as imagens primeiro.");
-      return;
-    }
-    setAtribuindo(true);
-    setMsg("Claude Vision analisando slides vs imagens... (~15s)");
-    try {
-      const res = await fetch("/api/instagram/atribuir-imagens", {
-        method: "POST",
-        headers: apiHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ postId: id, imagens: galeria }),
-      });
-      const j = await res.json();
-      if (!res.ok || !j.ok) {
-        setMsg("Erro: " + (j.error || "falha na atribuição"));
+        setMsg("Erro: " + (j.error || "falha ao ilustrar"));
         return;
       }
       if (Array.isArray(j.slides)) setSlidesEdit(j.slides);
       const comImg = (j.slides || []).filter((s: Slide) => s.imagem_url).length;
-      setMsg(`${comImg} de ${(j.slides || []).length} slides receberam imagem. Ajuste manual se quiser e depois renderize.`);
+      setMsg(`${comImg} de ${(j.slides || []).length} slides receberam imagem. Clique "🔄" em algum slide pra trocar.`);
     } finally {
-      setAtribuindo(false);
+      setIlustrando(false);
+    }
+  };
+
+  const reIlustrarSlide = async (idx: number) => {
+    setReIlustrandoSlide(idx);
+    setMsg(`Buscando nova imagem pro slide ${idx + 1}...`);
+    try {
+      const res = await fetch("/api/instagram/ilustrar-slides", {
+        method: "POST",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ postId: id, slideIndex: idx }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setMsg("Erro: " + (j.error || "falha"));
+        return;
+      }
+      if (Array.isArray(j.slides)) setSlidesEdit(j.slides);
+      setMsg(`Slide ${idx + 1} re-ilustrado.`);
+    } finally {
+      setReIlustrandoSlide(null);
     }
   };
 
@@ -282,7 +266,6 @@ export default function InstagramPostPage() {
 
   const jaTemConteudo = post.status !== "RASCUNHO" && post.status !== "GERANDO" && slidesEdit.length > 0;
   const podeEditar = ["GERADO", "ERRO"].includes(post.status);
-  const temFontes = Array.isArray(post.pesquisa_json?.fontes) && (post.pesquisa_json?.fontes?.length ?? 0) > 0;
   const temImagensRenderizadas = Array.isArray(post.imagens_urls) && post.imagens_urls.length > 0;
 
   return (
@@ -375,75 +358,31 @@ export default function InstagramPostPage() {
             )}
           </div>
 
-          {/* Galeria de imagens */}
+          {/* Ilustrar slides */}
           {podeEditar && (
             <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 mb-6">
-              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-[#1D1D1F]">Imagens dos slides</h3>
+                  <h3 className="text-sm font-semibold text-[#1D1D1F]">Ilustrar slides</h3>
                   <p className="text-xs text-[#86868B] mt-1">
-                    Busca nas fontes do fact-check (Apple oficial primeiro). Se a imagem não for ideal, faça upload manual em cada slide.
+                    Claude busca na web uma imagem que ilustre o texto de cada slide (Apple oficial quando faz sentido, reviews e fontes tech caso contrário). Use &quot;🔄&quot; num slide pra trocar só aquela imagem. Upload manual também vale.
                   </p>
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  {galeria.length > 0 && (
-                    <button
-                      onClick={atribuirAutomaticamente}
-                      disabled={atribuindo || buscandoImgs}
-                      className="px-3 py-1.5 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] disabled:opacity-50"
-                      title="Claude Vision lê os slides e as imagens, escolhe a melhor pra cada um"
-                    >
-                      {atribuindo ? "Analisando..." : "✨ Atribuir automaticamente"}
-                    </button>
-                  )}
-                  {temFontes && (
-                    <button
-                      onClick={buscarImagens}
-                      disabled={buscandoImgs || atribuindo}
-                      className="px-3 py-1.5 rounded-xl bg-[#1D1D1F] text-white text-xs font-semibold hover:bg-[#333] disabled:opacity-50"
-                    >
-                      {buscandoImgs ? "Buscando..." : galeria.length > 0 ? "🔍 Re-buscar" : "🔍 Buscar nas fontes"}
-                    </button>
-                  )}
-                </div>
+                <button
+                  onClick={ilustrarSlides}
+                  disabled={ilustrando}
+                  className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+                >
+                  {ilustrando ? "⏳ Ilustrando..." : "✨ Ilustrar slides"}
+                </button>
               </div>
-
-              {galeria.length > 0 && (
-                <>
-                  <div className="text-xs text-[#6E6E73] mb-2">
-                    {slideAlvo === null
-                      ? "Clique em um slide abaixo (ícone 🖼️) e depois na imagem que quiser atribuir."
-                      : <>Slide <strong>{slideAlvo + 1}</strong> selecionado. Clique numa imagem pra atribuir · <button onClick={() => setSlideAlvo(null)} className="text-[#E8740E] hover:underline">cancelar</button></>
-                    }
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {galeria.map((img, i) => (
-                      <button
-                        key={i}
-                        disabled={slideAlvo === null}
-                        onClick={() => { if (slideAlvo !== null) { atribuirImagem(slideAlvo, img.url); setSlideAlvo(null); } }}
-                        title={`${img.source} · ${img.sourceUrl}`}
-                        className={`relative aspect-square rounded-lg overflow-hidden border-2 ${
-                          slideAlvo !== null ? "border-[#E8740E]/30 hover:border-[#E8740E] cursor-pointer" : "border-[#E8E8ED] cursor-default"
-                        } bg-[#F5F5F7]`}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img.url} alt={img.source} className="w-full h-full object-cover" loading="lazy" />
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] px-1 py-0.5 truncate">
-                          {img.source}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
           )}
 
           {/* Cards de edição de slide */}
           <div className="grid gap-3 mb-6">
             {slidesEdit.map((slide, idx) => (
-              <div key={idx} className={`bg-white border rounded-2xl p-4 ${slideAlvo === idx ? "border-[#E8740E] ring-2 ring-[#E8740E]/20" : "border-[#D2D2D7]"}`}>
+              <div key={idx} className="bg-white border border-[#D2D2D7] rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <span className="text-xs px-2 py-1 rounded bg-[#1D1D1F] text-white font-mono">{idx + 1}</span>
                   <span className="text-xs text-[#86868B]">
@@ -457,16 +396,12 @@ export default function InstagramPostPage() {
                   {podeEditar && (
                     <div className="ml-auto flex items-center gap-2">
                       <button
-                        onClick={() => setSlideAlvo(slideAlvo === idx ? null : idx)}
-                        disabled={galeria.length === 0}
-                        title={galeria.length === 0 ? "Busque imagens primeiro" : "Atribuir imagem da galeria"}
-                        className={`text-xs px-2 py-1 rounded ${
-                          slideAlvo === idx
-                            ? "bg-[#E8740E] text-white"
-                            : "bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#E8E8ED]"
-                        } disabled:opacity-40`}
+                        onClick={() => reIlustrarSlide(idx)}
+                        disabled={reIlustrandoSlide !== null || ilustrando}
+                        title="Claude busca nova imagem só pra esse slide"
+                        className="text-xs px-2 py-1 rounded bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#E8E8ED] disabled:opacity-40"
                       >
-                        🖼️ Galeria
+                        {reIlustrandoSlide === idx ? "Buscando..." : "🔄 Trocar imagem"}
                       </button>
                       <button
                         onClick={() => uploadRefs.current[idx]?.click()}
@@ -540,7 +475,7 @@ export default function InstagramPostPage() {
                   {(() => {
                     const comImg = slidesEdit.filter(s => s.imagem_url).length;
                     if (comImg === 0) {
-                      return <p className="text-xs text-[#E74C3C] mt-1">⚠️ Nenhum slide com imagem atribuída. Use &quot;✨ Atribuir automaticamente&quot; antes de renderizar.</p>;
+                      return <p className="text-xs text-[#E74C3C] mt-1">⚠️ Nenhum slide com imagem. Use &quot;✨ Ilustrar slides&quot; antes de renderizar.</p>;
                     }
                     if (comImg < slidesEdit.length) {
                       return <p className="text-xs text-[#E8740E] mt-1">{comImg} de {slidesEdit.length} slides com imagem. Os outros vão renderizar só com texto.</p>;
