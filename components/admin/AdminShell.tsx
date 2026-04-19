@@ -320,7 +320,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         }}
       >
         {/* Sidebar Navigation */}
-        <AdminNav userRole={user.role} userPermissoes={user.permissoes} abasOcultas={user.abas_ocultas} />
+        <AdminNav userRole={user.role} userNome={user.nome} userPermissoes={user.permissoes} abasOcultas={user.abas_ocultas} />
 
         {/* Main content area — offset by sidebar width */}
         <div className={`${sidebarCollapsed ? "lg:ml-[60px]" : "lg:ml-[220px]"} print:ml-0 min-h-screen flex flex-col transition-all duration-200`}>
