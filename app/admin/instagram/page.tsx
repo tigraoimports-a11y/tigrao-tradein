@@ -109,12 +109,20 @@ export default function InstagramListPage() {
           <h1 className="text-2xl font-bold text-[#1D1D1F]">📸 Instagram</h1>
           <p className="text-sm text-[#86868B] mt-1">Posts automatizados em carrossel com pesquisa + fact-check</p>
         </div>
-        <button
-          onClick={() => setNovoOpen(true)}
-          className="px-4 py-2 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
-        >
-          + Novo post
-        </button>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/instagram/configuracoes"
+            className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-sm text-[#6E6E73] hover:bg-[#F5F5F7] transition-colors"
+          >
+            ⚙️ Configurações
+          </Link>
+          <button
+            onClick={() => setNovoOpen(true)}
+            className="px-4 py-2 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
+          >
+            + Novo post
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
