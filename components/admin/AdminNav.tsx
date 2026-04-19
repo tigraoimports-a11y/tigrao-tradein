@@ -8,11 +8,21 @@ import { NAV, isGroup, type NavGroup, type NavItem } from "./nav-config";
 
 interface AdminNavProps {
   userRole: string;
+  userNome?: string;
   userPermissoes?: string[];
   abasOcultas?: string[];
 }
 
-export default function AdminNav({ userRole, userPermissoes, abasOcultas }: AdminNavProps) {
+function normalizarNome(s: string): string {
+  return (s || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/\s+/)[0] || "";
+}
+
+export default function AdminNav({ userRole, userNome, userPermissoes, abasOcultas }: AdminNavProps) {
   const pathname = usePathname();
   const { sidebarCollapsed: collapsed, setSidebarCollapsed: setCollapsed } = useAdmin();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -28,6 +38,7 @@ export default function AdminNav({ userRole, userPermissoes, abasOcultas }: Admi
 
   const isAdmin = userRole === "admin";
   const perms = userPermissoes ?? [];
+  const primeiroNome = normalizarNome(userNome ?? "");
 
   // Páginas visíveis pra todos os usuários (não precisa de permissão)
   const PUBLIC_PAGES = ["gerar_link", "calculadora_taxas", "entregas"];
@@ -51,6 +62,12 @@ export default function AdminNav({ userRole, userPermissoes, abasOcultas }: Admi
     return !ocultas.has(item.href);
   }
 
+  // Feature em beta: se o item tem 'betaPara', só mostra pros nomes listados.
+  function liberadoEmBeta(item: NavItem): boolean {
+    if (!item.betaPara || item.betaPara.length === 0) return true;
+    return item.betaPara.map(normalizarNome).includes(primeiroNome);
+  }
+
   function toggleGroup(label: string) {
     setOpenGroups((prev) => {
       const next = new Set(prev);
@@ -64,6 +81,7 @@ export default function AdminNav({ userRole, userPermissoes, abasOcultas }: Admi
     const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href + "/"));
     if (!canSee(item.pageKey)) return null;
     if (!naoOculta(item)) return null;
+    if (!liberadoEmBeta(item)) return null;
     return (
       <Link
         key={item.href}
@@ -83,7 +101,7 @@ export default function AdminNav({ userRole, userPermissoes, abasOcultas }: Admi
   }
 
   function renderGroup(group: NavGroup) {
-    const visibleItems = group.items.filter((i) => canSee(i.pageKey) && naoOculta(i));
+    const visibleItems = group.items.filter((i) => canSee(i.pageKey) && naoOculta(i) && liberadoEmBeta(i));
     if (visibleItems.length === 0) return null;
 
     const isOpen = openGroups.has(group.label);

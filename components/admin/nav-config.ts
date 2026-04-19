@@ -6,6 +6,12 @@ export interface NavItem {
   label: string;
   icon: string;
   pageKey: string; // granular permission key
+  /**
+   * Se preenchido, o item só aparece pros usuários listados (match por primeiro
+   * nome, case-insensitive, sem acento). Usado pra features em teste que só o
+   * dono/beta tester vê antes de liberar pra todo o admin.
+   */
+  betaPara?: string[];
 }
 
 export interface NavGroup {
@@ -74,7 +80,7 @@ export const NAV: NavEntry[] = [
     items: [
       { href: "/admin/mostruario", label: "Mostruario", icon: "\u{1F5BC}\uFE0F", pageKey: "mostruario" },
       { href: "/admin/simulacoes", label: "Simulacoes", icon: "\u{1F4F1}", pageKey: "simulacoes" },
-      { href: "/admin/instagram", label: "Instagram", icon: "\u{1F4F8}", pageKey: "instagram" },
+      { href: "/admin/instagram", label: "Instagram", icon: "\u{1F4F8}", pageKey: "instagram", betaPara: ["andre"] },
       { href: "/admin/precos", label: "Alteração de Preços", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
       { href: "/admin/usados", label: "Precos Trade-In", icon: "\u{1F4B0}", pageKey: "tradein_precos" },
       { href: "/admin/analytics", label: "Funil Trade-In", icon: "\u{1F4C8}", pageKey: "funil_tradein" },
