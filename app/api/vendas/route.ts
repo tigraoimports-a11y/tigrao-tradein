@@ -675,8 +675,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
-  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto").eq("id", id).single();
+  // e status_pagamento (evitar reenvio de NF/Telegram em edicoes posteriores).
+  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento").eq("id", id).single();
   const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
+  const statusPagamentoAnterior = (vendaAnterior as unknown as { status_pagamento?: string } | null)?.status_pagamento || null;
 
   // Se o admin enviou _estoque_id (mesmo null), atualizar o vinculo na venda
   if (estoqueIdFoiEnviado) {
@@ -797,8 +799,12 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Enviar notificação no Telegram quando venda é FINALIZADA
-  if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
+  // Enviar notificacao Telegram + NF por email APENAS na transicao para FINALIZADO.
+  // Se a venda ja estava FINALIZADA antes do PATCH, nao reenviar (bug: edicao
+  // de venda finalizada reenviava NF/Telegram toda vez).
+  const transicionouParaFinalizado = fields.status_pagamento === "FINALIZADO"
+    && statusPagamentoAnterior !== "FINALIZADO";
+  if (transicionouParaFinalizado && data && data.length > 0) {
     const venda = data[0];
     const lucroCalc = Number(venda.preco_vendido || 0) - Number(venda.custo || 0);
     console.log("[Vendas] Enviando notificação Telegram para venda finalizada:", venda.cliente, venda.produto);
