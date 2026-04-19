@@ -2923,6 +2923,15 @@ export default function VendasPage() {
                                                   setEstoqueId("");
                                                   set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", "");
                                                 } else {
+                                                  // Em modo edicao, se o form ja tem um produto DIFERENTE
+                                                  // do que estamos clicando, preserva ele no carrinho pra nao
+                                                  // sumir (bug: admin selecionava novo produto e o anterior
+                                                  // era sobrescrito silenciosamente).
+                                                  if (editandoVendaId && form.produto && form.produto !== p.produto) {
+                                                    const prodAtual = getCurrentProductFields();
+                                                    setProdutosCarrinho(prev => [...prev, prodAtual]);
+                                                    setMsg(`Produto anterior movido pro carrinho. Agora selecionando: ${p.produto}`);
+                                                  }
                                                   setEstoqueId(p.id);
                                                   set("produto", p.produto);
                                                   set("custo", String(Math.round(p.custo_unitario || 0)));
