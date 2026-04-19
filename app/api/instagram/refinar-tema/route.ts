@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -16,20 +16,23 @@ const SYSTEM_PROMPT = `Você é o editor de pauta do Instagram da @tigraoimports
 TAREFA
 O admin mandou uma ideia curta ou vaga pra post (ex: "comparativo pra iPad", "dica de bateria", "notícia iPhone novo"). Expanda pra um TEMA específico, acionável, com ângulo claro — o suficiente pra um editor de conteúdo saber o que pesquisar.
 
+IMPORTANTE — MODELOS ATUAIS
+Seu conhecimento interno pode estar desatualizado. ANTES de escolher modelos específicos, faça 1-2 web_search pra confirmar qual é o modelo atual da linha relevante (ex: "iPad Air atual 2026", "iPhone lançamento mais recente", "Apple Watch Ultra versão atual"). Nunca chute o chip/geração — confirme via web_search em apple.com/br, 9to5mac, MacRumors, Tecnoblog.
+
 REGRAS
 - Escolha UMA pergunta ou ângulo concreto. Nada de genérico ("tudo sobre iPad").
-- Se a ideia é comparativo, escolha 2 modelos específicos atuais (ex: iPad Air M3 vs iPad Pro M4). Evite comparar modelo novo com um descontinuado há muito.
+- Se a ideia é comparativo, escolha 2 modelos ATUAIS confirmados por web_search (ex: iPad Air M-atual vs iPad Pro M-atual). Nunca compare modelo vigente com descontinuado há muito.
 - Se é dica, pegue um cenário de uso real (ex: "5 ajustes pra dar sobrevida de bateria em iPhone 13 que já não segura o dia inteiro").
-- Se é notícia, foque no fato específico e no que muda pro consumidor (ex: "Lançamento do Apple Watch Ultra 3 — o que mudou vs Ultra 2?").
+- Se é notícia, use web_search pra confirmar se o lançamento é recente mesmo. Foque no fato específico e no que muda pro consumidor.
 - Tom: descontraído mas técnico. Faça perguntas / contraste. Nada de clickbait.
 - Considere o público Rio de Janeiro, Brasil (preço em reais se relevante, sem viés gringo).
 
 SAÍDA
-Chame a ferramenta 'refinar' UMA vez com:
+Depois de confirmar modelos atuais via web_search, chame a ferramenta 'refinar' UMA vez com:
 - tema: o tema expandido (1 frase, <120 caracteres, pronto pra ser título do post).
 - tipo: DICA | COMPARATIVO | NOTICIA (o que melhor encaixa).
 - numero_slides: 5, 6 ou 7 (padrão 7; use menos se tema é simples).
-- motivo: 1 linha explicando por que escolheu esse ângulo.`;
+- motivo: 1 linha explicando por que escolheu esse ângulo (pode citar o que confirmou via busca).`;
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -48,6 +51,12 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const WEB_SEARCH_TOOL = {
+  type: "web_search_20250305",
+  name: "web_search",
+  max_uses: 4,
+} as unknown as Anthropic.Tool;
+
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -59,11 +68,10 @@ export async function POST(req: NextRequest) {
   try {
     const response = await client.messages.create({
       model: "claude-opus-4-7",
-      max_tokens: 800,
+      max_tokens: 4000,
       system: SYSTEM_PROMPT,
-      tools: TOOLS,
-      tool_choice: { type: "tool", name: "refinar" },
-      messages: [{ role: "user", content: `Ideia do admin: "${ideia}"\n\nExpande pra tema completo e chama 'refinar'.` }],
+      tools: [WEB_SEARCH_TOOL, ...TOOLS],
+      messages: [{ role: "user", content: `Ideia do admin: "${ideia}"\n\nFaça 1-2 web_searches pra confirmar modelos atuais (estamos em 2026) e depois chame 'refinar' com o tema expandido.` }],
     });
     const toolUse = response.content.find(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "refinar"
