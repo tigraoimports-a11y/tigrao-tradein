@@ -4508,6 +4508,45 @@ export default function VendasPage() {
                 </div>
                 <div className="flex gap-3 items-center text-xs text-[#86868B]">
                   <span>{filtered.length} vendas</span>
+                  {/* Botao de envio em massa de NFs pendentes — aparece quando
+                      ha vendas no filtro atual com NF anexa + email + ainda nao
+                      enviada. Confirma antes, mostra contagem e erros. */}
+                  {(() => {
+                    const pendentesNF = filtered.filter(v =>
+                      v.nota_fiscal_url
+                      && v.email
+                      && !((v as unknown as { nota_fiscal_enviada?: boolean }).nota_fiscal_enviada)
+                    );
+                    if (pendentesNF.length === 0) return null;
+                    return (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Enviar ${pendentesNF.length} NF(s) pendente(s) por email?\n\nVai disparar email pra cada cliente dessa lista. Quem ja recebeu nao sera reenviado.`)) return;
+                          const ids = pendentesNF.map(v => v.id);
+                          const res = await fetch("/api/vendas", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                            body: JSON.stringify({ action: "enviar_nf_bulk", ids }),
+                          });
+                          const j = await res.json().catch(() => ({}));
+                          if (res.ok && j.ok) {
+                            const errTxt = j.erros && j.erros.length
+                              ? ` (${j.erros.length} erro${j.erros.length > 1 ? "s" : ""}: ${j.erros.slice(0, 3).map((e: { cliente: string }) => e.cliente).join(", ")}${j.erros.length > 3 ? "..." : ""})`
+                              : "";
+                            setMsg(`${j.enviadas}/${j.total} NF(s) enviada(s)${errTxt}`);
+                            fetchVendas();
+                          } else {
+                            setMsg(`Erro no envio em massa: ${j.error || res.status}`);
+                          }
+                          setTimeout(() => setMsg(""), 6000);
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 hover:bg-amber-100 transition-colors inline-flex items-center gap-1"
+                        title="Envia todas as NFs anexadas que ainda nao foram enviadas por email"
+                      >
+                        📧 Enviar {pendentesNF.length} NF{pendentesNF.length > 1 ? "s" : ""} pendente{pendentesNF.length > 1 ? "s" : ""}
+                      </button>
+                    );
+                  })()}
                   {selecionadas.size > 0 && (
                     <div className="flex gap-2">
                       {tab === "andamento" && (

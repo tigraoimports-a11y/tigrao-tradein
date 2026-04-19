@@ -600,6 +600,53 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Envio em massa de NF pendente. Filtra: tem nota_fiscal_url + tem email +
+  // nota_fiscal_enviada=false. Opcionalmente restringe por lista de ids.
+  // Nunca reenvia NF ja enviada (filtro no SELECT). Retorna contagem de
+  // enviadas + lista de erros por cliente.
+  if (body.action === "enviar_nf_bulk") {
+    const idsFiltro = Array.isArray(body.ids) ? (body.ids as string[]) : null;
+    let q = supabase.from("vendas")
+      .select("id, email, cliente, produto, cor, valor_comprovante, preco_vendido, nota_fiscal_url")
+      .not("nota_fiscal_url", "is", null)
+      .not("email", "is", null)
+      .eq("nota_fiscal_enviada", false);
+    if (idsFiltro && idsFiltro.length > 0) q = q.in("id", idsFiltro);
+    const { data: pendentes, error: errSel } = await q;
+    if (errSel) return NextResponse.json({ error: errSel.message }, { status: 500 });
+    if (!pendentes || pendentes.length === 0) {
+      return NextResponse.json({ ok: true, enviadas: 0, erros: [], total: 0 });
+    }
+    const { enviarNotaFiscal } = await import("@/lib/email");
+    const erros: { cliente: string; erro: string }[] = [];
+    let enviadas = 0;
+    for (const v of pendentes) {
+      try {
+        await enviarNotaFiscal({
+          to: v.email!,
+          clienteNome: v.cliente || "Cliente",
+          produto: normalizarCoresNoTexto(`${v.produto || ""}${v.cor ? ` ${v.cor}` : ""}`.trim()),
+          valor: Number(v.valor_comprovante || v.preco_vendido || 0),
+          notaFiscalUrl: v.nota_fiscal_url!,
+        });
+        await supabase.from("vendas")
+          .update({ nota_fiscal_enviada: true, nota_fiscal_enviada_em: new Date().toISOString() })
+          .eq("id", v.id);
+        enviadas++;
+      } catch (err) {
+        erros.push({ cliente: v.cliente || "?", erro: String(err) });
+        console.error("[Vendas] Erro envio bulk NF:", v.cliente, err);
+      }
+    }
+    await logActivity(
+      usuario,
+      "Envio em massa de NF",
+      `${enviadas}/${pendentes.length} enviadas${erros.length ? `, ${erros.length} erro(s)` : ""}`,
+      "vendas"
+    );
+    return NextResponse.json({ ok: true, enviadas, erros, total: pendentes.length });
+  }
+
   // Bulk update: finalizar todas vendas de uma data
   if (body.action === "finalizar_dia") {
     const { data: dia } = body;
