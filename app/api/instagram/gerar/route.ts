@@ -20,7 +20,21 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const TIPO_GUIA: Record<string, string> = {
   DICA: "dica prática pra dono de iPhone/Mac/Apple Watch (ex: '5 ajustes pra economizar bateria'). Foco em utilidade imediata.",
-  COMPARATIVO: "comparativo entre modelos ou features (ex: 'iPhone 15 vs 16 — vale a pena trocar?'). Traga números concretos (chip, bateria, tela) e veredito honesto.",
+  COMPARATIVO: `comparativo entre modelos (ex: 'iPhone 17 vs 17 Pro — vale pagar mais?').
+
+REGRA IMPORTANTE de comparativo entre 2 modelos Apple:
+Mesmo que o tema enfatize UMA dimensão (ex: 'câmera iPhone 17 vs 17 Pro'), SEMPRE cubra o quadro completo pra dono de loja ajudar o cliente a decidir. Dedique slides a:
+1. Câmera (sensores, lentes, zoom, vídeo)
+2. Tela (ProMotion 120Hz, Always-On, brilho nits)
+3. Chip / performance (A-Pro vs A-base, Neural Engine, GPU cores)
+4. Bateria (horas vídeo, carga rápida)
+5. Design e materiais (titânio vs alumínio, peso, botões Action/Camera Control)
+6. Preço oficial Apple BR + valor de revenda / trade-in (quem trocar em 1-2 anos o Pro segura mais valor?)
+7. Veredito honesto: "pro vale se você usa X; 17 base entrega Y pra maioria".
+
+Se o tema for estreito (só câmera), ainda distribua slides: 2 ou 3 aprofundando a dimensão do tema + 1 "além da câmera, o Pro também tem..." cobrindo as outras dimensões em 1 slide de resumo.
+
+Não romantize o Pro sem motivo. Se pro base cobre a maioria dos casos, diga.`,
   NOTICIA: "novidade, lançamento ou rumor do ecossistema Apple. Data, fonte e o que muda na prática pro consumidor.",
 };
 

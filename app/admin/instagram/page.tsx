@@ -153,10 +153,21 @@ export default function InstagramListPage() {
                 <textarea
                   value={form.tema}
                   onChange={e => setForm({ ...form, tema: e.target.value })}
-                  placeholder='ex: "5 dicas pra economizar bateria no iPhone 15"'
+                  placeholder={
+                    form.tipo === "COMPARATIVO"
+                      ? 'ex: "iPhone 17 vs 17 Pro — vale pagar mais pelo Pro?"'
+                      : form.tipo === "NOTICIA"
+                      ? 'ex: "Lançamento do Apple Watch Ultra 3 — o que mudou?"'
+                      : 'ex: "5 dicas pra economizar bateria no iPhone 15"'
+                  }
                   rows={3}
                   className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                 />
+                {form.tipo === "COMPARATIVO" && (
+                  <p className="text-xs text-[#86868B] mt-1">
+                    Dica: comparativos cobrem câmera + tela + chip + bateria + design + preço + revenda. Prefira o tema amplo (&quot;X vs Y&quot;) a estreito (&quot;câmera X vs Y&quot;).
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-[#6E6E73] mb-1 block">Tipo</label>
