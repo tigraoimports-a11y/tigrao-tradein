@@ -43,6 +43,8 @@ export default function InstagramListPage() {
   const [novoOpen, setNovoOpen] = useState(false);
   const [form, setForm] = useState({ tema: "", tipo: "DICA" as Post["tipo"], numero_slides: 7 });
   const [saving, setSaving] = useState(false);
+  const [refinando, setRefinando] = useState(false);
+  const [motivoRefino, setMotivoRefino] = useState("");
   const [msg, setMsg] = useState("");
 
   const fetchPosts = useCallback(async () => {
@@ -82,6 +84,32 @@ export default function InstagramListPage() {
       router.push(`/admin/instagram/${j.data.id}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const refinarTema = async () => {
+    if (!form.tema.trim()) {
+      setMsg("Escreve uma ideia (pode ser curta) antes de refinar.");
+      return;
+    }
+    setRefinando(true);
+    setMsg("");
+    setMotivoRefino("");
+    try {
+      const res = await fetch("/api/instagram/refinar-tema", {
+        method: "POST",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ ideia: form.tema }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setMsg("Erro ao refinar: " + (j.error || "falha"));
+        return;
+      }
+      setForm({ tema: j.tema, tipo: j.tipo, numero_slides: j.numero_slides });
+      setMotivoRefino(j.motivo || "");
+    } finally {
+      setRefinando(false);
     }
   };
 
@@ -149,23 +177,37 @@ export default function InstagramListPage() {
             <h2 className="text-lg font-semibold mb-4 text-[#1D1D1F]">Novo post</h2>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-[#6E6E73] mb-1 block">Tema</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-[#6E6E73]">Tema</label>
+                  <button
+                    type="button"
+                    onClick={refinarTema}
+                    disabled={refinando || !form.tema.trim()}
+                    className="text-xs px-2 py-1 rounded bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] disabled:opacity-40"
+                    title="IA expande sua ideia curta pra tema completo + sugere tipo e nº de slides"
+                  >
+                    {refinando ? "Refinando..." : "✨ Refinar com IA"}
+                  </button>
+                </div>
                 <textarea
                   value={form.tema}
-                  onChange={e => setForm({ ...form, tema: e.target.value })}
+                  onChange={e => { setForm({ ...form, tema: e.target.value }); if (motivoRefino) setMotivoRefino(""); }}
                   placeholder={
                     form.tipo === "COMPARATIVO"
-                      ? 'ex: "iPhone 17 vs 17 Pro — vale pagar mais pelo Pro?"'
+                      ? 'ex: "iPhone 17 vs 17 Pro — vale pagar mais pelo Pro?" ou só "comparativo iPad" + Refinar'
                       : form.tipo === "NOTICIA"
-                      ? 'ex: "Lançamento do Apple Watch Ultra 3 — o que mudou?"'
-                      : 'ex: "5 dicas pra economizar bateria no iPhone 15"'
+                      ? 'ex: "Lançamento do Apple Watch Ultra 3 — o que mudou?" ou só "watch novo" + Refinar'
+                      : 'ex: "5 dicas pra economizar bateria no iPhone 15" ou só "dica MacBook" + Refinar'
                   }
                   rows={3}
                   className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                 />
-                {form.tipo === "COMPARATIVO" && (
+                {motivoRefino && (
+                  <p className="text-xs text-[#2ECC71] mt-1">✨ IA: {motivoRefino}</p>
+                )}
+                {!motivoRefino && form.tipo === "COMPARATIVO" && (
                   <p className="text-xs text-[#86868B] mt-1">
-                    Dica: comparativos cobrem câmera + tela + chip + bateria + design + preço + revenda. Prefira o tema amplo (&quot;X vs Y&quot;) a estreito (&quot;câmera X vs Y&quot;).
+                    Dica: comparativos cobrem câmera + tela + chip + bateria + design + preço + revenda.
                   </p>
                 )}
               </div>
