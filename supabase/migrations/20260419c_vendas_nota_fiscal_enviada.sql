@@ -5,9 +5,6 @@
 -- com NFs duplicadas. Agora o envio vira MANUAL — admin anexa a NF e
 -- clica "Enviar NF". Esse campo marca que o envio ja foi feito pra NAO
 -- mostrar mais "envio pendente" nem permitir reenvio acidental.
---
--- Vendas antigas ficam default false. Admin pode marcar manualmente como
--- enviada via UI ou rodar um backfill de vendas finalizadas com NF anexa.
 
 ALTER TABLE vendas
   ADD COLUMN IF NOT EXISTS nota_fiscal_enviada BOOLEAN DEFAULT FALSE;
@@ -21,9 +18,12 @@ COMMENT ON COLUMN vendas.nota_fiscal_enviada_em IS 'Timestamp do envio da NF (nu
 -- Backfill: vendas que ja foram FINALIZADAS com NF anexa provavelmente
 -- tiveram o email disparado pelo fluxo antigo automatico. Marca como
 -- enviadas pra nao aparecer "pendente" em historico.
+-- Usa NOW() no timestamp (nao temos quando foi enviada de verdade —
+-- a tabela vendas nao tem updated_at). Poderia usar created_at tambem,
+-- mas NOW() deixa claro que eh um backfill feito hoje.
 UPDATE vendas
 SET nota_fiscal_enviada = TRUE,
-    nota_fiscal_enviada_em = updated_at
+    nota_fiscal_enviada_em = NOW()
 WHERE nota_fiscal_url IS NOT NULL
   AND status_pagamento = 'FINALIZADO'
   AND nota_fiscal_enviada = FALSE;
