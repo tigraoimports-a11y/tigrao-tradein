@@ -683,22 +683,37 @@ export default function EncomendasPage() {
 
   const confirmVincular = async (estoqueId: string) => {
     if (!vinculandoId) return;
-    await fetch("/api/encomendas", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...hdrs() },
-      body: JSON.stringify({
-        id: vinculandoId,
-        estoque_id: estoqueId,
-        status: "A CAMINHO",
-      }),
-    });
-    setEncomendas((prev) =>
-      prev.map((e) =>
-        e.id === vinculandoId
-          ? { ...e, estoque_id: estoqueId, status: "A CAMINHO" }
-          : e
-      )
-    );
+    try {
+      const res = await fetch("/api/encomendas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...hdrs() },
+        body: JSON.stringify({
+          id: vinculandoId,
+          estoque_id: estoqueId,
+          status: "A CAMINHO",
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setMsg(`Erro ao vincular: ${j.error || res.status}`);
+        setTimeout(() => setMsg(""), 5000);
+        setVinculandoId(null);
+        return;
+      }
+      // Refetch — backend sincroniza produto/cor/custo/fornecedor da encomenda
+      // com o item de estoque, entao precisa puxar dados novos pra UI mostrar
+      // o nome correto (ex: M5 em vez do snapshot velho M4).
+      const ref = await fetch("/api/encomendas", { headers: hdrs() });
+      if (ref.ok) {
+        const json = await ref.json();
+        setEncomendas(json.data ?? []);
+      }
+      setMsg("Produto vinculado — dados sincronizados com o estoque.");
+      setTimeout(() => setMsg(""), 3500);
+    } catch (err) {
+      setMsg(`Erro ao vincular: ${String(err)}`);
+      setTimeout(() => setMsg(""), 5000);
+    }
     setVinculandoId(null);
   };
 

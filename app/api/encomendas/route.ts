@@ -36,13 +36,40 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   if (fields.cliente) fields.cliente = String(fields.cliente).toUpperCase();
+
+  // Vincular: se estoque_id foi passado, sincroniza produto/cor/custo/fornecedor
+  // da encomenda com o item de estoque. Senao admin corrige nome no estoque,
+  // re-vincula, e a encomenda continua com o snapshot velho (ex: M4 no lugar
+  // de M5 depois da correcao do modelo).
+  if ("estoque_id" in fields && fields.estoque_id) {
+    const { data: estItem } = await supabase
+      .from("estoque")
+      .select("produto, cor, categoria, custo_compra, custo_unitario, fornecedor")
+      .eq("id", fields.estoque_id)
+      .single();
+    if (estItem) {
+      fields.produto = estItem.produto;
+      if (estItem.cor) fields.cor = estItem.cor;
+      if (estItem.categoria) fields.categoria = estItem.categoria;
+      if (estItem.fornecedor) fields.fornecedor = estItem.fornecedor;
+      const custoEst = Number(estItem.custo_compra || estItem.custo_unitario || 0);
+      if (custoEst > 0) fields.custo = custoEst;
+    }
+  }
+
   const { error } = await supabase.from("encomendas").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Vincular/desvincular estoque ↔ encomenda
   if ("estoque_id" in fields) {
     if (fields.estoque_id) {
-      // Vincular: seta encomenda_id no item do estoque
+      // Limpa encomenda_id de item ANTERIOR (se admin estiver trocando pra
+      // outro item). Senao o antigo fica com referencia stale.
+      await supabase.from("estoque")
+        .update({ encomenda_id: null })
+        .eq("encomenda_id", id)
+        .neq("id", fields.estoque_id);
+      // Vincular: seta encomenda_id no NOVO item do estoque
       await supabase.from("estoque").update({ encomenda_id: id }).eq("id", fields.estoque_id);
     }
     // Se desvinculando (estoque_id = null), limpar encomenda_id do estoque antigo
