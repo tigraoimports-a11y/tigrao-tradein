@@ -2214,6 +2214,15 @@ export default function VendasPage() {
             </div>
           )}
 
+          {/* Hint: edicao de venda unica com produto no form e carrinho vazio. Avisa que
+              digitar outro produto sobrescreve o atual — precisa clicar "Adicionar ao
+              carrinho" primeiro pra preservar. */}
+          {editandoVendaId && editandoGrupoIds.length <= 1 && form.produto && produtosCarrinho.length === 0 && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "#FFF8E1", border: "1px solid #FFC107", color: "#8D6E00" }}>
+              💡 <strong>Pra adicionar OUTRO produto nesta venda:</strong> clique no botao verde <em>&quot;+ Adicionar Produto ao Carrinho&quot;</em> embaixo ANTES de digitar o novo produto. Senao os dados atuais sao sobrescritos.
+            </div>
+          )}
+
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6`}>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
