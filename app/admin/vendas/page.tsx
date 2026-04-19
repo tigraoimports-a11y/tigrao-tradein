@@ -2810,15 +2810,15 @@ export default function VendasPage() {
 
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div><p className={labelCls}>Buscar Serial</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Digitar serial ou modelo..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
+                  <div><p className={labelCls}>Buscar Serial</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); if (!editandoVendaId) { setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); } }} placeholder="Digitar serial ou modelo..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
                   <div>
                     <p className={labelCls}>Categoria (opcional)</p>
-                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); }} className={selectCls}>
+                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); if (!editandoVendaId) { setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); } }} className={selectCls}>
                       <option value="">Todas</option>
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Buscar Serial <span className="text-[10px] text-[#E8740E] font-normal">← bipe aqui</span></p><div className="flex gap-2 items-center"><div className="relative flex-1"><input ref={serialInputRef} autoFocus value={serialBusca} onChange={(e) => { const v = e.target.value; setSerialBusca(v); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); autoSelecionarPorSerial(v); }} placeholder="Apontar pistola aqui e bipar QR..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); if (serialInputRef.current) serialInputRef.current.focus(); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div><button onClick={handleOpenQRScanner} title="Escanear QR Code com câmera do Mac" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📷</button><button onClick={handleOpenIPhoneScan} title="Usar câmera do iPhone" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📱</button></div></div>
+                  <div><p className={labelCls}>Buscar Serial <span className="text-[10px] text-[#E8740E] font-normal">← bipe aqui</span></p><div className="flex gap-2 items-center"><div className="relative flex-1"><input ref={serialInputRef} autoFocus value={serialBusca} onChange={(e) => { const v = e.target.value; setSerialBusca(v); if (!editandoVendaId) { setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); } autoSelecionarPorSerial(v); }} placeholder="Apontar pistola aqui e bipar QR..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); if (!editandoVendaId) { setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); } if (serialInputRef.current) serialInputRef.current.focus(); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div><button onClick={handleOpenQRScanner} title="Escanear QR Code com câmera do Mac" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📷</button><button onClick={handleOpenIPhoneScan} title="Usar câmera do iPhone" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📱</button></div></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
@@ -2978,11 +2978,44 @@ export default function VendasPage() {
                   );
                 })()}
 
-                {/* Produto selecionado */}
-                {estoqueId && (
-                  <div className="px-4 py-2.5 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl flex items-center justify-between">
-                    <span className="text-white text-sm font-medium">{form.produto}</span>
-                    <span className="text-[#F5A623] text-sm font-bold">{fmt(parseFloat(form.custo) || 0)}</span>
+                {/* Produto selecionado — editavel.
+                    Antes so aparecia quando estoqueId era truthy, mas em edicao de
+                    venda (especialmente em andamento) o produto fica em form.produto
+                    sem estoqueId, entao a pill nao aparecia. Admin digitava no Buscar
+                    Serial, o onChange apagava form.produto silenciosamente, e salvava
+                    venda sem nome. Agora: sempre que form.produto OU estoqueId OU
+                    editandoVendaId, mostra um INPUT editavel pra ver e ajustar o nome
+                    manualmente (recuperacao de corrupcao e input manual). */}
+                {(estoqueId || form.produto || editandoVendaId) && (
+                  <div className="px-4 py-2.5 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl flex items-center gap-3">
+                    <input
+                      type="text"
+                      value={form.produto}
+                      onChange={(e) => {
+                        set("produto", e.target.value);
+                        // Se admin edita o nome manualmente, desvincula do estoque
+                        // (estoque_id anterior sera devolvido no PATCH via estoqueIdOriginal).
+                        if (estoqueId) setEstoqueId("");
+                        setProdutoManual(true);
+                      }}
+                      placeholder="Nome do produto (ou use Buscar Serial acima)"
+                      className="flex-1 bg-transparent text-white text-sm font-medium placeholder-white/30 outline-none border-b border-white/10 focus:border-[#F5A623] pb-0.5"
+                    />
+                    <span className="text-[#F5A623] text-sm font-bold shrink-0">{fmt(parseFloat(form.custo) || 0)}</span>
+                    {form.produto && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          set("produto", ""); set("custo", ""); set("preco_vendido", "");
+                          set("fornecedor", ""); set("serial_no", ""); set("imei", "");
+                          setEstoqueId(""); setSerialBusca("");
+                        }}
+                        title="Limpar produto"
+                        className="text-white/60 hover:text-red-400 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors shrink-0"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
