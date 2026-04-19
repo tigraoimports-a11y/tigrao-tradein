@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 const noCache = { "Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache" };
 
 function auth(req: NextRequest) {
