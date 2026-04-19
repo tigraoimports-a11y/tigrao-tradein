@@ -28,11 +28,12 @@ export interface LayoutMeta {
 const COR = {
   fundo: "#FFFFFF",
   titulo: "#1D1D1F",
-  corpo: "#3A3A3C",
+  corpo: "#1D1D1F",
   secundario: "#86868B",
   accent: "#E8740E",
   footer: "#6E6E73",
   borda: "#E8E8ED",
+  verified: "#3897F0",
 };
 
 const TIPO_LABEL: Record<LayoutMeta["tipo"], string> = {
@@ -41,8 +42,34 @@ const TIPO_LABEL: Record<LayoutMeta["tipo"], string> = {
   NOTICIA: "NOTICIA",
 };
 
-// Header fixo no topo de todos os slides: foto do Andre + handle + origem.
-// Tamanho aumentado (~20%): foto 64x64, handle 26, subtitulo 19.
+// Selo azul de perfil verificado (estilo Instagram/Twitter).
+// SVG inline pra o Satori conseguir rasterizar.
+function SeloVerificado({ size = 30 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ marginLeft: 10 }}
+    >
+      <path
+        d="M12 1l2.4 2.4 3.4-.4.8 3.3 3 1.7-1.3 3.1 1.3 3.1-3 1.7-.8 3.3-3.4-.4L12 22l-2.4-2.4-3.4.4-.8-3.3-3-1.7 1.3-3.1-1.3-3.1 3-1.7.8-3.3 3.4.4L12 1z"
+        fill={COR.verified}
+      />
+      <path
+        d="M8 12.2l2.8 2.8L16.4 9.4"
+        stroke="#FFFFFF"
+        strokeWidth={2.2}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Header no topo: foto do Andre + handle + selo verificado. Sem subtítulo (mais limpo).
 function Header({ config, index, total }: { config: Config; index: number; total: number }) {
   const handle = config.nome_display || "tigraoimports";
   return (
@@ -89,9 +116,9 @@ function Header({ config, index, total }: { config: Config; index: number; total
             🐯
           </div>
         )}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ color: COR.titulo, fontSize: 26, fontWeight: 700 }}>@{handle}</span>
-          <span style={{ color: COR.secundario, fontSize: 19, marginTop: 2 }}>Apple no Rio de Janeiro</span>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <span style={{ color: COR.titulo, fontSize: 30, fontWeight: 700 }}>@{handle}</span>
+          <SeloVerificado />
         </div>
       </div>
       <div style={{ display: "flex", color: COR.secundario, fontSize: 20, fontWeight: 500 }}>
@@ -142,7 +169,7 @@ function LayoutCapa({ slide, config, meta }: { slide: SlideData; config: Config;
           style={{
             display: "flex",
             color: COR.accent,
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: 700,
             letterSpacing: 3,
             marginBottom: 20,
@@ -168,8 +195,8 @@ function LayoutCapa({ slide, config, meta }: { slide: SlideData; config: Config;
             style={{
               display: "flex",
               color: COR.corpo,
-              fontSize: 28,
-              fontWeight: 400,
+              fontSize: 32,
+              fontWeight: 500,
               lineHeight: 1.3,
             }}
           >
@@ -190,6 +217,9 @@ function LayoutCapa({ slide, config, meta }: { slide: SlideData; config: Config;
 
 function LayoutMeio({ slide, config, meta }: { slide: SlideData; config: Config; meta: LayoutMeta }) {
   const destaqueGigante = slide.destaque && slide.destaque.length <= 10 ? slide.destaque : null;
+  const textoLongo = slide.texto.length > 220;
+  // Fonte adapta ao volume de texto: texto curto fica GIGANTE, longo fica confortavel.
+  const tamanhoTexto = textoLongo ? 32 : 38;
 
   return (
     <div
@@ -204,7 +234,16 @@ function LayoutMeio({ slide, config, meta }: { slide: SlideData; config: Config;
     >
       <Header config={config} index={meta.index} total={meta.total} />
 
-      <div style={{ display: "flex", flexDirection: "column", marginTop: 28 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          justifyContent: "center",
+          paddingTop: 24,
+          paddingBottom: 12,
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -229,8 +268,8 @@ function LayoutMeio({ slide, config, meta }: { slide: SlideData; config: Config;
           style={{
             display: "flex",
             color: COR.corpo,
-            fontSize: 28,
-            fontWeight: 400,
+            fontSize: tamanhoTexto,
+            fontWeight: 500,
             lineHeight: 1.35,
           }}
         >
@@ -253,8 +292,6 @@ function LayoutMeio({ slide, config, meta }: { slide: SlideData; config: Config;
           </div>
         )}
       </div>
-
-      <div style={{ flex: 1 }} />
     </div>
   );
 }
@@ -278,8 +315,8 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
           style={{
             display: "flex",
             color: COR.accent,
-            fontSize: 22,
-            fontWeight: 600,
+            fontSize: 24,
+            fontWeight: 700,
             letterSpacing: 3,
             marginBottom: 20,
           }}
@@ -303,8 +340,8 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
           style={{
             display: "flex",
             color: COR.corpo,
-            fontSize: 28,
-            fontWeight: 400,
+            fontSize: 34,
+            fontWeight: 500,
             lineHeight: 1.3,
             marginBottom: 40,
           }}
@@ -316,7 +353,7 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
             display: "flex",
             alignItems: "center",
             color: COR.footer,
-            fontSize: 24,
+            fontSize: 26,
             fontWeight: 500,
           }}
         >
