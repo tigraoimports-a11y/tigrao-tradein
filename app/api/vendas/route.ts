@@ -569,6 +569,84 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
 
+  // Enviar NF manualmente por email ao cliente
+  if (body.action === "enviar_nf") {
+    const { id: vendaId } = body;
+    if (!vendaId) return NextResponse.json({ error: "id required" }, { status: 400 });
+    const { data: venda, error: e } = await supabase.from("vendas")
+      .select("id, email, cliente, produto, cor, valor_comprovante, preco_vendido, nota_fiscal_url, nota_fiscal_enviada")
+      .eq("id", vendaId)
+      .single();
+    if (e || !venda) return NextResponse.json({ error: "venda nao encontrada" }, { status: 404 });
+    if (!venda.email) return NextResponse.json({ error: "venda sem email do cliente" }, { status: 400 });
+    if (!venda.nota_fiscal_url) return NextResponse.json({ error: "venda sem NF anexada" }, { status: 400 });
+    try {
+      const { enviarNotaFiscal } = await import("@/lib/email");
+      await enviarNotaFiscal({
+        to: venda.email,
+        clienteNome: venda.cliente || "Cliente",
+        produto: normalizarCoresNoTexto(`${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim()),
+        valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
+        notaFiscalUrl: venda.nota_fiscal_url,
+      });
+      await supabase.from("vendas")
+        .update({ nota_fiscal_enviada: true, nota_fiscal_enviada_em: new Date().toISOString() })
+        .eq("id", vendaId);
+      await logActivity(usuario, "NF enviada por email (manual)", `${venda.cliente} → ${venda.email}`, "vendas", vendaId);
+      return NextResponse.json({ ok: true });
+    } catch (err) {
+      console.error("[Vendas] Erro ao enviar NF manual:", err);
+      return NextResponse.json({ error: `Erro ao enviar email: ${String(err)}` }, { status: 500 });
+    }
+  }
+
+  // Envio em massa de NF pendente. Filtra: tem nota_fiscal_url + tem email +
+  // nota_fiscal_enviada=false. Opcionalmente restringe por lista de ids.
+  // Nunca reenvia NF ja enviada (filtro no SELECT). Retorna contagem de
+  // enviadas + lista de erros por cliente.
+  if (body.action === "enviar_nf_bulk") {
+    const idsFiltro = Array.isArray(body.ids) ? (body.ids as string[]) : null;
+    let q = supabase.from("vendas")
+      .select("id, email, cliente, produto, cor, valor_comprovante, preco_vendido, nota_fiscal_url")
+      .not("nota_fiscal_url", "is", null)
+      .not("email", "is", null)
+      .eq("nota_fiscal_enviada", false);
+    if (idsFiltro && idsFiltro.length > 0) q = q.in("id", idsFiltro);
+    const { data: pendentes, error: errSel } = await q;
+    if (errSel) return NextResponse.json({ error: errSel.message }, { status: 500 });
+    if (!pendentes || pendentes.length === 0) {
+      return NextResponse.json({ ok: true, enviadas: 0, erros: [], total: 0 });
+    }
+    const { enviarNotaFiscal } = await import("@/lib/email");
+    const erros: { cliente: string; erro: string }[] = [];
+    let enviadas = 0;
+    for (const v of pendentes) {
+      try {
+        await enviarNotaFiscal({
+          to: v.email!,
+          clienteNome: v.cliente || "Cliente",
+          produto: normalizarCoresNoTexto(`${v.produto || ""}${v.cor ? ` ${v.cor}` : ""}`.trim()),
+          valor: Number(v.valor_comprovante || v.preco_vendido || 0),
+          notaFiscalUrl: v.nota_fiscal_url!,
+        });
+        await supabase.from("vendas")
+          .update({ nota_fiscal_enviada: true, nota_fiscal_enviada_em: new Date().toISOString() })
+          .eq("id", v.id);
+        enviadas++;
+      } catch (err) {
+        erros.push({ cliente: v.cliente || "?", erro: String(err) });
+        console.error("[Vendas] Erro envio bulk NF:", v.cliente, err);
+      }
+    }
+    await logActivity(
+      usuario,
+      "Envio em massa de NF",
+      `${enviadas}/${pendentes.length} enviadas${erros.length ? `, ${erros.length} erro(s)` : ""}`,
+      "vendas"
+    );
+    return NextResponse.json({ ok: true, enviadas, erros, total: pendentes.length });
+  }
+
   // Bulk update: finalizar todas vendas de uma data
   if (body.action === "finalizar_dia") {
     const { data: dia } = body;
@@ -825,23 +903,9 @@ export async function PATCH(req: NextRequest) {
       else console.log("[Vendas] Notificação Telegram enviada com sucesso para:", venda.cliente);
     }).catch(err => console.error("[Vendas] Erro notificação Telegram:", err));
 
-    // Enviar Nota Fiscal por email ao cliente (se tem email + NF anexada)
-    if (venda.email && venda.nota_fiscal_url) {
-      import("@/lib/email").then(({ enviarNotaFiscal }) => {
-        enviarNotaFiscal({
-          to: venda.email!,
-          clienteNome: venda.cliente || "Cliente",
-          produto: normalizarCoresNoTexto(`${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim()),
-          valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
-          notaFiscalUrl: venda.nota_fiscal_url!,
-        }).then(() => {
-          console.log("[Vendas] NF enviada por email para:", venda.email);
-          logActivity(usuario, "NF enviada por email", `${venda.cliente} → ${venda.email}`, "vendas", id).catch(() => {});
-        }).catch(err => {
-          console.error("[Vendas] Erro ao enviar NF por email:", err);
-        });
-      }).catch(err => console.error("[Vendas] Erro ao importar email:", err));
-    }
+    // NF nao eh mais enviada automaticamente — admin envia manualmente via
+    // botao "Enviar NF" no card da venda (action=enviar_nf). Venda com NF
+    // anexada mas nao enviada ganha badge "Envio pendente" na UI.
   }
 
   // Se tem reajustes, sincronizar com tabela reajustes (para relatório da noite)
