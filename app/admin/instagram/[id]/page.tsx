@@ -70,6 +70,7 @@ export default function InstagramPostPage() {
 
   // PR 2: imagens
   const [buscandoImgs, setBuscandoImgs] = useState(false);
+  const [atribuindo, setAtribuindo] = useState(false);
   const [renderizando, setRenderizando] = useState(false);
   const [galeria, setGaleria] = useState<ImagemCandidata[]>([]);
   const [slideAlvo, setSlideAlvo] = useState<number | null>(null);
@@ -139,10 +140,36 @@ export default function InstagramPostPage() {
       if ((j.imagens || []).length === 0) {
         setMsg("Nenhuma imagem encontrada nas fontes. Use upload manual por slide.");
       } else {
-        setMsg(`${j.imagens.length} imagens encontradas. Clique em um slide e escolha a imagem.`);
+        setMsg(`${j.imagens.length} imagens encontradas. Clique em "Atribuir automaticamente" ou escolha manual.`);
       }
     } finally {
       setBuscandoImgs(false);
+    }
+  };
+
+  const atribuirAutomaticamente = async () => {
+    if (galeria.length === 0) {
+      setMsg("Busque as imagens primeiro.");
+      return;
+    }
+    setAtribuindo(true);
+    setMsg("Claude Vision analisando slides vs imagens... (~15s)");
+    try {
+      const res = await fetch("/api/instagram/atribuir-imagens", {
+        method: "POST",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ postId: id, imagens: galeria }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setMsg("Erro: " + (j.error || "falha na atribuição"));
+        return;
+      }
+      if (Array.isArray(j.slides)) setSlidesEdit(j.slides);
+      const comImg = (j.slides || []).filter((s: Slide) => s.imagem_url).length;
+      setMsg(`${comImg} de ${(j.slides || []).length} slides receberam imagem. Ajuste manual se quiser e depois renderize.`);
+    } finally {
+      setAtribuindo(false);
     }
   };
 
@@ -358,15 +385,27 @@ export default function InstagramPostPage() {
                     Busca nas fontes do fact-check (Apple oficial primeiro). Se a imagem não for ideal, faça upload manual em cada slide.
                   </p>
                 </div>
-                {temFontes && (
-                  <button
-                    onClick={buscarImagens}
-                    disabled={buscandoImgs}
-                    className="px-3 py-1.5 rounded-xl bg-[#1D1D1F] text-white text-xs font-semibold hover:bg-[#333] disabled:opacity-50"
-                  >
-                    {buscandoImgs ? "Buscando..." : "🔍 Buscar nas fontes"}
-                  </button>
-                )}
+                <div className="flex gap-2 flex-wrap">
+                  {galeria.length > 0 && (
+                    <button
+                      onClick={atribuirAutomaticamente}
+                      disabled={atribuindo || buscandoImgs}
+                      className="px-3 py-1.5 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+                      title="Claude Vision lê os slides e as imagens, escolhe a melhor pra cada um"
+                    >
+                      {atribuindo ? "Analisando..." : "✨ Atribuir automaticamente"}
+                    </button>
+                  )}
+                  {temFontes && (
+                    <button
+                      onClick={buscarImagens}
+                      disabled={buscandoImgs || atribuindo}
+                      className="px-3 py-1.5 rounded-xl bg-[#1D1D1F] text-white text-xs font-semibold hover:bg-[#333] disabled:opacity-50"
+                    >
+                      {buscandoImgs ? "Buscando..." : galeria.length > 0 ? "🔍 Re-buscar" : "🔍 Buscar nas fontes"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {galeria.length > 0 && (
