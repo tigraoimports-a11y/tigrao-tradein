@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { resizeImageFile } from "@/lib/instagram/image-resize";
+import SquareCropper from "@/components/instagram/SquareCropper";
 
 interface Config {
   id: number;
@@ -16,6 +17,7 @@ export default function InstagramConfigPage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [pendingCrop, setPendingCrop] = useState<File | null>(null);
   const [savingName, setSavingName] = useState(false);
   const [nome, setNome] = useState("");
   const [msg, setMsg] = useState("");
@@ -36,18 +38,24 @@ export default function InstagramConfigPage() {
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       setMsg("Formato inválido. Use JPG, PNG ou WEBP.");
+      e.target.value = "";
       return;
     }
+    setPendingCrop(file);
+    e.target.value = "";
+  };
+
+  const uploadCropped = async (cropped: File) => {
+    setPendingCrop(null);
     setUploading(true);
     try {
       setMsg("Preparando imagem...");
-      // Foto de perfil: quadrada 800x800 eh mais que suficiente no rodape circular.
-      const resized = await resizeImageFile(file, { maxWidth: 800, maxHeight: 800, quality: 0.9 });
+      const resized = await resizeImageFile(cropped, { maxWidth: 800, maxHeight: 800, quality: 0.9 });
       const sizeKB = Math.round(resized.size / 1024);
       setMsg(`Enviando foto (${sizeKB} KB)...`);
 
@@ -188,6 +196,17 @@ export default function InstagramConfigPage() {
           </button>
         </div>
       </div>
+
+      {pendingCrop && (
+        <SquareCropper
+          file={pendingCrop}
+          onCancel={() => setPendingCrop(null)}
+          onCrop={uploadCropped}
+          outputSize={800}
+          title="Ajustar foto de perfil"
+          aspectLabel="circulo"
+        />
+      )}
     </div>
   );
 }
