@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { resizeImageFile } from "@/lib/instagram/image-resize";
 
 interface Slide {
   titulo: string;
@@ -153,8 +154,14 @@ export default function InstagramPostPage() {
   const uploadImagemSlide = async (idx: number, file: File) => {
     setUploadingSlide(idx);
     try {
+      setMsg(`Preparando imagem do slide ${idx + 1}...`);
+      // Imagens de slide: 1600px eh suficiente pro render em 1080x1350.
+      const resized = await resizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.85 });
+      const sizeKB = Math.round(resized.size / 1024);
+      setMsg(`Enviando slide ${idx + 1} (${sizeKB} KB)...`);
+
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", resized);
       form.append("kind", "slide");
       form.append("postId", String(id));
       const up = await fetch("/api/admin/instagram-upload", {
@@ -162,12 +169,20 @@ export default function InstagramPostPage() {
         headers: apiHeaders(),
         body: form,
       });
-      const uj = await up.json();
-      if (!up.ok || !uj.ok) {
-        setMsg("Erro no upload: " + (uj.error || "falha"));
+      let uj: { ok?: boolean; url?: string; error?: string };
+      try {
+        uj = await up.json();
+      } catch {
+        setMsg(`Erro no upload (HTTP ${up.status}): resposta invalida. Use uma imagem menor.`);
         return;
       }
-      atribuirImagem(idx, uj.url);
+      if (!up.ok || !uj.ok) {
+        setMsg("Erro no upload: " + (uj.error || `HTTP ${up.status}`));
+        return;
+      }
+      atribuirImagem(idx, uj.url ?? null);
+    } catch (err) {
+      setMsg("Erro: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setUploadingSlide(null);
     }

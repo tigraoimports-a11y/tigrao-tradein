@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { resizeImageFile } from "@/lib/instagram/image-resize";
 
 interface Config {
   id: number;
@@ -43,19 +44,30 @@ export default function InstagramConfigPage() {
       return;
     }
     setUploading(true);
-    setMsg("Enviando foto...");
     try {
+      setMsg("Preparando imagem...");
+      // Foto de perfil: quadrada 800x800 eh mais que suficiente no rodape circular.
+      const resized = await resizeImageFile(file, { maxWidth: 800, maxHeight: 800, quality: 0.9 });
+      const sizeKB = Math.round(resized.size / 1024);
+      setMsg(`Enviando foto (${sizeKB} KB)...`);
+
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", resized);
       form.append("kind", "perfil");
       const up = await fetch("/api/admin/instagram-upload", {
         method: "POST",
         headers: apiHeaders(),
         body: form,
       });
-      const uj = await up.json();
+      let uj: { ok?: boolean; url?: string; error?: string };
+      try {
+        uj = await up.json();
+      } catch {
+        setMsg(`Erro no upload (HTTP ${up.status}): resposta invalida do servidor. Tente uma imagem menor.`);
+        return;
+      }
       if (!up.ok || !uj.ok) {
-        setMsg("Erro no upload: " + (uj.error || "falha"));
+        setMsg("Erro no upload: " + (uj.error || `HTTP ${up.status}`));
         return;
       }
       const patch = await fetch("/api/admin/instagram-config", {
@@ -70,6 +82,8 @@ export default function InstagramConfigPage() {
       }
       setMsg("Foto atualizada!");
       fetchConfig();
+    } catch (err) {
+      setMsg("Erro: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setUploading(false);
     }
