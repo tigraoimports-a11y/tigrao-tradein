@@ -130,20 +130,22 @@ function inferSpecFromCatalogModel(nome: string, categoria: string): Partial<Pro
     s.mm_nucleos = ""; // user selects nucleos manually
   } else if (categoria === "APPLE_WATCH") {
     const part = nome.replace(/^Apple Watch\s+/i, "");
-    if (/SE.*2|2.*SE/i.test(part)) { s.aw_modelo = "SE 2"; s.aw_tamanho = "40mm"; }
-    else if (/SE.*3|3.*SE/i.test(part)) { s.aw_modelo = "SE 3"; s.aw_tamanho = "40mm"; }
-    else if (/SE/i.test(part)) { s.aw_modelo = "SE"; s.aw_tamanho = "40mm"; }
+    // ULTRA e SERIES precisam ser checados ANTES de SE — senao o regex /SE/i
+    // casa a substring "SE" dentro de "SERIES" e tudo vira modelo SE (bug:
+    // selecionar Series 11 aparecia como SE no nome do produto).
+    const ultra = part.match(/ultra\s*(\d+)/i);
+    const series = part.match(/series\s*(\d+)/i);
+    if (ultra) { s.aw_modelo = `ULTRA ${ultra[1]}`; s.aw_tamanho = "49mm"; }
+    else if (series) {
+      s.aw_modelo = `SERIES ${series[1]}`;
+      s.aw_tamanho = Number(series[1]) >= 10 ? "42mm" : "41mm";
+    }
+    else if (/\bSE\b.*2|2.*\bSE\b/i.test(part)) { s.aw_modelo = "SE 2"; s.aw_tamanho = "40mm"; }
+    else if (/\bSE\b.*3|3.*\bSE\b/i.test(part)) { s.aw_modelo = "SE 3"; s.aw_tamanho = "40mm"; }
+    else if (/\bSE\b/i.test(part)) { s.aw_modelo = "SE"; s.aw_tamanho = "40mm"; }
     else {
-      const ultra = part.match(/ultra\s*(\d+)/i);
-      const series = part.match(/series\s*(\d+)/i);
-      if (ultra) { s.aw_modelo = `ULTRA ${ultra[1]}`; s.aw_tamanho = "49mm"; }
-      else if (series) {
-        s.aw_modelo = `SERIES ${series[1]}`;
-        s.aw_tamanho = Number(series[1]) >= 10 ? "42mm" : "41mm";
-      } else {
-        s.aw_modelo = part.toUpperCase().replace(/[°º]/g, "").trim();
-        s.aw_tamanho = "42mm";
-      }
+      s.aw_modelo = part.toUpperCase().replace(/[°º]/g, "").trim();
+      s.aw_tamanho = "42mm";
     }
   } else if (categoria === "AIRPODS") {
     s.air_modelo = nome.toUpperCase().replace(/[°º]/g, "").replace(/\s+/g, " ").trim();
