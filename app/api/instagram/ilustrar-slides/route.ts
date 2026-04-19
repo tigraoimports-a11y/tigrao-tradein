@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { ImageResponse } from "next/og";
 import { createClient } from "@supabase/supabase-js";
+import { composicaoJSX, COMPOSICAO_W, COMPOSICAO_H } from "@/lib/instagram/composicao-layout";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 180;
+export const maxDuration = 300;
+
+const BUCKET = "instagram-assets";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -28,39 +32,46 @@ interface AtribuicaoClaude {
   slide_index: number;
   image_url?: string | null;
   page_url?: string | null;
+  composicao?: string[] | null;
   motivo: string;
 }
 
 const SYSTEM_PROMPT = `Você é editor visual do Instagram da @tigraoimports, loja Apple no Rio de Janeiro.
 
 TAREFA
-Pra cada slide do carrossel, use web_search pra achar a MELHOR imagem que ilustre o conceito do texto. Depois chame a ferramenta 'definir_imagens' uma única vez com as atribuições de todos os slides.
+Pra cada slide do carrossel (exceto CTA), ache a MELHOR imagem que ilustre o conceito do texto via web_search. Todo slide de conteúdo PRECISA sair com imagem. Depois chame a ferramenta 'definir_imagens' UMA VEZ com as atribuições.
 
 REGRAS
 1. Busca orientada ao CONCEITO do slide, não só ao produto.
-   - Slide "Command é o novo Ctrl" → buscar imagem de teclado Mac mostrando tecla ⌘, atalho ⌘+C em uso, etc.
-   - Slide "Configure Time Machine" → buscar screenshot/foto de Time Machine em Mac, backup para HD externo.
-   - Slide "Câmera iPhone 17 Pro" → buscar foto do módulo de câmera traseira do iPhone 17 Pro.
+   - Slide "Command é o novo Ctrl" → imagem de teclado Mac mostrando tecla ⌘.
+   - Slide "Configure Time Machine" → screenshot/foto de Time Machine em Mac.
+   - Slide "Câmera iPhone 17 Pro" → foto do módulo de câmera traseira do iPhone 17 Pro.
 
-2. Priorize:
-   - Páginas oficiais Apple (apple.com/br, newsroom) pra produtos específicos.
-   - 9to5Mac, MacRumors, The Verge, Tecnoblog, TechTudo pra reviews / imagens conceituais.
-   - Wikipedia, blogs tech confiáveis pra imagens com licença aberta.
+2. COMPARATIVO entre 2 ou 3 modelos — use COMPOSIÇÃO:
+   Se o texto do slide cita N modelos específicos (ex: "iPad 11, Air M4 ou Pro M5"), em vez de buscar uma imagem com todos juntos (raro ter boa), faça N buscas individuais — UMA foto oficial de cada modelo — e retorne no campo \`composicao: [url1, url2, url3]\`. O backend vai compor as N imagens lado a lado automaticamente.
+   - Ideal: fotos de produto em fundo BRANCO (ex: apple.com/br/ipad, product photos).
+   - Todas em mesma "perspectiva" se possível (ex: todas frontais, todas com ângulo).
+   - Máximo 3 URLs em composição.
 
-3. NÃO use:
+3. Priorize fontes:
+   - apple.com/br, apple.com, newsroom Apple pra produtos específicos.
+   - 9to5Mac, MacRumors, The Verge, Tecnoblog, TechTudo pra reviews.
+   - Wikipedia commons pra imagens com licença aberta.
+
+4. NÃO use:
    - Ícones pequenos, sprites, logos.
-   - Imagens de site de afiliado/cupom.
-   - Screenshots de apresentação/slide (meta).
-   - Foto que aparece em 2 slides (nunca repita).
+   - Sites de afiliado/cupom.
+   - Screenshots de slide/apresentação (meta).
+   - Imagem que já apareceu em outro slide (nunca repita).
 
-4. Formato da URL:
-   - Prefira URL DIRETA de imagem (.jpg/.png/.webp) quando conseguir.
-   - Se só tiver URL de página, passe em \`page_url\` — eu extraio o og:image no backend.
-   - Se não encontrar imagem decente depois de 2 buscas, use null com motivo claro.
+5. Formato da URL:
+   - Prefira URL DIRETA de imagem (.jpg/.png/.webp).
+   - Se só tiver URL de página, passe em \`page_url\` — backend extrai og:image.
+   - Pra composição, use \`composicao\` (array de 2-3 URLs diretas ou de página).
 
-5. Faça buscas específicas. Use o título + texto do slide pra montar o query, não termos genéricos.
+6. INSISTA até achar. Se a 1ª busca não trouxer nada, reformule o query (mais específico OU mais genérico). Cada slide tem que sair com imagem — use null SÓ no CTA (último slide). Se travou mesmo após 2 buscas, use imagem ilustrativa do produto da linha (ex: foto genérica de um MacBook em vez de nada).
 
-6. Slide CTA (último) normalmente não precisa imagem. Marque null.
+7. Use título + texto do slide pra montar o query. Não seja genérico.
 
 SAÍDA
 Só chame 'definir_imagens'. Não escreva texto narrativo.`;
@@ -79,8 +90,13 @@ const TOOLS: Anthropic.Tool[] = [
             type: "object",
             properties: {
               slide_index: { type: "integer", description: "Índice do slide (0-based)." },
-              image_url: { type: "string", description: "URL direta da imagem (.jpg/.png/.webp). Opcional — use page_url se só tiver link de página." },
-              page_url: { type: "string", description: "URL da página web. O backend extrai og:image dela." },
+              image_url: { type: "string", description: "URL direta da imagem (.jpg/.png/.webp). Use para slide com 1 produto/conceito." },
+              page_url: { type: "string", description: "URL da página web. Backend extrai og:image dela." },
+              composicao: {
+                type: "array",
+                items: { type: "string" },
+                description: "Array de 2-3 URLs (diretas ou de página) pra comparativo multi-produto. Backend compõe as N imagens lado a lado automaticamente. Use EM VEZ de image_url quando o slide compara modelos.",
+              },
               motivo: { type: "string", description: "Linha curta explicando a escolha." },
             },
             required: ["slide_index", "motivo"],
@@ -95,7 +111,7 @@ const TOOLS: Anthropic.Tool[] = [
 const WEB_SEARCH_TOOL = {
   type: "web_search_20250305",
   name: "web_search",
-  max_uses: 15,
+  max_uses: 25,
 } as unknown as Anthropic.Tool;
 
 function buildUserMessage(
@@ -176,6 +192,72 @@ async function resolverImagem(
   return null;
 }
 
+// Baixa a imagem e retorna como data URL (base64) — Satori nao faz fetch
+// externo confiavel em runtime serverless; embutir evita timeout/CORS.
+async function baixarComoDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "image/*",
+      },
+      signal: AbortSignal.timeout(10000),
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    if (!contentType.startsWith("image/")) return null;
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength < 2000 || buf.byteLength > 5_000_000) return null;
+    const base64 = Buffer.from(buf).toString("base64");
+    return `data:${contentType};base64,${base64}`;
+  } catch {
+    return null;
+  }
+}
+
+// Compoe 2-3 imagens lado a lado em um PNG 1080x540, sobe no Storage
+// e retorna URL publica. Retorna null se nao conseguir compor 2+ validas.
+async function comporImagens(
+  urls: string[],
+  postId: string,
+  slideIndex: number,
+  supabase: ReturnType<typeof getSupabase>
+): Promise<string | null> {
+  // Claude pode mandar URL direta de imagem OU URL de pagina.
+  // Pra cada, tenta resolver (se for pagina, extrai og:image).
+  const urlsResolvidas = await Promise.all(
+    urls.map(async (u) => {
+      if (/\.(jpe?g|png|webp)(\?|$)/i.test(u) && ehImagemValida(u)) return u;
+      return resolverImagem(null, u);
+    })
+  );
+  const urlsFinais = urlsResolvidas.filter((u): u is string => !!u);
+  if (urlsFinais.length < 2) return null;
+
+  const dataUrls = await Promise.all(urlsFinais.map(baixarComoDataUrl));
+  const validos = dataUrls.filter((d): d is string => !!d);
+  if (validos.length < 2) return null;
+
+  try {
+    const img = new ImageResponse(composicaoJSX(validos.slice(0, 3)), {
+      width: COMPOSICAO_W,
+      height: COMPOSICAO_H,
+    });
+    const pngBuffer = Buffer.from(await img.arrayBuffer());
+    const path = `composto/${postId}/${Date.now()}-${slideIndex}.png`;
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, pngBuffer, { contentType: "image/png", upsert: true });
+    if (upErr) return null;
+    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return pub.publicUrl;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -229,12 +311,20 @@ export async function POST(req: NextRequest) {
   }
 
   // Resolve cada atribuição → URL final de imagem.
+  // Se tem `composicao`, compoe as N imagens em uma so via Satori e sobe.
   const resolvidas = await Promise.all(
-    atribuicoes.map(async (a) => ({
-      slide_index: a.slide_index,
-      imagem_final: await resolverImagem(a.image_url, a.page_url),
-      motivo: a.motivo,
-    }))
+    atribuicoes.map(async (a) => {
+      const composicaoValida = Array.isArray(a.composicao) && a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
+      const imagem_final = composicaoValida
+        ? (await comporImagens(a.composicao!, postId, a.slide_index, supabase)) || (await resolverImagem(a.image_url, a.page_url))
+        : await resolverImagem(a.image_url, a.page_url);
+      return {
+        slide_index: a.slide_index,
+        imagem_final,
+        motivo: a.motivo,
+        composto: !!(composicaoValida && imagem_final && imagem_final.includes("/composto/")),
+      };
+    })
   );
 
   // Aplica: se slideIndex foi especificado, só mexe naquele slide.
