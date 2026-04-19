@@ -21,8 +21,12 @@ const PRIORIDADE: Array<{ pattern: RegExp; peso: number; label: string }> = [
   { pattern: /apple\.com\/br\/newsroom/i, peso: 100, label: "Apple Newsroom BR" },
   { pattern: /apple\.com\/newsroom/i, peso: 95, label: "Apple Newsroom" },
   { pattern: /apple\.com\/br\//i, peso: 90, label: "Apple Brasil" },
+  // Apple Support / Help / Guides: tem og:image util mas o HTML esta cheio de
+  // icones de categoria e setas de navegacao. Peso baixo e scrap limitado.
+  // IMPORTANTE: esses patterns precisam vir ANTES do generico apple.com.
+  { pattern: /(?:support|help)\.apple\.com/i, peso: 25, label: "Apple Support" },
+  { pattern: /apple\.com\/(?:[a-z-]+\/)?(?:support|guide|help)/i, peso: 25, label: "Apple Support" },
   { pattern: /apple\.com\//i, peso: 80, label: "Apple" },
-  { pattern: /support\.apple\.com/i, peso: 70, label: "Apple Support" },
   { pattern: /9to5mac\.com/i, peso: 60, label: "9to5Mac" },
   { pattern: /macrumors\.com/i, peso: 55, label: "MacRumors" },
   { pattern: /theverge\.com/i, peso: 50, label: "The Verge" },
@@ -135,8 +139,15 @@ async function extrairImagens(url: string): Promise<string[]> {
       }
     }
 
-    // Páginas Apple (newsroom + produto): scan de URLs apple.com apontando pra imagem.
-    if (/apple\.com/i.test(url)) {
+    // Scan agressivo de URLs apple.com: SÓ em páginas de produto da Apple
+    // (newsroom, /mac, /iphone, /watch, /airpods, /ipad). Support nao entra
+    // porque o HTML tem icones de categoria, setas de navegacao, social cards
+    // minusculos — que viram lixo quando esticados no preview quadrado.
+    const ePaginaDeProduto =
+      /apple\.com\/(?:[a-z-]+\/)?(?:newsroom|iphone|mac(?:book|-studio|-mini|-pro)?|imac|watch|airpods|ipad|vision)/i.test(
+        url
+      );
+    if (ePaginaDeProduto) {
       const imgs = html.match(/https?:\/\/[^"'\s)]*apple\.com[^"'\s)]*?\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s)]*)?/gi);
       if (imgs) candidatos.push(...imgs.slice(0, 15));
     }
@@ -249,6 +260,15 @@ export async function POST(req: NextRequest) {
     if (/knowledge_graph/i.test(c.url)) return false;
     if (/structured-data/i.test(c.url)) return false;
     if (/apple-touch-icon/i.test(c.url)) return false;
+    // Apple Support: filtra cards de categoria, setas, ícones sociais genéricos.
+    if (/support-app-.*-general/i.test(c.url)) return false;
+    if (/social-card/i.test(c.url)) return false;
+    if (/arrow|chevron|caret|button/i.test(c.url)) return false;
+    if (/category|categor[íi]a/i.test(c.url)) return false;
+    // help.apple.com/assets/ sao screenshots pequenos do user guide
+    // (setinhas verdes, ícones de menu, capturas de 200x150 etc). Nunca prestam.
+    if (/help\.apple\.com\/assets/i.test(c.url)) return false;
+    if (/cdsassets\.apple\.com\/live\/[A-Z0-9]+\/images\/social/i.test(c.url)) return false;
     // Apple usa nomes tipo "hero_large", "overview_hero" — prioriza esses.
     return true;
   });
