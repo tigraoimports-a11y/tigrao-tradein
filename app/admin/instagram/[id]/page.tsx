@@ -537,6 +537,16 @@ export default function InstagramPostPage() {
                   <p className="text-xs text-[#86868B] mt-1">
                     Gera os {slidesEdit.length} slides em 1080×1350 (ratio 4:5). Salva edição antes.
                   </p>
+                  {(() => {
+                    const comImg = slidesEdit.filter(s => s.imagem_url).length;
+                    if (comImg === 0) {
+                      return <p className="text-xs text-[#E74C3C] mt-1">⚠️ Nenhum slide com imagem atribuída. Use &quot;✨ Atribuir automaticamente&quot; antes de renderizar.</p>;
+                    }
+                    if (comImg < slidesEdit.length) {
+                      return <p className="text-xs text-[#E8740E] mt-1">{comImg} de {slidesEdit.length} slides com imagem. Os outros vão renderizar só com texto.</p>;
+                    }
+                    return <p className="text-xs text-[#2ECC71] mt-1">✓ Todos os {comImg} slides com imagem.</p>;
+                  })()}
                 </div>
                 <button
                   onClick={renderizar}
