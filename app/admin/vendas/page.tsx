@@ -40,6 +40,11 @@ export default function VendasPage() {
   // Usado pra detectar se o admin trocou o produto (mesmo digitando manualmente
   // sem vincular novo item do estoque). Permite devolver o antigo ao estoque.
   const [estoqueIdOriginal, setEstoqueIdOriginal] = useState<string | null>(null);
+  // Guarda o status_pagamento ORIGINAL da venda em edicao. Sem isso,
+  // buildPayload defaulta pra "AGUARDANDO" e edicoes (ex: trocar forma de
+  // pagamento) jogam a venda finalizada de volta pra "em andamento" —
+  // disparando reenvio de NF/Telegram na proxima finalizacao.
+  const [statusPagamentoOriginal, setStatusPagamentoOriginal] = useState<string | null>(null);
   const [vendaProgramada, setVendaProgramada] = useState(false);
   const [programadaJaPago, setProgramadaJaPago] = useState(false);
   const [programadaComSinal, setProgramadaComSinal] = useState(false);
@@ -1126,7 +1131,13 @@ export default function VendasPage() {
             const totalEntries = pagEntries.reduce((s, e) => s + (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0), 0);
             return totalEntries >= pPrecoVendido ? "FINALIZADO" : "PROGRAMADA";
           })()
-        : vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA") : "AGUARDANDO",
+        : vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA")
+        // Em edicao, preserva o status original — edicao de forma de pagamento,
+        // dados do cliente, etc., nao deve jogar venda finalizada de volta
+        // pra AGUARDANDO (isso disparava reenvio de NF quando o admin
+        // finalizasse de novo).
+        : (editandoVendaId && statusPagamentoOriginal) ? statusPagamentoOriginal
+        : "AGUARDANDO",
       data_programada: vendaProgramada && dataProgramada ? dataProgramada : null,
       ...(multiDatePagamento && pagEntries.length > 0 ? {
         pagamento_historia: pagEntries.filter(e => (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0) > 0).map(e => {
@@ -1607,7 +1618,7 @@ export default function VendasPage() {
               : allProducts.length > editandoGrupoIds.length
                 ? `${editandoGrupoIds.length} atualizadas + ${allProducts.length - editandoGrupoIds.length} novas criadas!`
                 : `${allProducts.length} atualizadas + ${editandoGrupoIds.length - allProducts.length} removidas!`;
-            setEditandoVendaId(null); setEstoqueIdOriginal(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -1649,7 +1660,7 @@ export default function VendasPage() {
           });
           const json = await res.json();
           if (json.ok || json.data) {
-            setEditandoVendaId(null); setEstoqueIdOriginal(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -2207,7 +2218,7 @@ export default function VendasPage() {
               </div>
               <button
                 onClick={() => {
-                  setEditandoVendaId(null); setEstoqueIdOriginal(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
                   setEditandoGrupoIds([]);
                   setProdutosCarrinho([]);
                   setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
@@ -2253,7 +2264,7 @@ export default function VendasPage() {
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
-                  setProdutosCarrinho([]); setEditandoVendaId(null); setEstoqueIdOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
+                  setProdutosCarrinho([]); setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
@@ -3082,7 +3093,7 @@ export default function VendasPage() {
                   setProdutosCarrinho([]);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
-                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
@@ -5337,6 +5348,10 @@ export default function VendasPage() {
                                             }
                                             // Guarda o estoque_id ORIGINAL da venda (pra detectar se trocou produto no submit)
                                             setEstoqueIdOriginal((primaryVenda as unknown as { estoque_id?: string | null }).estoque_id || null);
+                                            // Guarda o status_pagamento ORIGINAL — preservado em buildPayload
+                                            // pra edicao de venda FINALIZADA nao voltar pra AGUARDANDO
+                                            // (bug que disparava reenvio de NF ao finalizar de novo).
+                                            setStatusPagamentoOriginal(primaryVenda.status_pagamento || null);
                                             // Preservar flag de venda programada no form — senao o PATCH
                                             // zerava data_programada e mudava status pra AGUARDANDO ao salvar.
                                             if (primaryVenda.status_pagamento === "PROGRAMADA" || primaryVenda.data_programada) {
@@ -5500,6 +5515,44 @@ export default function VendasPage() {
                                               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-200 hover:bg-green-50 transition-colors inline-flex items-center gap-1">
                                               📄 Ver NF
                                             </a>
+                                            {/* Badge de status do envio + botao Enviar (substitui o envio
+                                                automatico que spamava cliente a cada edicao de venda). */}
+                                            {(v as unknown as { nota_fiscal_enviada?: boolean }).nota_fiscal_enviada ? (
+                                              <span
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-700 bg-green-50 border border-green-200 inline-flex items-center gap-1"
+                                                title={(v as unknown as { nota_fiscal_enviada_em?: string }).nota_fiscal_enviada_em || ""}
+                                              >
+                                                ✅ NF enviada
+                                              </span>
+                                            ) : v.email ? (
+                                              <button
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  if (!confirm(`Enviar NF por email pra ${v.email}?`)) return;
+                                                  const res = await fetch("/api/vendas", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                    body: JSON.stringify({ action: "enviar_nf", id: v.id }),
+                                                  });
+                                                  const j = await res.json().catch(() => ({}));
+                                                  if (res.ok && j.ok) {
+                                                    setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_enviada: true, nota_fiscal_enviada_em: new Date().toISOString() } as typeof r : r));
+                                                    setMsg(`NF enviada para ${v.email}`);
+                                                  } else {
+                                                    setMsg(`Erro ao enviar NF: ${j.error || res.status}`);
+                                                  }
+                                                  setTimeout(() => setMsg(""), 4000);
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 hover:bg-amber-100 transition-colors inline-flex items-center gap-1"
+                                                title={`Enviar por email pra ${v.email}`}
+                                              >
+                                                📧 Enviar NF (pendente)
+                                              </button>
+                                            ) : (
+                                              <span className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 inline-flex items-center gap-1" title="Venda sem email do cliente">
+                                                ⚠️ Sem email
+                                              </span>
+                                            )}
                                             <button
                                               onClick={async (e) => {
                                                 e.stopPropagation();
@@ -5507,9 +5560,9 @@ export default function VendasPage() {
                                                 await fetch("/api/vendas", {
                                                   method: "PATCH",
                                                   headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                  body: JSON.stringify({ id: v.id, nota_fiscal_url: null }),
+                                                  body: JSON.stringify({ id: v.id, nota_fiscal_url: null, nota_fiscal_enviada: false, nota_fiscal_enviada_em: null }),
                                                 });
-                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: "" } : r));
+                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: "", nota_fiscal_enviada: false, nota_fiscal_enviada_em: null } as typeof r : r));
                                                 setMsg("NF removida. Agora pode anexar a correta.");
                                               }}
                                               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors inline-flex items-center gap-1"
