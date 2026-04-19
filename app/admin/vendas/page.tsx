@@ -1270,6 +1270,12 @@ export default function VendasPage() {
     setEstoqueId("");
     setProdutoManual(false);
     setShowSegundaTroca(false); setTrocaEnabled(false);
+    // Resetar trocaRow/trocaRow2 tambem — sao a fonte de verdade lida pelo
+    // ProdutoSpecFields e getCurrentProductFields cai nelas via fallback.
+    // Sem isso, o proximo produto adicionado ao carrinho herdava a troca do
+    // anterior (bug: mesma troca contava duas vezes em multi-produto).
+    setTrocaRow(createEmptyProdutoRow());
+    setTrocaRow2(createEmptyProdutoRow());
   };
 
   // Add current product to cart
@@ -2930,7 +2936,21 @@ export default function VendasPage() {
                                                   if (editandoVendaId && form.produto && form.produto !== p.produto) {
                                                     const prodAtual = getCurrentProductFields();
                                                     setProdutosCarrinho(prev => [...prev, prodAtual]);
-                                                    setMsg(`Produto anterior movido pro carrinho. Agora selecionando: ${p.produto}`);
+                                                    // Limpa troca do form/trocaRow pra proximo produto nao
+                                                    // herdar (bug: mesma troca contava duas vezes).
+                                                    setForm(f => ({
+                                                      ...f,
+                                                      produto_na_troca: "", troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "",
+                                                      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_pulseira: "", troca_ciclos: "", troca_garantia: "",
+                                                      troca_serial: "", troca_imei: "",
+                                                      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                                                      troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
+                                                      troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
+                                                    }));
+                                                    setTrocaRow(createEmptyProdutoRow());
+                                                    setTrocaRow2(createEmptyProdutoRow());
+                                                    setTrocaEnabled(false); setShowSegundaTroca(false);
+                                                    setMsg(`Produto anterior movido pro carrinho (com a troca). Selecionando: ${p.produto}`);
                                                   }
                                                   setEstoqueId(p.id);
                                                   set("produto", p.produto);
