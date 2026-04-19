@@ -383,7 +383,12 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     case "APPLE_WATCH": {
       const tamanho = spec.aw_tamanho ? ` ${spec.aw_tamanho}` : "";
       const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CEL" : spec.aw_conn === "GPS" ? " GPS" : "";
-      const pulseira = spec.aw_pulseira ? ` PULSEIRA ${spec.aw_pulseira}` : "";
+      // Se o valor do pulseira ja comeca com "Pulseira" (ex: "Pulseira natural
+      // estilo milanes" do WATCH_BAND_MODELS), nao duplica o prefixo — senao
+      // sai "PULSEIRA PULSEIRA NATURAL ESTILO MILANES".
+      const pulseira = spec.aw_pulseira
+        ? (/^pulseira\b/i.test(spec.aw_pulseira.trim()) ? ` ${spec.aw_pulseira}` : ` PULSEIRA ${spec.aw_pulseira}`)
+        : "";
       const band = spec.aw_band ? ` ${spec.aw_band}` : "";
       return `APPLE WATCH ${spec.aw_modelo}${tamanho}${conn}${c}${pulseira}${band}`.toUpperCase();
     }
