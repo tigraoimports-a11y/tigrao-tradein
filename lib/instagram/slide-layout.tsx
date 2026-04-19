@@ -41,7 +41,9 @@ const TIPO_LABEL: Record<LayoutMeta["tipo"], string> = {
   NOTICIA: "NOTICIA",
 };
 
-function Footer({ config, index, total }: { config: Config; index: number; total: number }) {
+// Header fixo no topo de todos os slides: foto do Andre + handle + origem.
+// Tamanho aumentado (~20%): foto 64x64, handle 26, subtitulo 19.
+function Header({ config, index, total }: { config: Config; index: number; total: number }) {
   const handle = config.nome_display || "tigraoimports";
   return (
     <div
@@ -50,8 +52,8 @@ function Footer({ config, index, total }: { config: Config; index: number; total
         alignItems: "center",
         justifyContent: "space-between",
         width: "100%",
-        paddingTop: 20,
-        borderTop: `1px solid ${COR.borda}`,
+        paddingBottom: 24,
+        borderBottom: `1px solid ${COR.borda}`,
       }}
     >
       <div style={{ display: "flex", alignItems: "center" }}>
@@ -60,14 +62,14 @@ function Footer({ config, index, total }: { config: Config; index: number; total
           <img
             src={config.foto_perfil_url}
             alt=""
-            width={52}
-            height={52}
+            width={64}
+            height={64}
             style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
+              width: 64,
+              height: 64,
+              borderRadius: 32,
               objectFit: "cover",
-              marginRight: 14,
+              marginRight: 18,
             }}
           />
         ) : (
@@ -76,23 +78,23 @@ function Footer({ config, index, total }: { config: Config; index: number; total
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 52,
-              height: 52,
-              borderRadius: 26,
+              width: 64,
+              height: 64,
+              borderRadius: 32,
               backgroundColor: "#FFF5EB",
-              marginRight: 14,
-              fontSize: 28,
+              marginRight: 18,
+              fontSize: 34,
             }}
           >
             🐯
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ color: COR.titulo, fontSize: 22, fontWeight: 600 }}>@{handle}</span>
-          <span style={{ color: COR.secundario, fontSize: 16, marginTop: 2 }}>Apple no Rio de Janeiro</span>
+          <span style={{ color: COR.titulo, fontSize: 26, fontWeight: 700 }}>@{handle}</span>
+          <span style={{ color: COR.secundario, fontSize: 19, marginTop: 2 }}>Apple no Rio de Janeiro</span>
         </div>
       </div>
-      <div style={{ display: "flex", color: COR.secundario, fontSize: 18, fontWeight: 500 }}>
+      <div style={{ display: "flex", color: COR.secundario, fontSize: 20, fontWeight: 500 }}>
         {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
       </div>
     </div>
@@ -105,7 +107,7 @@ function Imagem({ url }: { url: string }) {
       style={{
         display: "flex",
         width: "100%",
-        height: 540,
+        height: 520,
         borderRadius: 24,
         overflow: "hidden",
         backgroundColor: "#F5F5F7",
@@ -130,66 +132,63 @@ function LayoutCapa({ slide, config, meta }: { slide: SlideData; config: Config;
         width: "100%",
         height: "100%",
         backgroundColor: COR.fundo,
-        padding: 72,
+        padding: 60,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          color: COR.accent,
-          fontSize: 22,
-          fontWeight: 700,
-          letterSpacing: 3,
-          marginBottom: 24,
-        }}
-      >
-        {TIPO_LABEL[meta.tipo]}
-      </div>
+      <Header config={config} index={meta.index} total={meta.total} />
 
-      <div
-        style={{
-          display: "flex",
-          color: COR.titulo,
-          fontSize: slide.titulo.length > 40 ? 68 : 84,
-          fontWeight: 700,
-          lineHeight: 1.05,
-          letterSpacing: -1.5,
-          marginBottom: 20,
-        }}
-      >
-        {slide.titulo}
-      </div>
-
-      {slide.texto && (
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 36 }}>
         <div
           style={{
             display: "flex",
-            color: COR.corpo,
-            fontSize: 30,
-            fontWeight: 400,
-            lineHeight: 1.3,
-            marginBottom: 32,
+            color: COR.accent,
+            fontSize: 22,
+            fontWeight: 700,
+            letterSpacing: 3,
+            marginBottom: 20,
           }}
         >
-          {slide.texto}
+          {TIPO_LABEL[meta.tipo]}
         </div>
-      )}
+        <div
+          style={{
+            display: "flex",
+            color: COR.titulo,
+            fontSize: slide.titulo.length > 40 ? 66 : 80,
+            fontWeight: 700,
+            lineHeight: 1.05,
+            letterSpacing: -1.5,
+            marginBottom: 20,
+          }}
+        >
+          {slide.titulo}
+        </div>
+        {slide.texto && (
+          <div
+            style={{
+              display: "flex",
+              color: COR.corpo,
+              fontSize: 28,
+              fontWeight: 400,
+              lineHeight: 1.3,
+            }}
+          >
+            {slide.texto}
+          </div>
+        )}
+      </div>
 
       {slide.imagem_url && (
-        <div style={{ display: "flex", flex: 1, alignItems: "flex-end", marginBottom: 24 }}>
+        <div style={{ display: "flex", flex: 1, alignItems: "flex-end", marginTop: 32 }}>
           <Imagem url={slide.imagem_url} />
         </div>
       )}
-
       {!slide.imagem_url && <div style={{ flex: 1 }} />}
-
-      <Footer config={config} index={meta.index} total={meta.total} />
     </div>
   );
 }
 
 function LayoutMeio({ slide, config, meta }: { slide: SlideData; config: Config; meta: LayoutMeta }) {
-  // Se tem destaque curto (<8 chars), vira tipografia gigante (ex: "48MP", "R$ 6.999").
   const destaqueGigante = slide.destaque && slide.destaque.length <= 10 ? slide.destaque : null;
 
   return (
@@ -200,73 +199,62 @@ function LayoutMeio({ slide, config, meta }: { slide: SlideData; config: Config;
         width: "100%",
         height: "100%",
         backgroundColor: COR.fundo,
-        padding: 72,
+        padding: 60,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          color: COR.secundario,
-          fontSize: 20,
-          fontWeight: 500,
-          letterSpacing: 2,
-          marginBottom: 20,
-        }}
-      >
-        {String(meta.index + 1).padStart(2, "0")} {TIPO_LABEL[meta.tipo]}
-      </div>
+      <Header config={config} index={meta.index} total={meta.total} />
 
-      <div
-        style={{
-          display: "flex",
-          color: COR.titulo,
-          fontSize: slide.titulo.length > 30 ? 56 : 64,
-          fontWeight: 700,
-          lineHeight: 1.1,
-          letterSpacing: -1,
-          marginBottom: 24,
-        }}
-      >
-        {slide.titulo}
-      </div>
-
-      {slide.imagem_url && (
-        <div style={{ display: "flex", marginBottom: 28 }}>
-          <Imagem url={slide.imagem_url} />
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          color: COR.corpo,
-          fontSize: 28,
-          fontWeight: 400,
-          lineHeight: 1.35,
-          marginBottom: 20,
-        }}
-      >
-        {slide.texto}
-      </div>
-
-      {destaqueGigante && (
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 28 }}>
         <div
           style={{
             display: "flex",
-            color: COR.accent,
-            fontSize: 180,
+            color: COR.titulo,
+            fontSize: slide.titulo.length > 30 ? 56 : 64,
             fontWeight: 700,
-            lineHeight: 1,
-            letterSpacing: -5,
-            marginTop: 12,
+            lineHeight: 1.1,
+            letterSpacing: -1,
+            marginBottom: 22,
           }}
         >
-          {destaqueGigante}
+          {slide.titulo}
         </div>
-      )}
+
+        {slide.imagem_url && (
+          <div style={{ display: "flex", marginBottom: 24 }}>
+            <Imagem url={slide.imagem_url} />
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            color: COR.corpo,
+            fontSize: 28,
+            fontWeight: 400,
+            lineHeight: 1.35,
+          }}
+        >
+          {slide.texto}
+        </div>
+
+        {destaqueGigante && (
+          <div
+            style={{
+              display: "flex",
+              color: COR.accent,
+              fontSize: 160,
+              fontWeight: 700,
+              lineHeight: 1,
+              letterSpacing: -5,
+              marginTop: 20,
+            }}
+          >
+            {destaqueGigante}
+          </div>
+        )}
+      </div>
 
       <div style={{ flex: 1 }} />
-      <Footer config={config} index={meta.index} total={meta.total} />
     </div>
   );
 }
@@ -280,9 +268,11 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
         width: "100%",
         height: "100%",
         backgroundColor: COR.fundo,
-        padding: 72,
+        padding: 60,
       }}
     >
+      <Header config={config} index={meta.index} total={meta.total} />
+
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
         <div
           style={{
@@ -300,7 +290,7 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
           style={{
             display: "flex",
             color: COR.titulo,
-            fontSize: 72,
+            fontSize: 68,
             fontWeight: 700,
             lineHeight: 1.1,
             letterSpacing: -1.5,
@@ -313,7 +303,7 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
           style={{
             display: "flex",
             color: COR.corpo,
-            fontSize: 30,
+            fontSize: 28,
             fontWeight: 400,
             lineHeight: 1.3,
             marginBottom: 40,
@@ -333,7 +323,6 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
           📲 Siga @{config.nome_display || "tigraoimports"} pra mais
         </div>
       </div>
-      <Footer config={config} index={meta.index} total={meta.total} />
     </div>
   );
 }

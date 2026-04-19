@@ -19,7 +19,21 @@ function getSupabase() {
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const TIPO_GUIA: Record<string, string> = {
-  DICA: "dica prática pra dono de iPhone/Mac/Apple Watch (ex: '5 ajustes pra economizar bateria'). Foco em utilidade imediata.",
+  DICA: `dica prática pra dono de iPhone/Mac/Apple Watch (ex: "5 ajustes pra economizar bateria", "5 dicas pra quem nunca teve MacBook"). Foco em utilidade imediata.
+
+REGRA IMPORTANTE de DICA:
+Cada dica (cada slide do meio) precisa ter DOIS elementos no texto:
+1. O QUE é a dica (frase curta explicando o conceito/atalho/ajuste).
+2. COMO fazer — passo a passo concreto, com nome exato do botão/menu/tecla quando aplicável.
+
+Exemplo BOM (slide sobre Command+C no Mac):
+Título: "Command é o novo Ctrl"
+Texto: "No Mac, ⌘ substitui o Ctrl do Windows. Copiar: selecione o texto e aperte ⌘+C. Colar: ⌘+V. Salvar: ⌘+S. Option equivale ao Alt."
+
+Exemplo RUIM (só descreve, não ensina):
+"No Mac, a tecla Command faz o papel do Ctrl. Atalhos são diferentes do Windows."
+
+Use setas de ação: "Ajustes > Geral > Time Machine", "Mission Control (3 dedos pra cima)", "selecione > ⌘+I". Nada de vago ("vá nas configurações").`,
   COMPARATIVO: `comparativo entre modelos (ex: 'iPhone 17 vs 17 Pro — vale pagar mais?').
 
 REGRA IMPORTANTE de comparativo entre 2 modelos Apple:
