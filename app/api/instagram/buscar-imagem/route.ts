@@ -16,6 +16,8 @@ function getSupabase() {
 
 // Ordem de prioridade para filtrar fontes (Apple oficial primeiro).
 const PRIORIDADE: Array<{ pattern: RegExp; peso: number; label: string }> = [
+  { pattern: /apple\.com\/br\/(?:iphone|mac|ipad|watch|airpods|vision)/i, peso: 110, label: "Apple Brasil (produto)" },
+  { pattern: /apple\.com\/(?:iphone|mac|ipad|watch|airpods|vision)(?!\/newsroom)/i, peso: 105, label: "Apple (produto)" },
   { pattern: /apple\.com\/br\/newsroom/i, peso: 100, label: "Apple Newsroom BR" },
   { pattern: /apple\.com\/newsroom/i, peso: 95, label: "Apple Newsroom" },
   { pattern: /apple\.com\/br\//i, peso: 90, label: "Apple Brasil" },
@@ -37,6 +39,62 @@ function pesoDaFonte(url: string): { peso: number; label: string } {
     if (p.pattern.test(url)) return { peso: p.peso, label: p.label };
   }
   return { peso: 0, label: new URL(url).hostname };
+}
+
+// Mapeamento produto mencionado no tema → URLs oficiais Apple com hero shots.
+// Ordem: mais específico primeiro (iphone 17 pro antes de iphone).
+const PRODUTOS_APPLE: Array<{ match: RegExp; urls: string[] }> = [
+  { match: /iphone\s*17\s*pro/i, urls: ["https://www.apple.com/br/iphone-17-pro/", "https://www.apple.com/br/shop/buy-iphone/iphone-17-pro"] },
+  { match: /iphone\s*17/i, urls: ["https://www.apple.com/br/iphone-17/", "https://www.apple.com/br/shop/buy-iphone/iphone-17"] },
+  { match: /iphone\s*16\s*pro/i, urls: ["https://www.apple.com/br/iphone-16-pro/"] },
+  { match: /iphone\s*16/i, urls: ["https://www.apple.com/br/iphone-16/"] },
+  { match: /iphone\s*15\s*pro/i, urls: ["https://www.apple.com/br/iphone-15-pro/"] },
+  { match: /iphone\s*15/i, urls: ["https://www.apple.com/br/iphone-15/"] },
+  { match: /iphone\s*14\s*pro/i, urls: ["https://www.apple.com/br/shop/buy-iphone/iphone-14-pro"] },
+  { match: /iphone\s*14/i, urls: ["https://www.apple.com/br/shop/buy-iphone/iphone-14"] },
+  { match: /iphone\s*13/i, urls: ["https://www.apple.com/br/shop/buy-iphone/iphone-13"] },
+  { match: /iphone/i, urls: ["https://www.apple.com/br/iphone/"] },
+
+  { match: /macbook\s*air/i, urls: ["https://www.apple.com/br/macbook-air/", "https://www.apple.com/br/shop/buy-mac/macbook-air"] },
+  { match: /macbook\s*pro/i, urls: ["https://www.apple.com/br/macbook-pro/", "https://www.apple.com/br/shop/buy-mac/macbook-pro"] },
+  { match: /macbook|mac\s*book/i, urls: ["https://www.apple.com/br/mac/", "https://www.apple.com/br/macbook-air/", "https://www.apple.com/br/macbook-pro/"] },
+  { match: /imac/i, urls: ["https://www.apple.com/br/imac/"] },
+  { match: /mac\s*studio/i, urls: ["https://www.apple.com/br/mac-studio/"] },
+  { match: /mac\s*mini/i, urls: ["https://www.apple.com/br/mac-mini/"] },
+  { match: /mac\s*pro/i, urls: ["https://www.apple.com/br/mac-pro/"] },
+
+  { match: /apple\s*watch\s*ultra/i, urls: ["https://www.apple.com/br/apple-watch-ultra-2/"] },
+  { match: /apple\s*watch\s*se/i, urls: ["https://www.apple.com/br/apple-watch-se/"] },
+  { match: /apple\s*watch/i, urls: ["https://www.apple.com/br/apple-watch/"] },
+
+  { match: /airpods\s*pro/i, urls: ["https://www.apple.com/br/airpods-pro/"] },
+  { match: /airpods\s*max/i, urls: ["https://www.apple.com/br/airpods-max/"] },
+  { match: /airpods/i, urls: ["https://www.apple.com/br/airpods/"] },
+
+  { match: /ipad\s*pro/i, urls: ["https://www.apple.com/br/ipad-pro/"] },
+  { match: /ipad\s*air/i, urls: ["https://www.apple.com/br/ipad-air/"] },
+  { match: /ipad\s*mini/i, urls: ["https://www.apple.com/br/ipad-mini/"] },
+  { match: /ipad/i, urls: ["https://www.apple.com/br/ipad/"] },
+
+  { match: /vision\s*pro/i, urls: ["https://www.apple.com/br/apple-vision-pro/"] },
+];
+
+function detectarProdutoUrls(texto: string): string[] {
+  // Conta ocorrências de cada pattern no texto (case-insensitive, global).
+  // Vence o produto com mais matches; empate → mais específico (primeiro da lista).
+  let melhorIdx = -1;
+  let melhorCount = 0;
+  for (let i = 0; i < PRODUTOS_APPLE.length; i++) {
+    const globalRe = new RegExp(PRODUTOS_APPLE[i].match.source, "gi");
+    const matches = texto.match(globalRe);
+    const count = matches ? matches.length : 0;
+    if (count > melhorCount) {
+      melhorCount = count;
+      melhorIdx = i;
+    }
+  }
+  if (melhorIdx < 0) return [];
+  return PRODUTOS_APPLE[melhorIdx].urls;
 }
 
 // Extrai og:image, twitter:image e imagens grandes de uma pagina.
@@ -77,10 +135,10 @@ async function extrairImagens(url: string): Promise<string[]> {
       }
     }
 
-    // Apple newsroom tem galeria com <img src=".../download-gallery/...">
-    if (/apple\.com\/.*newsroom/i.test(url)) {
-      const imgs = html.match(/https:\/\/[^"']+apple\.com[^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?/gi);
-      if (imgs) candidatos.push(...imgs.slice(0, 5));
+    // Páginas Apple (newsroom + produto): scan de URLs apple.com apontando pra imagem.
+    if (/apple\.com/i.test(url)) {
+      const imgs = html.match(/https?:\/\/[^"'\s)]*apple\.com[^"'\s)]*?\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s)]*)?/gi);
+      if (imgs) candidatos.push(...imgs.slice(0, 15));
     }
 
     // Dedup + resolve URLs relativas
@@ -118,6 +176,7 @@ export async function POST(req: NextRequest) {
   const { postId, fontes: fontesBody } = body || {};
 
   let fontes: string[] = [];
+  let textoPost = "";
 
   if (Array.isArray(fontesBody) && fontesBody.length > 0) {
     fontes = fontesBody;
@@ -125,7 +184,7 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase();
     const { data: post, error } = await supabase
       .from("instagram_posts")
-      .select("pesquisa_json")
+      .select("tema, slides_json, pesquisa_json")
       .eq("id", postId)
       .single();
     if (error || !post) {
@@ -133,22 +192,33 @@ export async function POST(req: NextRequest) {
     }
     const fs = post.pesquisa_json?.fontes;
     if (Array.isArray(fs)) fontes = fs;
+    // Monta texto pra detectar produto mencionado (tema + todos os textos dos slides).
+    textoPost = post.tema || "";
+    if (Array.isArray(post.slides_json)) {
+      for (const s of post.slides_json) {
+        textoPost += " " + (s?.titulo || "") + " " + (s?.texto || "");
+      }
+    }
   } else {
     return NextResponse.json({ error: "postId ou fontes obrigatório" }, { status: 400 });
   }
 
-  if (fontes.length === 0) {
+  // Páginas oficiais Apple do produto detectado — entram no topo da lista.
+  const urlsProduto = detectarProdutoUrls(textoPost);
+  const fontesCombinadas = [...urlsProduto, ...fontes.filter((u) => !urlsProduto.includes(u))];
+
+  if (fontesCombinadas.length === 0) {
     return NextResponse.json({ ok: true, imagens: [], aviso: "Nenhuma fonte disponível" });
   }
 
-  // Ordena fontes por prioridade (Apple > tech sites > outros).
-  const fontesOrdenadas = [...fontes]
+  // Ordena por prioridade (Apple produto > newsroom > outras Apple > tech sites).
+  const fontesOrdenadas = fontesCombinadas
     .map((u) => ({ url: u, ...pesoDaFonte(u) }))
     .sort((a, b) => b.peso - a.peso);
 
   const todos: Candidato[] = [];
   await Promise.all(
-    fontesOrdenadas.slice(0, 10).map(async (f) => {
+    fontesOrdenadas.slice(0, 12).map(async (f) => {
       const imgs = await extrairImagens(f.url);
       for (const img of imgs) {
         todos.push({
@@ -161,28 +231,40 @@ export async function POST(req: NextRequest) {
     })
   );
 
-  // Dedup global por URL da imagem, preservando o primeiro (que tem maior peso).
+  // Dedup global: ignora query string (Apple usa ?v= como cache-buster). Preserva o primeiro.
   const seen = new Set<string>();
   const unicos = todos.filter((c) => {
-    if (seen.has(c.url)) return false;
-    seen.add(c.url);
+    const chave = c.url.split("?")[0];
+    if (seen.has(chave)) return false;
+    seen.add(chave);
     return true;
   });
 
-  // Filtra imagens obviamente ruins: icons, logos genericos, muito pequenas conhecidas.
+  // Filtra imagens obviamente ruins: icons, logos genéricos, sprites, SVGs pequenos.
   const filtrados = unicos.filter((c) => {
     if (/\/favicon/i.test(c.url)) return false;
     if (/\/logo(-|_|\.)/i.test(c.url)) return false;
     if (/sprite/i.test(c.url)) return false;
+    if (/\/(icons?|glyph)\//i.test(c.url)) return false;
+    if (/knowledge_graph/i.test(c.url)) return false;
+    if (/structured-data/i.test(c.url)) return false;
+    if (/apple-touch-icon/i.test(c.url)) return false;
+    // Apple usa nomes tipo "hero_large", "overview_hero" — prioriza esses.
     return true;
   });
 
-  // Reordena por peso da fonte (Apple primeiro).
-  filtrados.sort((a, b) => b.peso - a.peso);
+  // Ordena: primeiro por peso da fonte, depois hero shots (apple.com/v/...) no topo.
+  filtrados.sort((a, b) => {
+    if (a.peso !== b.peso) return b.peso - a.peso;
+    const aHero = /hero|overview|gallery/i.test(a.url) ? 1 : 0;
+    const bHero = /hero|overview|gallery/i.test(b.url) ? 1 : 0;
+    return bHero - aHero;
+  });
 
   return NextResponse.json({
     ok: true,
-    imagens: filtrados.slice(0, 20),
-    totalFontes: fontes.length,
+    imagens: filtrados.slice(0, 24),
+    totalFontes: fontesCombinadas.length,
+    produtoDetectado: urlsProduto.length > 0 ? urlsProduto[0] : null,
   });
 }
