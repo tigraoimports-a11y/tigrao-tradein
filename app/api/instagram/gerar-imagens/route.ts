@@ -118,8 +118,59 @@ async function gerarPromptsDeImagem(
   return input.prompts || [];
 }
 
-// Chama Gemini 2.5 Flash Image (Nano Banana) com um prompt, recebe PNG em base64
-// e sobe no Supabase Storage. Retorna URL publica.
+// Cache do modelo descoberto via ListModels (nome do modelo muda com frequencia
+// no Gemini; hard-code quebra em meses). Cache vive enquanto o processo estiver vivo.
+let modeloImagemCache: { nome: string; descobertoEm: number } | null = null;
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
+
+async function descobrirModeloImagem(apiKey: string): Promise<string | null> {
+  if (modeloImagemCache && Date.now() - modeloImagemCache.descobertoEm < CACHE_TTL_MS) {
+    return modeloImagemCache.nome;
+  }
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!res.ok) return null;
+    const j = await res.json();
+    const models = (j?.models || []) as Array<{
+      name?: string;
+      supportedGenerationMethods?: string[];
+    }>;
+    // Prefere modelos com "image" no nome que suportem generateContent.
+    const candidatos = models.filter((m) => {
+      const nome = (m.name || "").toLowerCase();
+      const metodos = m.supportedGenerationMethods || [];
+      return nome.includes("image") && metodos.includes("generateContent");
+    });
+    // Ordem de preferencia: 2.5 flash image > 2.0 flash preview image > outros.
+    const ordemPreferida = [
+      "gemini-2.5-flash-image",
+      "gemini-2.0-flash-preview-image-generation",
+      "gemini-2.0-flash-exp-image-generation",
+    ];
+    for (const pref of ordemPreferida) {
+      const achado = candidatos.find((m) => (m.name || "").includes(pref));
+      if (achado?.name) {
+        const nomeCurto = achado.name.replace(/^models\//, "");
+        modeloImagemCache = { nome: nomeCurto, descobertoEm: Date.now() };
+        return nomeCurto;
+      }
+    }
+    // Fallback: qualquer modelo com "image" que suporte generateContent.
+    if (candidatos[0]?.name) {
+      const nomeCurto = candidatos[0].name.replace(/^models\//, "");
+      modeloImagemCache = { nome: nomeCurto, descobertoEm: Date.now() };
+      return nomeCurto;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Chama Gemini com um prompt, recebe PNG em base64 e sobe no Supabase Storage.
 async function gerarImagemViaGemini(
   prompt: string,
   postId: string,
@@ -129,7 +180,15 @@ async function gerarImagemViaGemini(
   const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) return { url: null, erro: "GOOGLE_AI_API_KEY não configurada" };
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+  const modelo = await descobrirModeloImagem(apiKey);
+  if (!modelo) {
+    return {
+      url: null,
+      erro: "Nenhum modelo Gemini de imagem disponivel na sua API key. Ative billing em console.cloud.google.com ou use outra conta.",
+    };
+  }
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`;
   try {
     const res = await fetch(endpoint, {
       method: "POST",
@@ -144,7 +203,7 @@ async function gerarImagemViaGemini(
     });
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      return { url: null, erro: `Gemini HTTP ${res.status}: ${txt.slice(0, 200)}` };
+      return { url: null, erro: `Gemini (${modelo}) HTTP ${res.status}: ${txt.slice(0, 200)}` };
     }
     const j = await res.json();
     const parts = j?.candidates?.[0]?.content?.parts || [];
@@ -154,7 +213,7 @@ async function gerarImagemViaGemini(
     );
     const base64 = imgPart?.inlineData?.data;
     const mimeType = imgPart?.inlineData?.mimeType || "image/png";
-    if (!base64) return { url: null, erro: "Gemini não retornou imagem" };
+    if (!base64) return { url: null, erro: `Gemini (${modelo}) nao retornou imagem` };
 
     const buffer = Buffer.from(base64, "base64");
     const ext = mimeType.includes("png") ? "png" : "jpg";
