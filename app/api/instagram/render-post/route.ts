@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
       index: i,
       total: slides.length,
       tipo: post.tipo,
+      estilo: post.estilo || "PADRAO",
     });
     const img = new ImageResponse(jsx, {
       width: SLIDE_W,

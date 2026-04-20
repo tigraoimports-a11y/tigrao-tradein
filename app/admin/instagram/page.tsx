@@ -5,10 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 
+type Tipo = "DICA" | "COMPARATIVO" | "NOTICIA" | "ANALISE_PROFUNDA";
+type Estilo = "PADRAO" | "EMANUEL_PESSOA";
+
 interface Post {
   id: string;
   tema: string;
-  tipo: "DICA" | "COMPARATIVO" | "NOTICIA";
+  tipo: Tipo;
+  estilo: Estilo;
   numero_slides: number;
   status: "RASCUNHO" | "GERANDO" | "GERADO" | "APROVADO" | "AGENDADO" | "POSTADO" | "ERRO";
   erro: string | null;
@@ -32,6 +36,12 @@ const TIPO_LABEL: Record<Post["tipo"], string> = {
   DICA: "💡 Dica",
   COMPARATIVO: "⚖️ Comparativo",
   NOTICIA: "📰 Notícia",
+  ANALISE_PROFUNDA: "🔍 Análise profunda",
+};
+
+const ESTILO_LABEL: Record<Post["estilo"], string> = {
+  PADRAO: "Padrão Tigrão",
+  EMANUEL_PESSOA: "Emanuel Pessoa",
 };
 
 export default function InstagramListPage() {
@@ -41,7 +51,7 @@ export default function InstagramListPage() {
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<"TODOS" | Post["status"]>("TODOS");
   const [novoOpen, setNovoOpen] = useState(false);
-  const [form, setForm] = useState({ tema: "", tipo: "DICA" as Post["tipo"], numero_slides: 7 });
+  const [form, setForm] = useState({ tema: "", tipo: "DICA" as Post["tipo"], estilo: "PADRAO" as Post["estilo"], numero_slides: 7 });
   const [saving, setSaving] = useState(false);
   const [refinando, setRefinando] = useState(false);
   const [motivoRefino, setMotivoRefino] = useState("");
@@ -106,7 +116,7 @@ export default function InstagramListPage() {
         setMsg("Erro ao refinar: " + (j.error || "falha"));
         return;
       }
-      setForm({ tema: j.tema, tipo: j.tipo, numero_slides: j.numero_slides });
+      setForm(prev => ({ ...prev, tema: j.tema, tipo: j.tipo, numero_slides: j.numero_slides }));
       setMotivoRefino(j.motivo || "");
     } finally {
       setRefinando(false);
@@ -197,6 +207,8 @@ export default function InstagramListPage() {
                       ? 'ex: "iPhone 17 vs 17 Pro — vale pagar mais pelo Pro?" ou só "comparativo iPad" + Refinar'
                       : form.tipo === "NOTICIA"
                       ? 'ex: "Lançamento do Apple Watch Ultra 3 — o que mudou?" ou só "watch novo" + Refinar'
+                      : form.tipo === "ANALISE_PROFUNDA"
+                      ? 'ex: "Por que o iPhone usado no Brasil virou item de luxo" ou só "análise preço Apple BR" + Refinar'
                       : 'ex: "5 dicas pra economizar bateria no iPhone 15" ou só "dica MacBook" + Refinar'
                   }
                   rows={3}
@@ -210,18 +222,48 @@ export default function InstagramListPage() {
                     Dica: comparativos cobrem câmera + tela + chip + bateria + design + preço + revenda.
                   </p>
                 )}
+                {!motivoRefino && form.tipo === "ANALISE_PROFUNDA" && (
+                  <p className="text-xs text-[#86868B] mt-1">
+                    Dica: análise profunda funciona melhor em 10-14 slides e com estilo &quot;Emanuel Pessoa&quot; (narrativa didática + negrito + foto real).
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-[#6E6E73] mb-1 block">Tipo</label>
                 <select
                   value={form.tipo}
-                  onChange={e => setForm({ ...form, tipo: e.target.value as Post["tipo"] })}
+                  onChange={e => {
+                    const novoTipo = e.target.value as Post["tipo"];
+                    setForm(prev => ({
+                      ...prev,
+                      tipo: novoTipo,
+                      numero_slides: novoTipo === "ANALISE_PROFUNDA" && prev.numero_slides < 10 ? 12 : prev.numero_slides,
+                      estilo: novoTipo === "ANALISE_PROFUNDA" ? "EMANUEL_PESSOA" : prev.estilo,
+                    }));
+                  }}
                   className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                 >
                   <option value="DICA">💡 Dica prática</option>
                   <option value="COMPARATIVO">⚖️ Comparativo</option>
                   <option value="NOTICIA">📰 Notícia / lançamento</option>
+                  <option value="ANALISE_PROFUNDA">🔍 Análise profunda</option>
                 </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#6E6E73] mb-1 block">Estilo de escrita + visual</label>
+                <select
+                  value={form.estilo}
+                  onChange={e => setForm({ ...form, estilo: e.target.value as Post["estilo"] })}
+                  className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                >
+                  <option value="PADRAO">Padrão Tigrão (descontraído + técnico, layout capa/meio/CTA)</option>
+                  <option value="EMANUEL_PESSOA">Emanuel Pessoa (narrativa didática, negrito, foto real no rodapé)</option>
+                </select>
+                <p className="text-xs text-[#86868B] mt-1">
+                  {form.estilo === "EMANUEL_PESSOA"
+                    ? "Frases curtas, parágrafos separados, **negrito** em frases-chave, header tipo tweet + imagem real ocupando metade do slide."
+                    : "Estilo original da loja com capa, slides de meio e CTA final."}
+                </p>
               </div>
               <div>
                 <label className="text-xs font-medium text-[#6E6E73] mb-1 block">Nº de slides</label>
@@ -230,9 +272,9 @@ export default function InstagramListPage() {
                   onChange={e => setForm({ ...form, numero_slides: Number(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                 >
-                  <option value={5}>5 slides</option>
-                  <option value={6}>6 slides</option>
-                  <option value={7}>7 slides</option>
+                  {[5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(n => (
+                    <option key={n} value={n}>{n} slides</option>
+                  ))}
                 </select>
               </div>
               {msg && <p className="text-sm text-[#E74C3C]">{msg}</p>}
@@ -278,7 +320,12 @@ export default function InstagramListPage() {
             <tbody>
               {filtrados.map(p => (
                 <tr key={p.id} className="border-t border-[#E8E8ED] hover:bg-[#FAFAFA]">
-                  <td className="px-4 py-3 whitespace-nowrap">{TIPO_LABEL[p.tipo]}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div>{TIPO_LABEL[p.tipo]}</div>
+                    {p.estilo === "EMANUEL_PESSOA" && (
+                      <div className="text-[10px] text-[#86868B] mt-0.5">{ESTILO_LABEL[p.estilo]}</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <Link href={`/admin/instagram/${p.id}`} className="text-[#E8740E] hover:underline">
                       {p.tema}
