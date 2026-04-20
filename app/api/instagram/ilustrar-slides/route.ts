@@ -48,6 +48,10 @@ REGRAS CRÍTICAS (⚠️ não quebre)
 
 ⚠️ COERÊNCIA TEMÁTICA: a imagem DEVE refletir o texto do slide. Se o slide fala de "Veredito honesto", busque foto de balança, iPads enfileirados, ou comparação lado-a-lado — NÃO foto aleatória de revista, meme ou coisa não relacionada.
 
+⚠️ SEM TEXTO EM INGLÊS (nem em qualquer idioma) NA IMAGEM: o carrossel é em PORTUGUÊS. NÃO use thumbnails de YouTube, capas de artigo com overlay de título ("Hidden in macOS Tahoe", "Spotlight Clipboard History"), infográficos ou banners com palavras. Imagens com texto em inglês quebram o visual. Prefira foto LIMPA do produto ou screenshot da tela do app SEM overlay editorial.
+
+⚠️ FOTO REAL, NÃO RENDER ARTÍSTICO: pra capas e slides genéricos sobre produto Apple, busque FOTO REAL do produto (oficial apple.com, newsroom, reviews de canais tech) — NÃO setups artísticos com luzes coloridas, monitor curvo + teclado mecânico + RGB, wallpapers abstratos, mockups 3D renderizados. O leitor tem que reconhecer "aquilo é um MacBook/iPhone/iPad de verdade", não uma cena de Pinterest.
+
 REGRAS GERAIS
 1. Busca orientada ao CONCEITO do slide, não só ao produto.
    - Slide "Command é o novo Ctrl" → imagem de teclado Mac mostrando tecla ⌘.
@@ -74,6 +78,9 @@ REGRAS GERAIS
    - Sites de afiliado/cupom.
    - Screenshots de slide/apresentação (meta).
    - Imagens de capa de revista ou trending TikTok (CORECORE, coisas do tipo — sem relação).
+   - **Thumbnails de YouTube** (i.ytimg.com, img.youtube.com): sempre têm rosto + texto overlay + setas vermelhas.
+   - **Imagens com texto em inglês sobreposto** (ex: "Hidden in macOS Tahoe", "Top 10 Tips"): conflitam com post em PT-BR.
+   - **Setups artísticos** tipo Pinterest (monitor + RGB + teclado mecânico + plantas) quando o slide fala genericamente de Mac/iPad — use foto real do produto.
    - Imagem que já apareceu em outro slide (VER REGRA CRÍTICA acima).
 
 REGRA ESPECIAL — ESTILO EMANUEL_PESSOA (análise profunda narrativa):
@@ -239,6 +246,8 @@ function ehImagemValida(url: string): boolean {
   if (/\/(icons?|glyph)\//i.test(url)) return false;
   if (/knowledge_graph/i.test(url)) return false;
   if (/help\.apple\.com\/assets/i.test(url)) return false;
+  // Thumbnails de YouTube sempre vem com rosto + texto overlay em ingles.
+  if (/\b(i\.ytimg\.com|img\.youtube\.com)\b/i.test(url)) return false;
   return true;
 }
 
