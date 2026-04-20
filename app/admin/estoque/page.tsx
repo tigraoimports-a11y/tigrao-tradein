@@ -1013,13 +1013,18 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
       return `Apple Watch Ultra${gen}${sz}`;
     }
-    // SE com geração (SE 2, SE 3)
-    const seMatch = p.match(/SE\s*(\d+)/);
-    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
-    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
-    // Series com número
-    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
+    // Apple Watch SE so existe em 40/44mm. Se o nome tem 46mm/49mm, "SE" no
+    // meio do nome e lixo (provavelmente "SERIES") — trata como Series 11.
+    const has46or49 = /\b(46|49)\s*MM/.test(p);
+    // \bSE(?!R) impede casar "SERIES" (SE seguido de R)
+    const seMatch = p.match(/\bSE(?!R)\s*(\d+)/);
+    if (seMatch && !has46or49) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
+    if (/\bSE(?!R)/.test(p) && !has46or49) return `Apple Watch SE${sz}${conn}`;
+    // Series com numero
+    const seriesMatch = p.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
+    // Fallback: tem 46/49mm mas nao casou series — assume Series 11
+    if (has46or49) return `Apple Watch Series 11${sz}${conn}`;
     return `Apple Watch${sz}${conn}`;
   }
   if (baseCat === "AIRPODS") {
