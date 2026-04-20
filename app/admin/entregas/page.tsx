@@ -271,6 +271,7 @@ export default function EntregasPage() {
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [trocas, setTrocas] = useState<string[]>([]);
   const [showPagAlt, setShowPagAlt] = useState(false);
+  const [horarioLivreForcado, setHorarioLivreForcado] = useState(false);
 
   // Estoque picker states
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
@@ -1958,24 +1959,56 @@ export default function EntregasPage() {
             </div>
             <div>
               <p className={labelCls}>Horario</p>
-              <select value={form.horario} onChange={(e) => set("horario", e.target.value)} className={inputCls}>
-                <option value="">-- Definir --</option>
-                <option value="MANHA">Manha (ate 12h)</option>
-                <option value="TARDE">Tarde (12h-18h)</option>
-                <option value="NOITE">Noite (apos 18h)</option>
-                <option value="09:00">09:00</option>
-                <option value="10:00">10:00</option>
-                <option value="11:00">11:00</option>
-                <option value="12:00">12:00</option>
-                <option value="13:00">13:00</option>
-                <option value="14:00">14:00</option>
-                <option value="15:00">15:00</option>
-                <option value="16:00">16:00</option>
-                <option value="17:00">17:00</option>
-                <option value="18:00">18:00</option>
-                <option value="19:00">19:00</option>
-                <option value="20:00">20:00</option>
-              </select>
+              {(() => {
+                const HORARIOS_FIXOS = ["MANHA","TARDE","NOITE","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"];
+                const horarioEhLivre = !!form.horario && !HORARIOS_FIXOS.includes(form.horario);
+                const mostrarHorarioLivre = horarioEhLivre || horarioLivreForcado;
+                return (
+                  <>
+                    <select
+                      value={mostrarHorarioLivre ? "__LIVRE__" : form.horario}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "__LIVRE__") {
+                          setHorarioLivreForcado(true);
+                          if (!horarioEhLivre) set("horario", "");
+                        } else {
+                          setHorarioLivreForcado(false);
+                          set("horario", v);
+                        }
+                      }}
+                      className={inputCls}
+                    >
+                      <option value="">-- Definir --</option>
+                      <option value="MANHA">Manha (ate 12h)</option>
+                      <option value="TARDE">Tarde (12h-18h)</option>
+                      <option value="NOITE">Noite (apos 18h)</option>
+                      <option value="09:00">09:00</option>
+                      <option value="10:00">10:00</option>
+                      <option value="11:00">11:00</option>
+                      <option value="12:00">12:00</option>
+                      <option value="13:00">13:00</option>
+                      <option value="14:00">14:00</option>
+                      <option value="15:00">15:00</option>
+                      <option value="16:00">16:00</option>
+                      <option value="17:00">17:00</option>
+                      <option value="18:00">18:00</option>
+                      <option value="19:00">19:00</option>
+                      <option value="20:00">20:00</option>
+                      <option value="__LIVRE__">⏰ Horario livre (digitar)...</option>
+                    </select>
+                    {mostrarHorarioLivre && (
+                      <input
+                        type="time"
+                        value={horarioEhLivre ? form.horario : ""}
+                        onChange={(e) => set("horario", e.target.value)}
+                        className={`${inputCls} mt-2`}
+                        placeholder="Ex: 16:45"
+                      />
+                    )}
+                  </>
+                );
+              })()}
             </div>
             <div>
               <p className={labelCls}>Motoboy / Entregador</p>
