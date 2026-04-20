@@ -1958,24 +1958,47 @@ export default function EntregasPage() {
             </div>
             <div>
               <p className={labelCls}>Horario</p>
-              <select value={form.horario} onChange={(e) => set("horario", e.target.value)} className={inputCls}>
-                <option value="">-- Definir --</option>
+              {/* Input livre — operador digita qualquer horario (14:30, "entre 10
+                  e 11", etc). As opcoes em datalist sao atalho pras mais comuns
+                  mas nao restringem. */}
+              <input
+                type="text"
+                list="entregas-horario-sugestoes"
+                value={form.horario}
+                onChange={(e) => set("horario", e.target.value)}
+                placeholder="Ex: 14:30, Manha, Tarde, entre 10 e 11..."
+                className={inputCls}
+              />
+              <datalist id="entregas-horario-sugestoes">
                 <option value="MANHA">Manha (ate 12h)</option>
                 <option value="TARDE">Tarde (12h-18h)</option>
                 <option value="NOITE">Noite (apos 18h)</option>
-                <option value="09:00">09:00</option>
-                <option value="10:00">10:00</option>
-                <option value="11:00">11:00</option>
-                <option value="12:00">12:00</option>
-                <option value="13:00">13:00</option>
-                <option value="14:00">14:00</option>
-                <option value="15:00">15:00</option>
-                <option value="16:00">16:00</option>
-                <option value="17:00">17:00</option>
-                <option value="18:00">18:00</option>
-                <option value="19:00">19:00</option>
-                <option value="20:00">20:00</option>
-              </select>
+                <option value="09:00" />
+                <option value="09:30" />
+                <option value="10:00" />
+                <option value="10:30" />
+                <option value="11:00" />
+                <option value="11:30" />
+                <option value="12:00" />
+                <option value="12:30" />
+                <option value="13:00" />
+                <option value="13:30" />
+                <option value="14:00" />
+                <option value="14:30" />
+                <option value="15:00" />
+                <option value="15:30" />
+                <option value="16:00" />
+                <option value="16:30" />
+                <option value="17:00" />
+                <option value="17:30" />
+                <option value="18:00" />
+                <option value="18:30" />
+                <option value="19:00" />
+                <option value="19:30" />
+                <option value="20:00" />
+                <option value="20:30" />
+                <option value="21:00" />
+              </datalist>
             </div>
             <div>
               <p className={labelCls}>Motoboy / Entregador</p>
