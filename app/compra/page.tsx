@@ -1007,64 +1007,89 @@ function CompraForm() {
             )}
 
             {/* Modo normal: produto + preço já definidos na URL */}
-            {variantesDoBase.length === 0 && (
-              <>
-                <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produtoParam}</p>
-                {produtosExtras.map((p, i) => (
-                  <p key={i} className="text-[#1D1D1F] font-semibold text-base mt-1">{p.nome}{p.preco > 0 ? ` — R$ ${fmt(p.preco)}` : ""}</p>
-                ))}
-                {preco > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-[#86868B] text-xs uppercase tracking-wider">
-                      {produtosExtras.length > 0 ? `Preco total (${produtosExtras.length + 1} produtos)` : "Preco de venda"}
+            {variantesDoBase.length === 0 && (() => {
+              // Calcula preco individual do produto 1 = preco total - soma dos extras.
+              // `preco` na URL e o total somado (conforme gerar-link envia).
+              const somaExtras = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+              const precoP1 = preco > 0 ? Math.max(preco - somaExtras, 0) : 0;
+              return (
+                <>
+                  <p className="text-[#1D1D1F] font-bold text-lg mt-1">
+                    {produtoParam}
+                    {precoP1 > 0 && <span className="text-[#E8740E] font-bold ml-2">R$ {fmt(precoP1)}</span>}
+                  </p>
+                  {produtosExtras.map((p, i) => (
+                    <p key={i} className="text-[#1D1D1F] font-semibold text-base mt-1">
+                      {p.nome}
+                      {p.preco > 0 && <span className="text-[#E8740E] font-bold ml-2">R$ {fmt(p.preco)}</span>}
                     </p>
-                    <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
-                    {descontoParam > 0 && (
-                      <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>
-                    )}
-                    {(trocaNum > 0 || descontoParam > 0) && (
-                      <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : descontoParam > 0 ? "Total com desconto" : "Total"}: R$ {fmt(valorBase)}</p>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
+                  ))}
+                  {preco > 0 && (
+                    <div className="mt-3 pt-3 border-t border-[#E8E8ED] space-y-1">
+                      {/* Quando ha desconto/troca, mostra breakdown claro: total sem
+                          desconto → desconto/troca → total com desconto. Quando nao
+                          ha, mostra so 'Preco de venda'. */}
+                      {(descontoParam > 0 || trocaNum > 0) ? (
+                        <>
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[#86868B] text-xs uppercase tracking-wider">Total sem desconto</span>
+                            <span className="text-[#1D1D1F] font-semibold text-base">R$ {fmt(preco)}</span>
+                          </div>
+                          {descontoParam > 0 && (
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-blue-500 text-xs font-semibold">Desconto</span>
+                              <span className="text-blue-500 font-semibold text-base">- R$ {fmt(descontoParam)}</span>
+                            </div>
+                          )}
+                          {trocaNum > 0 && (
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-blue-500 text-xs font-semibold">Valor da troca</span>
+                              <span className="text-blue-500 font-semibold text-base">- R$ {fmt(trocaNum)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-baseline pt-1 border-t border-[#E8E8ED]">
+                            <span className="text-[#86868B] text-xs uppercase tracking-wider">{trocaNum > 0 ? "Diferenca a pagar" : "Total com desconto"}</span>
+                            <span className="text-[#E8740E] font-bold text-2xl">R$ {fmt(valorBase)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[#86868B] text-xs uppercase tracking-wider">{produtosExtras.length > 0 ? "Preco total" : "Preco de venda"}</span>
+                          <span className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Selecao de cor — obrigatoria. Se ja veio pre-selecionada pelo operador
-                (cor detectada no nome do produto ou passada via URL), mostra como info
-                read-only ao inves de pedir pro cliente escolher de novo. */}
-            {(produtoInput || produtoParam) && (
-              <div id="escolha-cor" className={`mt-3 pt-3 border-t ${!corSel ? "border-[#E8740E]" : "border-[#E8E8ED]"}`}>
-                {corSel && !produtoInput ? (
-                  // Cor ja pre-selecionada pelo operador — read-only info
-                  <>
-                    <p className="text-xs uppercase tracking-wider font-semibold mb-1 text-[#86868B]">Cor</p>
-                    <p className="text-sm font-semibold text-[#1D1D1F]">{corSel}</p>
-                  </>
+                (cor detectada no nome do produto ou passada via URL), OCULTA a selecao
+                completamente — a cor ja esta nos nomes dos produtos acima. Cliente so
+                precisa escolher se nao veio preenchida. */}
+            {(produtoInput || produtoParam) && !corSel && (
+              <div id="escolha-cor" className={`mt-3 pt-3 border-t border-[#E8740E]`}>
+                <p className={`text-xs uppercase tracking-wider font-semibold mb-2 text-[#E8740E]`}>
+                  Escolha a cor *<span className="ml-1 normal-case font-medium">(obrigatório)</span>
+                </p>
+                {coresDisponiveis.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {coresDisponiveis.map(cor => (
+                      <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all border bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]">
+                        {cor}
+                      </button>
+                    ))}
+                  </div>
                 ) : (
-                  <>
-                    <p className={`text-xs uppercase tracking-wider font-semibold mb-2 ${!corSel ? "text-[#E8740E]" : "text-[#86868B]"}`}>
-                      Escolha a cor *{!corSel && <span className="ml-1 normal-case font-medium">(obrigatório)</span>}
-                    </p>
-                    {coresDisponiveis.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {coresDisponiveis.map(cor => (
-                          <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
-                            {cor}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <input
-                        type="text"
-                        value={corSel}
-                        onChange={(e) => setCorSel(e.target.value.toUpperCase())}
-                        placeholder="Ex: Preto, Azul, Titânio..."
-                        className={inputCls}
-                      />
-                    )}
-                  </>
+                  <input
+                    type="text"
+                    value={corSel}
+                    onChange={(e) => setCorSel(e.target.value.toUpperCase())}
+                    placeholder="Ex: Preto, Azul, Titânio..."
+                    className={inputCls}
+                  />
                 )}
               </div>
             )}
