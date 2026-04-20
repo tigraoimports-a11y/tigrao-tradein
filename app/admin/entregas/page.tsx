@@ -189,14 +189,40 @@ function formatPagamentoDisplay(
 
 /**
  * Formata o campo PRODUTO do formulário do motoboy.
- * Se tem multiplos produtos separados por " + ", quebra em bullets (1 por linha).
- * Single-produto sai como string simples na mesma linha.
+ *
+ * Caso 1: single produto sem " + " → retorna como veio.
+ * Caso 2: mesmo produto com specs separados por " + " (ex: "MACBOOK NEO 13"
+ *   + 8GB + 256GB Prata") → flatten em uma linha so, usando "/" entre
+ *   tokens de storage/RAM adjacentes e espaco no resto. Ex: "MACBOOK NEO
+ *   13" 8GB/256GB Prata".
+ * Caso 3: produtos diferentes separados por " + " (ex: "MacBook + iPhone")
+ *   — detecta quando 2+ partes contem nome de device (iPhone/MacBook/etc).
+ *   Quebra em bullets, um por linha.
  */
 function formatProdutoDisplay(produto: string | null | undefined): string {
   if (!produto) return "—";
   const parts = produto.split(" + ").map(s => s.trim()).filter(Boolean);
   if (parts.length <= 1) return produto;
-  return "\n" + parts.map(p => `   • ${p}`).join("\n");
+
+  const deviceRegex = /\b(iphone|macbook|ipad|apple\s*watch|airpods?|mac\s*mini|mac\s*studio|imac)\b/i;
+  const devicesCount = parts.filter(p => deviceRegex.test(p)).length;
+  if (devicesCount > 1) {
+    // Multi-produto real — mantem bullets
+    return "\n" + parts.map(p => `   • ${p}`).join("\n");
+  }
+
+  // Mesmo produto com specs colados por "+". Junta em linha unica.
+  // Separadores: "/" entre tokens que comecam com NUMERO+GB/TB (storage/RAM),
+  //              espaco no resto.
+  const startsWithStorage = (s: string) => /^\d+\s*(GB|TB)\b/i.test(s);
+  let out = parts[0];
+  for (let i = 1; i < parts.length; i++) {
+    const prev = parts[i - 1];
+    const curr = parts[i];
+    const sep = startsWithStorage(prev) && startsWithStorage(curr) ? "/" : " ";
+    out += sep + curr;
+  }
+  return out;
 }
 
 export default function EntregasPage() {
