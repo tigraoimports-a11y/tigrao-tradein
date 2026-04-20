@@ -2404,7 +2404,7 @@ export default function EntregasPage() {
               </div>
               <p className={`text-sm font-semibold truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</p>
               {e.bairro && <p className={`text-[11px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.bairro}</p>}
-              {e.produto && <p className={`text-[11px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>🍎 {e.produto}</p>}
+              {e.produto && <p className={`text-[11px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>🍎 {limparNomeProduto(e.produto)}</p>}
             </button>
           );
         };
@@ -2743,7 +2743,7 @@ export default function EntregasPage() {
                 {e.produto && (
                   <div className="text-sm">
                     <span className="text-[#86868B]">Produto: </span>
-                    <span className="text-[#1D1D1F] font-medium">{e.produto}</span>
+                    <span className="text-[#1D1D1F] font-medium">{limparNomeProduto(e.produto)}</span>
                   </div>
                 )}
                 {e.tipo && (
