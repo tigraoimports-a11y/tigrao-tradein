@@ -142,11 +142,19 @@ function buildUserMessage(
   tema: string,
   tipo: string,
   estilo: string,
-  slideAlvo?: number
+  slideAlvo?: number,
+  alvosMultiplos?: number[],
+  urlsProibidas?: string[]
 ): string {
+  const alvosSet = slideAlvo !== undefined
+    ? new Set([slideAlvo])
+    : alvosMultiplos && alvosMultiplos.length > 0
+      ? new Set(alvosMultiplos)
+      : null;
+
   const slidesTxt = slides
     .map((s, i) => {
-      if (slideAlvo !== undefined && i !== slideAlvo) return null;
+      if (alvosSet && !alvosSet.has(i)) return null;
       const tag = i === 0 ? "CAPA" : i === slides.length - 1 ? "CTA" : `SLIDE ${i + 1}`;
       const dest = s.destaque ? ` [destaque: "${s.destaque}"]` : "";
       return `${i}. ${tag}${dest}\n   Título: ${s.titulo}\n   Texto: ${s.texto}`;
@@ -154,17 +162,26 @@ function buildUserMessage(
     .filter(Boolean)
     .join("\n\n");
 
-  const contexto = slideAlvo !== undefined
-    ? `Re-ilustre APENAS o slide ${slideAlvo}. Ignore os outros. IMPORTANTE: sua imagem não pode ser igual à de nenhum outro slide já existente.`
-    : `Ilustre TODOS os ${slides.length} slides (exceto o último CTA). Faça 2-3 web_searches por slide se necessário (max_uses=40 total). NENHUM slide pode ficar sem imagem. NENHUMA URL pode repetir entre slides.`;
+  let contexto: string;
+  if (slideAlvo !== undefined) {
+    contexto = `Re-ilustre APENAS o slide ${slideAlvo}. Ignore os outros. IMPORTANTE: sua imagem não pode ser igual à de nenhum outro slide já existente.`;
+  } else if (alvosMultiplos && alvosMultiplos.length > 0) {
+    contexto = `⚠️ RETRY: esses slides ficaram SEM imagem na 1ª tentativa (URL inválida ou duplicada). Re-ilustre APENAS eles (${alvosMultiplos.length} slide${alvosMultiplos.length === 1 ? "" : "s"}). Busque imagens DIFERENTES das que já estão em uso nos outros slides.`;
+  } else {
+    contexto = `Ilustre TODOS os ${slides.length} slides (exceto o último CTA). Faça 2-3 web_searches por slide se necessário (max_uses=40 total). NENHUM slide pode ficar sem imagem. NENHUMA URL pode repetir entre slides.`;
+  }
 
   const estiloNota = estilo === "EMANUEL_PESSOA"
     ? "\n\n⚠️ ESTILO EMANUEL_PESSOA: busque FOTOS REAIS de contexto (pessoas, cenas, situações, executivos, locais) em vez de mockups de produto. Ver regra especial no system prompt."
     : "";
 
+  const blacklistTxt = urlsProibidas && urlsProibidas.length > 0
+    ? `\n\nURLS JÁ USADAS NOS OUTROS SLIDES (NÃO REPITA NENHUMA):\n${urlsProibidas.map((u) => `- ${u}`).join("\n")}`
+    : "";
+
   return `Tema do post: "${tema}" (tipo: ${tipo}, estilo: ${estilo})${estiloNota}
 
-${contexto}
+${contexto}${blacklistTxt}
 
 SLIDES:
 ${slidesTxt}
@@ -311,31 +328,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "slideIndex fora do range" }, { status: 400 });
   }
 
-  const userMsg = buildUserMessage(slides, post.tema, post.tipo, post.estilo || "PADRAO", slideIndex);
-
-  let atribuicoes: AtribuicaoClaude[] = [];
-  try {
-    const response = await client.messages.create({
-      model: "claude-opus-4-7",
-      max_tokens: 6000,
-      system: SYSTEM_PROMPT,
-      tools: [WEB_SEARCH_TOOL, ...TOOLS],
-      messages: [{ role: "user", content: userMsg }],
-    });
-    const toolUse = response.content.find(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "definir_imagens"
-    );
-    if (!toolUse) {
-      return NextResponse.json(
-        { error: "Claude não chamou 'definir_imagens'. Tente novamente." },
-        { status: 500 }
+  async function chamarClaude(
+    userMsg: string
+  ): Promise<{ atribuicoes: AtribuicaoClaude[]; erro: string | null }> {
+    try {
+      const response = await client.messages.create({
+        model: "claude-opus-4-7",
+        max_tokens: 6000,
+        system: SYSTEM_PROMPT,
+        tools: [WEB_SEARCH_TOOL, ...TOOLS],
+        messages: [{ role: "user", content: userMsg }],
+      });
+      const toolUse = response.content.find(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "definir_imagens"
       );
+      if (!toolUse) {
+        return { atribuicoes: [], erro: "Claude não chamou 'definir_imagens'." };
+      }
+      const input = toolUse.input as { atribuicoes: AtribuicaoClaude[] };
+      return { atribuicoes: input.atribuicoes || [], erro: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { atribuicoes: [], erro: "Falha na chamada ao Claude: " + msg };
     }
-    const input = toolUse.input as { atribuicoes: AtribuicaoClaude[] };
-    atribuicoes = input.atribuicoes || [];
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: "Falha na chamada ao Claude: " + msg }, { status: 500 });
+  }
+
+  const userMsg = buildUserMessage(slides, post.tema, post.tipo, post.estilo || "PADRAO", slideIndex);
+  const { atribuicoes, erro } = await chamarClaude(userMsg);
+  if (erro && atribuicoes.length === 0) {
+    return NextResponse.json({ error: erro }, { status: 500 });
   }
 
   // Resolve cada atribuição → URL final de imagem.
@@ -399,6 +420,58 @@ export async function POST(req: NextRequest) {
     return { ...s, imagem_url: r.imagem_final };
   });
 
+  // Fallback: quando ilustrando tudo, re-ilustra slides não-CTA que ficaram
+  // sem imagem (Claude não atribuiu, URL inválida, ou zerada pelo dedup).
+  // Passa blacklist de URLs já usadas pra evitar repetir.
+  let retries = 0;
+  if (slideIndex === undefined) {
+    const ultimoIdx = slides.length - 1;
+    const faltando = slidesNovos
+      .map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => i !== ultimoIdx && !s.imagem_url)
+      .map(({ i }) => i);
+
+    if (faltando.length > 0) {
+      retries = faltando.length;
+      const urlsProibidas = Array.from(urlsJaUsadas);
+      const retryMsg = buildUserMessage(
+        slides,
+        post.tema,
+        post.tipo,
+        post.estilo || "PADRAO",
+        undefined,
+        faltando,
+        urlsProibidas
+      );
+      const { atribuicoes: retryAtrib } = await chamarClaude(retryMsg);
+
+      const retryResolvidas = await Promise.all(
+        retryAtrib.map(async (a) => {
+          const composicaoValida =
+            Array.isArray(a.composicao) &&
+            a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
+          const imagem_final = composicaoValida
+            ? (await comporImagens(a.composicao!, postId, a.slide_index, supabase)) ||
+              (await resolverImagem(a.image_url, a.page_url))
+            : await resolverImagem(a.image_url, a.page_url);
+          return { slide_index: a.slide_index, imagem_final: imagem_final as string | null };
+        })
+      );
+
+      // Aplica só em slides que ainda estão sem imagem, evitando repetir URLs.
+      for (const r of retryResolvidas) {
+        if (!r.imagem_final) continue;
+        if (r.slide_index < 0 || r.slide_index >= slidesNovos.length) continue;
+        if (r.slide_index === ultimoIdx) continue;
+        if (slidesNovos[r.slide_index].imagem_url) continue; // já tem, não sobrescreve
+        const ehComposicao = r.imagem_final.includes("/composto/");
+        if (!ehComposicao && urlsJaUsadas.has(r.imagem_final)) continue; // evita duplicar
+        slidesNovos[r.slide_index] = { ...slidesNovos[r.slide_index], imagem_url: r.imagem_final };
+        if (!ehComposicao) urlsJaUsadas.add(r.imagem_final);
+      }
+    }
+  }
+
   const { error: updErr } = await supabase
     .from("instagram_posts")
     .update({ slides_json: slidesNovos, updated_at: new Date().toISOString() })
@@ -411,5 +484,6 @@ export async function POST(req: NextRequest) {
     slides: slidesNovos,
     atribuicoes: resolvidas,
     duplicadas,
+    retries,
   });
 }

@@ -142,10 +142,14 @@ export default function InstagramPostPage() {
       const comImg = (j.slides || []).filter((s: Slide) => s.imagem_url).length;
       const total = (j.slides || []).length;
       const duplicadas = j.duplicadas || 0;
-      const dupAviso = duplicadas > 0
-        ? ` ⚠️ ${duplicadas} slide(s) ficaram sem imagem porque o Claude sugeriu URL repetida — clica "🔄 Trocar imagem" nos vazios.`
+      const retries = j.retries || 0;
+      const retryAviso = retries > 0
+        ? ` (fallback rodou em ${retries} slide${retries === 1 ? "" : "s"})`
         : "";
-      setMsg(`${comImg} de ${total} slides receberam imagem.${dupAviso} Clique "🔄" em algum slide pra trocar.`);
+      const dupAviso = duplicadas > 0
+        ? ` ⚠️ Ainda ficaram slide(s) vazio(s) — clica "🔄 Trocar imagem" nos vazios.`
+        : "";
+      setMsg(`${comImg} de ${total} slides receberam imagem${retryAviso}.${dupAviso} Clique "🔄" em algum slide pra trocar.`);
     } finally {
       setIlustrando(false);
     }
