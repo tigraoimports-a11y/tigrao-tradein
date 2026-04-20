@@ -48,6 +48,10 @@ REGRAS CRÍTICAS (⚠️ não quebre)
 
 ⚠️ COERÊNCIA TEMÁTICA: a imagem DEVE refletir o texto do slide. Se o slide fala de "Veredito honesto", busque foto de balança, iPads enfileirados, ou comparação lado-a-lado — NÃO foto aleatória de revista, meme ou coisa não relacionada.
 
+⚠️ SEM TEXTO EM INGLÊS (nem em qualquer idioma) NA IMAGEM: o carrossel é em PORTUGUÊS. NÃO use thumbnails de YouTube, capas de artigo com overlay de título ("Hidden in macOS Tahoe", "Spotlight Clipboard History"), infográficos ou banners com palavras. Imagens com texto em inglês quebram o visual. Prefira foto LIMPA do produto ou screenshot da tela do app SEM overlay editorial.
+
+⚠️ FOTO REAL, NÃO RENDER ARTÍSTICO: pra capas e slides genéricos sobre produto Apple, busque FOTO REAL do produto (oficial apple.com, newsroom, reviews de canais tech) — NÃO setups artísticos com luzes coloridas, monitor curvo + teclado mecânico + RGB, wallpapers abstratos, mockups 3D renderizados. O leitor tem que reconhecer "aquilo é um MacBook/iPhone/iPad de verdade", não uma cena de Pinterest.
+
 REGRAS GERAIS
 1. Busca orientada ao CONCEITO do slide, não só ao produto.
    - Slide "Command é o novo Ctrl" → imagem de teclado Mac mostrando tecla ⌘.
@@ -64,16 +68,38 @@ REGRAS GERAIS
    - Máximo 3 URLs em composição.
    - ⚠️ COMPOSIÇÕES TAMBÉM NÃO PODEM REPETIR: se 3 slides falam dos mesmos modelos, NÃO mande a mesma lista de URLs nos 3. Varie — ex: slide A usa foto frontal dos 3, slide B usa foto lateral, slide C usa detalhe de câmera. O backend detecta composições visualmente iguais (mesma lista de URLs ordenada) e ZERA as duplicatas.
 
-3. Priorize fontes:
-   - apple.com/br, apple.com, newsroom Apple pra produtos específicos.
-   - 9to5Mac, MacRumors, The Verge, Tecnoblog, TechTudo pra reviews.
-   - Wikipedia commons pra imagens com licença aberta.
+3. Priorize fontes (⚠️ PREFERENCIA FORTE por sites BRASILEIROS — carrossel em PT-BR, imagens e legendas em PT evitam o problema de overlay em inglês):
+
+   **Oficial Apple:**
+   - apple.com/br, apple.com, newsroom Apple (support.apple.com pra screenshots de tutorial).
+
+   **Sites brasileiros especializados em Apple (TOP):**
+   - macmagazine.com.br — "O melhor pedaço da Maçã", reviews e fotos de alta qualidade.
+   - blogdoiphone.com — referência de iPhone no Brasil desde 2008.
+   - tudocelular.com/apple — portal do mundo Apple do TudoCelular.
+   - blog.iplace.com.br — blog da Apple Premium Reseller, fotos de produto.
+   - iphoneblog.com.br — tutoriais e screenshots iOS em PT.
+
+   **Tech geral brasileiro (cobertura forte Apple):**
+   - tecnoblog.net, canaltech.com.br, olhardigital.com.br, techtudo.com.br (Globo).
+   - gizmodo.uol.com.br, showmetech.com.br, adrenaline.com.br, uol.com.br/tilt.
+   - meiobit.com, manualdousuario.net.
+
+   **Jornalismo BR (tecnologia):**
+   - cnnbrasil.com.br, exame.com, estadao.com.br/link, folha.uol.com.br/tec, mobiletime.com.br.
+
+   **Internacional (só se não achar em BR):**
+   - 9to5Mac, MacRumors, The Verge (tem overlay em inglês — cuidado).
+   - Wikipedia Commons (imagens com licença aberta, fundo limpo).
 
 4. NÃO use:
    - Ícones pequenos, sprites, logos de favicon.
    - Sites de afiliado/cupom.
    - Screenshots de slide/apresentação (meta).
    - Imagens de capa de revista ou trending TikTok (CORECORE, coisas do tipo — sem relação).
+   - **Thumbnails de YouTube** (i.ytimg.com, img.youtube.com): sempre têm rosto + texto overlay + setas vermelhas.
+   - **Imagens com texto em inglês sobreposto** (ex: "Hidden in macOS Tahoe", "Top 10 Tips"): conflitam com post em PT-BR.
+   - **Setups artísticos** tipo Pinterest (monitor + RGB + teclado mecânico + plantas) quando o slide fala genericamente de Mac/iPad — use foto real do produto.
    - Imagem que já apareceu em outro slide (VER REGRA CRÍTICA acima).
 
 REGRA ESPECIAL — ESTILO EMANUEL_PESSOA (análise profunda narrativa):
@@ -239,6 +265,8 @@ function ehImagemValida(url: string): boolean {
   if (/\/(icons?|glyph)\//i.test(url)) return false;
   if (/knowledge_graph/i.test(url)) return false;
   if (/help\.apple\.com\/assets/i.test(url)) return false;
+  // Thumbnails de YouTube sempre vem com rosto + texto overlay em ingles.
+  if (/\b(i\.ytimg\.com|img\.youtube\.com)\b/i.test(url)) return false;
   return true;
 }
 
