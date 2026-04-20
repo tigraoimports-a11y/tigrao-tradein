@@ -569,31 +569,43 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
 
-  // Enviar NF manualmente por email ao cliente
+  // Enviar NF manualmente por email ao cliente.
+  // Se body.skipEmail=true, apenas marca a NF como enviada sem disparar email
+  // (fallback pra casos onde o vendedor ja enviou por outro canal e so quer
+  // limpar a flag "pendente").
   if (body.action === "enviar_nf") {
-    const { id: vendaId } = body;
+    const { id: vendaId, skipEmail } = body;
     if (!vendaId) return NextResponse.json({ error: "id required" }, { status: 400 });
     const { data: venda, error: e } = await supabase.from("vendas")
       .select("id, email, cliente, produto, cor, valor_comprovante, preco_vendido, nota_fiscal_url, nota_fiscal_enviada")
       .eq("id", vendaId)
       .single();
     if (e || !venda) return NextResponse.json({ error: "venda nao encontrada" }, { status: 404 });
-    if (!venda.email) return NextResponse.json({ error: "venda sem email do cliente" }, { status: 400 });
     if (!venda.nota_fiscal_url) return NextResponse.json({ error: "venda sem NF anexada" }, { status: 400 });
+    if (!skipEmail && !venda.email) return NextResponse.json({ error: "venda sem email do cliente — use skipEmail pra marcar como enviada sem disparar email" }, { status: 400 });
     try {
-      const { enviarNotaFiscal } = await import("@/lib/email");
-      await enviarNotaFiscal({
-        to: venda.email,
-        clienteNome: venda.cliente || "Cliente",
-        produto: normalizarCoresNoTexto(`${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim()),
-        valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
-        notaFiscalUrl: venda.nota_fiscal_url,
-      });
-      await supabase.from("vendas")
+      if (!skipEmail) {
+        const { enviarNotaFiscal } = await import("@/lib/email");
+        await enviarNotaFiscal({
+          to: venda.email!,
+          clienteNome: venda.cliente || "Cliente",
+          produto: normalizarCoresNoTexto(`${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim()),
+          valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
+          notaFiscalUrl: venda.nota_fiscal_url,
+        });
+      }
+      // Checa erro do update explicitamente — se a coluna nao existe (migration
+      // nao rodou) ou RLS bloqueia, antes retornava ok=true silenciosamente e
+      // o frontend ficava divergente do DB.
+      const { error: updErr } = await supabase.from("vendas")
         .update({ nota_fiscal_enviada: true, nota_fiscal_enviada_em: new Date().toISOString() })
         .eq("id", vendaId);
-      await logActivity(usuario, "NF enviada por email (manual)", `${venda.cliente} → ${venda.email}`, "vendas", vendaId);
-      return NextResponse.json({ ok: true });
+      if (updErr) {
+        console.error("[Vendas] Erro ao atualizar nota_fiscal_enviada:", updErr);
+        return NextResponse.json({ error: `Email enviado mas falhou ao marcar como enviada: ${updErr.message}. Verifique se a migration 20260419c rodou.` }, { status: 500 });
+      }
+      await logActivity(usuario, skipEmail ? "NF marcada como enviada (sem email)" : "NF enviada por email (manual)", `${venda.cliente} → ${venda.email || "sem email"}`, "vendas", vendaId);
+      return NextResponse.json({ ok: true, skipEmail: !!skipEmail });
     } catch (err) {
       console.error("[Vendas] Erro ao enviar NF manual:", err);
       return NextResponse.json({ error: `Erro ao enviar email: ${String(err)}` }, { status: 500 });

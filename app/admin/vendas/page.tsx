@@ -4582,20 +4582,32 @@ export default function VendasPage() {
                         onClick={async () => {
                           if (!confirm(`Enviar ${pendentesNF.length} NF(s) pendente(s) por email?\n\nVai disparar email pra cada cliente dessa lista. Quem ja recebeu nao sera reenviado.`)) return;
                           const ids = pendentesNF.map(v => v.id);
-                          const res = await fetch("/api/vendas", {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                            body: JSON.stringify({ action: "enviar_nf_bulk", ids }),
-                          });
-                          const j = await res.json().catch(() => ({}));
-                          if (res.ok && j.ok) {
-                            const errTxt = j.erros && j.erros.length
-                              ? ` (${j.erros.length} erro${j.erros.length > 1 ? "s" : ""}: ${j.erros.slice(0, 3).map((e: { cliente: string }) => e.cliente).join(", ")}${j.erros.length > 3 ? "..." : ""})`
-                              : "";
-                            setMsg(`${j.enviadas}/${j.total} NF(s) enviada(s)${errTxt}`);
-                            fetchVendas();
-                          } else {
-                            setMsg(`Erro no envio em massa: ${j.error || res.status}`);
+                          try {
+                            const res = await fetch("/api/vendas", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                              body: JSON.stringify({ action: "enviar_nf_bulk", ids }),
+                            });
+                            const j = await res.json().catch(() => ({}));
+                            console.log("[Bulk NF] status=", res.status, "body=", j);
+                            if (res.ok && j.ok) {
+                              const errTxt = j.erros && j.erros.length
+                                ? ` (${j.erros.length} erro${j.erros.length > 1 ? "s" : ""}: ${j.erros.slice(0, 3).map((e: { cliente: string }) => e.cliente).join(", ")}${j.erros.length > 3 ? "..." : ""})`
+                                : "";
+                              setMsg(`${j.enviadas}/${j.total} NF(s) enviada(s)${errTxt}`);
+                              if (j.erros && j.erros.length) {
+                                console.error("[Bulk NF] erros detalhados:", j.erros);
+                                alert(`${j.enviadas}/${j.total} enviadas.\n\n${j.erros.length} falharam — ver console (F12) pra detalhes.`);
+                              }
+                              await fetchVendas();
+                            } else {
+                              const erro = `Erro no envio em massa (HTTP ${res.status}): ${j.error || "sem detalhe"}`;
+                              setMsg(erro);
+                              alert(erro);
+                            }
+                          } catch (err) {
+                            console.error("[Bulk NF] excecao:", err);
+                            alert(`Erro de rede: ${String(err)}`);
                           }
                           setTimeout(() => setMsg(""), 6000);
                         }}
@@ -5622,34 +5634,83 @@ export default function VendasPage() {
                                               >
                                                 ✅ NF enviada
                                               </span>
-                                            ) : v.email ? (
-                                              <button
-                                                onClick={async (e) => {
-                                                  e.stopPropagation();
-                                                  if (!confirm(`Enviar NF por email pra ${v.email}?`)) return;
-                                                  const res = await fetch("/api/vendas", {
-                                                    method: "PATCH",
-                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                    body: JSON.stringify({ action: "enviar_nf", id: v.id }),
-                                                  });
-                                                  const j = await res.json().catch(() => ({}));
-                                                  if (res.ok && j.ok) {
-                                                    setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_enviada: true, nota_fiscal_enviada_em: new Date().toISOString() } as typeof r : r));
-                                                    setMsg(`NF enviada para ${v.email}`);
-                                                  } else {
-                                                    setMsg(`Erro ao enviar NF: ${j.error || res.status}`);
-                                                  }
-                                                  setTimeout(() => setMsg(""), 4000);
-                                                }}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 hover:bg-amber-100 transition-colors inline-flex items-center gap-1"
-                                                title={`Enviar por email pra ${v.email}`}
-                                              >
-                                                📧 Enviar NF (pendente)
-                                              </button>
                                             ) : (
-                                              <span className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 inline-flex items-center gap-1" title="Venda sem email do cliente">
-                                                ⚠️ Sem email
-                                              </span>
+                                              <>
+                                                {v.email ? (
+                                                  <button
+                                                    onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      if (!confirm(`Enviar NF por email pra ${v.email}?`)) return;
+                                                      try {
+                                                        const res = await fetch("/api/vendas", {
+                                                          method: "PATCH",
+                                                          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                          body: JSON.stringify({ action: "enviar_nf", id: v.id }),
+                                                        });
+                                                        const j = await res.json().catch(() => ({}));
+                                                        console.log("[Enviar NF] status=", res.status, "body=", j);
+                                                        if (res.ok && j.ok) {
+                                                          setMsg(`✅ NF enviada para ${v.email}`);
+                                                          // Sync com DB pra garantir que o estado local bate com servidor
+                                                          await fetchVendas();
+                                                        } else {
+                                                          const erro = `Erro ao enviar NF (HTTP ${res.status}): ${j.error || "sem detalhe"}`;
+                                                          setMsg(erro);
+                                                          alert(erro + "\n\nVerifique console (F12) pra detalhes.\n\nSe o erro persistir, use 'Marcar como enviada' pra dispensar a pendencia manualmente.");
+                                                        }
+                                                      } catch (err) {
+                                                        const erro = `Erro de rede ao enviar NF: ${String(err)}`;
+                                                        console.error("[Enviar NF] excecao:", err);
+                                                        setMsg(erro);
+                                                        alert(erro);
+                                                      }
+                                                      setTimeout(() => setMsg(""), 6000);
+                                                    }}
+                                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 hover:bg-amber-100 transition-colors inline-flex items-center gap-1"
+                                                    title={`Enviar por email pra ${v.email}`}
+                                                  >
+                                                    📧 Enviar NF (pendente)
+                                                  </button>
+                                                ) : (
+                                                  <span className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 inline-flex items-center gap-1" title="Venda sem email do cliente">
+                                                    ⚠️ Sem email
+                                                  </span>
+                                                )}
+                                                {/* Fallback: marca como enviada sem disparar email — util quando
+                                                    vendedor ja enviou pelo WhatsApp ou o servico de email ta com
+                                                    problema e so quer dispensar a pendencia. */}
+                                                <button
+                                                  onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (!confirm("Marcar essa NF como enviada SEM disparar email?\n\nUse quando ja enviou por outro canal (WhatsApp, etc) e so quer dispensar a pendencia.")) return;
+                                                    try {
+                                                      const res = await fetch("/api/vendas", {
+                                                        method: "PATCH",
+                                                        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                        body: JSON.stringify({ action: "enviar_nf", id: v.id, skipEmail: true }),
+                                                      });
+                                                      const j = await res.json().catch(() => ({}));
+                                                      console.log("[Marcar NF enviada] status=", res.status, "body=", j);
+                                                      if (res.ok && j.ok) {
+                                                        setMsg("✅ NF marcada como enviada");
+                                                        await fetchVendas();
+                                                      } else {
+                                                        const erro = `Erro ao marcar NF: ${j.error || res.status}`;
+                                                        setMsg(erro);
+                                                        alert(erro);
+                                                      }
+                                                    } catch (err) {
+                                                      console.error("[Marcar NF enviada] excecao:", err);
+                                                      alert(`Erro de rede: ${String(err)}`);
+                                                    }
+                                                    setTimeout(() => setMsg(""), 4000);
+                                                  }}
+                                                  className="px-2 py-1.5 rounded-lg text-[10px] font-semibold text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 transition-colors inline-flex items-center gap-1"
+                                                  title="Marcar como enviada sem disparar email (fallback)"
+                                                >
+                                                  ✓ Marcar enviada
+                                                </button>
+                                              </>
                                             )}
                                             <button
                                               onClick={async (e) => {
