@@ -199,42 +199,32 @@ export default function CalculadoraImportacao() {
           <span className="text-[#86868B]">{showProdutos ? "▲" : "▼"}</span>
         </button>
 
-        {produtoBase && (produtoBase.configs?.length || produtoBase.cores?.length) && (
+        {produtoBase && (
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {produtoBase.configs && produtoBase.configs.length > 0 && (
-              <div>
-                <label className="block text-xs font-semibold text-[#86868B] mb-1.5 uppercase tracking-wider">
-                  Configuração
-                </label>
-                <select
-                  value={configSelecionada}
-                  onChange={(e) => setConfigSelecionada(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-sm outline-none focus:border-[#E8740E]"
-                >
-                  <option value="">— Selecionar —</option>
-                  {produtoBase.configs.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {produtoBase.cores && produtoBase.cores.length > 0 && (
-              <div>
-                <label className="block text-xs font-semibold text-[#86868B] mb-1.5 uppercase tracking-wider">
-                  Cor
-                </label>
-                <select
-                  value={corSelecionada}
-                  onChange={(e) => setCorSelecionada(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-sm outline-none focus:border-[#E8740E]"
-                >
-                  <option value="">— Selecionar —</option>
-                  {produtoBase.cores.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div>
+              <label className="block text-xs font-semibold text-[#86868B] mb-1.5 uppercase tracking-wider">
+                Configuração (opcional)
+              </label>
+              <input
+                type="text"
+                value={configSelecionada}
+                onChange={(e) => setConfigSelecionada(e.target.value)}
+                placeholder="Ex: 256GB, 512GB, M4 Pro..."
+                className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-sm outline-none focus:border-[#E8740E]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#86868B] mb-1.5 uppercase tracking-wider">
+                Cor (opcional)
+              </label>
+              <input
+                type="text"
+                value={corSelecionada}
+                onChange={(e) => setCorSelecionada(e.target.value)}
+                placeholder="Ex: Prata, Grafite, Preto..."
+                className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-sm outline-none focus:border-[#E8740E]"
+              />
+            </div>
           </div>
         )}
 
@@ -278,9 +268,9 @@ export default function CalculadoraImportacao() {
                         onClick={() => {
                           setPeso(String(p.peso));
                           setProdutoBaseNome(p.nome);
-                          // Pre-seleciona primeira config/cor se houver apenas uma
-                          setConfigSelecionada((p.configs && p.configs.length === 1) ? p.configs[0] : "");
-                          setCorSelecionada((p.cores && p.cores.length === 1) ? p.cores[0] : "");
+                          // Config e cor sao digitados livre na tela de Calcular — limpa ao trocar produto
+                          setConfigSelecionada("");
+                          setCorSelecionada("");
                           setShowProdutos(false);
                           setBuscaProduto("");
                         }}
@@ -572,9 +562,7 @@ function EditorProdutos({
 
       <div className="overflow-x-auto">
         <p className="text-[11px] text-[#86868B] mb-2">
-          💡 <strong>Configurações</strong> e <strong>Cores</strong> sao opcionais —
-          separe por virgula (ex: &quot;256GB, 512GB, 1TB&quot; ou &quot;Prata, Grafite&quot;).
-          Se preenchidos, viram seletores na tela de calcular.
+          💡 Configuracao e cor sao digitadas na tela de <strong>Calcular</strong>, produto por produto. Aqui e so lista de modelos com peso.
         </p>
         <table className="w-full text-sm">
           <thead>
@@ -582,8 +570,6 @@ function EditorProdutos({
               <th className="text-left py-2 pr-3 w-28">Categoria</th>
               <th className="text-left py-2 pr-3">Nome</th>
               <th className="text-left py-2 pr-3 w-20">Peso (kg)</th>
-              <th className="text-left py-2 pr-3">Configurações</th>
-              <th className="text-left py-2 pr-3">Cores</th>
               <th className="text-right py-2 w-12"></th>
             </tr>
           </thead>
@@ -617,24 +603,6 @@ function EditorProdutos({
                     value={p.peso}
                     onChange={(e) => atualizar(i, "peso", parseFloat(e.target.value) || 0)}
                     placeholder="3.0"
-                    className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm outline-none focus:border-[#E8740E]"
-                  />
-                </td>
-                <td className="py-2 pr-3">
-                  <input
-                    type="text"
-                    value={(p.configs || []).join(", ")}
-                    onChange={(e) => atualizarArray(i, "configs", e.target.value)}
-                    placeholder="256GB, 512GB, 1TB"
-                    className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm outline-none focus:border-[#E8740E]"
-                  />
-                </td>
-                <td className="py-2 pr-3">
-                  <input
-                    type="text"
-                    value={(p.cores || []).join(", ")}
-                    onChange={(e) => atualizarArray(i, "cores", e.target.value)}
-                    placeholder="Prata, Grafite, Preto"
                     className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm outline-none focus:border-[#E8740E]"
                   />
                 </td>
