@@ -958,7 +958,7 @@ function CompraForm() {
                       <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>
                     )}
                     {(trocaNum > 0 || descontoParam > 0) && (
-                      <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>
+                      <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : descontoParam > 0 ? "Total com desconto" : "Total"}: R$ {fmt(valorBase)}</p>
                     )}
                   </div>
                 )}
@@ -1022,7 +1022,7 @@ function CompraForm() {
                   <>
                     <p className="text-[#E8740E] font-bold text-xl">R$ {fmt(preco)}</p>
                     {descontoParam > 0 && <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>}
-                    {(trocaNum > 0 || descontoParam > 0) && <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>}
+                    {(trocaNum > 0 || descontoParam > 0) && <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : descontoParam > 0 ? "Total com desconto" : "Total"}: R$ {fmt(valorBase)}</p>}
                   </>
                 ) : (
                   <div>
@@ -1093,7 +1093,7 @@ function CompraForm() {
             </div>
           )}
           {preco > 0 && descontoParam > 0 && <p className="text-blue-500 font-semibold text-sm pt-2 border-t border-green-200">Desconto: - R$ {fmt(descontoParam)}</p>}
-          {preco > 0 && <p className={`text-[#E8740E] font-bold text-lg ${descontoParam > 0 ? "" : "pt-2 border-t border-green-200"}`}>{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>}
+          {preco > 0 && <p className={`text-[#E8740E] font-bold text-lg ${descontoParam > 0 ? "" : "pt-2 border-t border-green-200"}`}>{trocaNum > 0 ? "Diferenca a pagar" : descontoParam > 0 ? "Total com desconto" : "Total"}: R$ {fmt(valorBase)}</p>}
         </div>
       )}
 
