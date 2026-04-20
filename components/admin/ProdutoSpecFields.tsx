@@ -353,6 +353,7 @@ export default function ProdutoSpecFields({
   const awTamanhoOptions = cfgOr("tamanho_aw", WATCH_TAMANHOS_FULL);
   const awConnOptions = cfgOr("conectividade_aw", ["GPS", "GPS + CEL"]);
   const awBandOptions = cfgOr("pulseiras", WATCH_BAND_MODELS);
+  const airDescricaoOptions = cfgOr("descricao_airpods", ["Com ANC", "Sem ANC", "USB-C"]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
 
@@ -954,6 +955,13 @@ export default function ProdutoSpecFields({
               </select>
             </div>
           )}
+          <div>
+            <p className={labelCls}>Descrição</p>
+            <select value={row.spec.air_descricao} onChange={(e) => setSpec("air_descricao", e.target.value)} className={inputCls}>
+              <option value="">— Opcional —</option>
+              {airDescricaoOptions?.map((d) => <option key={d}>{d}</option>)}
+            </select>
+          </div>
         </div>
       )}
 
