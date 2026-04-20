@@ -36,6 +36,10 @@ interface Post {
   erro: string | null;
   criado_por: string | null;
   created_at: string;
+  agendado_para: string | null;
+  postado_em: string | null;
+  instagram_post_id: string | null;
+  instagram_permalink: string | null;
 }
 
 const STATUS_LABEL: Record<Post["status"], string> = {
@@ -79,6 +83,11 @@ export default function InstagramPostPage() {
   const [renderizando, setRenderizando] = useState(false);
   const [uploadingSlide, setUploadingSlide] = useState<number | null>(null);
   const uploadRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  // PR 3: postagem
+  const [publicando, setPublicando] = useState(false);
+  const [agendando, setAgendando] = useState(false);
+  const [agendadoInput, setAgendadoInput] = useState("");
 
   const fetchPost = useCallback(async () => {
     if (!password || !id) return;
@@ -320,6 +329,84 @@ export default function InstagramPostPage() {
 
   const atualizarSlide = (idx: number, campo: keyof Slide, valor: string) => {
     setSlidesEdit(prev => prev.map((s, i) => i === idx ? { ...s, [campo]: valor } : s));
+  };
+
+  const publicarAgora = async () => {
+    if (!confirm("Publicar agora no Instagram? Isso é irreversível.")) return;
+    setPublicando(true);
+    setMsg("Publicando no Instagram... (pode levar 1-2 min)");
+    try {
+      const res = await fetch("/api/instagram/publicar", {
+        method: "POST",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ postId: id }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setMsg("Erro: " + (j.error || "falha ao publicar"));
+        return;
+      }
+      setMsg("✅ Publicado no Instagram!");
+      fetchPost();
+    } catch (e) {
+      setMsg("Erro de rede: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setPublicando(false);
+    }
+  };
+
+  const agendarPost = async () => {
+    if (!agendadoInput) {
+      setMsg("Escolha data e hora do agendamento.");
+      return;
+    }
+    const quando = new Date(agendadoInput);
+    if (isNaN(quando.getTime()) || quando.getTime() <= Date.now()) {
+      setMsg("Data de agendamento precisa ser no futuro.");
+      return;
+    }
+    setAgendando(true);
+    try {
+      const res = await fetch("/api/admin/instagram-posts", {
+        method: "PATCH",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          id,
+          status: "AGENDADO",
+          agendado_para: quando.toISOString(),
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setMsg("Erro: " + (j.error || "falha ao agendar"));
+        return;
+      }
+      setMsg(`⏰ Agendado pra ${quando.toLocaleString("pt-BR")}`);
+      setAgendadoInput("");
+      fetchPost();
+    } finally {
+      setAgendando(false);
+    }
+  };
+
+  const cancelarAgendamento = async () => {
+    if (!confirm("Cancelar agendamento? O post volta pra APROVADO.")) return;
+    try {
+      const res = await fetch("/api/admin/instagram-posts", {
+        method: "PATCH",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ id, status: "APROVADO", agendado_para: null }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setMsg("Erro: " + (j.error || "falha"));
+        return;
+      }
+      setMsg("Agendamento cancelado.");
+      fetchPost();
+    } catch (e) {
+      setMsg("Erro de rede: " + (e instanceof Error ? e.message : String(e)));
+    }
   };
 
   if (loading) return <div className="max-w-5xl mx-auto p-6 text-[#86868B]">Carregando...</div>;
@@ -610,6 +697,83 @@ export default function InstagramPostPage() {
             </div>
           </div>
 
+          {/* Postar no Instagram */}
+          {temImagensRenderizadas && post.status !== "POSTADO" && (
+            <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 mb-6">
+              <h3 className="text-sm font-semibold text-[#1D1D1F] mb-2">Postar no Instagram</h3>
+              <p className="text-xs text-[#86868B] mb-4">
+                Publica o carrossel completo (imagem + legenda + hashtags) na conta @tigraoimports.
+              </p>
+
+              {post.status === "AGENDADO" && post.agendado_para ? (
+                <div className="bg-[#FFF5EB] border border-[#E8740E]/20 rounded-xl p-4">
+                  <div className="text-sm font-semibold text-[#E8740E] mb-1">⏰ Agendado</div>
+                  <div className="text-sm text-[#1D1D1F] mb-3">
+                    Vai publicar em <strong>{new Date(post.agendado_para).toLocaleString("pt-BR")}</strong>
+                    <div className="text-xs text-[#86868B] mt-1">(cron roda a cada 5 min, pode atrasar alguns minutos)</div>
+                  </div>
+                  <button
+                    onClick={cancelarAgendamento}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-[#6E6E73] hover:bg-[#F5F5F7]"
+                  >
+                    Cancelar agendamento
+                  </button>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="border border-[#E8E8ED] rounded-xl p-3">
+                    <div className="text-sm font-semibold text-[#1D1D1F] mb-2">🚀 Publicar agora</div>
+                    <p className="text-xs text-[#86868B] mb-3">Posta imediatamente. Leva ~1-2 min.</p>
+                    <button
+                      onClick={publicarAgora}
+                      disabled={publicando || agendando}
+                      className="w-full px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+                    >
+                      {publicando ? "⏳ Publicando..." : "🚀 Publicar agora"}
+                    </button>
+                  </div>
+                  <div className="border border-[#E8E8ED] rounded-xl p-3">
+                    <div className="text-sm font-semibold text-[#1D1D1F] mb-2">⏰ Agendar</div>
+                    <input
+                      type="datetime-local"
+                      value={agendadoInput}
+                      onChange={(e) => setAgendadoInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-[#E8E8ED] text-sm mb-2 focus:outline-none focus:border-[#E8740E]"
+                    />
+                    <button
+                      onClick={agendarPost}
+                      disabled={publicando || agendando || !agendadoInput}
+                      className="w-full px-4 py-2 rounded-xl bg-[#1D1D1F] text-white text-sm font-semibold hover:bg-black disabled:opacity-50"
+                    >
+                      {agendando ? "Agendando..." : "⏰ Agendar"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {post.status === "POSTADO" && (
+            <div className="bg-[#F0FFF4] border border-[#2ECC71]/30 rounded-2xl p-4 mb-6">
+              <div className="text-sm font-semibold text-[#27AE60] mb-1">✅ Publicado no Instagram</div>
+              {post.postado_em && (
+                <div className="text-xs text-[#1D1D1F] mb-2">
+                  em {new Date(post.postado_em).toLocaleString("pt-BR")}
+                </div>
+              )}
+              {post.instagram_permalink && (
+                <a
+                  href={post.instagram_permalink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-[#E8740E] hover:underline break-all"
+                >
+                  {post.instagram_permalink}
+                </a>
+              )}
+            </div>
+          )}
+
           {/* Fact-check */}
           {post.pesquisa_json && (
             <details className="bg-[#F5F5F7] border border-[#E8E8ED] rounded-2xl p-4 mb-6">
@@ -647,9 +811,6 @@ export default function InstagramPostPage() {
         </>
       )}
 
-      <div className="text-xs text-[#86868B] text-center py-4">
-        Após aprovar: próximo PR adiciona agendamento + postagem automática.
-      </div>
     </div>
   );
 }
