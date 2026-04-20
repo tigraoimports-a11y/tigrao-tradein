@@ -874,7 +874,13 @@ export default function ClientesPage() {
                     if (!res.ok || !j.ok) {
                       falhas.push(`${antigo}: ${j.error || j.erros?.join(", ") || `HTTP ${res.status}`}`);
                     } else if (j.resultado) {
-                      totalAfetado += Object.values(j.resultado as Record<string, number>).reduce((s, n) => s + Number(n || 0), 0);
+                      const soma = Object.values(j.resultado as Record<string, number>).reduce((s, n) => s + Number(n || 0), 0);
+                      totalAfetado += soma;
+                      // Se API retornou ok=true mas 0 registros afetados, sinaliza — provavel que
+                      // o nome no DB tenha variacao (espaco extra, acento) que o ilike nao casou
+                      if (soma === 0) {
+                        falhas.push(`${antigo}: API retornou OK mas 0 registros foram atualizados. Verifique se o nome bate exatamente (espacos, acentos). Detalhes no console.`);
+                      }
                     }
                   } catch (err) {
                     falhas.push(`${antigo}: ${String(err)}`);

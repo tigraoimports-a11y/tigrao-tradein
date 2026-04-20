@@ -39,18 +39,49 @@ export async function POST(req: NextRequest) {
   const resultado: Record<string, number> = {};
   const erros: string[] = [];
 
-  // Helper: atualiza tabela usando ilike (case-insensitive exact match).
-  // Retorna contagem. Em erro, registra e retorna 0.
+  const antigoNorm = normalizar(antigoRaw);
+
+  // Helper: atualiza tabela via ilike (case-insensitive). Se 0 matches, faz
+  // fallback buscando TODOS os nomes distintos e matching por normalizacao
+  // (sem acentos, espacos colapsados). Protege contra "NEXT PHONE" vs
+  // "NEXT  PHONE" (2 espacos), "NÉXT PHONE", " NEXT PHONE" (padding), etc.
   const updateTabela = async (tabela: string, coluna: string) => {
-    const { data, error } = await supabase.from(tabela)
+    // Primeira tentativa: ilike exato case-insensitive
+    const { data: ilikeData, error: ilikeErr } = await supabase.from(tabela)
       .update({ [coluna]: novo })
       .ilike(coluna, antigoEsc)
       .select("id");
-    if (error) {
-      erros.push(`${tabela}.${coluna}: ${error.message}`);
+    if (ilikeErr) {
+      erros.push(`${tabela}.${coluna} (ilike): ${ilikeErr.message}`);
       return 0;
     }
-    return data?.length || 0;
+    if ((ilikeData?.length || 0) > 0) return ilikeData!.length;
+
+    // Fallback: busca nomes distintos, filtra por match normalizado no JS,
+    // depois atualiza via .in() pra todos os nomes que casarem.
+    const { data: todos, error: selErr } = await supabase.from(tabela)
+      .select(coluna)
+      .not(coluna, "is", null);
+    if (selErr) {
+      erros.push(`${tabela}.${coluna} (select): ${selErr.message}`);
+      return 0;
+    }
+    const nomesMatching = Array.from(new Set(
+      (todos || [])
+        .map(r => (r as unknown as Record<string, unknown>)[coluna] as string)
+        .filter(n => typeof n === "string" && normalizar(n) === antigoNorm && n !== novo),
+    ));
+    if (nomesMatching.length === 0) return 0;
+
+    const { data: updData, error: updErr } = await supabase.from(tabela)
+      .update({ [coluna]: novo })
+      .in(coluna, nomesMatching)
+      .select("id");
+    if (updErr) {
+      erros.push(`${tabela}.${coluna} (update by normalized): ${updErr.message}`);
+      return 0;
+    }
+    return updData?.length || 0;
   };
 
   resultado.vendas = await updateTabela("vendas", "cliente");
@@ -67,7 +98,6 @@ export async function POST(req: NextRequest) {
       .from("lojistas")
       .select("id, nome, saldo_credito");
 
-    const antigoNorm = normalizar(antigoRaw);
     const novoNorm = normalizar(novo);
 
     const lojistasAntigos = (todosLojistas || []).filter(l => normalizar(l.nome || "") === antigoNorm);
