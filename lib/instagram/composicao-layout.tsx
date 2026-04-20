@@ -5,15 +5,18 @@
 import type { ReactElement } from "react";
 
 export const COMPOSICAO_W = 1080;
-export const COMPOSICAO_H = 540;
+// Altura maior (antes 540) pra cada imagem individual aparecer maior dentro da
+// composicao — evita o efeito de "miniaturas" quando tem 2-3 produtos lado a lado.
+// Com 720, o ratio fica 3:2, mais proximo do container do slide (~1.85:1).
+export const COMPOSICAO_H = 720;
 
 export function composicaoJSX(imagensDataUrls: string[]): ReactElement {
   const n = imagensDataUrls.length;
-  const paddingLateral = 30;
-  const gap = n === 2 ? 20 : 14;
+  const paddingLateral = 24;
+  const gap = n === 2 ? 24 : 18;
   const disponivel = COMPOSICAO_W - paddingLateral * 2 - gap * (n - 1);
   const larguraCada = Math.floor(disponivel / n);
-  const alturaCada = COMPOSICAO_H - 60;
+  const alturaCada = COMPOSICAO_H - 40;
 
   return (
     <div
