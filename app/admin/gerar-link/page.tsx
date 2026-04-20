@@ -369,6 +369,19 @@ export default function GerarLinkPage() {
   const [histTipo, setHistTipo] = useState<"" | "COMPRA" | "TROCA">("");
   const [histArquivado, setHistArquivado] = useState<"0" | "1">("0");
   const [histStatus, setHistStatus] = useState<"" | "ATIVO" | "PREENCHIDO" | "ENCAMINHADO">("");
+  const [histOperador, setHistOperador] = useState<string>("");
+
+  // Lista de operadores unicos extraida dos links carregados. Alimenta o
+  // dropdown "Vendedor que criou" na aba Historico. Ordena alfabeticamente,
+  // ignora vazios. O filtro em si e aplicado no cliente (nao no backend) pra
+  // evitar round-trip e manter o dropdown populado ao alternar filtros.
+  const operadoresDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of histLinks) {
+      if (l.operador && l.operador.trim()) set.add(l.operador.trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [histLinks]);
 
   async function fetchHistorico() {
     if (!adminPw) return;
@@ -1876,6 +1889,18 @@ export default function GerarLinkPage() {
               <option value="0">Ativos</option>
               <option value="1">Arquivados</option>
             </select>
+            <select
+              value={histOperador}
+              onChange={(e) => setHistOperador(e.target.value)}
+              className={inputCls}
+              style={{ maxWidth: 200 }}
+              title="Filtrar por quem criou o link"
+            >
+              <option value="">👤 Todos vendedores</option>
+              {operadoresDisponiveis.map((op) => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
             <button
               onClick={() => fetchHistorico()}
               disabled={histLoading}
@@ -1888,11 +1913,16 @@ export default function GerarLinkPage() {
 
           {histLoading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
           {!histLoading && histLinks.length === 0 && <p className="text-xs text-[#86868B] text-center py-6">Nenhum link encontrado.</p>}
+          {!histLoading && histLinks.length > 0 && histOperador && histLinks.filter((l) => (l.operador || "") === histOperador).length === 0 && (
+            <p className="text-xs text-[#86868B] text-center py-6">Nenhum link de <strong>{histOperador}</strong> nos filtros atuais.</p>
+          )}
 
           {(() => {
             // Mostra TODOS os links (Aguardando, Preenchido, Entrega criada).
-            // Operador filtra via o dropdown "Status" em cima se quiser ver só um tipo.
-            const visiveis = histLinks;
+            // Operador filtra via os dropdowns em cima (Status / Vendedor que criou).
+            const visiveis = histOperador
+              ? histLinks.filter((l) => (l.operador || "") === histOperador)
+              : histLinks;
             return (
           <div className="space-y-2">
             {visiveis.map((l) => (
