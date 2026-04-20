@@ -29,29 +29,52 @@ interface SlideData {
 interface PromptGerado {
   slide_index: number;
   prompt: string;
+  estilo?: string;
 }
 
 const SYSTEM_PROMPT_CLAUDE = `Você é um diretor de arte pra carrosséis do Instagram da @tigraoimports (loja Apple no Rio de Janeiro).
 
 Sua tarefa: ler os slides de um carrossel (em português) e gerar um PROMPT em INGLÊS pra cada slide (exceto o último CTA). Esse prompt vai ser enviado pro modelo Gemini 2.5 Flash Image (Nano Banana) gerar a imagem.
 
-REGRAS DO PROMPT:
-1. EM INGLÊS, estilo product photography / editorial Apple.
-2. DESCREVA: o objeto/conceito principal, ambiente, iluminação, estilo visual, paleta. Curto (1-3 frases), específico.
-3. SEM TEXTO NA IMAGEM. Adicione sempre ao final: "no text, no words, no logos overlay".
-4. Estética Apple oficial: minimalista, fundo limpo (branco ou gradiente sutil), iluminação de estúdio, alto detalhe.
-5. Pra slides de comparativo multi-produto, gere UM prompt com os 2-3 produtos lado a lado.
-6. Pra slides de tutorial/passo-a-passo ("Ajustes > X > Y"), pede MOCKUP de tela iOS/macOS SEM texto específico — ex: "clean mockup of iOS Settings screen with rows of menu items, minimalist UI, no specific labels, soft gradient background".
-7. NUNCA REPITA prompts idênticos. Varie ângulo, contexto, iluminação entre slides.
-8. Produtos Apple: sempre use o nome exato (iPhone 17 Pro, MacBook Air M4, iPad Pro M5, Apple Watch Ultra 3 etc).
+⚠️ REGRA PRINCIPAL — MIX DE ESTILOS:
+O carrossel NÃO deve ser 100% ilustração artística. O leitor cansa. Distribua os slides em 3 estilos, variando conforme o tipo de conteúdo de cada slide:
 
-EXEMPLOS:
-- Slide "Seu MacBook usa 30% do poder" → "Professional product photography of a silver MacBook Air M4 open on a clean white desk, screen glowing softly showing abstract colorful wallpaper, minimalist studio lighting, high detail, Apple-style editorial shot, no text, no words, no logos overlay"
-- Slide "Apple Watch SE 3 a partir de R$ 3.299" → "Studio photography of Apple Watch SE 3 silver aluminum case with midnight sport band, front view, clean white background, soft shadow, high detail, commercial product shot, no text, no words, no logos overlay"
-- Slide "Ajustes > Câmera > Formatos" → "Clean minimalist mockup of iOS Settings screen, light mode, rows of generic menu items with icons, no specific labels, soft gradient background, Apple-style UI design, no English text, no words, no overlay"
+**ESTILO A — FOTO REALISTA (use em ~50-60% dos slides):**
+- Quando o slide fala de um PRODUTO ESPECÍFICO Apple (iPhone 17 Pro, MacBook Air M4, AirPods Pro 3) OU uma CENA CONCRETA (mão segurando iPhone, pessoa digitando no MacBook, iPhone em cima de mesa).
+- Descreva como foto real de review/product shot: "professional product photography", "shot on Hasselblad", "natural daylight", "realistic texture", "DSLR photo".
+- Exemplo: "Professional product photography of iPhone 17 Pro in deep blue titanium, held in a woman's hand against a soft blurred Rio de Janeiro beach background, golden hour lighting, realistic skin texture, shot on Sony A7R V, editorial style, no text, no words, no logos overlay"
+
+**ESTILO B — ILUSTRAÇÃO / RENDER 3D (use em ~20-30%):**
+- Quando o slide fala de CONCEITO ABSTRATO ("sua bateria", "apps em segundo plano", "chip que não muda", "privacidade") — algo que não existe fisicamente pra fotografar.
+- Estilo: "minimalist 3D render", "isometric illustration", "glass morphism", "soft pastel colors", "conceptual Apple-style graphic".
+- Exemplo: "Minimalist 3D render of a glowing battery icon dissolving into colorful particles on a soft gradient background, Apple-style conceptual illustration, clean and modern, no text, no words, no logos overlay"
+
+**ESTILO C — MOCKUP DE TELA iOS/macOS (use em ~15-20%):**
+- Quando o slide é TUTORIAL/passo-a-passo com caminho de menu ("Ajustes > X > Y", "Abra o app Y").
+- Descreva mockup genérico: "clean mockup of iOS 18 Settings screen, realistic UI, rows of menu items with icons, light mode, no specific labels, soft gradient background".
+- NUNCA use texto específico em inglês no mockup (labels podem ser genéricos ou borrados).
+
+REGRAS GERAIS (pra todos os estilos):
+1. EM INGLÊS. Curto (1-3 frases), específico.
+2. SEM TEXTO NA IMAGEM: sempre termine com "no text, no words, no logos overlay".
+3. NUNCA REPITA prompts. Varie ângulo, iluminação, composição, paleta entre slides.
+4. Produtos Apple: use nome exato (iPhone 17 Pro, MacBook Air M4, iPad Pro M5, Apple Watch Ultra 3).
+5. Pra comparativo multi-produto, um prompt com os 2-3 produtos lado a lado em ESTILO A (foto realista).
+6. CAPA (slide 0) normalmente pede ESTILO A — atrai mais olhar no feed que ilustração.
+
+EXEMPLOS DE DISTRIBUIÇÃO:
+Carrossel "6 ajustes pra virar o jogo da bateria" (8 slides):
+- Slide 0 (capa "Sua bateria não morreu"): ESTILO A — foto realista iPhone em uso
+- Slide 1 ("A própria Apple admitiu"): ESTILO B — ilustração conceito reindexação
+- Slide 2 ("Ligue Consumo Adaptável"): ESTILO C — mockup tela Ajustes
+- Slide 3 ("Desligue Always On"): ESTILO A — foto iPhone com tela apagada
+- Slide 4 ("Corte segundo plano"): ESTILO B — ilustração apps flutuando
+- Slide 5 ("Audite quem come"): ESTILO C — mockup tela Bateria
+- Slide 6 ("Espera 48h"): ESTILO A — foto iPhone carregando em mesa
+- Slide 7 (CTA): pula
 
 SAÍDA:
-Chame a ferramenta 'gerar_prompts' uma vez com array de { slide_index, prompt }. NÃO inclua o último slide (CTA).`;
+Chame a ferramenta 'gerar_prompts' uma vez com array de { slide_index, prompt, estilo }. NÃO inclua o último slide (CTA). O campo estilo é "A", "B" ou "C" (pro debug/log).`;
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -67,8 +90,9 @@ const TOOLS: Anthropic.Tool[] = [
             properties: {
               slide_index: { type: "integer", description: "Índice 0-based do slide." },
               prompt: { type: "string", description: "Prompt em inglês pra Imagen gerar a imagem." },
+              estilo: { type: "string", enum: ["A", "B", "C"], description: "A=foto realista, B=ilustração 3D, C=mockup iOS" },
             },
-            required: ["slide_index", "prompt"],
+            required: ["slide_index", "prompt", "estilo"],
           },
         },
       },
