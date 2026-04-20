@@ -425,7 +425,11 @@ function CompraForm() {
 
   // Installment calculations
   const descontoNum = parseFloat(String(descontoParam)) || 0;
-  const valorBase = preco > 0 ? Math.max(preco - descontoNum - trocaNum, 0) : 0;
+  // Soma dos produtos extras (Produto 2+) — inclui no total pra preview do
+  // Total e calculo de parcelas refletir o carrinho completo, nao so o
+  // produto 1.
+  const extrasTotalPreview = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+  const valorBase = preco > 0 ? Math.max(preco + extrasTotalPreview - descontoNum - trocaNum, 0) : 0;
   const entradaPixNum = parseFloat(entradaPixManual || entradaPixParam) || 0;
   const valorParcelar = entradaPixNum > 0 ? Math.max(valorBase - entradaPixNum, 0) : valorBase;
   const parcOpts = useMemo(() => {
@@ -514,7 +518,11 @@ function CompraForm() {
 
     // Valor base para cálculos (usa precoFinal definido acima)
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
-    const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
+    // Soma dos produtos extras (Produto 2+) — nao era somado antes, gerava
+    // Total errado na mensagem de WhatsApp (ex: MacBook 11.694 + iPhone 5.497
+    // - desconto 100 virava Total 11.594 em vez de 17.091).
+    const extrasTotal = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+    const valorBaseFinal = Math.max(precoFinal + extrasTotal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorParcelarFinal = entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
 
@@ -763,7 +771,10 @@ function CompraForm() {
     // Calcula valor a cobrar no MP. Se há entrada PIX (pagamento dividido),
     // o MP cobra só o valor parcelar (o PIX fica pendente pra retirada).
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
-    const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
+    // Soma dos produtos extras — MP precisa cobrar o valor total incluindo
+    // multi-produto. Sem isso o link pagava so o Produto 1.
+    const extrasTotalMp = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+    const valorBaseFinal = Math.max(precoFinal + extrasTotalMp - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorMpCobrado =
       entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
