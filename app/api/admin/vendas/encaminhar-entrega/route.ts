@@ -1,5 +1,27 @@
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity-log";
+import { normalizarCoresNoTexto } from "@/lib/cor-pt";
+
+// Monta "Com caixa | Com cabo | Sem fonte | Grade A | 120 ciclos" a partir dos flags da troca
+function formatTrocaFlags(v: Record<string, unknown>, suffix: "" | "2" = ""): string {
+  const parts: string[] = [];
+  const grade = v[`troca_grade${suffix}`] as string | null | undefined;
+  const caixa = v[`troca_caixa${suffix}`] as string | null | undefined;
+  const cabo = v[`troca_cabo${suffix}`] as string | null | undefined;
+  const fonte = v[`troca_fonte${suffix}`] as string | null | undefined;
+  const pulseira = v[`troca_pulseira${suffix}`] as string | null | undefined;
+  const ciclos = v[`troca_ciclos${suffix}`] as string | null | undefined;
+  if (grade) parts.push(`Grade ${grade}`);
+  if (caixa === "SIM") parts.push("Com caixa");
+  else if (caixa === "NAO") parts.push("Sem caixa");
+  if (cabo === "SIM") parts.push("Com cabo");
+  else if (cabo === "NAO") parts.push("Sem cabo");
+  if (fonte === "SIM") parts.push("Com fonte");
+  else if (fonte === "NAO") parts.push("Sem fonte");
+  if (pulseira === "SIM") parts.push("Com pulseira");
+  if (ciclos) parts.push(`${ciclos} ciclos`);
+  return parts.join(" | ");
+}
 
 function auth(request: Request) {
   const pw = request.headers.get("x-admin-password");
@@ -126,11 +148,23 @@ export async function POST(request: Request) {
       tipo: (venda.troca_produto || venda.troca_produto2 || Number(venda.produto_na_troca || 0) > 0) ? "TROCA" : null,
       detalhes_upgrade: (() => {
         const partes: string[] = [];
+        // Traduz cores EN->PT no nome (ex: "IPHONE 13 128GB MIDNIGHT" -> "... Preto")
+        // e NAO anexa troca_cor pra nao duplicar ("MIDNIGHT Midnight").
         if (venda.troca_produto) {
-          partes.push(`${venda.troca_produto}${venda.troca_cor ? ` ${venda.troca_cor}` : ""} — R$ ${Number(venda.produto_na_troca || 0).toLocaleString("pt-BR")}${venda.troca_bateria ? ` (Bat: ${venda.troca_bateria}%)` : ""}${venda.troca_obs ? ` ${venda.troca_obs}` : ""}`);
+          const nome = normalizarCoresNoTexto(venda.troca_produto);
+          const valor = `R$ ${Number(venda.produto_na_troca || 0).toLocaleString("pt-BR")}`;
+          const bat = venda.troca_bateria ? ` (Bat: ${venda.troca_bateria}%)` : "";
+          const flags = formatTrocaFlags(venda, "");
+          const obs = venda.troca_obs ? ` ${venda.troca_obs}` : "";
+          partes.push(`${nome} — ${valor}${bat}${flags ? ` | ${flags}` : ""}${obs}`);
         }
         if (venda.troca_produto2) {
-          partes.push(`${venda.troca_produto2}${venda.troca_cor2 ? ` ${venda.troca_cor2}` : ""} — R$ ${Number(venda.produto_na_troca2 || 0).toLocaleString("pt-BR")}${venda.troca_bateria2 ? ` (Bat: ${venda.troca_bateria2}%)` : ""}${venda.troca_obs2 ? ` ${venda.troca_obs2}` : ""}`);
+          const nome = normalizarCoresNoTexto(venda.troca_produto2);
+          const valor = `R$ ${Number(venda.produto_na_troca2 || 0).toLocaleString("pt-BR")}`;
+          const bat = venda.troca_bateria2 ? ` (Bat: ${venda.troca_bateria2}%)` : "";
+          const flags = formatTrocaFlags(venda, "2");
+          const obs = venda.troca_obs2 ? ` ${venda.troca_obs2}` : "";
+          partes.push(`${nome} — ${valor}${bat}${flags ? ` | ${flags}` : ""}${obs}`);
         }
         return partes.length > 0 ? partes.join(" + ") : null;
       })(),
