@@ -17,7 +17,15 @@ const TAXAS_PARCELA: Record<number, number> = {
 function getTaxa(n: number) { return TAXAS_PARCELA[n] ?? 0; }
 const fmtBRL = (v: number) => `R$ ${Math.ceil(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-interface ProdutoPeso { cat: string; nome: string; peso: number }
+interface ProdutoPeso {
+  cat: string;
+  nome: string;
+  peso: number;
+  // Configuracoes (storage/RAM/chip) e cores opcionais — admin preenche via
+  // aba Editar produtos. Se vazio, calculadora nao mostra os seletores.
+  configs?: string[];
+  cores?: string[];
+}
 
 // Fallback caso a API falhe ou o seed ainda nao tenha rodado.
 // Admin edita a lista via aba "Editar produtos" e salva no app_settings
@@ -62,7 +70,17 @@ export default function CalculadoraImportacao() {
   const [result, setResult] = useState<CalcResult | null>(null);
   const [showProdutos, setShowProdutos] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
-  const [produtoSelecionado, setProdutoSelecionado] = useState("");
+  // produtoBaseNome = nome do row do catalogo (sem config/cor) que foi
+  // clicado. Usado pra buscar configs/cores disponiveis no array produtos.
+  const [produtoBaseNome, setProdutoBaseNome] = useState("");
+  const [configSelecionada, setConfigSelecionada] = useState("");
+  const [corSelecionada, setCorSelecionada] = useState("");
+  // produtoSelecionado = string composta (base + config + cor) mostrada na
+  // pill e usada no texto do orcamento.
+  const produtoBase = produtos.find(p => p.nome === produtoBaseNome) || null;
+  const produtoSelecionado = produtoBaseNome
+    ? [produtoBaseNome, configSelecionada, corSelecionada].filter(Boolean).join(" ")
+    : "";
 
   // Gerador de orçamento
   const [precoVenda, setPrecoVenda] = useState("");
@@ -149,9 +167,11 @@ export default function CalculadoraImportacao() {
           produtos={produtos}
           onSaved={(novaLista) => {
             setProdutos(novaLista);
-            // Se o produto selecionado na calculadora foi removido, limpa.
-            if (produtoSelecionado && !novaLista.some(p => p.nome === produtoSelecionado)) {
-              setProdutoSelecionado("");
+            // Se o produto base selecionado na calculadora foi removido, limpa.
+            if (produtoBaseNome && !novaLista.some(p => p.nome === produtoBaseNome)) {
+              setProdutoBaseNome("");
+              setConfigSelecionada("");
+              setCorSelecionada("");
             }
           }}
         />
@@ -178,6 +198,45 @@ export default function CalculadoraImportacao() {
           </span>
           <span className="text-[#86868B]">{showProdutos ? "▲" : "▼"}</span>
         </button>
+
+        {produtoBase && (produtoBase.configs?.length || produtoBase.cores?.length) && (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {produtoBase.configs && produtoBase.configs.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-[#86868B] mb-1.5 uppercase tracking-wider">
+                  Configuração
+                </label>
+                <select
+                  value={configSelecionada}
+                  onChange={(e) => setConfigSelecionada(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-sm outline-none focus:border-[#E8740E]"
+                >
+                  <option value="">— Selecionar —</option>
+                  {produtoBase.configs.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {produtoBase.cores && produtoBase.cores.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-[#86868B] mb-1.5 uppercase tracking-wider">
+                  Cor
+                </label>
+                <select
+                  value={corSelecionada}
+                  onChange={(e) => setCorSelecionada(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-sm outline-none focus:border-[#E8740E]"
+                >
+                  <option value="">— Selecionar —</option>
+                  {produtoBase.cores.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
 
         {showProdutos && (
           <div className="absolute z-50 mt-1 w-full bg-white border border-[#D2D2D7] rounded-xl shadow-xl max-h-[400px] overflow-hidden">
@@ -218,7 +277,10 @@ export default function CalculadoraImportacao() {
                       <button
                         onClick={() => {
                           setPeso(String(p.peso));
-                          setProdutoSelecionado(p.nome);
+                          setProdutoBaseNome(p.nome);
+                          // Pre-seleciona primeira config/cor se houver apenas uma
+                          setConfigSelecionada((p.configs && p.configs.length === 1) ? p.configs[0] : "");
+                          setCorSelecionada((p.cores && p.cores.length === 1) ? p.cores[0] : "");
                           setShowProdutos(false);
                           setBuscaProduto("");
                         }}
@@ -249,7 +311,13 @@ export default function CalculadoraImportacao() {
           label="Peso do produto"
           suffix="kg"
           value={peso}
-          onChange={(v) => { setPeso(v); setProdutoSelecionado(""); }}
+          onChange={(v) => {
+            setPeso(v);
+            // Se admin mexer no peso manualmente, desvincula do produto selecionado.
+            setProdutoBaseNome("");
+            setConfigSelecionada("");
+            setCorSelecionada("");
+          }}
           placeholder="3.0"
         />
         <InputField
@@ -412,6 +480,13 @@ function EditorProdutos({
     setLista(prev => prev.map((p, idx) => idx === i ? { ...p, [campo]: valor } : p));
   };
 
+  // Helper pra campos array (configs, cores): admin digita "256GB, 512GB, 1TB"
+  // e salva como ["256GB", "512GB", "1TB"]. Vazio/espacos ignorados.
+  const atualizarArray = (i: number, campo: "configs" | "cores", csv: string) => {
+    const arr = csv.split(",").map(s => s.trim()).filter(Boolean);
+    setLista(prev => prev.map((p, idx) => idx === i ? { ...p, [campo]: arr.length > 0 ? arr : undefined } : p));
+  };
+
   const adicionar = () => {
     setLista(prev => [...prev, { cat: "MacBook", nome: "", peso: 1.0 }]);
   };
@@ -496,13 +571,20 @@ function EditorProdutos({
       </datalist>
 
       <div className="overflow-x-auto">
+        <p className="text-[11px] text-[#86868B] mb-2">
+          💡 <strong>Configurações</strong> e <strong>Cores</strong> sao opcionais —
+          separe por virgula (ex: &quot;256GB, 512GB, 1TB&quot; ou &quot;Prata, Grafite&quot;).
+          Se preenchidos, viram seletores na tela de calcular.
+        </p>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider border-b border-[#E5E5EA]">
-              <th className="text-left py-2 pr-3">Categoria</th>
+              <th className="text-left py-2 pr-3 w-28">Categoria</th>
               <th className="text-left py-2 pr-3">Nome</th>
-              <th className="text-left py-2 pr-3 w-24">Peso (kg)</th>
-              <th className="text-right py-2 w-16"></th>
+              <th className="text-left py-2 pr-3 w-20">Peso (kg)</th>
+              <th className="text-left py-2 pr-3">Configurações</th>
+              <th className="text-left py-2 pr-3">Cores</th>
+              <th className="text-right py-2 w-12"></th>
             </tr>
           </thead>
           <tbody>
@@ -538,6 +620,24 @@ function EditorProdutos({
                     className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm outline-none focus:border-[#E8740E]"
                   />
                 </td>
+                <td className="py-2 pr-3">
+                  <input
+                    type="text"
+                    value={(p.configs || []).join(", ")}
+                    onChange={(e) => atualizarArray(i, "configs", e.target.value)}
+                    placeholder="256GB, 512GB, 1TB"
+                    className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm outline-none focus:border-[#E8740E]"
+                  />
+                </td>
+                <td className="py-2 pr-3">
+                  <input
+                    type="text"
+                    value={(p.cores || []).join(", ")}
+                    onChange={(e) => atualizarArray(i, "cores", e.target.value)}
+                    placeholder="Prata, Grafite, Preto"
+                    className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm outline-none focus:border-[#E8740E]"
+                  />
+                </td>
                 <td className="py-2 text-right">
                   <button
                     onClick={() => remover(i)}
@@ -551,7 +651,7 @@ function EditorProdutos({
             ))}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-8 text-center text-sm text-[#86868B]">
+                <td colSpan={6} className="py-8 text-center text-sm text-[#86868B]">
                   Nenhum produto. Clica em <strong>+ Adicionar produto</strong>.
                 </td>
               </tr>
