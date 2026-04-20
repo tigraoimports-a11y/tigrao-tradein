@@ -316,6 +316,9 @@ function CompraForm() {
   const [nome, setNome] = useState(nomeParam);
   const [cpf, setCpf] = useState(cpfParam ? maskCPF(cpfParam) : "");
   const [cnpj, setCnpj] = useState("");
+  // Inscricao estadual (so PJ): null = nao respondeu ainda, "ISENTO" = nao tem, string = numero
+  const [ieStatus, setIeStatus] = useState<null | "TEM" | "ISENTO">(null);
+  const [ie, setIe] = useState("");
   const [email, setEmail] = useState(emailParam);
   const [telefone, setTelefone] = useState(whatsappClienteParam ? maskPhone(whatsappClienteParam) : "");
   const [cep, setCep] = useState(cepParam ? maskCEP(cepParam) : "");
@@ -498,6 +501,19 @@ function CompraForm() {
       return;
     }
 
+    // PJ: Inscricao Estadual e obrigatoria responder (TEM ou ISENTO). Se TEM,
+    // precisa preencher o numero.
+    if (pessoa === "PJ") {
+      if (ieStatus === null) {
+        alert("Responda se a empresa tem ou é isenta de Inscrição Estadual.");
+        return;
+      }
+      if (ieStatus === "TEM" && !ie.trim()) {
+        alert("Informe o número da Inscrição Estadual.");
+        return;
+      }
+    }
+
     if (formaPagamento.includes("Cartao") && !parcelas && !pagamentoPagoParam) {
       alert("Selecione o numero de parcelas antes de enviar.");
       return;
@@ -627,6 +643,7 @@ function CompraForm() {
             `*Tipo:* Pessoa Jurídica`,
             `*Razão Social:* ${nome}`,
             `*CNPJ:* ${cnpj}`,
+            `*Inscrição Estadual:* ${ieStatus === "TEM" ? ie : "Isento"}`,
           ]
         : [
             `*Nome completo:* ${nome}`,
@@ -723,6 +740,7 @@ function CompraForm() {
       const payload = JSON.stringify({
         dados: {
           nome, cpf: pessoa === "PJ" ? "" : cpf, cnpj: pessoa === "PJ" ? cnpj : "", pessoa,
+          inscricao_estadual: pessoa === "PJ" ? (ieStatus === "TEM" ? ie : "ISENTO") : "",
           email, telefone, instagram,
           cep, endereco, numero, complemento, bairro,
           endereco_completo: enderecoFullTxt,
@@ -798,6 +816,16 @@ function CompraForm() {
       setErroMp(`Preencha seu ${pessoa === "PJ" ? "CNPJ" : "CPF"}.`);
       return;
     }
+    if (pessoa === "PJ") {
+      if (ieStatus === null) {
+        setErroMp("Responda se a empresa tem ou é isenta de Inscrição Estadual.");
+        return;
+      }
+      if (ieStatus === "TEM" && !ie.trim()) {
+        setErroMp("Informe o número da Inscrição Estadual.");
+        return;
+      }
+    }
     if (!email || !telefone) {
       setErroMp("Preencha email e telefone.");
       return;
@@ -828,6 +856,7 @@ function CompraForm() {
         pessoa,
         cpf: pessoa === "PF" ? cpf : undefined,
         cnpj: pessoa === "PJ" ? cnpj : undefined,
+        inscricao_estadual: pessoa === "PJ" ? (ieStatus === "TEM" ? ie : "ISENTO") : undefined,
         email,
         telefone,
         instagram,
@@ -1212,18 +1241,53 @@ function CompraForm() {
             />
           </div>
           {pessoa === "PJ" ? (
-            <div>
-              <label className={labelCls}>CNPJ *</label>
-              <input
-                type="text"
-                required
-                inputMode="numeric"
-                value={cnpj}
-                onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
-                placeholder="00.000.000/0000-00"
-                className={inputCls}
-              />
-            </div>
+            <>
+              <div>
+                <label className={labelCls}>CNPJ *</label>
+                <input
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
+                  placeholder="00.000.000/0000-00"
+                  className={inputCls}
+                />
+              </div>
+              {/* Inscricao Estadual — pergunta obrigatoria. Empresa tem IE ou eh isenta. */}
+              <div>
+                <label className={labelCls}>Inscrição Estadual *</label>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIeStatus("TEM"); }}
+                    className={`flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${ieStatus === "TEM" ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                  >
+                    Tem IE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIeStatus("ISENTO"); setIe(""); }}
+                    className={`flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${ieStatus === "ISENTO" ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                  >
+                    Isento
+                  </button>
+                </div>
+                {ieStatus === "TEM" && (
+                  <input
+                    type="text"
+                    required
+                    value={ie}
+                    onChange={(e) => setIe(e.target.value.replace(/[^0-9.\-/\s]/g, ""))}
+                    placeholder="Número da Inscrição Estadual"
+                    className={inputCls}
+                  />
+                )}
+                {ieStatus === null && (
+                  <p className="text-[11px] text-red-500 mt-1">Responda se a empresa tem ou é isenta de Inscrição Estadual.</p>
+                )}
+              </div>
+            </>
           ) : (
             <div>
               <label className={labelCls}>CPF *</label>
