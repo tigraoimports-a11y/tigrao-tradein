@@ -214,6 +214,23 @@ async function extrairOgImage(pageUrl: string): Promise<string | null> {
   }
 }
 
+// Normaliza URL pra dedup: remove query string, fragment, trailing slash,
+// lowercase do host. Assim "url.com/img.jpg?w=800" e "url.com/img.jpg?w=400"
+// contam como a mesma imagem (CDN com variantes de tamanho).
+function normalizarUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.search = "";
+    u.hash = "";
+    u.hostname = u.hostname.toLowerCase();
+    let out = u.toString();
+    if (out.endsWith("/")) out = out.slice(0, -1);
+    return out;
+  } catch {
+    return url.trim();
+  }
+}
+
 function ehImagemValida(url: string): boolean {
   if (!/^https?:\/\//i.test(url)) return false;
   if (/\/favicon/i.test(url)) return false;
@@ -403,16 +420,17 @@ export async function POST(req: NextRequest) {
   // - Quando ilustrando UM slide (re-busca): rejeita se URL ja esta em outro.
   // Composicoes (/composto/) sao sempre unicas (timestamp no path), entao
   // nao entram no dedup.
+  // Set guarda URLs NORMALIZADAS pra pegar variantes de CDN (?w=800 etc).
   const urlsJaUsadas = new Set<string>();
   if (slideIndex !== undefined) {
     // Re-ilustrando 1 slide — coleta URLs dos OUTROS slides pra nao repetir
     for (let i = 0; i < slides.length; i++) {
       if (i === slideIndex) continue;
       const u = slides[i].imagem_url;
-      if (u && !u.includes("/composto/")) urlsJaUsadas.add(u);
+      if (u && !u.includes("/composto/")) urlsJaUsadas.add(normalizarUrl(u));
     }
     for (const r of resolvidas) {
-      if (r.imagem_final && !r.imagem_final.includes("/composto/") && urlsJaUsadas.has(r.imagem_final)) {
+      if (r.imagem_final && !r.imagem_final.includes("/composto/") && urlsJaUsadas.has(normalizarUrl(r.imagem_final))) {
         r.imagem_final = null;
         r.duplicada = true;
       }
@@ -423,11 +441,12 @@ export async function POST(req: NextRequest) {
     for (const r of porOrdem) {
       if (!r.imagem_final) continue;
       if (r.imagem_final.includes("/composto/")) continue; // composicoes sao unicas
-      if (urlsJaUsadas.has(r.imagem_final)) {
+      const key = normalizarUrl(r.imagem_final);
+      if (urlsJaUsadas.has(key)) {
         r.imagem_final = null;
         r.duplicada = true;
       } else {
-        urlsJaUsadas.add(r.imagem_final);
+        urlsJaUsadas.add(key);
       }
     }
   }
@@ -495,9 +514,28 @@ export async function POST(req: NextRequest) {
         if (r.slide_index === ultimoIdx) continue;
         if (slidesNovos[r.slide_index].imagem_url) continue; // já tem, não sobrescreve
         const ehComposicao = r.imagem_final.includes("/composto/");
-        if (!ehComposicao && urlsJaUsadas.has(r.imagem_final)) continue; // evita duplicar
+        const key = normalizarUrl(r.imagem_final);
+        if (!ehComposicao && urlsJaUsadas.has(key)) continue; // evita duplicar
         slidesNovos[r.slide_index] = { ...slidesNovos[r.slide_index], imagem_url: r.imagem_final };
-        if (!ehComposicao) urlsJaUsadas.add(r.imagem_final);
+        if (!ehComposicao) urlsJaUsadas.add(key);
+      }
+    }
+  }
+
+  // Safety net final: varredura em slidesNovos depois de tudo. Se por qualquer
+  // motivo sobrou URL duplicada (mesma img via CDN diferente, mesma composicao
+  // visual), zera o slide de indice maior. Operador troca com "🔄".
+  {
+    const vistas = new Set<string>();
+    for (let i = 0; i < slidesNovos.length; i++) {
+      const u = slidesNovos[i].imagem_url;
+      if (!u) continue;
+      if (u.includes("/composto/")) continue; // composicoes ja dedupadas por chave
+      const key = normalizarUrl(u);
+      if (vistas.has(key)) {
+        slidesNovos[i] = { ...slidesNovos[i], imagem_url: null };
+      } else {
+        vistas.add(key);
       }
     }
   }
