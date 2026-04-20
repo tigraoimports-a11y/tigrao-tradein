@@ -68,10 +68,29 @@ REGRAS GERAIS
    - Máximo 3 URLs em composição.
    - ⚠️ COMPOSIÇÕES TAMBÉM NÃO PODEM REPETIR: se 3 slides falam dos mesmos modelos, NÃO mande a mesma lista de URLs nos 3. Varie — ex: slide A usa foto frontal dos 3, slide B usa foto lateral, slide C usa detalhe de câmera. O backend detecta composições visualmente iguais (mesma lista de URLs ordenada) e ZERA as duplicatas.
 
-3. Priorize fontes:
-   - apple.com/br, apple.com, newsroom Apple pra produtos específicos.
-   - 9to5Mac, MacRumors, The Verge, Tecnoblog, TechTudo pra reviews.
-   - Wikipedia commons pra imagens com licença aberta.
+3. Priorize fontes (⚠️ PREFERENCIA FORTE por sites BRASILEIROS — carrossel em PT-BR, imagens e legendas em PT evitam o problema de overlay em inglês):
+
+   **Oficial Apple:**
+   - apple.com/br, apple.com, newsroom Apple (support.apple.com pra screenshots de tutorial).
+
+   **Sites brasileiros especializados em Apple (TOP):**
+   - macmagazine.com.br — "O melhor pedaço da Maçã", reviews e fotos de alta qualidade.
+   - blogdoiphone.com — referência de iPhone no Brasil desde 2008.
+   - tudocelular.com/apple — portal do mundo Apple do TudoCelular.
+   - blog.iplace.com.br — blog da Apple Premium Reseller, fotos de produto.
+   - iphoneblog.com.br — tutoriais e screenshots iOS em PT.
+
+   **Tech geral brasileiro (cobertura forte Apple):**
+   - tecnoblog.net, canaltech.com.br, olhardigital.com.br, techtudo.com.br (Globo).
+   - gizmodo.uol.com.br, showmetech.com.br, adrenaline.com.br, uol.com.br/tilt.
+   - meiobit.com, manualdousuario.net.
+
+   **Jornalismo BR (tecnologia):**
+   - cnnbrasil.com.br, exame.com, estadao.com.br/link, folha.uol.com.br/tec, mobiletime.com.br.
+
+   **Internacional (só se não achar em BR):**
+   - 9to5Mac, MacRumors, The Verge (tem overlay em inglês — cuidado).
+   - Wikipedia Commons (imagens com licença aberta, fundo limpo).
 
 4. NÃO use:
    - Ícones pequenos, sprites, logos de favicon.
