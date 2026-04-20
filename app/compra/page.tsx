@@ -1016,8 +1016,20 @@ function CompraForm() {
                 ))}
                 {preco > 0 && (
                   <div className="mt-2 space-y-1">
-                    <p className="text-[#86868B] text-xs uppercase tracking-wider">Preco de venda</p>
-                    <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
+                    {/* Quando ha extras, o label muda de "Preco de venda" pra "Subtotal"
+                        somando todos os produtos — evita confusao tipo "preco - desconto !=
+                        total" porque os extras nao entravam no breakdown visivel. */}
+                    {produtosExtras.length > 0 ? (
+                      <>
+                        <p className="text-[#86868B] text-xs uppercase tracking-wider">Subtotal ({produtosExtras.length + 1} produtos)</p>
+                        <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco + extrasTotalPreview)}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[#86868B] text-xs uppercase tracking-wider">Preco de venda</p>
+                        <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
+                      </>
+                    )}
                     {descontoParam > 0 && (
                       <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>
                     )}
@@ -1029,30 +1041,41 @@ function CompraForm() {
               </>
             )}
 
-            {/* Seleção de cor — obrigatória. Se há cores no estoque, mostra chips;
-                senão (produto sem variantes cadastradas), mostra input manual. */}
+            {/* Selecao de cor — obrigatoria. Se ja veio pre-selecionada pelo operador
+                (cor detectada no nome do produto ou passada via URL), mostra como info
+                read-only ao inves de pedir pro cliente escolher de novo. */}
             {(produtoInput || produtoParam) && (
               <div id="escolha-cor" className={`mt-3 pt-3 border-t ${!corSel ? "border-[#E8740E]" : "border-[#E8E8ED]"}`}>
-                <p className={`text-xs uppercase tracking-wider font-semibold mb-2 ${!corSel ? "text-[#E8740E]" : "text-[#86868B]"}`}>
-                  Escolha a cor *{!corSel && <span className="ml-1 normal-case font-medium">(obrigatório)</span>}
-                </p>
-                {coresDisponiveis.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {coresDisponiveis.map(cor => (
-                      <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
-                        {cor}
-                      </button>
-                    ))}
-                  </div>
+                {corSel && !produtoInput ? (
+                  // Cor ja pre-selecionada pelo operador — read-only info
+                  <>
+                    <p className="text-xs uppercase tracking-wider font-semibold mb-1 text-[#86868B]">Cor</p>
+                    <p className="text-sm font-semibold text-[#1D1D1F]">{corSel}</p>
+                  </>
                 ) : (
-                  <input
-                    type="text"
-                    value={corSel}
-                    onChange={(e) => setCorSel(e.target.value.toUpperCase())}
-                    placeholder="Ex: Preto, Azul, Titânio..."
-                    className={inputCls}
-                  />
+                  <>
+                    <p className={`text-xs uppercase tracking-wider font-semibold mb-2 ${!corSel ? "text-[#E8740E]" : "text-[#86868B]"}`}>
+                      Escolha a cor *{!corSel && <span className="ml-1 normal-case font-medium">(obrigatório)</span>}
+                    </p>
+                    {coresDisponiveis.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {coresDisponiveis.map(cor => (
+                          <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                            {cor}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={corSel}
+                        onChange={(e) => setCorSel(e.target.value.toUpperCase())}
+                        placeholder="Ex: Preto, Azul, Titânio..."
+                        className={inputCls}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             )}
