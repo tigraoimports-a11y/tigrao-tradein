@@ -274,6 +274,41 @@ function CompraForm() {
     }
   }, [coresDisponiveis, produtoInput, produtoParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fallback: detecta cor PT no final do produtoParam mesmo sem catalogo/estoque.
+  // Fix pro caso do operador incluir a cor no nome do produto via gerar-link
+  // (ex: "iPhone 17 Pro Max 256GB Prata") — antes o /compra ainda pedia pra
+  // escolher a cor de novo porque coresDisponiveis vinha vazio (lookup por
+  // startsWith nao casava com o produto com cor no nome). Roda uma vez no
+  // mount, so se corSel ainda esta vazio.
+  useEffect(() => {
+    if (corSel) return;
+    const prod = produtoParam;
+    if (!prod) return;
+    // Cores PT comuns — ordem importante: multi-palavra ANTES de uma so pra
+    // match correto (ex: "Titanio Preto" antes de "Preto").
+    const CORES_PT = [
+      "Titânio Preto", "Titânio Azul", "Titânio Deserto", "Titânio Natural", "Titânio Branco",
+      "Titanio Preto", "Titanio Azul", "Titanio Deserto", "Titanio Natural", "Titanio Branco",
+      "Space Black", "Space Gray", "Rose Gold", "Midnight Green", "Sky Blue",
+      "Preto", "Branco", "Azul", "Verde", "Prata", "Cinza", "Dourado",
+      "Roxo", "Rosa", "Laranja", "Amarelo", "Vermelho", "Estelar", "Grafite",
+      "Black", "White", "Blue", "Green", "Silver", "Gold", "Purple", "Pink",
+      "Red", "Orange", "Yellow", "Midnight", "Starlight", "Natural", "Graphite",
+    ];
+    const pNorm = prod.toLowerCase();
+    // Ordena por tamanho decrescente e tenta match no sufixo
+    const sorted = [...CORES_PT].sort((a, b) => b.length - a.length);
+    for (const cor of sorted) {
+      if (pNorm.endsWith(" " + cor.toLowerCase())) {
+        setCorSel(cor);
+        // Tira a cor do final do produtoInput pra coresDisponiveis funcionar
+        const semCor = prod.slice(0, prod.length - cor.length - 1).trim();
+        setProdutoInput(semCor);
+        break;
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const preco = precoParam ? parseInt(precoParam) : precoAuto;
 
   // Form state — aceita pre-preenchimento vindo do gerar-link
