@@ -85,6 +85,9 @@ export interface Venda {
   frete_forma: string | null;
   frete_banco: string | null;
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
+  // Estornos (gastos tipo ESTORNO vinculados pela venda_id) — so leitura,
+  // preenchido pelo GET /api/vendas. Nao persiste na tabela vendas.
+  estornos?: { id: string; data: string; valor: number; banco: string | null; descricao: string | null; observacao: string | null; contato_nome: string | null }[];
   // Brinde / Cortesia — não impacta faturamento nem lucro
   is_brinde: boolean;
   // Venda programada

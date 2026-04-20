@@ -104,6 +104,34 @@ export async function GET(req: NextRequest) {
   const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 500;
   const { data, error } = await query.limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Anexar estornos (gastos categoria=ESTORNO) vinculados por venda_id. Uma
+  // venda pode ter 0-N estornos (ex: devolucao caucao R$1000, devolucao
+  // diferenca R$400, etc). O admin vincula isso criando um gasto ESTORNO com
+  // venda_id preenchido na aba /admin/gastos.
+  if (data && data.length > 0) {
+    const vendaIds = data.map((v: { id: string }) => v.id).filter(Boolean);
+    if (vendaIds.length > 0) {
+      const { data: estornos } = await supabase
+        .from("gastos")
+        .select("id, data, valor, banco, descricao, observacao, contato_nome, venda_id")
+        .eq("categoria", "ESTORNO")
+        .in("venda_id", vendaIds);
+      if (estornos && estornos.length > 0) {
+        const porVenda = new Map<string, typeof estornos>();
+        for (const e of estornos) {
+          const list = porVenda.get(e.venda_id!) || [];
+          list.push(e);
+          porVenda.set(e.venda_id!, list);
+        }
+        for (const v of data) {
+          const list = porVenda.get(v.id);
+          if (list) (v as unknown as Record<string, unknown>).estornos = list;
+        }
+      }
+    }
+  }
+
   return NextResponse.json({ data });
 }
 
@@ -784,9 +812,11 @@ export async function PATCH(req: NextRequest) {
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
   // e status_pagamento (evitar reenvio de NF/Telegram em edicoes posteriores).
-  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento").eq("id", id).single();
+  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento, troca_produto, produto_na_troca, troca_produto2, produto_na_troca2").eq("id", id).single();
   const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
   const statusPagamentoAnterior = (vendaAnterior as unknown as { status_pagamento?: string } | null)?.status_pagamento || null;
+  const jaTinhaTroca1Antes = !!((vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.troca_produto || (vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.produto_na_troca);
+  const jaTinhaTroca2Antes = !!((vendaAnterior as unknown as { troca_produto2?: string; produto_na_troca2?: string } | null)?.troca_produto2 || (vendaAnterior as unknown as { troca_produto2?: string; produto_na_troca2?: string } | null)?.produto_na_troca2);
 
   // Se o admin enviou _estoque_id (mesmo null), atualizar o vinculo na venda
   if (estoqueIdFoiEnviado) {
@@ -992,7 +1022,13 @@ export async function PATCH(req: NextRequest) {
       const hasTroca1 = !!(venda.troca_produto || venda.produto_na_troca);
       if (hasTroca1) {
         const p1 = existing.find(p => p.data_compra === venda.data) || existing[0];
-        if (p1) {
+        // Se venda JA tinha troca antes desta edicao E nao encontrou pendencia
+        // (provavelmente foi movida pra estoque como seminovo), NAO criar uma
+        // nova. Antes, toda edicao de venda com troca criava uma pendencia
+        // duplicada, obrigando o admin a deletar manualmente.
+        if (!p1 && jaTinhaTroca1Antes) {
+          // no-op: troca ja foi processada numa edicao/criacao anterior
+        } else if (p1) {
           // UPDATE
           const upd1: Record<string, unknown> = {};
           if (fields.troca_produto) upd1.produto = fields.troca_produto;
@@ -1069,7 +1105,11 @@ export async function PATCH(req: NextRequest) {
         const p2 = existing.length >= 2
           ? (existing.find(p => p.data_compra === venda.data && p.id !== existing[0]?.id) || existing[1])
           : (hasTroca1 ? undefined : existing[0]);
-        if (p2) {
+        // Mesmo tratamento da troca 1: se venda ja tinha troca2 antes e nao
+        // achou pendencia, a troca ja foi processada — nao duplicar.
+        if (!p2 && jaTinhaTroca2Antes) {
+          // no-op
+        } else if (p2) {
           const upd2: Record<string, unknown> = {};
           if (fields.troca_produto2) upd2.produto = fields.troca_produto2;
           if (fields.troca_cor2 !== undefined) upd2.cor = fields.troca_cor2 ? String(fields.troca_cor2).toUpperCase() : null;

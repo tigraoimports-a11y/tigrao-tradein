@@ -6242,6 +6242,21 @@ export default function VendasPage() {
                                       </div>
                                     )}
 
+                                    {/* Estornos vinculados (gastos categoria=ESTORNO com venda_id = v.id) */}
+                                    {Array.isArray(v.estornos) && v.estornos.length > 0 && (
+                                      <div className="md:col-span-3 space-y-2">
+                                        <h4 className="text-xs font-bold text-red-600 uppercase">↩️ Estornos</h4>
+                                        {v.estornos.map((e) => (
+                                          <div key={e.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${dm ? "bg-red-900/20" : "bg-red-50"}`}>
+                                            <span className="text-sm font-bold text-red-600">-R$ {Number(e.valor).toLocaleString("pt-BR")}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.descricao || "Estorno"}{e.observacao ? ` (${e.observacao})` : ""}</span>
+                                            {e.banco && <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.banco}</span>}
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.data?.split("-").reverse().join("/")}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
                                     {/* Formulário de reajuste inline */}
                                     {reajusteId === v.id && (
                                       <div className="md:col-span-3 space-y-3 p-4 rounded-xl border-2 border-amber-300 bg-amber-50">
