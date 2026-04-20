@@ -576,11 +576,29 @@ export async function PATCH(req: NextRequest) {
   if (body.action === "enviar_nf") {
     const { id: vendaId, skipEmail } = body;
     if (!vendaId) return NextResponse.json({ error: "id required" }, { status: 400 });
+    // maybeSingle nao ergue erro se 0 rows — permite diagnostico ao inves de
+    // devolver 404 generico. Se nao encontrar, tenta contar quantas rows
+    // existem com esse id pra sinalizar se e problema de id malformado vs
+    // duplicidade.
     const { data: venda, error: e } = await supabase.from("vendas")
       .select("id, email, cliente, produto, cor, valor_comprovante, preco_vendido, nota_fiscal_url, nota_fiscal_enviada")
       .eq("id", vendaId)
-      .single();
-    if (e || !venda) return NextResponse.json({ error: "venda nao encontrada" }, { status: 404 });
+      .maybeSingle();
+    if (e) {
+      console.error("[Vendas] Erro no SELECT ao enviar NF:", { vendaId, error: e });
+      return NextResponse.json({ error: `Erro ao buscar venda: ${e.message}`, id: vendaId }, { status: 500 });
+    }
+    if (!venda) {
+      // Debug: tenta contar quantas rows existem com id parecido pra ajudar
+      // diagnose (ex: UUID truncado, typo, etc)
+      const { count } = await supabase.from("vendas").select("id", { count: "exact", head: true }).eq("id", vendaId);
+      console.error("[Vendas] Venda nao encontrada:", { vendaId, tipoId: typeof vendaId, count });
+      return NextResponse.json({
+        error: `Venda nao encontrada (id: ${vendaId}). Recarregue a pagina — pode ter sido cancelada ou excluida.`,
+        id: vendaId,
+        tipoId: typeof vendaId,
+      }, { status: 404 });
+    }
     if (!venda.nota_fiscal_url) return NextResponse.json({ error: "venda sem NF anexada" }, { status: 400 });
     if (!skipEmail && !venda.email) return NextResponse.json({ error: "venda sem email do cliente — use skipEmail pra marcar como enviada sem disparar email" }, { status: 400 });
     try {
