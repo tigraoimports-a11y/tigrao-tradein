@@ -74,6 +74,7 @@ export default function InstagramPostPage() {
 
   // PR 2: imagens
   const [ilustrando, setIlustrando] = useState(false);
+  const [gerandoGemini, setGerandoGemini] = useState(false);
   const [reIlustrandoSlide, setReIlustrandoSlide] = useState<number | null>(null);
   const [renderizando, setRenderizando] = useState(false);
   const [uploadingSlide, setUploadingSlide] = useState<number | null>(null);
@@ -152,6 +153,33 @@ export default function InstagramPostPage() {
       setMsg(`${comImg} de ${total} slides receberam imagem${retryAviso}.${dupAviso} Clique "🔄" em algum slide pra trocar.`);
     } finally {
       setIlustrando(false);
+    }
+  };
+
+  const gerarComGemini = async () => {
+    if (!confirm("Gerar imagens com Gemini (IA)? Cada slide vira imagem exclusiva. Custa ~$0.40 no total. Leva ~1-2 min.")) return;
+    setGerandoGemini(true);
+    setMsg("Claude gerando prompts → Gemini gerando imagens... (~1-2 min)");
+    try {
+      const res = await fetch("/api/instagram/gerar-imagens", {
+        method: "POST",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ postId: id }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setMsg("Erro: " + (j.error || "falha ao gerar com Gemini"));
+        return;
+      }
+      if (Array.isArray(j.slides)) setSlidesEdit(j.slides);
+      const falhasMsg = j.falhas && j.falhas.length > 0
+        ? ` ⚠️ ${j.falhas.length} slide(s) falharam: ${j.falhas.map((f: { slide_index: number; erro: string }) => `slide ${f.slide_index + 1} (${f.erro})`).join(", ")}`
+        : "";
+      setMsg(`Gemini gerou ${j.sucesso} de ${j.total} imagens.${falhasMsg}`);
+    } catch (e) {
+      setMsg("Erro de rede: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setGerandoGemini(false);
     }
   };
 
@@ -387,16 +415,26 @@ export default function InstagramPostPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-[#1D1D1F]">Ilustrar slides</h3>
                   <p className="text-xs text-[#86868B] mt-1">
-                    Claude busca na web uma imagem que ilustre o texto de cada slide (Apple oficial quando faz sentido, reviews e fontes tech caso contrário). Use &quot;🔄&quot; num slide pra trocar só aquela imagem. Upload manual também vale.
+                    <strong>✨ Buscar na web:</strong> Claude acha imagem real de review/Apple pra cada slide.{" "}
+                    <strong>🤖 Gerar com Gemini:</strong> IA cria imagens exclusivas baseadas no texto (sem duplicar, sem texto em inglês, estilo Apple editorial). Use &quot;🔄&quot; pra trocar só um slide.
                   </p>
                 </div>
-                <button
-                  onClick={ilustrarSlides}
-                  disabled={ilustrando}
-                  className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50"
-                >
-                  {ilustrando ? "⏳ Ilustrando..." : "✨ Ilustrar slides"}
-                </button>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={ilustrarSlides}
+                    disabled={ilustrando || gerandoGemini}
+                    className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+                  >
+                    {ilustrando ? "⏳ Buscando..." : "✨ Buscar na web"}
+                  </button>
+                  <button
+                    onClick={gerarComGemini}
+                    disabled={ilustrando || gerandoGemini}
+                    className="px-4 py-2 rounded-xl bg-[#4285F4] text-white text-sm font-semibold hover:bg-[#3367D6] disabled:opacity-50"
+                  >
+                    {gerandoGemini ? "⏳ Gerando..." : "🤖 Gerar com Gemini"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
