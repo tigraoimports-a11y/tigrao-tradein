@@ -1,4 +1,4 @@
-import { corParaPT } from "./cor-pt";
+import { corParaPT, normalizarCoresNoTexto } from "./cor-pt";
 
 const STRUCTURED = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 
@@ -22,6 +22,43 @@ export function cleanProdutoDisplay(nome: string | null | undefined): string {
   s = s.replace(/\s+(LL|JPA|HN|IN|BR|BZ|CH|ZA|KH|TH|SG)\b.*$/i, "");
   s = s.replace(/\[[^\]]*\]/g, "");
   return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Versao leve do `formatProdutoDisplay` que recebe APENAS a string do produto
+ * (nao o objeto estruturado). Aplica a logica global: strip de origem/regiao,
+ * traducao EN→PT de cores e dedup de palavras repetidas (ex: "MIDNIGHT Midnight").
+ * Depois tenta simplificar cor composta (Preto Brilhante → Preto) via corParaPT.
+ *
+ * Usado em contextos onde so temos a string (mensagem motoboy, etc) e nao
+ * da pra chamar `formatProdutoDisplay` com {produto, categoria, cor, observacao}.
+ */
+export function limparNomeProduto(raw: string | null | undefined): string {
+  if (!raw) return "";
+  // 1. Strip regiao/E-SIM/[tags]
+  let s = cleanProdutoDisplay(raw);
+  // 2. Traduz cores EN canonicas → PT (Midnight → Preto, Silver → Prata, etc)
+  s = normalizarCoresNoTexto(s);
+  // 3. Dedup de palavras adjacentes (case-insensitive): "Preto Preto" → "Preto"
+  const words = s.split(/\s+/).filter(Boolean);
+  const dedup: string[] = [];
+  for (const w of words) {
+    if (dedup.length && dedup[dedup.length - 1].toLowerCase() === w.toLowerCase()) continue;
+    dedup.push(w);
+  }
+  s = dedup.join(" ");
+  // 4. Simplifica cor composta no final (Preto Brilhante → Preto, Titanio Natural → Titanio Natural)
+  //    Testa as ultimas 1-3 palavras como cor conhecida. Se o corParaPT retornar
+  //    algo diferente, substitui.
+  const ws = s.split(/\s+/);
+  for (let n = Math.min(3, ws.length - 1); n >= 1; n--) {
+    const tail = ws.slice(-n).join(" ");
+    const simplified = corParaPT(tail);
+    if (simplified && simplified !== "—" && simplified.toLowerCase() !== tail.toLowerCase() && simplified.length < tail.length) {
+      return ws.slice(0, -n).concat(simplified.split(/\s+/)).join(" ");
+    }
+  }
+  return s;
 }
 
 /** Formata o nome do produto para exibição (PT simplificado). Compartilhado entre estoque, gastos e etc. */

@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
 import { INSTALLMENT_RATES } from "@/lib/calculations";
-import { formatProdutoDisplay, getModeloBase } from "@/lib/produto-display";
+import { formatProdutoDisplay, getModeloBase, limparNomeProduto } from "@/lib/produto-display";
 import { corParaPT } from "@/lib/cor-pt";
 import { useVendedores } from "@/lib/vendedores";
 
@@ -865,7 +865,9 @@ export default function EntregasPage() {
   };
 
   const buildWhatsAppText = () => {
-    const prods = produtos.filter(Boolean);
+    // Aplica logica global: strip origem/E-SIM/[tags], traduz cor EN→PT,
+    // dedupe repetidas e simplifica cor composta (Preto Brilhante → Preto).
+    const prods = produtos.filter(Boolean).map(p => limparNomeProduto(p));
     const produtoText = prods.length > 1
       ? prods.map((p, i) => `${i + 1}. ${p}`).join("\n   ")
       : prods[0] || "—";
@@ -890,9 +892,10 @@ export default function EntregasPage() {
 
     const tipoLabel = form.tipo === "UPGRADE" ? "UPGRADE (Troca)" : form.tipo || "Compra";
 
-    // Trocas formatadas
+    // Trocas formatadas — aplica mesma limpeza de produto (cor PT, sem regiao, etc)
     const trocasText = trocas.filter(Boolean).map((t, i) => {
-      return trocas.length > 1 ? `${i + 1}. ${t.replace(/\n/g, " / ")}` : t.replace(/\n/g, " / ");
+      const limpo = limparNomeProduto(t.replace(/\n/g, " / "));
+      return trocas.length > 1 ? `${i + 1}. ${limpo}` : limpo;
     }).join("\n   ");
 
     // formatProdutoDisplay retorna string vazia ou com leading "\n" se multi.
