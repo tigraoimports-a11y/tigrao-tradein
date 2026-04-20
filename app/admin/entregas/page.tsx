@@ -102,8 +102,16 @@ const fmtBRL = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumF
 
 /**
  * Formata o campo PAGAMENTO do formulário do motoboy com breakdown detalhado.
- * Suporta 1 ou 2 cartões (parseados do texto forma_pagamento) + entrada Pix/Espécie/Transferência.
- * Valores de total já vem com taxa embutida (valor_total salvo).
+ * Produz saida multilinha com bullets (1 item por linha) pra motoboy ler facil.
+ *
+ * Suporta 3 formatos de forma_pagamento:
+ *   1. Legado vendas admin: "Entrada PIX R$ X + 10x no Cartão (Itau)"
+ *   2. Link-compras:        "Entrada R$ X via Pix + 10x no Cartão"
+ *   3. Verbose com pipes:   "Forma: PIX + Cartão | Entrada PIX: R$ 2.000 | Parcelas: 12x de R$ 329,30 | Total no cartão: R$ 3.951,61"
+ *   4. Simples:             "PIX", "Debito", "Cartao Credito 12x"
+ *
+ * Caso 3 é detectado pela presenca de " | " — quebra direto em bullets.
+ * Caso 1/2/4 passa pelo parser antigo.
  */
 function formatPagamentoDisplay(
   formaPagamento: string | null,
@@ -114,14 +122,17 @@ function formatPagamentoDisplay(
 ): string {
   if (!formaPagamento) return "—";
   const fp = formaPagamento.trim();
+
+  // Formato verbose com pipes (vendas multi-pagamento) — ja vem estruturado,
+  // so quebra em bullets. Um par "Chave: Valor" por linha.
+  if (fp.includes(" | ")) {
+    const partes = fp.split(" | ").map(s => s.trim()).filter(Boolean);
+    return partes.map(p => `   • ${p}`).join("\n");
+  }
+
   const total = Number(valorTotal || valor || 0);
   const entrada = Number(entradaCol || 0);
   // Detecta entrada Pix/Especie/Transferencia
-  // Formatos suportados:
-  //   'Entrada R$ X via Pix + 10x no Cartão'        <- novo (link-compras)
-  //   'Entrada PIX R$ X + 10x no Cartão'            <- antigo (vendas admin)
-  //   'Entrada Espécie R$ X + ...'
-  // Banco do Pix nao interessa no texto do motoboy — info interna.
   let labelEntrada = "Entrada";
   if (/via\s+Pix/i.test(fp) || /\+\s*pix/i.test(fp) || /Entrada\s+PIX/i.test(fp)) {
     labelEntrada = "Entrada PIX";
@@ -137,36 +148,55 @@ function formatPagamentoDisplay(
   while ((m = cartaoRegex.exec(fp)) !== null) {
     const tipo = /link/i.test(m[2]) ? "Link" : "Cartão" as const;
     let maq = (m[3] || "").trim();
-    // Se eh Link, a maquina e Mercado Pago (implicito) — adiciona pra deixar claro no motoboy
     if (!maq && tipo === "Link") maq = "Mercado Pago";
     cartoes.push({ parcelas: parseInt(m[1]), maquina: maq, tipo });
   }
   const baseCartoes = Math.max(0, total - entrada);
-  const linhas: string[] = [fp];
+  // Nome resumido da forma (sem "Entrada X R$ Y + Nx no Cartao") — eh so a
+  // descricao da forma principal. Se nao conseguiu parsear, mostra fp inteiro.
+  const formaResumo = cartoes.length > 0
+    ? (entrada > 0 ? `${labelEntrada} + Cartão` : "Cartão")
+    : fp;
+  const linhas: string[] = [`   • Forma: ${formaResumo}`];
   if (entrada > 0) {
     linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}`);
   }
   if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
     const c = cartoes[0];
     const vParc = baseCartoes / c.parcelas;
-    const maqSuffix = c.maquina ? ` — ${c.maquina}` : "";
+    const maqSuffix = c.maquina ? ` (${c.maquina})` : "";
     if (c.parcelas > 1) {
-      linhas.push(`   • ${c.parcelas}x de ${fmtBRL(vParc)} — total ${fmtBRL(baseCartoes)}${maqSuffix}`);
+      linhas.push(`   • Parcelas: ${c.parcelas}x de ${fmtBRL(vParc)}${maqSuffix}`);
+      linhas.push(`   • Total no cartão: ${fmtBRL(baseCartoes)}`);
     } else {
       linhas.push(`   • ${c.tipo}: ${fmtBRL(baseCartoes)}${maqSuffix}`);
     }
   } else if (cartoes.length === 2) {
-    // Sem granularidade de valores nos dois cartões — aproxima 50/50
+    // Dois cartões — aproxima 50/50 na falta de granularidade
     const metade = baseCartoes / 2;
     cartoes.forEach((c, i) => {
       const vParc = c.parcelas > 0 ? metade / c.parcelas : 0;
-      const maqSuffix = c.maquina ? ` — ${c.maquina}` : "";
-      linhas.push(`   • ${c.tipo} ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)} — total ${fmtBRL(metade)}${maqSuffix}`);
+      const maqSuffix = c.maquina ? ` (${c.maquina})` : "";
+      linhas.push(`   • ${c.tipo} ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)}${maqSuffix}`);
     });
-  } else if (entrada === 0 && valor != null) {
-    linhas.push(`   • ${fmtBRL(Number(valor))}`);
+    linhas.push(`   • Total nos cartões: ${fmtBRL(baseCartoes)}`);
+  } else if (cartoes.length === 0 && valor != null) {
+    // Sem cartoes detectados (ex: PIX puro)
+    linhas.push(`   • Valor: ${fmtBRL(Number(valor))}`);
   }
   return linhas.join("\n");
+}
+
+/**
+ * Formata o campo PRODUTO do formulário do motoboy.
+ * Se tem multiplos produtos separados por " + ", quebra em bullets (1 por linha).
+ * Single-produto sai como string simples na mesma linha.
+ */
+function formatProdutoDisplay(produto: string | null | undefined): string {
+  if (!produto) return "—";
+  const parts = produto.split(" + ").map(s => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return produto;
+  return "\n" + parts.map(p => `   • ${p}`).join("\n");
 }
 
 export default function EntregasPage() {
@@ -839,15 +869,26 @@ export default function EntregasPage() {
       return trocas.length > 1 ? `${i + 1}. ${t.replace(/\n/g, " / ")}` : t.replace(/\n/g, " / ");
     }).join("\n   ");
 
+    // formatProdutoDisplay retorna string vazia ou com leading "\n" se multi.
+    // Pra single produto, sai na mesma linha do emoji/label. Pra multi, quebra.
+    const produtoFormatado = formatProdutoDisplay(produtoText);
+    const produtoLine = produtoFormatado.startsWith("\n")
+      ? `🍎 *PRODUTO:*${produtoFormatado}`
+      : `🍎 *PRODUTO:* ${produtoFormatado}`;
+    // Pagamento — se pagText tem \n (multi-linha) quebra direto; senao inline.
+    const pagCompleto = `${pagText}${pagAlt}`;
+    const pagLine = pagCompleto.includes("\n")
+      ? `💵 *PAGAMENTO:*\n${pagCompleto}`
+      : `💵 *PAGAMENTO:* ${pagCompleto}`;
     const lines = [
       `🛵 *ENTREGA ${(form.bairro || "—").toUpperCase()}* 🛵`,
       `🛵`,
       `⏰ *HORÁRIO:* ${form.horario || "—"}`,
       `📍 *LOCAL:* ${form.endereco || "—"} - ${form.bairro || ""}`,
-      `🍎 *PRODUTO:* ${produtoText}`,
+      produtoLine,
       `‼️ *TIPO:* ${tipoLabel}`,
       ...(form.tipo === "UPGRADE" && trocas.filter(Boolean).length > 0 ? [`🔄 *PRODUTO NA TROCA:*\n   ${trocasText}`] : []),
-      `💵 *PAGAMENTO:* ${pagText}${pagAlt}`,
+      pagLine,
       ...(form.local_entrega === "RESIDÊNCIA" ? [`⚠️ PAGAMENTO ANTECIPADO`] : form.local_entrega === "SHOPPING" ? [`✅ PAGAR NA ENTREGA`] : []),
       `🧑 *CLIENTE:* ${form.cliente || "—"}`,
       `📞 *CONTATO:* ${form.telefone || "—"}`,
@@ -2834,12 +2875,16 @@ export default function EntregasPage() {
                           ? e.detalhes_upgrade.split("\n").filter(l => !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao")).join("\n• ")
                           : "";
                         const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
+                        const produtoFmtC = formatProdutoDisplay(e.produto);
+                        const produtoLineC = produtoFmtC.startsWith("\n")
+                          ? `🍎 *PRODUTO:*${produtoFmtC}`
+                          : `🍎 *PRODUTO:* ${produtoFmtC}`;
                         const msg = [
                           `🛵 *COLETA* 🛵`,
                           ``,
                           `⏰ *HORÁRIO:* ${e.horario || "Horário a combinar"}`,
                           `📍 *LOCAL COLETA:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
-                          `🍎 *PRODUTO:* ${e.produto || ""}`,
+                          produtoLineC,
                           ``,
                           ...(detalhesAparelho ? [`📱 *APARELHO NA COLETA:*`, `• ${detalhesAparelho}`] : []),
                           ``,
@@ -2862,15 +2907,25 @@ export default function EntregasPage() {
                               .join(" / ")
                           : "";
                         const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
+                        // Produto: multi-produto quebra em bullets (quando tem " + ")
+                        const produtoFmt = formatProdutoDisplay(e.produto);
+                        const produtoLine = produtoFmt.startsWith("\n")
+                          ? `🍎 *PRODUTO:*${produtoFmt}`
+                          : `🍎 *PRODUTO:* ${produtoFmt}`;
+                        // Pagamento: formatPagamentoDisplay ja retorna multi-linha com bullets
+                        const pagFmt = formatPagamentoDisplay(e.forma_pagamento, e.valor, e.valor_total, e.entrada, e.parcelas);
+                        const pagLine = pagFmt.includes("\n")
+                          ? `💵 *PAGAMENTO:*\n${pagFmt}`
+                          : `💵 *PAGAMENTO:* ${pagFmt}`;
                         const msg = [
                           `🛵 *ENTREGA ${regiao.toUpperCase()}* 🛵`,
                           `🛵`,
                           `⏰ *HORÁRIO:* ${e.horario || "A combinar"}`,
                           `📍 *LOCAL:* ${e.endereco || "A definir"} - ${e.bairro || ""}`,
-                          `🍎 *PRODUTO:* ${e.produto || ""}`,
+                          produtoLine,
                           `‼️ *TIPO:* ${tipoLabel}`,
                           ...(isUpgrade && trocaTexto ? [`🔄 *PRODUTO NA TROCA:* ${trocaTexto}`] : []),
-                          `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor, e.valor_total, e.entrada, e.parcelas)}`,
+                          pagLine,
                           `🧑 *CLIENTE:* ${e.cliente || ""}`,
                           `📞 *CONTATO:* ${e.telefone || ""}`,
                           obsLimpa ? `OBS: ${obsLimpa}` : "",
