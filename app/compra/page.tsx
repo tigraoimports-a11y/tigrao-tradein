@@ -463,11 +463,12 @@ function CompraForm() {
 
   // Installment calculations
   const descontoNum = parseFloat(String(descontoParam)) || 0;
-  // Soma dos produtos extras (Produto 2+) — inclui no total pra preview do
-  // Total e calculo de parcelas refletir o carrinho completo, nao so o
-  // produto 1.
-  const extrasTotalPreview = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
-  const valorBase = preco > 0 ? Math.max(preco + extrasTotalPreview - descontoNum - trocaNum, 0) : 0;
+  // IMPORTANTE: `preco` (URL param `v`) JA E o total somado de todos os
+  // produtos — o gerar-link setta `preco = total` (soma do produto 1 + extras).
+  // Nao somar extras aqui de novo — dava double counting (ex: 14.294 + 5.497
+  // = 19.791 era o total mostrado, mas o admin calcula 14.294).
+  // Precos individuais em `produtosExtras` sao so pra display informativo.
+  const valorBase = preco > 0 ? Math.max(preco - descontoNum - trocaNum, 0) : 0;
   const entradaPixNum = parseFloat(entradaPixManual || entradaPixParam) || 0;
   const valorParcelar = entradaPixNum > 0 ? Math.max(valorBase - entradaPixNum, 0) : valorBase;
   const parcOpts = useMemo(() => {
@@ -569,11 +570,10 @@ function CompraForm() {
 
     // Valor base para cálculos (usa precoFinal definido acima)
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
-    // Soma dos produtos extras (Produto 2+) — nao era somado antes, gerava
-    // Total errado na mensagem de WhatsApp (ex: MacBook 11.694 + iPhone 5.497
-    // - desconto 100 virava Total 11.594 em vez de 17.091).
-    const extrasTotal = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
-    const valorBaseFinal = Math.max(precoFinal + extrasTotal - descontoFinal - trocaNum, 0);
+    // `precoFinal` ja e o total somado de todos os produtos (gerar-link envia
+    // `v = total`). Extras aqui sao so display. Nao somar de novo — dava
+    // double count (14.294 total + 5.497 extras = 19.791 erroneo).
+    const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorParcelarFinal = entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
 
@@ -834,10 +834,9 @@ function CompraForm() {
     // Calcula valor a cobrar no MP. Se há entrada PIX (pagamento dividido),
     // o MP cobra só o valor parcelar (o PIX fica pendente pra retirada).
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
-    // Soma dos produtos extras — MP precisa cobrar o valor total incluindo
-    // multi-produto. Sem isso o link pagava so o Produto 1.
-    const extrasTotalMp = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
-    const valorBaseFinal = Math.max(precoFinal + extrasTotalMp - descontoFinal - trocaNum, 0);
+    // `precoFinal` ja e o total somado — gerar-link envia `v = total`. Nao
+    // somar extras aqui (double count).
+    const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorMpCobrado =
       entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
@@ -1016,20 +1015,10 @@ function CompraForm() {
                 ))}
                 {preco > 0 && (
                   <div className="mt-2 space-y-1">
-                    {/* Quando ha extras, o label muda de "Preco de venda" pra "Subtotal"
-                        somando todos os produtos — evita confusao tipo "preco - desconto !=
-                        total" porque os extras nao entravam no breakdown visivel. */}
-                    {produtosExtras.length > 0 ? (
-                      <>
-                        <p className="text-[#86868B] text-xs uppercase tracking-wider">Subtotal ({produtosExtras.length + 1} produtos)</p>
-                        <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco + extrasTotalPreview)}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-[#86868B] text-xs uppercase tracking-wider">Preco de venda</p>
-                        <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
-                      </>
-                    )}
+                    <p className="text-[#86868B] text-xs uppercase tracking-wider">
+                      {produtosExtras.length > 0 ? `Preco total (${produtosExtras.length + 1} produtos)` : "Preco de venda"}
+                    </p>
+                    <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
                     {descontoParam > 0 && (
                       <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>
                     )}
