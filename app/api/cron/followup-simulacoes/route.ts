@@ -72,11 +72,34 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
   }
 }
 
+// Retorna true se o horario atual (America/Sao_Paulo) esta fora da janela
+// comercial pra envio de follow-up de simulacao.
+// Regras (pedido da equipe pra nao incomodar cliente no fim de semana):
+// - Domingo: nao envia o dia todo
+// - Sabado: nao envia a partir do meio-dia (sabado tarde/noite)
+// Segunda a sexta e sabado de manha continuam enviando normal.
+function foraDoHorarioComercial(): { fora: boolean; motivo: string } {
+  const nowSP = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+  );
+  const dow = nowSP.getDay(); // 0=Dom, 6=Sab
+  const hour = nowSP.getHours();
+  if (dow === 0) return { fora: true, motivo: "Domingo — pausado" };
+  if (dow === 6 && hour >= 12) return { fora: true, motivo: "Sabado a tarde — pausado" };
+  return { fora: false, motivo: "" };
+}
+
 // Roda todo dia as 14h — envia WhatsApp automatico pro cliente que simulou e nao fechou
 // Verifica se o cliente ja comprou antes de enviar
 export async function GET(req: NextRequest) {
   if (!authCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Pausa fim de semana (domingo inteiro + sabado a partir do meio-dia)
+  const janela = foraDoHorarioComercial();
+  if (janela.fora) {
+    return NextResponse.json({ ok: true, skipped: true, motivo: janela.motivo });
   }
 
   try {

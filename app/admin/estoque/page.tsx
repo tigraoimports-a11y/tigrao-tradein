@@ -14,6 +14,7 @@ import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "
 import BalancoSeminovosSection from "@/components/admin/BalancoSeminovosSection";
 import type { Banco } from "@/lib/admin-types";
 import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
+import { formatProdutoDisplay as formatProdutoDisplayLib } from "@/lib/produto-display";
 
 /**
  * Normaliza o display de um produto seguindo a ordem rigorosa por categoria,
@@ -1012,13 +1013,18 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
       return `Apple Watch Ultra${gen}${sz}`;
     }
-    // SE com geração (SE 2, SE 3)
-    const seMatch = p.match(/SE\s*(\d+)/);
-    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
-    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
-    // Series com número
-    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
+    // Apple Watch SE so existe em 40/44mm. Se o nome tem 46mm/49mm, "SE" no
+    // meio do nome e lixo (provavelmente "SERIES") — trata como Series 11.
+    const has46or49 = /\b(46|49)\s*MM/.test(p);
+    // \bSE(?!R) impede casar "SERIES" (SE seguido de R)
+    const seMatch = p.match(/\bSE(?!R)\s*(\d+)/);
+    if (seMatch && !has46or49) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
+    if (/\bSE(?!R)/.test(p) && !has46or49) return `Apple Watch SE${sz}${conn}`;
+    // Series com numero
+    const seriesMatch = p.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
+    // Fallback: tem 46/49mm mas nao casou series — assume Series 11
+    if (has46or49) return `Apple Watch Series 11${sz}${conn}`;
     return `Apple Watch${sz}${conn}`;
   }
   if (baseCat === "AIRPODS") {
@@ -4576,9 +4582,20 @@ export default function EstoquePage() {
                                       <input type="checkbox" checked={allSelected} onChange={() => setSelectedACaminho(prev => { const n = new Set(prev); if (allSelected) group.forEach(p => n.delete(p.id)); else group.forEach(p => n.add(p.id)); return n; })} className="accent-[#E8740E]" />
                                     </td>
                                     <td className={`px-4 py-3 text-sm font-semibold ${textPrimary}`}>
-                                      <span>{isSingleUnit ? group[0].produto : baseModel}</span>
-                                      {isSingleUnit && group[0].cor && !group[0].produto.toUpperCase().includes((group[0].cor || "").toUpperCase()) && (
-                                        <span className={`ml-2 text-[11px] font-normal ${textSecondary}`}>{group[0].cor}</span>
+                                      <span>
+                                        {isSingleUnit
+                                          ? formatProdutoDisplayLib({
+                                              produto: group[0].produto,
+                                              categoria: group[0].categoria,
+                                              cor: group[0].cor,
+                                              observacao: group[0].observacao,
+                                            })
+                                          : baseModel}
+                                      </span>
+                                      {isSingleUnit && group[0].cor && (
+                                        <span className={`ml-2 text-[10px] font-normal ${textMuted}`} title={group[0].cor}>
+                                          ({formatCorEtiquetaPTEN(group[0].cor).split(" - ").pop() || group[0].cor})
+                                        </span>
                                       )}
                                       {!isSingleUnit && (
                                         <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"}`}>

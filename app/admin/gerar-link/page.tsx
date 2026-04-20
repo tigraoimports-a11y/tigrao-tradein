@@ -7,6 +7,7 @@ import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
+import { getPublicBaseUrl } from "@/lib/public-url";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -984,7 +985,7 @@ export default function GerarLinkPage() {
     }
 
     const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const baseUrl = getPublicBaseUrl();
 
     // Helper: aplica cor extra no nome (PT simples)
     const aplicarCorExtra = (nome: string, idx: number): string => {
@@ -1263,7 +1264,7 @@ export default function GerarLinkPage() {
       // pra diferenciar e permitir reenvio/rastreio via webhook MP.
       if (shortCode) {
         try {
-          const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+          const baseUrl = getPublicBaseUrl();
           const urlCurta = `${baseUrl}/c/${shortCode}`;
           await fetch("/api/admin/link-compras", {
             method: "POST",
@@ -2041,7 +2042,7 @@ export default function GerarLinkPage() {
                     );
                   })()}
                   <button
-                    onClick={() => copiarLinkHist(l.url_curta || `${typeof window !== "undefined" ? window.location.origin : ""}/c/${l.short_code}`)}
+                    onClick={() => copiarLinkHist(l.url_curta || `${getPublicBaseUrl()}/c/${l.short_code}`)}
                     className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] font-medium"
                   >
                     📋 Copiar
@@ -2117,6 +2118,23 @@ export default function GerarLinkPage() {
 
       {aba === "novo" && (
       <>
+      {editingLinkId && (
+        <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">✏️</span>
+            <div>
+              <p className="text-sm font-bold text-blue-900">Editando link {editingShortCode || editingLinkId.slice(0, 6)}</p>
+              <p className="text-[11px] text-blue-700">Clique em <strong>Salvar Alterações</strong> pra gravar por cima. O link curto continua o mesmo.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => { setEditingLinkId(null); setEditingShortCode(null); setPasteMsg(""); }}
+            className="text-xs px-3 py-1.5 rounded-lg bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 font-semibold whitespace-nowrap"
+          >
+            ✕ Cancelar edição
+          </button>
+        </div>
+      )}
       <div className="bg-white border border-[#D2D2D7] rounded-xl p-4 shadow-sm space-y-4">
         {/* Botão colar resumo */}
         <div className="flex items-center justify-between">
@@ -2859,9 +2877,9 @@ export default function GerarLinkPage() {
         <button
           onClick={gerarLink}
           disabled={carrinhoLink.length === 0 && !produtos.some(Boolean)}
-          className="w-full py-3 bg-[#E8740E] text-white font-bold rounded-xl hover:bg-[#D06A0D] active:bg-[#B85E0B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={`w-full py-3 font-bold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${editingLinkId ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white" : "bg-[#E8740E] hover:bg-[#D06A0D] active:bg-[#B85E0B] text-white"}`}
         >
-          Gerar Link
+          {editingLinkId ? "💾 Salvar Alterações" : "Gerar Link"}
         </button>
 
         {/* ── Link Mercado Pago (pagamento via MP) ─────── */}
@@ -2874,10 +2892,11 @@ export default function GerarLinkPage() {
           </p>
           <button
             onClick={gerarLinkMP}
-            disabled={mpLoading || (carrinhoLink.length === 0 && !produtos.some(Boolean)) || valorComTaxa <= 0}
+            disabled={mpLoading || (carrinhoLink.length === 0 && !produtos.some(Boolean)) || valorComTaxa <= 0 || !!editingLinkId}
+            title={editingLinkId ? "Em modo edicao o link MP nao pode ser atualizado — salve as alteracoes pelo botao azul acima, ou cancele a edicao pra gerar um link MP novo" : undefined}
             className="w-full py-2.5 bg-[#00B1EA] text-white font-bold rounded-xl hover:bg-[#0097C7] active:bg-[#007FAA] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {mpLoading ? "Gerando..." : "Gerar Link MP"}
+            {mpLoading ? "Gerando..." : editingLinkId ? "🔒 MP indisponivel em edicao" : "Gerar Link MP"}
           </button>
           {mpErr && (
             <p className="text-xs text-red-500 mt-2">{mpErr}</p>

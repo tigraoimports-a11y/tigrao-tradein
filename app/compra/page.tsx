@@ -274,6 +274,41 @@ function CompraForm() {
     }
   }, [coresDisponiveis, produtoInput, produtoParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fallback: detecta cor PT no final do produtoParam mesmo sem catalogo/estoque.
+  // Fix pro caso do operador incluir a cor no nome do produto via gerar-link
+  // (ex: "iPhone 17 Pro Max 256GB Prata") — antes o /compra ainda pedia pra
+  // escolher a cor de novo porque coresDisponiveis vinha vazio (lookup por
+  // startsWith nao casava com o produto com cor no nome). Roda uma vez no
+  // mount, so se corSel ainda esta vazio.
+  useEffect(() => {
+    if (corSel) return;
+    const prod = produtoParam;
+    if (!prod) return;
+    // Cores PT comuns — ordem importante: multi-palavra ANTES de uma so pra
+    // match correto (ex: "Titanio Preto" antes de "Preto").
+    const CORES_PT = [
+      "Titânio Preto", "Titânio Azul", "Titânio Deserto", "Titânio Natural", "Titânio Branco",
+      "Titanio Preto", "Titanio Azul", "Titanio Deserto", "Titanio Natural", "Titanio Branco",
+      "Space Black", "Space Gray", "Rose Gold", "Midnight Green", "Sky Blue",
+      "Preto", "Branco", "Azul", "Verde", "Prata", "Cinza", "Dourado",
+      "Roxo", "Rosa", "Laranja", "Amarelo", "Vermelho", "Estelar", "Grafite",
+      "Black", "White", "Blue", "Green", "Silver", "Gold", "Purple", "Pink",
+      "Red", "Orange", "Yellow", "Midnight", "Starlight", "Natural", "Graphite",
+    ];
+    const pNorm = prod.toLowerCase();
+    // Ordena por tamanho decrescente e tenta match no sufixo
+    const sorted = [...CORES_PT].sort((a, b) => b.length - a.length);
+    for (const cor of sorted) {
+      if (pNorm.endsWith(" " + cor.toLowerCase())) {
+        setCorSel(cor);
+        // Tira a cor do final do produtoInput pra coresDisponiveis funcionar
+        const semCor = prod.slice(0, prod.length - cor.length - 1).trim();
+        setProdutoInput(semCor);
+        break;
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const preco = precoParam ? parseInt(precoParam) : precoAuto;
 
   // Form state — aceita pre-preenchimento vindo do gerar-link
@@ -281,6 +316,9 @@ function CompraForm() {
   const [nome, setNome] = useState(nomeParam);
   const [cpf, setCpf] = useState(cpfParam ? maskCPF(cpfParam) : "");
   const [cnpj, setCnpj] = useState("");
+  // Inscricao estadual (so PJ): null = nao respondeu ainda, "ISENTO" = nao tem, string = numero
+  const [ieStatus, setIeStatus] = useState<null | "TEM" | "ISENTO">(null);
+  const [ie, setIe] = useState("");
   const [email, setEmail] = useState(emailParam);
   const [telefone, setTelefone] = useState(whatsappClienteParam ? maskPhone(whatsappClienteParam) : "");
   const [cep, setCep] = useState(cepParam ? maskCEP(cepParam) : "");
@@ -425,7 +463,11 @@ function CompraForm() {
 
   // Installment calculations
   const descontoNum = parseFloat(String(descontoParam)) || 0;
-  const valorBase = preco > 0 ? Math.max(preco - descontoNum - trocaNum, 0) : 0;
+  // Soma dos produtos extras (Produto 2+) — inclui no total pra preview do
+  // Total e calculo de parcelas refletir o carrinho completo, nao so o
+  // produto 1.
+  const extrasTotalPreview = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+  const valorBase = preco > 0 ? Math.max(preco + extrasTotalPreview - descontoNum - trocaNum, 0) : 0;
   const entradaPixNum = parseFloat(entradaPixManual || entradaPixParam) || 0;
   const valorParcelar = entradaPixNum > 0 ? Math.max(valorBase - entradaPixNum, 0) : valorBase;
   const parcOpts = useMemo(() => {
@@ -457,6 +499,19 @@ function CompraForm() {
     if (!formaPagamento) {
       alert("Selecione a forma de pagamento antes de enviar.");
       return;
+    }
+
+    // PJ: Inscricao Estadual e obrigatoria responder (TEM ou ISENTO). Se TEM,
+    // precisa preencher o numero.
+    if (pessoa === "PJ") {
+      if (ieStatus === null) {
+        alert("Responda se a empresa tem ou é isenta de Inscrição Estadual.");
+        return;
+      }
+      if (ieStatus === "TEM" && !ie.trim()) {
+        alert("Informe o número da Inscrição Estadual.");
+        return;
+      }
     }
 
     if (formaPagamento.includes("Cartao") && !parcelas && !pagamentoPagoParam) {
@@ -514,7 +569,11 @@ function CompraForm() {
 
     // Valor base para cálculos (usa precoFinal definido acima)
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
-    const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
+    // Soma dos produtos extras (Produto 2+) — nao era somado antes, gerava
+    // Total errado na mensagem de WhatsApp (ex: MacBook 11.694 + iPhone 5.497
+    // - desconto 100 virava Total 11.594 em vez de 17.091).
+    const extrasTotal = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+    const valorBaseFinal = Math.max(precoFinal + extrasTotal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorParcelarFinal = entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
 
@@ -584,6 +643,7 @@ function CompraForm() {
             `*Tipo:* Pessoa Jurídica`,
             `*Razão Social:* ${nome}`,
             `*CNPJ:* ${cnpj}`,
+            `*Inscrição Estadual:* ${ieStatus === "TEM" ? ie : "Isento"}`,
           ]
         : [
             `*Nome completo:* ${nome}`,
@@ -680,6 +740,7 @@ function CompraForm() {
       const payload = JSON.stringify({
         dados: {
           nome, cpf: pessoa === "PJ" ? "" : cpf, cnpj: pessoa === "PJ" ? cnpj : "", pessoa,
+          inscricao_estadual: pessoa === "PJ" ? (ieStatus === "TEM" ? ie : "ISENTO") : "",
           email, telefone, instagram,
           cep, endereco, numero, complemento, bairro,
           endereco_completo: enderecoFullTxt,
@@ -755,6 +816,16 @@ function CompraForm() {
       setErroMp(`Preencha seu ${pessoa === "PJ" ? "CNPJ" : "CPF"}.`);
       return;
     }
+    if (pessoa === "PJ") {
+      if (ieStatus === null) {
+        setErroMp("Responda se a empresa tem ou é isenta de Inscrição Estadual.");
+        return;
+      }
+      if (ieStatus === "TEM" && !ie.trim()) {
+        setErroMp("Informe o número da Inscrição Estadual.");
+        return;
+      }
+    }
     if (!email || !telefone) {
       setErroMp("Preencha email e telefone.");
       return;
@@ -763,7 +834,10 @@ function CompraForm() {
     // Calcula valor a cobrar no MP. Se há entrada PIX (pagamento dividido),
     // o MP cobra só o valor parcelar (o PIX fica pendente pra retirada).
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
-    const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
+    // Soma dos produtos extras — MP precisa cobrar o valor total incluindo
+    // multi-produto. Sem isso o link pagava so o Produto 1.
+    const extrasTotalMp = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+    const valorBaseFinal = Math.max(precoFinal + extrasTotalMp - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorMpCobrado =
       entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
@@ -782,6 +856,7 @@ function CompraForm() {
         pessoa,
         cpf: pessoa === "PF" ? cpf : undefined,
         cnpj: pessoa === "PJ" ? cnpj : undefined,
+        inscricao_estadual: pessoa === "PJ" ? (ieStatus === "TEM" ? ie : "ISENTO") : undefined,
         email,
         telefone,
         instagram,
@@ -947,7 +1022,7 @@ function CompraForm() {
                       <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>
                     )}
                     {(trocaNum > 0 || descontoParam > 0) && (
-                      <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>
+                      <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : descontoParam > 0 ? "Total com desconto" : "Total"}: R$ {fmt(valorBase)}</p>
                     )}
                   </div>
                 )}
@@ -1011,7 +1086,7 @@ function CompraForm() {
                   <>
                     <p className="text-[#E8740E] font-bold text-xl">R$ {fmt(preco)}</p>
                     {descontoParam > 0 && <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>}
-                    {(trocaNum > 0 || descontoParam > 0) && <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>}
+                    {(trocaNum > 0 || descontoParam > 0) && <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : descontoParam > 0 ? "Total com desconto" : "Total"}: R$ {fmt(valorBase)}</p>}
                   </>
                 ) : (
                   <div>
@@ -1082,7 +1157,7 @@ function CompraForm() {
             </div>
           )}
           {preco > 0 && descontoParam > 0 && <p className="text-blue-500 font-semibold text-sm pt-2 border-t border-green-200">Desconto: - R$ {fmt(descontoParam)}</p>}
-          {preco > 0 && <p className={`text-[#E8740E] font-bold text-lg ${descontoParam > 0 ? "" : "pt-2 border-t border-green-200"}`}>{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>}
+          {preco > 0 && <p className={`text-[#E8740E] font-bold text-lg ${descontoParam > 0 ? "" : "pt-2 border-t border-green-200"}`}>{trocaNum > 0 ? "Diferenca a pagar" : descontoParam > 0 ? "Total com desconto" : "Total"}: R$ {fmt(valorBase)}</p>}
         </div>
       )}
 
@@ -1166,18 +1241,53 @@ function CompraForm() {
             />
           </div>
           {pessoa === "PJ" ? (
-            <div>
-              <label className={labelCls}>CNPJ *</label>
-              <input
-                type="text"
-                required
-                inputMode="numeric"
-                value={cnpj}
-                onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
-                placeholder="00.000.000/0000-00"
-                className={inputCls}
-              />
-            </div>
+            <>
+              <div>
+                <label className={labelCls}>CNPJ *</label>
+                <input
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
+                  placeholder="00.000.000/0000-00"
+                  className={inputCls}
+                />
+              </div>
+              {/* Inscricao Estadual — pergunta obrigatoria. Empresa tem IE ou eh isenta. */}
+              <div>
+                <label className={labelCls}>Inscrição Estadual *</label>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIeStatus("TEM"); }}
+                    className={`flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${ieStatus === "TEM" ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                  >
+                    Tem IE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIeStatus("ISENTO"); setIe(""); }}
+                    className={`flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${ieStatus === "ISENTO" ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                  >
+                    Isento
+                  </button>
+                </div>
+                {ieStatus === "TEM" && (
+                  <input
+                    type="text"
+                    required
+                    value={ie}
+                    onChange={(e) => setIe(e.target.value.replace(/[^0-9.\-/\s]/g, ""))}
+                    placeholder="Número da Inscrição Estadual"
+                    className={inputCls}
+                  />
+                )}
+                {ieStatus === null && (
+                  <p className="text-[11px] text-red-500 mt-1">Responda se a empresa tem ou é isenta de Inscrição Estadual.</p>
+                )}
+              </div>
+            </>
           ) : (
             <div>
               <label className={labelCls}>CPF *</label>

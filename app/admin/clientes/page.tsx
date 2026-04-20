@@ -860,17 +860,33 @@ export default function ClientesPage() {
                 const outros = Array.from(mergeSelection).filter(n => n !== nome);
                 if (!confirm(`Unificar todos para "${nome}"?\n\n${outros.map(o => `• ${o}`).join("\n")}\n\nTodas as vendas, entregas e dados serão transferidos para "${nome}".`)) return;
                 setMerging(true);
+                const falhas: string[] = [];
+                let totalAfetado = 0;
                 for (const antigo of outros) {
                   try {
-                    await fetch("/api/admin/merge-cliente", {
+                    const res = await fetch("/api/admin/merge-cliente", {
                       method: "POST",
                       headers: { ...apiHeaders() as Record<string, string>, "Content-Type": "application/json" },
                       body: JSON.stringify({ nomeAntigo: antigo, nomeNovo: nome }),
                     });
-                  } catch { /* ignore */ }
+                    const j = await res.json().catch(() => ({}));
+                    console.log("[Merge cliente]", antigo, "→", nome, "status=", res.status, "body=", j);
+                    if (!res.ok || !j.ok) {
+                      falhas.push(`${antigo}: ${j.error || j.erros?.join(", ") || `HTTP ${res.status}`}`);
+                    } else if (j.resultado) {
+                      totalAfetado += Object.values(j.resultado as Record<string, number>).reduce((s, n) => s + Number(n || 0), 0);
+                    }
+                  } catch (err) {
+                    falhas.push(`${antigo}: ${String(err)}`);
+                  }
                 }
                 setMergeSelection(new Set());
                 setMerging(false);
+                if (falhas.length > 0) {
+                  alert(`Unificacao teve ${falhas.length} falha(s):\n\n${falhas.join("\n")}\n\nVer console (F12) pra detalhes completos.`);
+                } else {
+                  console.log(`[Merge cliente] ${outros.length} unificado(s), ${totalAfetado} registro(s) atualizado(s)`);
+                }
                 // Recarregar dados
                 setLoading(true);
                 try {
