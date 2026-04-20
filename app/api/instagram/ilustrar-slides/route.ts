@@ -62,7 +62,7 @@ REGRAS GERAIS
    - Ideal: fotos de produto em fundo BRANCO (ex: apple.com/br/ipad, product photos).
    - Todas em mesma "perspectiva" se possível (ex: todas frontais, todas com ângulo).
    - Máximo 3 URLs em composição.
-   - Composições são SEMPRE únicas (não contam como repetição), então pode usar em múltiplos slides de comparação.
+   - ⚠️ COMPOSIÇÕES TAMBÉM NÃO PODEM REPETIR: se 3 slides falam dos mesmos modelos, NÃO mande a mesma lista de URLs nos 3. Varie — ex: slide A usa foto frontal dos 3, slide B usa foto lateral, slide C usa detalhe de câmera. O backend detecta composições visualmente iguais (mesma lista de URLs ordenada) e ZERA as duplicatas.
 
 3. Priorize fontes:
    - apple.com/br, apple.com, newsroom Apple pra produtos específicos.
@@ -359,20 +359,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: erro }, { status: 500 });
   }
 
+  // Dedup de composições visualmente iguais: mesma lista de URLs gera PNG
+  // distinto (timestamp), mas visualmente idêntico. Marca duplicatas ANTES
+  // de gerar pra nao desperdicar Satori render.
+  const composicoesKeys = new Set<string>();
+  function composicaoKey(urls: string[]): string {
+    return urls.slice(0, 3).map((u) => u.trim()).sort().join("|");
+  }
+  const atribuicoesAnotadas = atribuicoes.map((a) => {
+    const composicaoValida =
+      Array.isArray(a.composicao) &&
+      a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
+    let composicaoDuplicada = false;
+    if (composicaoValida) {
+      const key = composicaoKey(a.composicao!);
+      if (composicoesKeys.has(key)) composicaoDuplicada = true;
+      else composicoesKeys.add(key);
+    }
+    return { ...a, composicaoValida, composicaoDuplicada };
+  });
+
   // Resolve cada atribuição → URL final de imagem.
-  // Se tem `composicao`, compoe as N imagens em uma so via Satori e sobe.
+  // Se tem `composicao` e nao e duplicada, compoe as N imagens em uma so via Satori.
   const resolvidas = await Promise.all(
-    atribuicoes.map(async (a) => {
-      const composicaoValida = Array.isArray(a.composicao) && a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
-      const imagem_final = composicaoValida
+    atribuicoesAnotadas.map(async (a) => {
+      const usarComposicao = a.composicaoValida && !a.composicaoDuplicada;
+      const imagem_final = usarComposicao
         ? (await comporImagens(a.composicao!, postId, a.slide_index, supabase)) || (await resolverImagem(a.image_url, a.page_url))
         : await resolverImagem(a.image_url, a.page_url);
       return {
         slide_index: a.slide_index,
         imagem_final: imagem_final as string | null,
         motivo: a.motivo,
-        composto: !!(composicaoValida && imagem_final && imagem_final.includes("/composto/")),
-        duplicada: false,
+        composto: !!(usarComposicao && imagem_final && imagem_final.includes("/composto/")),
+        duplicada: a.composicaoDuplicada,
       };
     })
   );
@@ -445,12 +465,22 @@ export async function POST(req: NextRequest) {
       );
       const { atribuicoes: retryAtrib } = await chamarClaude(retryMsg);
 
+      const retryAnotadas = retryAtrib.map((a) => {
+        const composicaoValida =
+          Array.isArray(a.composicao) &&
+          a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
+        let composicaoDuplicada = false;
+        if (composicaoValida) {
+          const key = composicaoKey(a.composicao!);
+          if (composicoesKeys.has(key)) composicaoDuplicada = true;
+          else composicoesKeys.add(key);
+        }
+        return { ...a, composicaoValida, composicaoDuplicada };
+      });
       const retryResolvidas = await Promise.all(
-        retryAtrib.map(async (a) => {
-          const composicaoValida =
-            Array.isArray(a.composicao) &&
-            a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
-          const imagem_final = composicaoValida
+        retryAnotadas.map(async (a) => {
+          const usarComposicao = a.composicaoValida && !a.composicaoDuplicada;
+          const imagem_final = usarComposicao
             ? (await comporImagens(a.composicao!, postId, a.slide_index, supabase)) ||
               (await resolverImagem(a.image_url, a.page_url))
             : await resolverImagem(a.image_url, a.page_url);
