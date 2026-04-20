@@ -199,7 +199,7 @@ function formatPagamentoDisplay(
  *   — detecta quando 2+ partes contem nome de device (iPhone/MacBook/etc).
  *   Quebra em bullets, um por linha.
  */
-function formatProdutoDisplay(produto: string | null | undefined): string {
+function formatProdutoMotoboy(produto: string | null | undefined): string {
   if (!produto) return "—";
   const parts = produto.split(" + ").map(s => s.trim()).filter(Boolean);
   if (parts.length <= 1) return produto;
@@ -897,7 +897,7 @@ export default function EntregasPage() {
 
     // formatProdutoDisplay retorna string vazia ou com leading "\n" se multi.
     // Pra single produto, sai na mesma linha do emoji/label. Pra multi, quebra.
-    const produtoFormatado = formatProdutoDisplay(produtoText);
+    const produtoFormatado = formatProdutoMotoboy(produtoText);
     const produtoLine = produtoFormatado.startsWith("\n")
       ? `🍎 *PRODUTO:*${produtoFormatado}`
       : `🍎 *PRODUTO:* ${produtoFormatado}`;
@@ -2924,7 +2924,7 @@ export default function EntregasPage() {
                           ? e.detalhes_upgrade.split("\n").filter(l => !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao")).join("\n• ")
                           : "";
                         const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
-                        const produtoFmtC = formatProdutoDisplay(e.produto);
+                        const produtoFmtC = formatProdutoMotoboy(e.produto);
                         const produtoLineC = produtoFmtC.startsWith("\n")
                           ? `🍎 *PRODUTO:*${produtoFmtC}`
                           : `🍎 *PRODUTO:* ${produtoFmtC}`;
@@ -2957,7 +2957,7 @@ export default function EntregasPage() {
                           : "";
                         const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
                         // Produto: multi-produto quebra em bullets (quando tem " + ")
-                        const produtoFmt = formatProdutoDisplay(e.produto);
+                        const produtoFmt = formatProdutoMotoboy(e.produto);
                         const produtoLine = produtoFmt.startsWith("\n")
                           ? `🍎 *PRODUTO:*${produtoFmt}`
                           : `🍎 *PRODUTO:* ${produtoFmt}`;

@@ -69,6 +69,8 @@ export default function VendasPage() {
   const isSyncing = useRef(false);
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
+  const [showLojistaSuggestions, setShowLojistaSuggestions] = useState(false);
+  const [lojistas, setLojistas] = useState<{ id: string; nome: string; cpf?: string | null; cnpj?: string | null; saldo_credito?: number }[]>([]);
 
   // Card title overrides (sincronizado com a página de Estoque)
   const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
@@ -670,6 +672,18 @@ export default function VendasPage() {
     }
     return () => { if (clienteHistoricoTimer.current) clearTimeout(clienteHistoricoTimer.current); };
   }, [form.cliente, fetchClienteHistorico]);
+
+  // Carregar lista de lojistas cadastrados pra autocomplete no modo ATACADO.
+  // Busca uma vez ao entrar em ATACADO e reusa — a lista e pequena (< 100 em geral).
+  useEffect(() => {
+    if (form.tipo !== "ATACADO" || !password || lojistas.length > 0) return;
+    fetch("/api/admin/lojistas", {
+      headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { if (j?.lojistas) setLojistas(j.lojistas); })
+      .catch(() => {});
+  }, [form.tipo, password, user?.nome, lojistas.length]);
 
   // Buscar saldo de crédito do lojista quando cliente/cpf/cnpj mudar (só ATACADO)
   useEffect(() => {
@@ -2415,7 +2429,52 @@ export default function VendasPage() {
           {/* Campos condicionais por tipo */}
           {form.tipo === "ATACADO" ? (
             <div className="grid grid-cols-1 gap-4">
-              <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value.toUpperCase())} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
+              <div className="relative">
+                <p className={labelCls}>Nome da Loja</p>
+                <input
+                  value={form.cliente}
+                  onChange={(e) => { set("cliente", e.target.value.toUpperCase()); setShowLojistaSuggestions(true); }}
+                  onFocus={() => setShowLojistaSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowLojistaSuggestions(false), 200)}
+                  placeholder="Ex: Mega Cell, TM Cel..."
+                  className={inputCls}
+                />
+                {showLojistaSuggestions && (() => {
+                  const term = form.cliente.trim().toLowerCase();
+                  const lista = (term.length === 0
+                    ? lojistas
+                    : lojistas.filter(l => (l.nome || "").toLowerCase().includes(term))
+                  ).slice(0, 8);
+                  if (lista.length === 0) return null;
+                  return (
+                    <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[220px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+                      <div className={`px-3 py-1.5 text-[10px] font-bold uppercase ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>Lojistas cadastrados</div>
+                      {lista.map(l => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            set("cliente", (l.nome || "").toUpperCase());
+                            if (l.cpf) set("cpf", l.cpf);
+                            if (l.cnpj) set("cnpj", l.cnpj);
+                            setShowLojistaSuggestions(false);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors border-b border-[#F5F5F7] last:border-0"
+                        >
+                          <span className="text-sm font-medium text-[#1D1D1F]">{l.nome}</span>
+                          {(l.cnpj || l.cpf || (l.saldo_credito && l.saldo_credito > 0)) && (
+                            <span className="block text-[10px] text-[#86868B]">
+                              {l.cnpj ? `CNPJ ${l.cnpj}` : l.cpf ? `CPF ${l.cpf}` : ""}
+                              {l.saldo_credito && l.saldo_credito > 0 ? ` · Crédito: R$ ${Number(l.saldo_credito).toLocaleString("pt-BR")}` : ""}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
 
               {/* Entrega cobrada à parte */}
               <div className={`p-3 rounded-xl border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E0E0E5] bg-[#FAFAFA]"}`}>
