@@ -62,7 +62,7 @@ REGRAS GERAIS
    - Ideal: fotos de produto em fundo BRANCO (ex: apple.com/br/ipad, product photos).
    - Todas em mesma "perspectiva" se possível (ex: todas frontais, todas com ângulo).
    - Máximo 3 URLs em composição.
-   - Composições são SEMPRE únicas (não contam como repetição), então pode usar em múltiplos slides de comparação.
+   - ⚠️ COMPOSIÇÕES TAMBÉM NÃO PODEM REPETIR: se 3 slides falam dos mesmos modelos, NÃO mande a mesma lista de URLs nos 3. Varie — ex: slide A usa foto frontal dos 3, slide B usa foto lateral, slide C usa detalhe de câmera. O backend detecta composições visualmente iguais (mesma lista de URLs ordenada) e ZERA as duplicatas.
 
 3. Priorize fontes:
    - apple.com/br, apple.com, newsroom Apple pra produtos específicos.
@@ -142,11 +142,19 @@ function buildUserMessage(
   tema: string,
   tipo: string,
   estilo: string,
-  slideAlvo?: number
+  slideAlvo?: number,
+  alvosMultiplos?: number[],
+  urlsProibidas?: string[]
 ): string {
+  const alvosSet = slideAlvo !== undefined
+    ? new Set([slideAlvo])
+    : alvosMultiplos && alvosMultiplos.length > 0
+      ? new Set(alvosMultiplos)
+      : null;
+
   const slidesTxt = slides
     .map((s, i) => {
-      if (slideAlvo !== undefined && i !== slideAlvo) return null;
+      if (alvosSet && !alvosSet.has(i)) return null;
       const tag = i === 0 ? "CAPA" : i === slides.length - 1 ? "CTA" : `SLIDE ${i + 1}`;
       const dest = s.destaque ? ` [destaque: "${s.destaque}"]` : "";
       return `${i}. ${tag}${dest}\n   Título: ${s.titulo}\n   Texto: ${s.texto}`;
@@ -154,17 +162,26 @@ function buildUserMessage(
     .filter(Boolean)
     .join("\n\n");
 
-  const contexto = slideAlvo !== undefined
-    ? `Re-ilustre APENAS o slide ${slideAlvo}. Ignore os outros. IMPORTANTE: sua imagem não pode ser igual à de nenhum outro slide já existente.`
-    : `Ilustre TODOS os ${slides.length} slides (exceto o último CTA). Faça 2-3 web_searches por slide se necessário (max_uses=40 total). NENHUM slide pode ficar sem imagem. NENHUMA URL pode repetir entre slides.`;
+  let contexto: string;
+  if (slideAlvo !== undefined) {
+    contexto = `Re-ilustre APENAS o slide ${slideAlvo}. Ignore os outros. IMPORTANTE: sua imagem não pode ser igual à de nenhum outro slide já existente.`;
+  } else if (alvosMultiplos && alvosMultiplos.length > 0) {
+    contexto = `⚠️ RETRY: esses slides ficaram SEM imagem na 1ª tentativa (URL inválida ou duplicada). Re-ilustre APENAS eles (${alvosMultiplos.length} slide${alvosMultiplos.length === 1 ? "" : "s"}). Busque imagens DIFERENTES das que já estão em uso nos outros slides.`;
+  } else {
+    contexto = `Ilustre TODOS os ${slides.length} slides (exceto o último CTA). Faça 2-3 web_searches por slide se necessário (max_uses=40 total). NENHUM slide pode ficar sem imagem. NENHUMA URL pode repetir entre slides.`;
+  }
 
   const estiloNota = estilo === "EMANUEL_PESSOA"
     ? "\n\n⚠️ ESTILO EMANUEL_PESSOA: busque FOTOS REAIS de contexto (pessoas, cenas, situações, executivos, locais) em vez de mockups de produto. Ver regra especial no system prompt."
     : "";
 
+  const blacklistTxt = urlsProibidas && urlsProibidas.length > 0
+    ? `\n\nURLS JÁ USADAS NOS OUTROS SLIDES (NÃO REPITA NENHUMA):\n${urlsProibidas.map((u) => `- ${u}`).join("\n")}`
+    : "";
+
   return `Tema do post: "${tema}" (tipo: ${tipo}, estilo: ${estilo})${estiloNota}
 
-${contexto}
+${contexto}${blacklistTxt}
 
 SLIDES:
 ${slidesTxt}
@@ -194,6 +211,23 @@ async function extrairOgImage(pageUrl: string): Promise<string | null> {
     return null;
   } catch {
     return null;
+  }
+}
+
+// Normaliza URL pra dedup: remove query string, fragment, trailing slash,
+// lowercase do host. Assim "url.com/img.jpg?w=800" e "url.com/img.jpg?w=400"
+// contam como a mesma imagem (CDN com variantes de tamanho).
+function normalizarUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.search = "";
+    u.hash = "";
+    u.hostname = u.hostname.toLowerCase();
+    let out = u.toString();
+    if (out.endsWith("/")) out = out.slice(0, -1);
+    return out;
+  } catch {
+    return url.trim();
   }
 }
 
@@ -311,47 +345,71 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "slideIndex fora do range" }, { status: 400 });
   }
 
-  const userMsg = buildUserMessage(slides, post.tema, post.tipo, post.estilo || "PADRAO", slideIndex);
-
-  let atribuicoes: AtribuicaoClaude[] = [];
-  try {
-    const response = await client.messages.create({
-      model: "claude-opus-4-7",
-      max_tokens: 6000,
-      system: SYSTEM_PROMPT,
-      tools: [WEB_SEARCH_TOOL, ...TOOLS],
-      messages: [{ role: "user", content: userMsg }],
-    });
-    const toolUse = response.content.find(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "definir_imagens"
-    );
-    if (!toolUse) {
-      return NextResponse.json(
-        { error: "Claude não chamou 'definir_imagens'. Tente novamente." },
-        { status: 500 }
+  async function chamarClaude(
+    userMsg: string
+  ): Promise<{ atribuicoes: AtribuicaoClaude[]; erro: string | null }> {
+    try {
+      const response = await client.messages.create({
+        model: "claude-opus-4-7",
+        max_tokens: 6000,
+        system: SYSTEM_PROMPT,
+        tools: [WEB_SEARCH_TOOL, ...TOOLS],
+        messages: [{ role: "user", content: userMsg }],
+      });
+      const toolUse = response.content.find(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "definir_imagens"
       );
+      if (!toolUse) {
+        return { atribuicoes: [], erro: "Claude não chamou 'definir_imagens'." };
+      }
+      const input = toolUse.input as { atribuicoes: AtribuicaoClaude[] };
+      return { atribuicoes: input.atribuicoes || [], erro: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { atribuicoes: [], erro: "Falha na chamada ao Claude: " + msg };
     }
-    const input = toolUse.input as { atribuicoes: AtribuicaoClaude[] };
-    atribuicoes = input.atribuicoes || [];
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: "Falha na chamada ao Claude: " + msg }, { status: 500 });
   }
 
+  const userMsg = buildUserMessage(slides, post.tema, post.tipo, post.estilo || "PADRAO", slideIndex);
+  const { atribuicoes, erro } = await chamarClaude(userMsg);
+  if (erro && atribuicoes.length === 0) {
+    return NextResponse.json({ error: erro }, { status: 500 });
+  }
+
+  // Dedup de composições visualmente iguais: mesma lista de URLs gera PNG
+  // distinto (timestamp), mas visualmente idêntico. Marca duplicatas ANTES
+  // de gerar pra nao desperdicar Satori render.
+  const composicoesKeys = new Set<string>();
+  function composicaoKey(urls: string[]): string {
+    return urls.slice(0, 3).map((u) => u.trim()).sort().join("|");
+  }
+  const atribuicoesAnotadas = atribuicoes.map((a) => {
+    const composicaoValida =
+      Array.isArray(a.composicao) &&
+      a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
+    let composicaoDuplicada = false;
+    if (composicaoValida) {
+      const key = composicaoKey(a.composicao!);
+      if (composicoesKeys.has(key)) composicaoDuplicada = true;
+      else composicoesKeys.add(key);
+    }
+    return { ...a, composicaoValida, composicaoDuplicada };
+  });
+
   // Resolve cada atribuição → URL final de imagem.
-  // Se tem `composicao`, compoe as N imagens em uma so via Satori e sobe.
+  // Se tem `composicao` e nao e duplicada, compoe as N imagens em uma so via Satori.
   const resolvidas = await Promise.all(
-    atribuicoes.map(async (a) => {
-      const composicaoValida = Array.isArray(a.composicao) && a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
-      const imagem_final = composicaoValida
+    atribuicoesAnotadas.map(async (a) => {
+      const usarComposicao = a.composicaoValida && !a.composicaoDuplicada;
+      const imagem_final = usarComposicao
         ? (await comporImagens(a.composicao!, postId, a.slide_index, supabase)) || (await resolverImagem(a.image_url, a.page_url))
         : await resolverImagem(a.image_url, a.page_url);
       return {
         slide_index: a.slide_index,
         imagem_final: imagem_final as string | null,
         motivo: a.motivo,
-        composto: !!(composicaoValida && imagem_final && imagem_final.includes("/composto/")),
-        duplicada: false,
+        composto: !!(usarComposicao && imagem_final && imagem_final.includes("/composto/")),
+        duplicada: a.composicaoDuplicada,
       };
     })
   );
@@ -362,16 +420,17 @@ export async function POST(req: NextRequest) {
   // - Quando ilustrando UM slide (re-busca): rejeita se URL ja esta em outro.
   // Composicoes (/composto/) sao sempre unicas (timestamp no path), entao
   // nao entram no dedup.
+  // Set guarda URLs NORMALIZADAS pra pegar variantes de CDN (?w=800 etc).
   const urlsJaUsadas = new Set<string>();
   if (slideIndex !== undefined) {
     // Re-ilustrando 1 slide — coleta URLs dos OUTROS slides pra nao repetir
     for (let i = 0; i < slides.length; i++) {
       if (i === slideIndex) continue;
       const u = slides[i].imagem_url;
-      if (u && !u.includes("/composto/")) urlsJaUsadas.add(u);
+      if (u && !u.includes("/composto/")) urlsJaUsadas.add(normalizarUrl(u));
     }
     for (const r of resolvidas) {
-      if (r.imagem_final && !r.imagem_final.includes("/composto/") && urlsJaUsadas.has(r.imagem_final)) {
+      if (r.imagem_final && !r.imagem_final.includes("/composto/") && urlsJaUsadas.has(normalizarUrl(r.imagem_final))) {
         r.imagem_final = null;
         r.duplicada = true;
       }
@@ -382,11 +441,12 @@ export async function POST(req: NextRequest) {
     for (const r of porOrdem) {
       if (!r.imagem_final) continue;
       if (r.imagem_final.includes("/composto/")) continue; // composicoes sao unicas
-      if (urlsJaUsadas.has(r.imagem_final)) {
+      const key = normalizarUrl(r.imagem_final);
+      if (urlsJaUsadas.has(key)) {
         r.imagem_final = null;
         r.duplicada = true;
       } else {
-        urlsJaUsadas.add(r.imagem_final);
+        urlsJaUsadas.add(key);
       }
     }
   }
@@ -398,6 +458,87 @@ export async function POST(req: NextRequest) {
     if (!r) return s;
     return { ...s, imagem_url: r.imagem_final };
   });
+
+  // Fallback: quando ilustrando tudo, re-ilustra slides não-CTA que ficaram
+  // sem imagem (Claude não atribuiu, URL inválida, ou zerada pelo dedup).
+  // Passa blacklist de URLs já usadas pra evitar repetir.
+  let retries = 0;
+  if (slideIndex === undefined) {
+    const ultimoIdx = slides.length - 1;
+    const faltando = slidesNovos
+      .map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => i !== ultimoIdx && !s.imagem_url)
+      .map(({ i }) => i);
+
+    if (faltando.length > 0) {
+      retries = faltando.length;
+      const urlsProibidas = Array.from(urlsJaUsadas);
+      const retryMsg = buildUserMessage(
+        slides,
+        post.tema,
+        post.tipo,
+        post.estilo || "PADRAO",
+        undefined,
+        faltando,
+        urlsProibidas
+      );
+      const { atribuicoes: retryAtrib } = await chamarClaude(retryMsg);
+
+      const retryAnotadas = retryAtrib.map((a) => {
+        const composicaoValida =
+          Array.isArray(a.composicao) &&
+          a.composicao.filter((u) => typeof u === "string" && u.length > 0).length >= 2;
+        let composicaoDuplicada = false;
+        if (composicaoValida) {
+          const key = composicaoKey(a.composicao!);
+          if (composicoesKeys.has(key)) composicaoDuplicada = true;
+          else composicoesKeys.add(key);
+        }
+        return { ...a, composicaoValida, composicaoDuplicada };
+      });
+      const retryResolvidas = await Promise.all(
+        retryAnotadas.map(async (a) => {
+          const usarComposicao = a.composicaoValida && !a.composicaoDuplicada;
+          const imagem_final = usarComposicao
+            ? (await comporImagens(a.composicao!, postId, a.slide_index, supabase)) ||
+              (await resolverImagem(a.image_url, a.page_url))
+            : await resolverImagem(a.image_url, a.page_url);
+          return { slide_index: a.slide_index, imagem_final: imagem_final as string | null };
+        })
+      );
+
+      // Aplica só em slides que ainda estão sem imagem, evitando repetir URLs.
+      for (const r of retryResolvidas) {
+        if (!r.imagem_final) continue;
+        if (r.slide_index < 0 || r.slide_index >= slidesNovos.length) continue;
+        if (r.slide_index === ultimoIdx) continue;
+        if (slidesNovos[r.slide_index].imagem_url) continue; // já tem, não sobrescreve
+        const ehComposicao = r.imagem_final.includes("/composto/");
+        const key = normalizarUrl(r.imagem_final);
+        if (!ehComposicao && urlsJaUsadas.has(key)) continue; // evita duplicar
+        slidesNovos[r.slide_index] = { ...slidesNovos[r.slide_index], imagem_url: r.imagem_final };
+        if (!ehComposicao) urlsJaUsadas.add(key);
+      }
+    }
+  }
+
+  // Safety net final: varredura em slidesNovos depois de tudo. Se por qualquer
+  // motivo sobrou URL duplicada (mesma img via CDN diferente, mesma composicao
+  // visual), zera o slide de indice maior. Operador troca com "🔄".
+  {
+    const vistas = new Set<string>();
+    for (let i = 0; i < slidesNovos.length; i++) {
+      const u = slidesNovos[i].imagem_url;
+      if (!u) continue;
+      if (u.includes("/composto/")) continue; // composicoes ja dedupadas por chave
+      const key = normalizarUrl(u);
+      if (vistas.has(key)) {
+        slidesNovos[i] = { ...slidesNovos[i], imagem_url: null };
+      } else {
+        vistas.add(key);
+      }
+    }
+  }
 
   const { error: updErr } = await supabase
     .from("instagram_posts")
@@ -411,5 +552,6 @@ export async function POST(req: NextRequest) {
     slides: slidesNovos,
     atribuicoes: resolvidas,
     duplicadas,
+    retries,
   });
 }

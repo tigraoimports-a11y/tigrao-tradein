@@ -266,7 +266,7 @@ export interface ProdutoSpec {
   ms_chip: string; ms_nucleos: string; ms_ram: string; ms_storage: string;
   ipad_modelo: string; ipad_chip: string; ipad_tela: string; ipad_storage: string; ipad_conn: string;
   aw_modelo: string; aw_tamanho: string; aw_conn: string; aw_pulseira: string; aw_band: string;
-  air_modelo: string;
+  air_modelo: string; air_descricao: string;
 }
 
 export const DEFAULT_SPEC: ProdutoSpec = {
@@ -276,7 +276,7 @@ export const DEFAULT_SPEC: ProdutoSpec = {
   ms_chip: "M4 MAX", ms_nucleos: "14C CPU/32C GPU", ms_ram: "36GB", ms_storage: "512GB",
   ipad_modelo: "AIR M4", ipad_chip: "", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
   aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
-  air_modelo: "AIRPODS 4",
+  air_modelo: "AIRPODS 4", air_descricao: "",
 };
 
 // ── Mapa de cores Português → Inglês (nomes comerciais Apple) ──
@@ -392,8 +392,10 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
       const band = spec.aw_band ? ` ${spec.aw_band}` : "";
       return `APPLE WATCH ${spec.aw_modelo}${tamanho}${conn}${c}${pulseira}${band}`.toUpperCase();
     }
-    case "AIRPODS":
-      return `${spec.air_modelo}${c}`.toUpperCase();
+    case "AIRPODS": {
+      const desc = spec.air_descricao ? ` ${spec.air_descricao}` : "";
+      return `${spec.air_modelo}${desc}${c}`.toUpperCase();
+    }
     default:
       return "";
   }
