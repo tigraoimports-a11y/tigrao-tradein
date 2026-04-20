@@ -64,6 +64,17 @@ REGRAS
    - Screenshots de slide/apresentação (meta).
    - Imagem que já apareceu em outro slide (nunca repita).
 
+REGRA ESPECIAL — ESTILO EMANUEL_PESSOA (análise profunda narrativa):
+Quando o post é estilo EMANUEL_PESSOA, as imagens devem ser FOTOS REAIS que conectam emocional/contextualmente com o texto — NÃO apenas fotos de produto limpas.
+Exemplos que funcionam:
+- Slide sobre "preço de iPhone no Brasil" → foto de loja Apple em shopping lotada, filas, ou foto de consumidor segurando caixa de iPhone.
+- Slide sobre "mercado de seminovos" → foto de loja de celulares, balcão com vários aparelhos.
+- Slide sobre "cobrança de imposto" → foto de porto/contêiner, caminhão de importação, alfândega.
+- Slide sobre "Zona Franca de Manaus" → foto real da ZFM, fábricas, operários.
+- Slide com citação/fala de executivo → foto real do executivo (CEO Apple, ministro, analista) em situação pública.
+Busque em: agências de notícia (Reuters, AFP, AP, G1, UOL, Folha), newsroom da Apple com executivos, imagens de redação, Wikipedia commons.
+Evite: ícones vetoriais, mockups de celular em fundo branco pra posts Emanuel Pessoa — ficam sem alma.
+
 5. Formato da URL:
    - Prefira URL DIRETA de imagem (.jpg/.png/.webp).
    - Se só tiver URL de página, passe em \`page_url\` — backend extrai og:image.
@@ -118,6 +129,7 @@ function buildUserMessage(
   slides: SlideData[],
   tema: string,
   tipo: string,
+  estilo: string,
   slideAlvo?: number
 ): string {
   const slidesTxt = slides
@@ -134,7 +146,11 @@ function buildUserMessage(
     ? `Re-ilustre APENAS o slide ${slideAlvo}. Ignore os outros.`
     : `Ilustre todos os ${slides.length} slides. Faça 1-2 web_searches por slide (max_uses=15 total).`;
 
-  return `Tema do post: "${tema}" (tipo: ${tipo})
+  const estiloNota = estilo === "EMANUEL_PESSOA"
+    ? "\n\n⚠️ ESTILO EMANUEL_PESSOA: busque FOTOS REAIS de contexto (pessoas, cenas, situações, executivos, locais) em vez de mockups de produto. Ver regra especial no system prompt."
+    : "";
+
+  return `Tema do post: "${tema}" (tipo: ${tipo}, estilo: ${estilo})${estiloNota}
 
 ${contexto}
 
@@ -283,7 +299,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "slideIndex fora do range" }, { status: 400 });
   }
 
-  const userMsg = buildUserMessage(slides, post.tema, post.tipo, slideIndex);
+  const userMsg = buildUserMessage(slides, post.tema, post.tipo, post.estilo || "PADRAO", slideIndex);
 
   let atribuicoes: AtribuicaoClaude[] = [];
   try {

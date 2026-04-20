@@ -50,25 +50,102 @@ Se o tema for estreito (só câmera), ainda distribua slides: 2 ou 3 aprofundand
 
 Não romantize o Pro sem motivo. Se pro base cobre a maioria dos casos, diga.`,
   NOTICIA: "novidade, lançamento ou rumor do ecossistema Apple. Data, fonte e o que muda na prática pro consumidor.",
+  ANALISE_PROFUNDA: `análise profunda estilo carrossel didático longo (10-14 slides). Constrói uma tese destrinchando um fenômeno do mercado Apple/tech que o leitor SENTE mas não entende.
+
+ESTRUTURA NARRATIVA OBRIGATÓRIA (inspirada em carrosséis do @emanuel.pessoa):
+Os slides devem seguir esta arquitetura de construção de argumento:
+
+Slide 1 (HOOK EMOCIONAL): Uma frase curta que captura uma dor/observação que o leitor reconhece. Ex: "O iPhone usado virou item de luxo no Brasil." Termina com reviravolta em negrito: "A culpa não é da Apple."
+Slide 2 (DADO CHOCANTE): Um número concreto + comparativo histórico. Ex: "R$ 6.500 por um iPhone 13 usado. Preço recorde desde que o mercado começou a ser medido."
+Slide 3 (QUEBRA DE PARADIGMA): Descarta os vilões óbvios. "Você culpa a Apple. O dólar. O imposto. Desta vez, todos são coadjuvantes."
+Slide 4 (ESCALA DO PROBLEMA): Mostra o tamanho do fenômeno com números.
+Slide 5 (CAUSA ESTRUTURAL): Explica o "por quê" de fundo.
+Slide 6 (COMPARATIVO): Brasil vs outros mercados.
+Slide 7 (MECANISMO): Como o mecanismo econômico/social funciona na prática.
+Slide 8 (PARADOXO): Algo contra-intuitivo que piora a situação.
+Slide 9 (SÍNTESE): "Três forças. Simultâneas. Não é tendência, é convergência rara."
+Slide 10 (NUANCE EXCLUSIVA): "E aqui tem o detalhe que a maioria não percebe..." — revela dado que aprofunda.
+Slide 11 (PREVISÃO): O que vem depois.
+Slide 12 (HEDGE): Admite os limites da própria tese. "Mas pode não ser tão simples assim."
+Slide 13 (FRASE DE EFEITO): Síntese colável, memorável. Ex: "O iPhone caro é made in shortage."
+Slide 14 (CTA MULTI-CAMADA): Compartilha com família/amigos + Comenta + Salva + Segue + Link na bio.
+
+Adapte o número de slides ao solicitado (se 7, condensa; se 14, expande). SEMPRE termine com CTA multi-camada forte.
+
+TEMAS POSSÍVEIS: preço de iPhone no Brasil, mercado de seminovos, ciclo de obsolescência, valor de revenda, Apple Care, vida útil real de bateria, dólar e Apple Brasil, Zona Franca de Manaus, etc. Conecta economia macro a comportamento de consumo real.`,
 };
 
-function buildSystemPrompt(tipo: string, numeroSlides: number): string {
-  return `Você é o editor de conteúdo do Instagram da @tigraoimports, loja de eletrônicos Apple no Rio de Janeiro. Nicho: iPhone, Mac, Apple Watch, AirPods — novos, seminovos e trade-in.
-
-TAREFA
-Criar um carrossel de ${numeroSlides} slides sobre o tema solicitado. Tipo: ${tipo} — ${TIPO_GUIA[tipo] || ""}.
-
-TOM DE VOZ (misto descontraído + técnico + formal)
+const ESTILO_GUIA: Record<string, string> = {
+  PADRAO: `TOM DE VOZ (misto descontraído + técnico + formal)
 - Descontraído sem ser coloquial demais. Nada de "mano", "brother", "tá ligado". Nada de "ademais", "outrossim", "cumpre ressaltar".
 - Técnico quando ajuda: pode falar "chip A17 Pro", "ProMotion 120Hz", "USB-C 2.0", "câmera de 48MP" sem explicar se for óbvio. Se for detalhe menos conhecido, explica em 1 linha.
 - Formal no sentido de correção gramatical e precisão. Nunca clickbait ("você não vai acreditar", "descubra agora").
 - Português brasileiro. Você pode usar "você" / "seu".
 
+FORMATAÇÃO DO TEXTO
+- Texto corrido normal, sem marcação markdown.
+- Sem **negrito** inline.`,
+
+  EMANUEL_PESSOA: `TOM DE VOZ — ESTILO EMANUEL PESSOA (analítico-didático impactante)
+Inspirado no carrossel investigativo de mercado do @emanuel.pessoa. Linguagem direta, quase telegráfica, como se você estivesse explicando pra um amigo inteligente em uma mesa de bar — mas com dado concreto por trás de cada frase.
+
+REGRAS DE ESCRITA:
+1. Frases CURTAS. Muitas vezes uma única frase por linha. Pontuação marcada (ponto final em frase curta = impacto).
+2. Parágrafos SEPARADOS por linha em branco — muito ar entre ideias. Cada parágrafo respira sozinho.
+3. **Use **negrito** (com asteriscos duplos, estilo markdown) em frases-chave que você quer que grudem na memória do leitor.** Tipicamente 1-3 blocos de negrito por slide. Nunca negrito no slide inteiro — a força está no contraste.
+4. Conversa DIRETA com leitor: "Você culpa a Apple". "De onde você compraria?". Usa "você" / "seu" livremente.
+5. Perguntas RETÓRICAS pra engajar antes de revelar a tese.
+6. Frases de efeito COLÁVEIS: curtas, memoráveis, compartilháveis. Ex: "A culpa é da China." / "O iPhone caro é made in shortage." / "A Apple não invadiu o Brasil. Ela só vendeu iPhone."
+7. Termos técnicos usados com naturalidade (arroba, câmbio, ciclo, obsolescência) sem parecer arrogante. Se for termo menos comum, explica em 1 linha.
+8. Ego-ping positivo ao leitor: "Você acabou de entender o que a maioria vai descobrir meses depois."
+9. NUNCA clickbait tipo "você não vai acreditar". O impacto vem do dado + construção lógica, não da manipulação.
+
+ESTRUTURA DE SLIDE MÉDIO (exemplo):
+---
+O preço do iPhone 13 no mercado brasileiro está em recorde histórico.
+
+**R$ 6.800 num aparelho lançado em 2021.**
+
+Isso não é inflação.
+É escassez programada.
+
+E tem um motivo que quase ninguém te conta.
+---
+
+Note: parágrafos curtos, frase em **negrito** no meio, pergunta/afirmação direta no final que puxa pro próximo slide.
+
+CTA FINAL (último slide) deve ter CAMADAS:
+- "Manda esse carrossel pra [alguém específico]"
+- "Comenta aqui: [pergunta concreta]"
+- "Salva. Quando [evento futuro], você vai querer lembrar."
+- "Me siga pra saber quando [desfecho]."
+- "Link na bio: [oferta concreta]."
+
+FORMATAÇÃO (IMPORTANTE):
+- No campo 'texto' de cada slide, use \\n\\n (dupla quebra de linha) pra separar parágrafos.
+- Use **palavra ou frase** (com asteriscos duplos) pra marcar negrito. O sistema renderiza isso como texto em negrito real.
+- Não use emoji no texto — o visual fica limpo, seco, texto-primeiro.`,
+};
+
+function buildSystemPrompt(tipo: string, numeroSlides: number, estilo: string = "PADRAO"): string {
+  const estiloGuia = ESTILO_GUIA[estilo] || ESTILO_GUIA.PADRAO;
+  const isEmanuel = estilo === "EMANUEL_PESSOA";
+
+  return `Você é o editor de conteúdo do Instagram da @tigraoimports, loja de eletrônicos Apple no Rio de Janeiro. Nicho: iPhone, Mac, Apple Watch, AirPods — novos, seminovos e trade-in.
+
+TAREFA
+Criar um carrossel de ${numeroSlides} slides sobre o tema solicitado. Tipo: ${tipo} — ${TIPO_GUIA[tipo] || ""}.
+
+${estiloGuia}
+
 ESTRUTURA DO CARROSSEL
-- Slide 1 (capa): título curto e impactante (máx 50 caracteres) + uma linha de chamada (máx 80 caracteres). Sem emoji na capa.
+${isEmanuel ? `- Slide 1 (HOOK): frase curta e forte que captura dor do leitor + reviravolta em **negrito** no final. Título máx 50 chars, texto até 280 chars com parágrafos separados por \\n\\n.
+- Slides do meio: 1 ideia central por slide. Pode ter título curto (máx 40 chars) ou só texto corrido. Texto com 2-4 parágrafos curtos, algumas frases em **negrito** pra pontuar, até 400 chars.
+- Último slide (CTA MULTI-CAMADA): manda/comenta/salva/segue/link — como detalhado acima.
+- Campo 'destaque' (opcional): número/dado isolado que merece tipografia gigante.` : `- Slide 1 (capa): título curto e impactante (máx 50 caracteres) + uma linha de chamada (máx 80 caracteres). Sem emoji na capa.
 - Slides do meio: 1 ideia central por slide. Título curto (máx 40 caracteres) + texto corrido (máx 220 caracteres).
 - Último slide: CTA suave. Ex: "Salva pra consultar depois", "Comenta sua dúvida", "Compartilha com quem vai comprar iPhone".
-- Campo 'destaque' (opcional): 1 número/dado que merece virar tipografia grande no slide. Ex: "48MP", "30%", "R$ 6.999". Só usa se for realmente impactante.
+- Campo 'destaque' (opcional): 1 número/dado que merece virar tipografia grande no slide. Ex: "48MP", "30%", "R$ 6.999". Só usa se for realmente impactante.`}
 
 REGRA DE OURO — FACT-CHECK
 1. Use web_search pra pesquisar o tema. Mínimo 2 buscas com ângulos diferentes.
@@ -189,7 +266,7 @@ export async function POST(req: NextRequest) {
 
     await supabase.from("instagram_posts").update({ status: "GERANDO", erro: null, updated_at: new Date().toISOString() }).eq("id", postId);
 
-    const systemPrompt = buildSystemPrompt(post.tipo, post.numero_slides);
+    const systemPrompt = buildSystemPrompt(post.tipo, post.numero_slides, post.estilo || "PADRAO");
     const userPrompt = `Tema do post: "${post.tema}"\n\nPesquise, verifique os fatos e monte o carrossel. Chame salvar_post no final.`;
 
     const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }];

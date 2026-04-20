@@ -36,25 +36,28 @@ export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCache });
   const usuario = getUsuario(req);
   const body = await req.json();
-  const { tema, tipo = "DICA", numero_slides = 7 } = body;
+  const { tema, tipo = "DICA", numero_slides = 7, estilo = "PADRAO" } = body;
 
   if (!tema?.trim()) return NextResponse.json({ error: "tema obrigatório" }, { status: 400, headers: noCache });
-  if (!["DICA", "COMPARATIVO", "NOTICIA"].includes(tipo)) {
+  if (!["DICA", "COMPARATIVO", "NOTICIA", "ANALISE_PROFUNDA"].includes(tipo)) {
     return NextResponse.json({ error: "tipo inválido" }, { status: 400, headers: noCache });
   }
+  if (!["PADRAO", "EMANUEL_PESSOA"].includes(estilo)) {
+    return NextResponse.json({ error: "estilo inválido" }, { status: 400, headers: noCache });
+  }
   const n = Number(numero_slides);
-  if (!Number.isInteger(n) || n < 5 || n > 7) {
-    return NextResponse.json({ error: "numero_slides deve estar entre 5 e 7" }, { status: 400, headers: noCache });
+  if (!Number.isInteger(n) || n < 5 || n > 14) {
+    return NextResponse.json({ error: "numero_slides deve estar entre 5 e 14" }, { status: 400, headers: noCache });
   }
 
   const { data, error } = await supabase
     .from("instagram_posts")
-    .insert({ tema: tema.trim(), tipo, numero_slides: n, criado_por: usuario })
+    .insert({ tema: tema.trim(), tipo, numero_slides: n, estilo, criado_por: usuario })
     .select("*")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCache });
 
-  await logActivity(usuario, "Post Instagram criado", `${tipo}: ${tema}`, "instagram", data.id);
+  await logActivity(usuario, "Post Instagram criado", `${tipo}/${estilo}: ${tema}`, "instagram", data.id);
   return NextResponse.json({ ok: true, data }, { headers: noCache });
 }
 
@@ -66,7 +69,7 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400, headers: noCache });
 
   const editaveis = [
-    "tema", "tipo", "numero_slides", "status",
+    "tema", "tipo", "numero_slides", "estilo", "status",
     "pesquisa_json", "slides_json", "legenda", "hashtags",
     "agendado_para", "erro",
   ] as const;

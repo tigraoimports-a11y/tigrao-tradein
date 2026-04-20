@@ -2,7 +2,7 @@
 // Mesma funcao e usada pela rota que renderiza via next/og (Satori).
 // Dimensoes: 1080 x 1350 (ratio 4:5).
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 export const SLIDE_W = 1080;
 export const SLIDE_H = 1350;
@@ -19,10 +19,13 @@ export interface Config {
   nome_display?: string | null;
 }
 
+export type EstiloLayout = "PADRAO" | "EMANUEL_PESSOA";
+
 export interface LayoutMeta {
   index: number;
   total: number;
-  tipo: "DICA" | "COMPARATIVO" | "NOTICIA";
+  tipo: "DICA" | "COMPARATIVO" | "NOTICIA" | "ANALISE_PROFUNDA";
+  estilo?: EstiloLayout;
 }
 
 const COR = {
@@ -40,7 +43,37 @@ const TIPO_LABEL: Record<LayoutMeta["tipo"], string> = {
   DICA: "DICA",
   COMPARATIVO: "COMPARATIVO",
   NOTICIA: "NOTICIA",
+  ANALISE_PROFUNDA: "ANALISE",
 };
+
+// Parser simples de negrito estilo markdown: **texto** vira <span bold>.
+// Retorna array de nodes pra renderizar dentro de um <div>.
+// Usado principalmente no layout Emanuel Pessoa pra dar enfase em frases-chave.
+function parseBold(texto: string): ReactNode[] {
+  if (!texto) return [];
+  const partes = texto.split(/(\*\*[^*]+\*\*)/g);
+  return partes
+    .filter(p => p.length > 0)
+    .map((p, i) => {
+      if (p.startsWith("**") && p.endsWith("**")) {
+        return (
+          <span key={i} style={{ fontWeight: 700 }}>
+            {p.slice(2, -2)}
+          </span>
+        );
+      }
+      return <span key={i}>{p}</span>;
+    });
+}
+
+// Separa texto em blocos de paragrafo (separados por linha em branco).
+// Emanuel Pessoa usa muito ar entre frases — cada bloco vira 1 div.
+function paragrafos(texto: string): string[] {
+  return texto
+    .split(/\n\s*\n/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
 
 // Selo azul de perfil verificado (estilo Instagram/Twitter).
 // SVG inline pra o Satori conseguir rasterizar.
@@ -364,7 +397,205 @@ function LayoutCTA({ slide, config, meta }: { slide: SlideData; config: Config; 
   );
 }
 
+// =============================================================
+// LAYOUT EMANUEL PESSOA — estilo X/Twitter-like com imagem grande
+// Inspirado no carrossel de analise didatica do @emanuel.pessoa.
+// Caracteristicas:
+// - Header com avatar, nome bold e @handle cinza (tipo tweet)
+// - Numeracao N/total no canto direito
+// - Texto com paragrafos generosos e **negrito** em frases-chave
+// - Imagem real grande ocupando ~45% do rodape
+// - Watermark circular do autor no canto da imagem
+// =============================================================
+
+function HeaderEmanuel({ config, index, total }: { config: Config; index: number; total: number }) {
+  const handle = config.nome_display || "tigraoimports";
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        width: "100%",
+        marginBottom: 30,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {config.foto_perfil_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={config.foto_perfil_url}
+            alt=""
+            width={82}
+            height={82}
+            style={{
+              width: 82,
+              height: 82,
+              borderRadius: 41,
+              objectFit: "cover",
+              marginRight: 22,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 82,
+              height: 82,
+              borderRadius: 41,
+              backgroundColor: "#FFF5EB",
+              marginRight: 22,
+              fontSize: 44,
+            }}
+          >
+            🐯
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <span style={{ color: COR.titulo, fontSize: 38, fontWeight: 700 }}>
+              Tigrão Imports
+            </span>
+            <SeloVerificado size={28} />
+          </div>
+          <span style={{ color: COR.secundario, fontSize: 26, fontWeight: 400, marginTop: 2 }}>
+            @{handle}
+          </span>
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#F0F0F2",
+          color: COR.secundario,
+          fontSize: 22,
+          fontWeight: 600,
+          borderRadius: 20,
+          padding: "8px 16px",
+          marginTop: 8,
+        }}
+      >
+        {index + 1}/{total}
+      </div>
+    </div>
+  );
+}
+
+function WatermarkAutor({ config }: { config: Config }) {
+  if (!config.foto_perfil_url) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        position: "absolute",
+        bottom: 16,
+        left: 16,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={config.foto_perfil_url}
+        alt=""
+        width={68}
+        height={68}
+        style={{
+          width: 68,
+          height: 68,
+          borderRadius: 34,
+          objectFit: "cover",
+          border: "3px solid #FFFFFF",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+        }}
+      />
+    </div>
+  );
+}
+
+// Bloco de texto estilo Emanuel Pessoa: paragrafos separados com ar generoso,
+// tamanho grande, negrito para frases chave via **markdown**.
+function TextoEmanuel({ texto }: { texto: string }) {
+  const blocos = paragrafos(texto);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
+      {blocos.map((bloco, i) => (
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            color: COR.corpo,
+            fontSize: 34,
+            fontWeight: 400,
+            lineHeight: 1.3,
+            marginBottom: i < blocos.length - 1 ? 22 : 0,
+          }}
+        >
+          {parseBold(bloco)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LayoutEmanuelPessoa({ slide, config, meta }: { slide: SlideData; config: Config; meta: LayoutMeta }) {
+  // Monta texto completo: titulo (geralmente hook curto) + texto (paragrafos).
+  // Se titulo e diferente do comeco do texto, mostra titulo como abertura em bold.
+  const tituloComoAbertura = slide.titulo && !slide.texto.toLowerCase().startsWith(slide.titulo.slice(0, 20).toLowerCase());
+  const textoFinal = tituloComoAbertura && slide.titulo ? `**${slide.titulo}**\n\n${slide.texto}` : slide.texto;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        height: "100%",
+        backgroundColor: COR.fundo,
+        padding: 56,
+      }}
+    >
+      <HeaderEmanuel config={config} index={meta.index} total={meta.total} />
+
+      <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+        <TextoEmanuel texto={textoFinal} />
+
+        {slide.imagem_url && (
+          <div
+            style={{
+              display: "flex",
+              position: "relative",
+              width: "100%",
+              height: 560,
+              borderRadius: 18,
+              overflow: "hidden",
+              backgroundColor: "#F5F5F7",
+              marginTop: "auto",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slide.imagem_url}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+            <WatermarkAutor config={config} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function renderSlideJSX(slide: SlideData, config: Config, meta: LayoutMeta): ReactElement {
+  if (meta.estilo === "EMANUEL_PESSOA") {
+    return <LayoutEmanuelPessoa slide={slide} config={config} meta={meta} />;
+  }
   if (meta.index === 0) return <LayoutCapa slide={slide} config={config} meta={meta} />;
   if (meta.index === meta.total - 1) return <LayoutCTA slide={slide} config={config} meta={meta} />;
   return <LayoutMeio slide={slide} config={config} meta={meta} />;

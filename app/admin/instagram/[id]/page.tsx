@@ -18,10 +18,14 @@ interface Pesquisa {
   fatos_verificados?: string[];
 }
 
+type Tipo = "DICA" | "COMPARATIVO" | "NOTICIA" | "ANALISE_PROFUNDA";
+type Estilo = "PADRAO" | "EMANUEL_PESSOA";
+
 interface Post {
   id: string;
   tema: string;
-  tipo: "DICA" | "COMPARATIVO" | "NOTICIA";
+  tipo: Tipo;
+  estilo: Estilo;
   numero_slides: number;
   status: "RASCUNHO" | "GERANDO" | "GERADO" | "APROVADO" | "AGENDADO" | "POSTADO" | "ERRO";
   slides_json: Slide[] | null;
@@ -48,6 +52,12 @@ const TIPO_LABEL: Record<Post["tipo"], string> = {
   DICA: "💡 Dica",
   COMPARATIVO: "⚖️ Comparativo",
   NOTICIA: "📰 Notícia",
+  ANALISE_PROFUNDA: "🔍 Análise profunda",
+};
+
+const ESTILO_LABEL: Record<Post["estilo"], string> = {
+  PADRAO: "Padrão Tigrão",
+  EMANUEL_PESSOA: "Emanuel Pessoa",
 };
 
 export default function InstagramPostPage() {
@@ -280,6 +290,9 @@ export default function InstagramPostPage() {
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <span className="text-xs px-2 py-1 rounded-lg bg-[#F5F5F7] text-[#6E6E73]">{TIPO_LABEL[post.tipo]}</span>
             <span className="text-xs px-2 py-1 rounded-lg bg-[#F5F5F7] text-[#6E6E73]">{post.numero_slides} slides</span>
+            {post.estilo === "EMANUEL_PESSOA" && (
+              <span className="text-xs px-2 py-1 rounded-lg bg-[#EEF2FF] text-[#4F46E5]">✨ {ESTILO_LABEL[post.estilo]}</span>
+            )}
             <span className="text-xs px-2 py-1 rounded-lg bg-[#FFF5EB] text-[#E8740E]">{STATUS_LABEL[post.status]}</span>
           </div>
           <h1 className="text-2xl font-bold text-[#1D1D1F]">{post.tema}</h1>
@@ -376,6 +389,14 @@ export default function InstagramPostPage() {
                   {ilustrando ? "⏳ Ilustrando..." : "✨ Ilustrar slides"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Dica de markdown pra estilo Emanuel Pessoa */}
+          {post.estilo === "EMANUEL_PESSOA" && podeEditar && (
+            <div className="bg-[#EEF2FF] border border-[#4F46E5]/20 rounded-xl p-3 mb-3 text-xs text-[#4338CA]">
+              <strong>Estilo Emanuel Pessoa:</strong> use <code className="bg-white px-1 rounded">**texto**</code> pra <strong>negrito</strong>.
+              Separe parágrafos com <strong>linha em branco</strong> (dupla quebra de linha). Imagens reais ficam melhor que mockups.
             </div>
           )}
 
