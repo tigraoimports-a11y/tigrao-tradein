@@ -581,7 +581,7 @@ export async function PATCH(req: NextRequest) {
     // existem com esse id pra sinalizar se e problema de id malformado vs
     // duplicidade.
     const { data: venda, error: e } = await supabase.from("vendas")
-      .select("id, email, cliente, produto, cor, valor_comprovante, preco_vendido, nota_fiscal_url, nota_fiscal_enviada")
+      .select("id, email, cliente, produto, valor_comprovante, preco_vendido, nota_fiscal_url, nota_fiscal_enviada")
       .eq("id", vendaId)
       .maybeSingle();
     if (e) {
@@ -607,7 +607,7 @@ export async function PATCH(req: NextRequest) {
         await enviarNotaFiscal({
           to: venda.email!,
           clienteNome: venda.cliente || "Cliente",
-          produto: normalizarCoresNoTexto(`${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim()),
+          produto: normalizarCoresNoTexto((venda.produto || "").trim()),
           valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
           notaFiscalUrl: venda.nota_fiscal_url,
         });
@@ -637,7 +637,7 @@ export async function PATCH(req: NextRequest) {
   if (body.action === "enviar_nf_bulk") {
     const idsFiltro = Array.isArray(body.ids) ? (body.ids as string[]) : null;
     let q = supabase.from("vendas")
-      .select("id, email, cliente, produto, cor, valor_comprovante, preco_vendido, nota_fiscal_url")
+      .select("id, email, cliente, produto, valor_comprovante, preco_vendido, nota_fiscal_url")
       .not("nota_fiscal_url", "is", null)
       .not("email", "is", null)
       .eq("nota_fiscal_enviada", false);
@@ -655,7 +655,7 @@ export async function PATCH(req: NextRequest) {
         await enviarNotaFiscal({
           to: v.email!,
           clienteNome: v.cliente || "Cliente",
-          produto: normalizarCoresNoTexto(`${v.produto || ""}${v.cor ? ` ${v.cor}` : ""}`.trim()),
+          produto: normalizarCoresNoTexto((v.produto || "").trim()),
           valor: Number(v.valor_comprovante || v.preco_vendido || 0),
           notaFiscalUrl: v.nota_fiscal_url!,
         });
