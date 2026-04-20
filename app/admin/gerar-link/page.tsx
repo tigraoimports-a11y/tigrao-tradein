@@ -7,6 +7,7 @@ import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
+import { getPublicBaseUrl } from "@/lib/public-url";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -984,7 +985,7 @@ export default function GerarLinkPage() {
     }
 
     const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const baseUrl = getPublicBaseUrl();
 
     // Helper: aplica cor extra no nome (PT simples)
     const aplicarCorExtra = (nome: string, idx: number): string => {
@@ -1263,7 +1264,7 @@ export default function GerarLinkPage() {
       // pra diferenciar e permitir reenvio/rastreio via webhook MP.
       if (shortCode) {
         try {
-          const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+          const baseUrl = getPublicBaseUrl();
           const urlCurta = `${baseUrl}/c/${shortCode}`;
           await fetch("/api/admin/link-compras", {
             method: "POST",
@@ -2041,7 +2042,7 @@ export default function GerarLinkPage() {
                     );
                   })()}
                   <button
-                    onClick={() => copiarLinkHist(l.url_curta || `${typeof window !== "undefined" ? window.location.origin : ""}/c/${l.short_code}`)}
+                    onClick={() => copiarLinkHist(l.url_curta || `${getPublicBaseUrl()}/c/${l.short_code}`)}
                     className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] font-medium"
                   >
                     📋 Copiar
