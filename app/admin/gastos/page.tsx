@@ -40,6 +40,9 @@ interface GastoGrupo {
   is_dep_esp: boolean;
   bancos: string;
   funcionario_id: string | null;
+  contato_nome: string | null;
+  contato_tipo: string | null;
+  venda_id: string | null;
 }
 
 function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
@@ -75,6 +78,9 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       is_dep_esp: first.is_dep_esp,
       bancos: items.map((i) => `${i.banco}: ${fmt(i.valor)}`).join(" | "),
       funcionario_id: first.funcionario_id || null,
+      contato_nome: first.contato_nome || null,
+      contato_tipo: first.contato_tipo || null,
+      venda_id: first.venda_id || null,
     });
   }
 
@@ -94,6 +100,9 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       is_dep_esp: g.is_dep_esp,
       bancos: g.banco || "—",
       funcionario_id: g.funcionario_id || null,
+      contato_nome: g.contato_nome || null,
+      contato_tipo: g.contato_tipo || null,
+      venda_id: g.venda_id || null,
     });
   }
 
@@ -1477,6 +1486,26 @@ export default function GastosPage() {
                                   </div>
                                 );
                               })()}
+                              {/* ESTORNO: mostra contato + tipo + venda vinculada (se houver) */}
+                              {g.categoria === "ESTORNO" && g.contato_nome && (
+                                <div className="col-span-2 md:col-span-3 flex flex-wrap gap-4">
+                                  <div>
+                                    <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Contato</p>
+                                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
+                                      {g.contato_tipo === "fornecedor" ? "🏭" : g.contato_tipo === "atacado" ? "🏬" : "👤"} {g.contato_nome}
+                                      {g.contato_tipo && <span className="text-[9px] bg-[#E8740E] text-white px-1.5 py-0.5 rounded">{g.contato_tipo.toUpperCase()}</span>}
+                                    </span>
+                                  </div>
+                                  {g.venda_id && (
+                                    <div>
+                                      <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Venda vinculada</p>
+                                      <span className="inline-block px-3 py-1 rounded-full text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                                        {g.venda_id.slice(0, 8)}…
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {g.is_dep_esp && (
                                 <div className="col-span-2 md:col-span-3">
                                   <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">

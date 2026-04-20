@@ -128,6 +128,10 @@ export interface Gasto {
   grupo_id: string | null;
   pedido_fornecedor_id: string | null;
   funcionario_id: string | null;
+  // ESTORNO: contato vinculado (cliente/fornecedor/atacado) + venda opcional
+  contato_nome: string | null;
+  contato_tipo: string | null;
+  venda_id: string | null;
 }
 
 export interface PedidoFornecedorItem {
