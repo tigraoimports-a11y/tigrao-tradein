@@ -413,7 +413,7 @@ export default function InstagramPostPage() {
   if (!post) return <div className="max-w-5xl mx-auto p-6 text-[#E74C3C]">Post não encontrado.</div>;
 
   const jaTemConteudo = post.status !== "RASCUNHO" && post.status !== "GERANDO" && slidesEdit.length > 0;
-  const podeEditar = ["GERADO", "ERRO"].includes(post.status);
+  const podeEditar = !["RASCUNHO", "GERANDO", "POSTADO"].includes(post.status);
   const temImagensRenderizadas = Array.isArray(post.imagens_urls) && post.imagens_urls.length > 0;
 
   return (
