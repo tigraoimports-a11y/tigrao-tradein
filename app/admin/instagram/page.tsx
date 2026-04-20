@@ -109,7 +109,7 @@ export default function InstagramListPage() {
       const res = await fetch("/api/instagram/refinar-tema", {
         method: "POST",
         headers: apiHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ ideia: form.tema }),
+        body: JSON.stringify({ ideia: form.tema, estilo: form.estilo }),
       });
       const j = await res.json();
       if (!res.ok || !j.ok) {
@@ -203,7 +203,15 @@ export default function InstagramListPage() {
                   value={form.tema}
                   onChange={e => { setForm({ ...form, tema: e.target.value }); if (motivoRefino) setMotivoRefino(""); }}
                   placeholder={
-                    form.tipo === "COMPARATIVO"
+                    form.estilo === "EMANUEL_PESSOA"
+                      ? form.tipo === "COMPARATIVO"
+                        ? 'ex: "iPhone 17 vs Pro — o Pro não vale pra maioria" ou só "comparativo iPhone" + Refinar'
+                        : form.tipo === "NOTICIA"
+                        ? 'ex: "Apple Watch Ultra 3 chegou — e tem um motivo do alarde ser fraco" ou só "watch novo" + Refinar'
+                        : form.tipo === "ANALISE_PROFUNDA"
+                        ? 'ex: "Por que o iPhone usado no Brasil bate recorde de preço" ou só "preço iPhone BR" + Refinar'
+                        : 'ex: "A bateria do iPhone 13 morre às 18h — tem solução" ou só "bateria iPhone" + Refinar'
+                      : form.tipo === "COMPARATIVO"
                       ? 'ex: "iPhone 17 vs 17 Pro — vale pagar mais pelo Pro?" ou só "comparativo iPad" + Refinar'
                       : form.tipo === "NOTICIA"
                       ? 'ex: "Lançamento do Apple Watch Ultra 3 — o que mudou?" ou só "watch novo" + Refinar'
@@ -217,12 +225,17 @@ export default function InstagramListPage() {
                 {motivoRefino && (
                   <p className="text-xs text-[#2ECC71] mt-1">✨ IA: {motivoRefino}</p>
                 )}
-                {!motivoRefino && form.tipo === "COMPARATIVO" && (
+                {!motivoRefino && form.estilo === "EMANUEL_PESSOA" && (
+                  <p className="text-xs text-[#4F46E5] mt-1">
+                    ✨ Estilo Emanuel Pessoa: Refinar vai sugerir título com gancho narrativo (paradoxo, reviravolta, frase colável).
+                  </p>
+                )}
+                {!motivoRefino && form.estilo !== "EMANUEL_PESSOA" && form.tipo === "COMPARATIVO" && (
                   <p className="text-xs text-[#86868B] mt-1">
                     Dica: comparativos cobrem câmera + tela + chip + bateria + design + preço + revenda.
                   </p>
                 )}
-                {!motivoRefino && form.tipo === "ANALISE_PROFUNDA" && (
+                {!motivoRefino && form.estilo !== "EMANUEL_PESSOA" && form.tipo === "ANALISE_PROFUNDA" && (
                   <p className="text-xs text-[#86868B] mt-1">
                     Dica: análise profunda funciona melhor em 10-14 slides e com estilo &quot;Emanuel Pessoa&quot; (narrativa didática + negrito + foto real).
                   </p>
