@@ -162,12 +162,18 @@ function Header({ config, index, total }: { config: Config; index: number; total
 }
 
 function Imagem({ url }: { url: string }) {
+  // objectFit: contain — NUNCA corta a imagem. Composicoes (multi-produto
+  // lado a lado) e fotos oficiais Apple com fundo branco ficam centralizadas
+  // preservando toda a informacao visual. Fundo cinza claro ocupa o espaco
+  // residual quando o ratio da imagem e mais largo/estreito que o container.
   return (
     <div
       style={{
         display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         width: "100%",
-        height: 520,
+        height: 620,
         borderRadius: 24,
         overflow: "hidden",
         backgroundColor: "#F5F5F7",
@@ -177,7 +183,7 @@ function Imagem({ url }: { url: string }) {
       <img
         src={url}
         alt=""
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
       />
     </div>
   );
@@ -570,6 +576,8 @@ function LayoutEmanuelPessoa({ slide, config, meta }: { slide: SlideData; config
             style={{
               display: "flex",
               position: "relative",
+              alignItems: "center",
+              justifyContent: "center",
               width: "100%",
               height: 560,
               borderRadius: 18,
@@ -582,7 +590,7 @@ function LayoutEmanuelPessoa({ slide, config, meta }: { slide: SlideData; config
             <img
               src={slide.imagem_url}
               alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
             />
             <WatermarkAutor config={config} />
           </div>

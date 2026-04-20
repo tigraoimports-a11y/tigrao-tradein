@@ -39,19 +39,30 @@ interface AtribuicaoClaude {
 const SYSTEM_PROMPT = `Você é editor visual do Instagram da @tigraoimports, loja Apple no Rio de Janeiro.
 
 TAREFA
-Pra cada slide do carrossel (exceto CTA), ache a MELHOR imagem que ilustre o conceito do texto via web_search. Todo slide de conteúdo PRECISA sair com imagem. Depois chame a ferramenta 'definir_imagens' UMA VEZ com as atribuições.
+Pra CADA slide do carrossel (incluindo capa, excluindo apenas o último slide de CTA), ache a MELHOR imagem que ilustre o conceito do texto via web_search. Depois chame a ferramenta 'definir_imagens' UMA VEZ com as atribuições.
 
-REGRAS
+REGRAS CRÍTICAS (⚠️ não quebre)
+⚠️ COBERTURA TOTAL: nenhum slide pode ficar sem imagem, exceto o ÚLTIMO (CTA). Se o conceito é abstrato (ex: "Tela", "Conectividade", "Apple Intelligence"), busque foto CONCRETA que materialize o conceito (ex: close de tela iPad ligada, ícones Wi-Fi/USB-C num iPad, logo "Apple Intelligence" oficial). INSISTA com 2-3 buscas diferentes antes de desistir.
+
+⚠️ NUNCA REPITA URL: a mesma imagem NÃO PODE aparecer em 2 slides. Antes de atribuir, cheque mentalmente a lista de URLs que você já usou nos slides anteriores. O backend vai deduplicar e ZERAR slides com URL repetida — então se você repetir, o operador vai ficar com slide vazio e precisar corrigir manual. Busque uma foto DIFERENTE pra cada slide.
+
+⚠️ COERÊNCIA TEMÁTICA: a imagem DEVE refletir o texto do slide. Se o slide fala de "Veredito honesto", busque foto de balança, iPads enfileirados, ou comparação lado-a-lado — NÃO foto aleatória de revista, meme ou coisa não relacionada.
+
+REGRAS GERAIS
 1. Busca orientada ao CONCEITO do slide, não só ao produto.
    - Slide "Command é o novo Ctrl" → imagem de teclado Mac mostrando tecla ⌘.
    - Slide "Configure Time Machine" → screenshot/foto de Time Machine em Mac.
    - Slide "Câmera iPhone 17 Pro" → foto do módulo de câmera traseira do iPhone 17 Pro.
+   - Slide "Tela OLED ProMotion" → close-up de tela iPad Pro mostrando cor vibrante.
+   - Slide "Conectividade Wi-Fi 7" → iPad com indicador de rede, ou ícone Wi-Fi 7 oficial.
+   - Slide "Tamanhos e peso" → iPads enfileirados por tamanho, ou foto comparativa de 11" vs 13".
 
 2. COMPARATIVO entre 2 ou 3 modelos — use COMPOSIÇÃO:
    Se o texto do slide cita N modelos específicos (ex: "iPad 11, Air M4 ou Pro M5"), em vez de buscar uma imagem com todos juntos (raro ter boa), faça N buscas individuais — UMA foto oficial de cada modelo — e retorne no campo \`composicao: [url1, url2, url3]\`. O backend vai compor as N imagens lado a lado automaticamente.
    - Ideal: fotos de produto em fundo BRANCO (ex: apple.com/br/ipad, product photos).
    - Todas em mesma "perspectiva" se possível (ex: todas frontais, todas com ângulo).
    - Máximo 3 URLs em composição.
+   - Composições são SEMPRE únicas (não contam como repetição), então pode usar em múltiplos slides de comparação.
 
 3. Priorize fontes:
    - apple.com/br, apple.com, newsroom Apple pra produtos específicos.
@@ -59,10 +70,11 @@ REGRAS
    - Wikipedia commons pra imagens com licença aberta.
 
 4. NÃO use:
-   - Ícones pequenos, sprites, logos.
+   - Ícones pequenos, sprites, logos de favicon.
    - Sites de afiliado/cupom.
    - Screenshots de slide/apresentação (meta).
-   - Imagem que já apareceu em outro slide (nunca repita).
+   - Imagens de capa de revista ou trending TikTok (CORECORE, coisas do tipo — sem relação).
+   - Imagem que já apareceu em outro slide (VER REGRA CRÍTICA acima).
 
 REGRA ESPECIAL — ESTILO EMANUEL_PESSOA (análise profunda narrativa):
 Quando o post é estilo EMANUEL_PESSOA, as imagens devem ser FOTOS REAIS que conectam emocional/contextualmente com o texto — NÃO apenas fotos de produto limpas.
@@ -122,7 +134,7 @@ const TOOLS: Anthropic.Tool[] = [
 const WEB_SEARCH_TOOL = {
   type: "web_search_20250305",
   name: "web_search",
-  max_uses: 25,
+  max_uses: 40,
 } as unknown as Anthropic.Tool;
 
 function buildUserMessage(
@@ -143,8 +155,8 @@ function buildUserMessage(
     .join("\n\n");
 
   const contexto = slideAlvo !== undefined
-    ? `Re-ilustre APENAS o slide ${slideAlvo}. Ignore os outros.`
-    : `Ilustre todos os ${slides.length} slides. Faça 1-2 web_searches por slide (max_uses=15 total).`;
+    ? `Re-ilustre APENAS o slide ${slideAlvo}. Ignore os outros. IMPORTANTE: sua imagem não pode ser igual à de nenhum outro slide já existente.`
+    : `Ilustre TODOS os ${slides.length} slides (exceto o último CTA). Faça 2-3 web_searches por slide se necessário (max_uses=40 total). NENHUM slide pode ficar sem imagem. NENHUMA URL pode repetir entre slides.`;
 
   const estiloNota = estilo === "EMANUEL_PESSOA"
     ? "\n\n⚠️ ESTILO EMANUEL_PESSOA: busque FOTOS REAIS de contexto (pessoas, cenas, situações, executivos, locais) em vez de mockups de produto. Ver regra especial no system prompt."
@@ -336,12 +348,48 @@ export async function POST(req: NextRequest) {
         : await resolverImagem(a.image_url, a.page_url);
       return {
         slide_index: a.slide_index,
-        imagem_final,
+        imagem_final: imagem_final as string | null,
         motivo: a.motivo,
         composto: !!(composicaoValida && imagem_final && imagem_final.includes("/composto/")),
+        duplicada: false,
       };
     })
   );
+
+  // Deduplicacao: uma mesma URL nao pode aparecer em 2+ slides.
+  // - Quando ilustrando TODOS: mantem primeira ocorrencia (por slide_index),
+  //   zera as demais. Operador troca manualmente nos vazios via "🔄 Trocar".
+  // - Quando ilustrando UM slide (re-busca): rejeita se URL ja esta em outro.
+  // Composicoes (/composto/) sao sempre unicas (timestamp no path), entao
+  // nao entram no dedup.
+  const urlsJaUsadas = new Set<string>();
+  if (slideIndex !== undefined) {
+    // Re-ilustrando 1 slide — coleta URLs dos OUTROS slides pra nao repetir
+    for (let i = 0; i < slides.length; i++) {
+      if (i === slideIndex) continue;
+      const u = slides[i].imagem_url;
+      if (u && !u.includes("/composto/")) urlsJaUsadas.add(u);
+    }
+    for (const r of resolvidas) {
+      if (r.imagem_final && !r.imagem_final.includes("/composto/") && urlsJaUsadas.has(r.imagem_final)) {
+        r.imagem_final = null;
+        r.duplicada = true;
+      }
+    }
+  } else {
+    // Ilustrando tudo — dedup interno, mantem primeira ocorrencia
+    const porOrdem = [...resolvidas].sort((a, b) => a.slide_index - b.slide_index);
+    for (const r of porOrdem) {
+      if (!r.imagem_final) continue;
+      if (r.imagem_final.includes("/composto/")) continue; // composicoes sao unicas
+      if (urlsJaUsadas.has(r.imagem_final)) {
+        r.imagem_final = null;
+        r.duplicada = true;
+      } else {
+        urlsJaUsadas.add(r.imagem_final);
+      }
+    }
+  }
 
   // Aplica: se slideIndex foi especificado, só mexe naquele slide.
   const slidesNovos = slides.map((s, i) => {
@@ -357,9 +405,11 @@ export async function POST(req: NextRequest) {
     .eq("id", postId);
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
+  const duplicadas = resolvidas.filter((r) => r.duplicada).length;
   return NextResponse.json({
     ok: true,
     slides: slidesNovos,
     atribuicoes: resolvidas,
+    duplicadas,
   });
 }

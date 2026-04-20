@@ -140,7 +140,12 @@ export default function InstagramPostPage() {
       }
       if (Array.isArray(j.slides)) setSlidesEdit(j.slides);
       const comImg = (j.slides || []).filter((s: Slide) => s.imagem_url).length;
-      setMsg(`${comImg} de ${(j.slides || []).length} slides receberam imagem. Clique "🔄" em algum slide pra trocar.`);
+      const total = (j.slides || []).length;
+      const duplicadas = j.duplicadas || 0;
+      const dupAviso = duplicadas > 0
+        ? ` ⚠️ ${duplicadas} slide(s) ficaram sem imagem porque o Claude sugeriu URL repetida — clica "🔄 Trocar imagem" nos vazios.`
+        : "";
+      setMsg(`${comImg} de ${total} slides receberam imagem.${dupAviso} Clique "🔄" em algum slide pra trocar.`);
     } finally {
       setIlustrando(false);
     }
