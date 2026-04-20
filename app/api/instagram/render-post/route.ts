@@ -55,11 +55,34 @@ export async function POST(req: NextRequest) {
 
   const fonts = await loadInterFonts();
 
+  // Pre-fetch imagens dos slides e converte pra data URL. Evita que o Satori
+  // tente fetchar URLs recem-uploaded do Supabase Storage (que as vezes
+  // retornam 404 por propagacao de CDN) e falhe silenciosamente.
+  const slidesComImagens = await Promise.all(
+    slides.map(async (slide, idx) => {
+      if (!slide.imagem_url) return slide;
+      try {
+        const r = await fetch(slide.imagem_url, { cache: "no-store" });
+        if (!r.ok) {
+          console.error(`[render-post] slide ${idx + 1} imagem HTTP ${r.status}: ${slide.imagem_url}`);
+          return slide;
+        }
+        const buf = await r.arrayBuffer();
+        const mime = r.headers.get("content-type") || "image/jpeg";
+        const b64 = Buffer.from(buf).toString("base64");
+        return { ...slide, imagem_url: `data:${mime};base64,${b64}` };
+      } catch (err) {
+        console.error(`[render-post] slide ${idx + 1} imagem erro:`, err);
+        return slide;
+      }
+    })
+  );
+
   const urls: string[] = [];
   const ts = Date.now();
 
-  for (let i = 0; i < slides.length; i++) {
-    const slide = slides[i];
+  for (let i = 0; i < slidesComImagens.length; i++) {
+    const slide = slidesComImagens[i];
     const jsx = renderSlideJSX(slide, cfg, {
       index: i,
       total: slides.length,

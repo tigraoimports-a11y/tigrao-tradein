@@ -209,6 +209,16 @@ export default function InstagramPostPage() {
     setMsg("Imagem atribuída. Lembre de salvar a edição.");
   };
 
+  // Salva direto no banco um array de slides ja atualizado, sem depender do
+  // state do React (evita race entre setSlidesEdit e a proxima acao do user).
+  const persistirSlides = async (novosSlides: Slide[]) => {
+    await fetch("/api/admin/instagram-posts", {
+      method: "PATCH",
+      headers: apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ id, slides_json: novosSlides }),
+    });
+  };
+
   const uploadImagemSlide = async (idx: number, file: File) => {
     setUploadingSlide(idx);
     try {
@@ -238,7 +248,11 @@ export default function InstagramPostPage() {
         setMsg("Erro no upload: " + (uj.error || `HTTP ${up.status}`));
         return;
       }
-      atribuirImagem(idx, uj.url ?? null);
+      const novaUrl = uj.url ?? null;
+      const novosSlides = slidesEdit.map((s, i) => (i === idx ? { ...s, imagem_url: novaUrl } : s));
+      setSlidesEdit(novosSlides);
+      await persistirSlides(novosSlides);
+      setMsg(`Imagem do slide ${idx + 1} salva. Pode re-renderizar.`);
     } catch (err) {
       setMsg("Erro: " + (err instanceof Error ? err.message : String(err)));
     } finally {
