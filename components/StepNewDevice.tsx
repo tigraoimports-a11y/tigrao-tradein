@@ -391,6 +391,12 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                   // Salvar simulação seminovo no banco de dados (com dados completos de condição)
                   const condLines = condition && deviceType ? getAnyConditionLines(deviceType, condition) : [];
                   const condLines2 = condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
+                  // whatsappNumber eh passado pelo TradeInCalculator ja com a
+                  // logica correta pra seminovos (prefere vendedor selecionado;
+                  // senao tradeinConfig.whatsapp_formularios_seminovos; senao
+                  // principal). O fallback WHATSAPP_SEMINOVO so entra se o prop
+                  // nao foi passado (componente usado standalone).
+                  const waNum = whatsappNumber || WHATSAPP_SEMINOVO;
                   fetch("/api/leads", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -409,6 +415,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       status: "GOSTEI",
                       formaPagamento: "WhatsApp Seminovo",
                       condicaoLinhas: condLines,
+                      whatsappDestino: waNum,
                       ...(usedModel2 ? {
                         modeloUsado2: usedModel2,
                         storageUsado2: usedStorage2,
@@ -419,12 +426,6 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       website: getHoneypotValue(),
                     }),
                   }).catch(() => {});
-                  // whatsappNumber eh passado pelo TradeInCalculator ja com a
-                  // logica correta pra seminovos (prefere vendedor selecionado;
-                  // senao tradeinConfig.whatsapp_formularios_seminovos; senao
-                  // principal). O fallback WHATSAPP_SEMINOVO so entra se o prop
-                  // nao foi passado (componente usado standalone).
-                  const waNum = whatsappNumber || WHATSAPP_SEMINOVO;
                   const msg = encodeURIComponent(buildWhatsAppMsg());
                   window.location.href = `https://wa.me/${waNum}?text=${msg}`;
                 }}

@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
     if (body.corUsado2 != null) row.cor_usado2 = body.corUsado2 || null;
     if (body.avaliacaoUsado2) row.avaliacao_usado2 = body.avaliacaoUsado2;
     if (body.condicaoLinhas2) row.condicao_linhas2 = body.condicaoLinhas2;
+    // Numero de WhatsApp destino: rastreio de para quem foi o formulario
+    if (body.whatsappDestino) row.whatsapp_destino = String(body.whatsappDestino).replace(/\D/g, "") || null;
 
     // Checagem de duplicidade real: mesmo whatsapp + produto novo + produto usado nos últimos 2 minutos
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
@@ -67,6 +69,12 @@ export async function POST(req: NextRequest) {
       console.warn("[leads] coluna cor_usado ausente, retry sem cor");
       delete row.cor_usado;
       delete row.cor_usado2;
+      ({ error } = await supabase.from("simulacoes").insert([row]));
+    }
+    // Fallback: se whatsapp_destino ainda nao existe no banco (migration nao rodou), tenta sem ela
+    if (error && /column\s+["']?whatsapp_destino/i.test(error.message || "")) {
+      console.warn("[leads] coluna whatsapp_destino ausente, retry sem campo (rodar migration 20260421)");
+      delete row.whatsapp_destino;
       ({ error } = await supabase.from("simulacoes").insert([row]));
     }
 
