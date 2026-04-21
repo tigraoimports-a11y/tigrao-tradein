@@ -2965,7 +2965,9 @@ export default function EntregasPage() {
                         const tipoLabel = isUpgrade ? "UPGRADE (Troca)" : "Compra";
                         const trocaTexto = e.detalhes_upgrade
                           ? e.detalhes_upgrade.split("\n").filter(l => !l.startsWith("Avaliação:"))
-                              .map(l => l.replace(/\s*—\s*R\$\s*[\d.,]+/g, "")) // Remove valor avaliado (motoboy não vê)
+                              // Remove valor avaliado (motoboy nao ve). Cobre os
+                              // separadores em uso: em-dash (—), bullet (•) e hifen (-).
+                              .map(l => l.replace(/\s*[—•\-]\s*R\$\s*[\d.,]+/g, ""))
                               .join(" / ")
                           : "";
                         const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
