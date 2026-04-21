@@ -1182,6 +1182,10 @@ export default function EstoquePage() {
     precoCustom: string;
     tamanho: "pequena" | "media" | "grande";
     dataEntrada: string; // data de entrada no estoque (editável)
+    // Condicao escolhida ao mover pendencia pro estoque. Default vem de
+    // getTipoFromPendencia() (le tag [LACRADO]) mas o admin pode sobrescrever.
+    // Ignorado para itens A_CAMINHO (usa a condicao gravada na venda/pedido).
+    tipoEscolhido?: "NOVO" | "SEMINOVO" | "NAO_ATIVADO";
   } | null>(null);
 
   // Confirmação de "Mover para Estoque" com seleção de data no modal de detalhe
@@ -2123,8 +2127,12 @@ export default function EstoquePage() {
       setMsg(erro);
       return;
     }
-    // Etiqueta interna = preço de custo (custo_unitario)
-    setEtiquetaModal({ item, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media", dataEntrada: hojeBR() });
+    // Etiqueta interna = preço de custo (custo_unitario).
+    // Default do tipoEscolhido: pra PENDENCIA le a tag [LACRADO] da obs (senao SEMINOVO).
+    const tipoDefault = item.tipo === "PENDENCIA"
+      ? (getTipoFromPendencia(item) as "NOVO" | "SEMINOVO")
+      : undefined;
+    setEtiquetaModal({ item, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media", dataEntrada: hojeBR(), tipoEscolhido: tipoDefault });
   };
 
   // Abre modal para múltiplas unidades com seriais
@@ -2319,7 +2327,7 @@ export default function EstoquePage() {
       setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
       setSelectedACaminho(new Set());
     } else if (items && items.length > 1) {
-      const novoTipo = item.tipo === "PENDENCIA" ? getTipoFromPendencia(item) : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
+      const novoTipo = item.tipo === "PENDENCIA" ? (etiquetaModal.tipoEscolhido || getTipoFromPendencia(item)) : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
       await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       for (let i = 1; i < items.length; i++) {
         await fetch("/api/estoque", {
@@ -2335,7 +2343,7 @@ export default function EstoquePage() {
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
     } else {
-      const novoTipo = item.tipo === "PENDENCIA" ? getTipoFromPendencia(item) : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
+      const novoTipo = item.tipo === "PENDENCIA" ? (etiquetaModal.tipoEscolhido || getTipoFromPendencia(item)) : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
       await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
@@ -2873,6 +2881,23 @@ export default function EstoquePage() {
                   className={`flex-1 px-3 py-1.5 rounded-lg border text-sm font-semibold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                 />
               </div>
+              {/* Seletor de Condicao — so aparece quando o item e uma pendencia.
+                  Default ja vem da tag [LACRADO] gravada na venda, mas admin
+                  pode sobrescrever (ex: cliente entregou seminovo sem a tag). */}
+              {etiquetaModal.item.tipo === "PENDENCIA" && (
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-semibold shrink-0 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>🏷️ Condicao:</span>
+                  <select
+                    value={etiquetaModal.tipoEscolhido || "SEMINOVO"}
+                    onChange={(e) => setEtiquetaModal(prev => prev ? { ...prev, tipoEscolhido: e.target.value as "NOVO" | "SEMINOVO" | "NAO_ATIVADO" } : null)}
+                    className={`flex-1 px-3 py-1.5 rounded-lg border text-sm font-semibold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                  >
+                    <option value="NOVO">🔵 Lacrado (novo, sem uso)</option>
+                    <option value="NAO_ATIVADO">🟣 Nao Ativado</option>
+                    <option value="SEMINOVO">🟡 Seminovo (usado)</option>
+                  </select>
+                </div>
+              )}
               <div className="flex gap-3">
               {!etiquetaModal.printed ? (
                 <>
