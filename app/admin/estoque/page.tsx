@@ -2312,14 +2312,14 @@ export default function EstoquePage() {
     const dataEntrada = etiquetaModal.dataEntrada || hojeBR();
     if (batchItems && batchItems.length > 0) {
       for (const p of batchItems) {
-        const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : "NOVO";
+        const novoTipo = p.tipo === "PENDENCIA" ? getTipoFromPendencia(p) : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : "NOVO";
         await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
         produtosAfetados.add(`${p.categoria}|||${getModeloBase(p.produto, p.categoria)}`);
       }
       setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
       setSelectedACaminho(new Set());
     } else if (items && items.length > 1) {
-      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
+      const novoTipo = item.tipo === "PENDENCIA" ? getTipoFromPendencia(item) : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
       await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       for (let i = 1; i < items.length; i++) {
         await fetch("/api/estoque", {
@@ -2335,7 +2335,7 @@ export default function EstoquePage() {
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
     } else {
-      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
+      const novoTipo = item.tipo === "PENDENCIA" ? getTipoFromPendencia(item) : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
       await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
@@ -2402,11 +2402,20 @@ export default function EstoquePage() {
     return match ? match[1] : "NOVO";
   };
 
+  /** Condicao sugerida ao receber uma pendencia (produto vindo de troca).
+   *  Padrao e SEMINOVO (usado), mas se a venda marcou [LACRADO] no form,
+   *  a tag e gravada na observacao pelo /api/vendas e a pendencia ja
+   *  entra como NOVO (Lacrado) ao ser movida pro estoque. */
+  const getTipoFromPendencia = (p: ProdutoEstoque): string => {
+    if (p.observacao && /\[LACRADO\]/.test(p.observacao)) return "NOVO";
+    return "SEMINOVO";
+  };
+
   /** Limpa tags de condição/caixa/grade do campo observacao para exibição */
   const cleanObs = (obs: string | null): string | null => {
     if (!obs) return null;
     return obs
-      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA)\]/g, "")
+      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|LACRADO)\]/g, "")
       .replace(/\[GRADE_(A\+|AB|A|B)\]/g, "")
       .replace(/\[CICLOS:\d+\]/g, "")
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
@@ -2419,7 +2428,7 @@ export default function EstoquePage() {
   /** Extrai todas as tags [...] da observação */
   const extractTags = (obs: string | null): string => {
     if (!obs) return "";
-    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(A\+|AB|A|B)|CICLOS:\d+|RESP:[^\]]+)\]/g);
+    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|LACRADO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(A\+|AB|A|B)|CICLOS:\d+|RESP:[^\]]+)\]/g);
     return tags ? tags.join(" ") : "";
   };
   /** Extrai [RESP:xxx] da observação */
@@ -5809,7 +5818,15 @@ export default function EstoquePage() {
                       )}
                       <div>
                         <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p>
-                        {(canEdit || isAdmin) ? (
+                        {p.tipo === "PENDENCIA" ? (
+                          // Produto ainda em pendencia: bloqueia edicao da condicao aqui.
+                          // Trocar tipo sem definir status=EM ESTOQUE faria o produto
+                          // sumir de Pendencias e aparecer em Estoque com status=PENDENTE.
+                          // Usar o botao "Receber/Mover para Estoque" pro fluxo completo.
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-orange-100 text-orange-700" title="Use o botao 'Receber' para definir a condicao ao mover para o estoque">
+                            🟠 Pendência (defina condição ao receber)
+                          </span>
+                        ) : (canEdit || isAdmin) ? (
                           <select
                             value={p.tipo === "NAO_ATIVADO" ? "NAO_ATIVADO" : isLac ? "NOVO" : "SEMINOVO"}
                             onChange={async (e) => {
@@ -6971,7 +6988,7 @@ export default function EstoquePage() {
                                 if (erro) { setMsg(erro); return; }
                               }
                               try {
-                                const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
+                                const novoTipo = p.tipo === "PENDENCIA" ? getTipoFromPendencia(p) : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
                                 const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: moveConfirmData || hojeBR() }) });
                                 const json = await res.json();
                                 if (json.error) { setMsg("Erro: " + json.error); return; }

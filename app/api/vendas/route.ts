@@ -425,10 +425,13 @@ export async function POST(req: NextRequest) {
 
   // Notificação Telegram movida para quando a venda for FINALIZADA (PATCH)
 
-  // Helper: monta observacao com tags de grade/caixa/cabo/fonte
-  const buildObsComTags = (obs: string | null, grade: string | null, caixa: string | null, cabo: string | null, fonte: string | null): string | null => {
+  // Helper: monta observacao com tags de grade/caixa/cabo/fonte. Quando o
+  // produto vem como LACRADO, adiciona [LACRADO] para que, ao receber a
+  // pendencia, o estoque sugira tipo=NOVO (Lacrado) em vez do padrao SEMINOVO.
+  const buildObsComTags = (obs: string | null, grade: string | null, caixa: string | null, cabo: string | null, fonte: string | null, condicao?: string | null): string | null => {
     const parts: string[] = [];
     if (obs) parts.push(obs.trim());
+    if (condicao === "LACRADO") parts.push("[LACRADO]");
     if (grade) parts.push(`[GRADE_${grade}]`);
     if (caixa === "SIM") parts.push("[COM_CAIXA]");
     if (cabo === "SIM") parts.push("[COM_CABO]");
@@ -477,7 +480,7 @@ export async function POST(req: NextRequest) {
         status: "PENDENTE",
         tipo: "PENDENCIA",
         cor: sem1Final.cor ? String(sem1Final.cor).toUpperCase() : null,
-        observacao: buildObsComTags(sem1Final.observacao || null, sem1Final.grade || null, sem1Final.caixa || null, sem1Final.cabo || null, sem1Final.fonte || null),
+        observacao: buildObsComTags(sem1Final.observacao || null, sem1Final.grade || null, sem1Final.caixa || null, sem1Final.cabo || null, sem1Final.fonte || null, data?.troca_condicao || null),
         bateria: sem1Final.bateria || null,
         serial_no: sem1Final.serial_no || null,
         imei: sem1Final.imei || null,
@@ -526,7 +529,7 @@ export async function POST(req: NextRequest) {
         status: "PENDENTE",
         tipo: "PENDENCIA",
         cor: sem2Final.cor ? String(sem2Final.cor).toUpperCase() : null,
-        observacao: buildObsComTags(sem2Final.observacao || null, sem2Final.grade || null, sem2Final.caixa || null, sem2Final.cabo || null, sem2Final.fonte || null),
+        observacao: buildObsComTags(sem2Final.observacao || null, sem2Final.grade || null, sem2Final.caixa || null, sem2Final.cabo || null, sem2Final.fonte || null, data?.troca_condicao2 || null),
         bateria: sem2Final.bateria || null,
         serial_no: sem2Final.serial_no || null,
         imei: sem2Final.imei || null,
