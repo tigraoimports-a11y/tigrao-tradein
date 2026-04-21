@@ -122,6 +122,7 @@ export default function StepQuote(p: StepQuoteProps) {
     modeloNovo: newModel, storageNovo: newStorage, precoNovo: newPrice, modeloUsado: usedModel,
     storageUsado: usedStorage, corUsado: usedColor || "", avaliacaoUsado: hasSecond ? (tradeInValue1 ?? tradeInValue) : tradeInValue, diferenca: dif, condicaoLinhas: condLines,
     vendedor: vendedor || undefined, origem: clienteOrigem || undefined,
+    whatsappDestino: whatsappNumero,
     ...(hasSecond ? { modeloUsado2: usedModel2, storageUsado2: usedStorage2, corUsado2: usedColor2 || "", avaliacaoUsado2: tradeInValue2 ?? 0, condicaoLinhas2: condition2 ? getAnyConditionLines(deviceType2 ?? "iphone", condition2) : [] } : {}) };
 
   const cardStyle: React.CSSProperties = { backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" };

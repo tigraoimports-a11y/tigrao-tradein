@@ -19,6 +19,19 @@ import { INSTALLMENT_RATES } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 import FlexiblePaymentSimulator from "@/components/FlexiblePaymentSimulator";
+import { WHATSAPP_NUMBERS } from "@/lib/whatsapp-config";
+
+/** Traduz um numero de WhatsApp (E.164 sem +) para o nome do destinatario.
+ *  Usado para mostrar "Nicolas"/"Bianca" em vez do numero bruto. */
+function nomeWhatsappDestino(numero: string | null | undefined): string | null {
+  if (!numero) return null;
+  const clean = String(numero).replace(/\D/g, "");
+  for (const [nome, num] of Object.entries(WHATSAPP_NUMBERS)) {
+    if (num === clean) return nome.charAt(0).toUpperCase() + nome.slice(1);
+  }
+  // Numero desconhecido (fallback): mostra os 4 ultimos digitos
+  return clean ? `(...${clean.slice(-4)})` : null;
+}
 
 const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
 
@@ -53,6 +66,7 @@ interface SimulacaoRow {
   contatado: boolean | null;
   vendedor: string | null;
   follow_up_enviado: boolean | null;
+  whatsapp_destino?: string | null;
 }
 
 const fmt = (v: number) =>
@@ -1623,11 +1637,21 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {row.vendedor ? (
-                          <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{row.vendedor}</span>
-                        ) : (
-                          <span className="text-[#86868B] text-xs">—</span>
-                        )}
+                        <div className="flex flex-col gap-1">
+                          {row.vendedor ? (
+                            <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{row.vendedor}</span>
+                          ) : (
+                            <span className="text-[#86868B] text-xs">—</span>
+                          )}
+                          {nomeWhatsappDestino(row.whatsapp_destino) && (
+                            <span
+                              className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-100 text-blue-700"
+                              title={`Formulario enviado para ${row.whatsapp_destino}`}
+                            >
+                              → {nomeWhatsappDestino(row.whatsapp_destino)}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-[#1D1D1F] whitespace-nowrap">
                         {row.modelo_novo} {row.storage_novo}
@@ -1842,6 +1866,14 @@ export default function AdminPage() {
                 </span>
                 {modalRow.vendedor && (
                   <span className="ml-2 px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{modalRow.vendedor}</span>
+                )}
+                {nomeWhatsappDestino(modalRow.whatsapp_destino) && (
+                  <span
+                    className="ml-2 px-2 py-1 rounded-lg text-xs font-semibold bg-blue-100 text-blue-700"
+                    title={`Formulario enviado para ${modalRow.whatsapp_destino}`}
+                  >
+                    → {nomeWhatsappDestino(modalRow.whatsapp_destino)}
+                  </span>
                 )}
               </div>
 
