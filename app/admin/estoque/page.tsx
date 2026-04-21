@@ -1862,9 +1862,11 @@ export default function EstoquePage() {
     } catch { /* ignore */ }
   }, [password]);
 
-  // Fetch inicial + refetch ao voltar de aba oculta (sem polling constante)
+  // Fetch inicial + refetch ao voltar de aba oculta (sem polling constante).
+  // useAutoRefetch ja faz o fetch inicial no mount e registra o listener de
+  // visibilitychange — nao ter um useEffect separado aqui evita fetch duplo
+  // toda vez que refetchAll muda de referencia.
   const refetchAll = useCallback(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
-  useEffect(() => { refetchAll(); }, [refetchAll]);
   useAutoRefetch(refetchAll, !!password);
 
   // Carregar ordem customizada das seções do estoque

@@ -10,7 +10,13 @@ import { useEffect, useRef } from "react";
  * setInterval / listener a cada render. Antes, passar uma função
  * inline causava clear+reset do timer constantemente (travando
  * polling e gerando lag percebido).
+ *
+ * Visibility threshold: só refetch quando a aba ficou oculta por >30s.
+ * Alt-tab rápido não dispara fetch (evita ver a página "piscando" toda
+ * vez que o usuário troca de janela brevemente).
  */
+const VISIBILITY_REFETCH_THRESHOLD_MS = 30_000;
+
 export function useAutoRefetch(refetch: () => void, enabled: boolean = true, intervalMs: number = 0) {
   const refetchRef = useRef(refetch);
   useEffect(() => { refetchRef.current = refetch; }, [refetch]);
@@ -21,11 +27,15 @@ export function useAutoRefetch(refetch: () => void, enabled: boolean = true, int
     // Fetch inicial imediato na montagem
     call();
     const interval = intervalMs > 0 ? setInterval(call, intervalMs) : null;
-    // Refetch ao focar apenas se a aba esteve oculta (evita re-fetch em toda troca de foco de janela)
-    let wasHidden = false;
+    // Refetch ao voltar o foco só quando a aba ficou oculta por tempo
+    // suficiente pra valer a pena — alt-tab curto não dispara.
+    let hiddenAt: number | null = null;
     const onVisibility = () => {
-      if (document.hidden) { wasHidden = true; return; }
-      if (wasHidden) { wasHidden = false; call(); }
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt !== null && Date.now() - hiddenAt >= VISIBILITY_REFETCH_THRESHOLD_MS) {
+        call();
+      }
+      hiddenAt = null;
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
