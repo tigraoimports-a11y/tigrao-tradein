@@ -491,8 +491,11 @@ function CompraForm() {
 
     // Cor sempre obrigatoria — se tem cores no estoque, cliente escolhe chip;
     // senao, digita manualmente no input. Evita mensagens chegando sem cor.
-    if (!corSel || !corSel.trim()) {
-      alert("Escolha a cor do produto antes de enviar.");
+    // Minimo 3 chars evita caso de cliente enviar so "P" quando ia digitar
+    // "Prata" (mensagem chegava pra vendedora com "— P —").
+    const corTrim = (corSel || "").trim();
+    if (corTrim.length < 3) {
+      alert("Informe a cor do produto completa (ex: Prata, Azul, Preto).");
       document.getElementById("escolha-cor")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
