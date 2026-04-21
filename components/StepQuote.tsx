@@ -6,6 +6,7 @@ import type { LeadSaiu } from "@/lib/supabase";
 import type { NewProduct } from "@/lib/types";
 import { calculateQuote, getWhatsAppUrl, getAnyConditionLines, formatBRL } from "@/lib/calculations";
 import { getHoneypotValue } from "@/lib/honeypot-client";
+import { getPublicBaseUrl } from "@/lib/public-url";
 import FlexiblePaymentSimulator, { type PaymentBlock, type PaymentSummary, calculatePaymentSummary } from "./FlexiblePaymentSimulator";
 
 const PARCELAS_OPCOES = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
@@ -328,7 +329,12 @@ export default function StepQuote(p: StepQuoteProps) {
           ...(parc && parc !== "pix" ? { parcelas: parc } : {}),
           ...(entNum > 0 ? { entrada_pix: String(Math.round(entNum)) } : {}),
         });
-        const baseOrigin = typeof window !== "undefined" ? window.location.origin : "";
+        // Usa getPublicBaseUrl() em vez de window.location.origin pra garantir
+        // que o link gerado sempre aponta pro dominio de producao, mesmo se o
+        // cliente acessou o simulador via preview do Vercel (tigrao-tradein.
+        // vercel.app). Evita links com url_curta apontando pra preview, que
+        // depois confundiam o admin no Historico de Formularios.
+        const baseOrigin = getPublicBaseUrl();
         const compraUrl = `${baseOrigin}/compra?${params.toString()}`;
         return (
           <button disabled={fechando} onClick={async () => {
