@@ -87,12 +87,12 @@ export default function CalculadoraImportacao() {
   const [parcelasSel, setParcelasSel] = useState<number[]>([12, 18, 21]);
   const [copiado, setCopiado] = useState(false);
 
-  // Carrega a lista do app_settings. Usa localStorage.adminPassword pra auth
-  // (mesmo padrao do resto do /admin).
+  // Carrega a lista do app_settings. Usa localStorage.admin_pw pra auth
+  // (mesma chave que o AdminShell salva).
   const carregarProdutos = useCallback(async () => {
     setLoading(true);
     try {
-      const pw = typeof window !== "undefined" ? localStorage.getItem("adminPassword") || "" : "";
+      const pw = typeof window !== "undefined" ? localStorage.getItem("admin_pw") || "" : "";
       const res = await fetch(`/api/admin/estoque-settings?key=${SETTINGS_KEY}`, {
         headers: { "x-admin-password": pw },
       });
@@ -496,7 +496,7 @@ function EditorProdutos({
     }
     setSalvando(true);
     try {
-      const pw = typeof window !== "undefined" ? localStorage.getItem("adminPassword") || "" : "";
+      const pw = typeof window !== "undefined" ? localStorage.getItem("admin_pw") || "" : "";
       const res = await fetch("/api/admin/estoque-settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json", "x-admin-password": pw },
