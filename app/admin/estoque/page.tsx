@@ -2671,13 +2671,19 @@ export default function EstoquePage() {
   const isReservado = (p: ProdutoEstoque) => !!p.reserva_cliente && p.status !== "ESGOTADO" && p.qnt > 0;
   const reservados = estoque.filter(isReservado);
 
-  // Filtrar por tipo (sempre excluindo reservados)
-  const novos = estoque.filter((p) => !isReservado(p) && (p.tipo || "NOVO") === "NOVO");
+  // Filtrar por tipo (sempre excluindo reservados).
+  // Excluir status=PENDENTE das abas de produto disponivel (Lacrados/Seminovos)
+  // pra evitar que item em pendencia apareca em Estoque por causa de resquicio
+  // do bug onde trocar "Condicao" mudava tipo sem mexer no status.
+  const novos = estoque.filter((p) => !isReservado(p) && (p.tipo || "NOVO") === "NOVO" && p.status !== "PENDENTE");
   // Seminovos agora engloba SEMINOVO + NAO_ATIVADO (aba "Não Ativados" foi removida)
-  const seminovos = estoque.filter((p) => !isReservado(p) && (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") && p.status !== "ESGOTADO");
+  const seminovos = estoque.filter((p) => !isReservado(p) && (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") && p.status !== "ESGOTADO" && p.status !== "PENDENTE");
   const atacado = estoque.filter((p) => !isReservado(p) && p.tipo === "ATACADO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
-  const pendencias = estoque.filter((p) => !isReservado(p) && p.tipo === "PENDENCIA");
+  // Pendencias inclui tambem itens que tem status=PENDENTE mas tipo ja foi
+  // alterado (ex: resquicio do bug da "Condicao"). Assim o admin consegue
+  // achar o item e receber corretamente via botao "Receber".
+  const pendencias = estoque.filter((p) => !isReservado(p) && (p.tipo === "PENDENCIA" || p.status === "PENDENTE"));
   const aCaminho = estoque.filter((p) => !isReservado(p) && p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque — identificados por terem data_compra
