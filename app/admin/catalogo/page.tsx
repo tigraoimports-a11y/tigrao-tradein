@@ -651,8 +651,12 @@ function ModelosTab({ data, headers, reload }: TabProps) {
     try {
       const res = await fetch(`${BASE}?modelo_id=${modelo.id}`, { headers: headers() });
       const json = await res.json();
-      if (json.configs) {
-        setConfigs(new Set(json.configs.map((c: { tipo_chave: string; valor: string }) => `${c.tipo_chave}:${c.valor}`)));
+      // configs_explicit = somente o que foi configurado explicitamente no
+      // modelo (sem fallback da categoria). Modelo novo -> Set vazio ->
+      // checkboxes desmarcados pro admin escolher o que o modelo suporta.
+      const explicit = json.configs_explicit ?? json.configs;
+      if (explicit) {
+        setConfigs(new Set(explicit.map((c: { tipo_chave: string; valor: string }) => `${c.tipo_chave}:${c.valor}`)));
       }
     } catch (e) {
       console.error(e);

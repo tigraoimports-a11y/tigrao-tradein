@@ -18,9 +18,14 @@ export async function GET(req: NextRequest) {
     const modeloId = req.nextUrl.searchParams.get("modelo_id");
     const allConfigs = req.nextUrl.searchParams.get("all_configs");
 
-    // Return configs for a specific model
-    // Return configs for a specific model, merging with category-level
-    // fallback for any spec types that have no model-specific configs.
+    // Return configs for a specific model.
+    //   configs          — legacy: model-specific + category fallback para tipos
+    //                      sem config de modelo. ProdutoSpecFields e estoque
+    //                      usam isso e esperam fallback automatico.
+    //   configs_explicit — APENAS o que foi configurado explicitamente no
+    //                      modelo. Admin catalog page usa pra marcar checkboxes
+    //                      (sem mesclar fallback, que fazia parecer que tudo
+    //                      estava sempre selecionado).
     if (modeloId) {
       const { data: modelConfigs, error } = await supabase
         .from("catalogo_modelo_configs")
@@ -67,7 +72,10 @@ export async function GET(req: NextRequest) {
 
       // Merge: model-specific configs + category-level fallback for missing types
       const merged = [...(modelConfigs || []), ...fallbackConfigs];
-      return NextResponse.json({ configs: merged });
+      return NextResponse.json({
+        configs: merged,
+        configs_explicit: modelConfigs || [],
+      });
     }
 
     // Return ALL model configs (used by estoque page to know all valid colors per model)
