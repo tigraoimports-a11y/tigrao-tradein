@@ -2374,7 +2374,7 @@ export default function EstoquePage() {
   };
 
   /** Retorna o modelo base de um produto sem a cor (ex: "IPHONE 17 256GB") */
-  const getBaseModelACaminho = (produto: string): string => {
+  const getBaseModelACaminho = (produto: string, observacao?: string | null): string => {
     const COLOR_WORDS = new Set([
       "BLACK","WHITE","RED","BLUE","GREEN","YELLOW","PINK","PURPLE","GOLD","SILVER",
       "NATURAL","TITANIUM","COSMIC","LAVENDER","SAGE","TEAL","ULTRAMARINE","MIDNIGHT",
@@ -2382,6 +2382,10 @@ export default function EstoquePage() {
       "AZUL","ROSA","PRATA","VERDE","VERMELHO","AMARELO","ROXO","CINZA","DOURADO",
       "JET","SLATE","OCEAN","PRETA","MILANES","MILANESE","LAKE",
     ]);
+    // Tela de acessorio (ex: Magic Keyboard 11"/13") vem na observacao como [TELA:X"]
+    // — incluir no modelo base para separar variantes do mesmo produto
+    const telaMatch = observacao?.match(/\[TELA:([^\]]+)\]/);
+    const telaSuffix = telaMatch ? ` ${telaMatch[1].trim().replace(/"?$/, '"')}` : "";
     const words = produto.split(/\s+/);
     // Para MacBook/iPad/Mac Mini a RAM também é "XXGB" — usar o ÚLTIMO match (SSD real)
     let storageIdx = -1;
@@ -2399,10 +2403,10 @@ export default function EstoquePage() {
         if (/^(GPS(\+CEL)?|CELLULAR|WI-FI|5G|4G|LTE)$/i.test(nextWord)) {
           baseParts.push(words[sizeIdx + 1]);
         }
-        return baseParts.join(" ");
+        return baseParts.join(" ") + telaSuffix;
       }
       // Sem storage nem tamanho: remover cores do nome
-      return words.filter(w => !COLOR_WORDS.has(w.toUpperCase()) && !/^PULSEIRA$/i.test(w)).join(" ");
+      return words.filter(w => !COLOR_WORDS.has(w.toUpperCase()) && !/^PULSEIRA$/i.test(w)).join(" ") + telaSuffix;
     }
     const baseParts = words.slice(0, storageIdx + 1).filter(w => !COLOR_WORDS.has(w.toUpperCase()));
     // Incluir sufixo de conectividade (WI-FI, CELLULAR) que aparece logo após o storage
@@ -2410,7 +2414,7 @@ export default function EstoquePage() {
     if (storageIdx + 1 < words.length && connectWords.has(words[storageIdx + 1].toUpperCase())) {
       baseParts.push(words[storageIdx + 1]);
     }
-    return baseParts.join(" ");
+    return baseParts.join(" ") + telaSuffix;
   };
 
   /** Extrai a condição (NOVO/NAO_ATIVADO/SEMINOVO) do campo observacao de um produto A_CAMINHO */
@@ -4607,7 +4611,7 @@ export default function EstoquePage() {
                                 : items.filter(p => p.tipo === "A_CAMINHO");
                               const groupMap = new Map<string, typeof pendentesDate>();
                               pendentesDate.forEach(p => {
-                                const base = getBaseModelACaminho(p.produto);
+                                const base = getBaseModelACaminho(p.produto, p.observacao);
                                 if (!groupMap.has(base)) groupMap.set(base, []);
                                 groupMap.get(base)!.push(p);
                               });
