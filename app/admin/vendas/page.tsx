@@ -1154,19 +1154,20 @@ export default function VendasPage() {
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
       status_pagamento: multiDatePagamento
         ? (() => {
-            const totalEntries = pagEntries.reduce((s, e) => s + (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0), 0);
-            // Se ALGUMA parcela tem data futura, a venda nao pode finalizar
-            // automaticamente — vai pra AGUARDANDO (aparece em "Em Andamento")
-            // ate o admin finalizar manualmente quando cobrar tudo. Antes o
-            // sistema finalizava direto so por bater valor total >= preco,
-            // ignorando que parte do dinheiro ainda iria entrar.
+            // Modo multi-data: admin finaliza manualmente quando cobrar tudo.
+            // Nao finalizar automaticamente porque:
+            // 1. totalEntries e soma BRUTA; pPrecoVendido e LIQUIDO pos-taxa.
+            //    Comparar bruto >= liquido resultava em FINALIZADO quase sempre.
+            // 2. Pagamentos com cartao podem ter chargeback; admin deve
+            //    confirmar manualmente quando o dinheiro entrar.
+            // 3. Pagamentos com data futura obviamente ainda nao foram feitos.
             const hojeISO = hojeBR();
             const temDataFutura = pagEntries.some(e => {
               const valor = parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0;
               return valor > 0 && e.data && e.data > hojeISO;
             });
             if (temDataFutura) return "AGUARDANDO";
-            return totalEntries >= pPrecoVendido ? "FINALIZADO" : "PROGRAMADA";
+            return "AGUARDANDO";
           })()
         : vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA")
         // Em edicao, preserva o status original — edicao de forma de pagamento,
@@ -4933,16 +4934,33 @@ export default function VendasPage() {
                         const isFirstInGrupo = isGrupo && grupoItens[0].id === v.id;
 
                         const pagParts: string[] = [];
-                        if (valorTrocaTotal > 0) pagParts.push(`Troca: ${fmt(valorTrocaTotal)}`);
-                        if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
-                        if (v.entrada_especie && v.entrada_especie > 0) pagParts.push(`Especie: ${fmt(v.entrada_especie)}`);
+                        // Multi-data: quando ha pagamento_historia, lista cada pagamento
+                        // individualmente (PIX + Cartao + etc) em vez de so mostrar o primeiro.
+                        const pagHist = (v as unknown as { pagamento_historia?: Array<{ valor: number; forma: string; banco: string; data?: string; parcelas?: number; bandeira?: string }> }).pagamento_historia;
+                        const hasMultiData = Array.isArray(pagHist) && pagHist.length > 1;
+                        if (hasMultiData) {
+                          if (valorTrocaTotal > 0) pagParts.push(`Troca: ${fmt(valorTrocaTotal)}`);
+                          for (const entry of pagHist) {
+                            if (!entry || !entry.valor) continue;
+                            if (entry.forma === "PIX") pagParts.push(`💸 PIX ${entry.banco || "ITAU"}: ${fmt(entry.valor)}`);
+                            else if (entry.forma === "CARTAO") pagParts.push(`${entry.banco || "CARTAO"}${entry.parcelas ? ` ${entry.parcelas}x` : ""}${entry.bandeira ? ` ${entry.bandeira}` : ""}: ${fmt(entry.valor)}`);
+                            else if (entry.forma === "LINK") pagParts.push(`Link MP${entry.parcelas ? ` ${entry.parcelas}x` : ""}: ${fmt(entry.valor)}`);
+                            else if (entry.forma === "DEBITO") pagParts.push(`Débito ${entry.banco || ""}: ${fmt(entry.valor)}`);
+                            else if (entry.forma === "ESPECIE" || entry.forma === "DINHEIRO") pagParts.push(`💵 Espécie: ${fmt(entry.valor)}`);
+                            else if (entry.forma === "FIADO") pagParts.push(`Fiado: ${fmt(entry.valor)}`);
+                            else pagParts.push(`${entry.forma}: ${fmt(entry.valor)}`);
+                          }
+                        }
+                        if (valorTrocaTotal > 0 && !hasMultiData) pagParts.push(`Troca: ${fmt(valorTrocaTotal)}`);
+                        if (temEntrada && !hasMultiData) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
+                        if (v.entrada_especie && v.entrada_especie > 0 && !hasMultiData) pagParts.push(`Especie: ${fmt(v.entrada_especie)}`);
                         const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
                         const espVal = parseFloat(String(v.entrada_especie || 0)) || 0;
                         const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
                         const creditoVal = parseFloat(String(v.credito_lojista_usado || 0)) || 0;
                         const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
-                        if (creditoVal > 0) pagParts.push(`Crédito: ${fmt(creditoVal)}`);
-                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal - creditoVal));
+                        if (creditoVal > 0 && !hasMultiData) pagParts.push(`Crédito: ${fmt(creditoVal)}`);
+                        const resto = hasMultiData ? 0 : Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal - creditoVal));
                         const formaLabel = (f: string | null | undefined) => {
                           if (!f) return "";
                           if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
@@ -4953,26 +4971,28 @@ export default function VendasPage() {
                           if (f === "FIADO") return "Fiado";
                           return f;
                         };
-                        if (v.forma === "CARTAO" && v.qnt_parcelas) {
-                          pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
-                        } else if (v.banco === "MERCADO_PAGO") {
-                          pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
-                        } else if (v.forma && v.forma !== "CARTAO") {
-                          const lbl = formaLabel(v.forma);
-                          const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
-                          const valorForma = resto > 0 ? resto : (compVal > 0 ? compVal : 0);
-                          if (valorForma > 0) pagParts.push(`${lbl}${banco}: ${fmt(valorForma)}`);
-                        } else if (!v.forma && compVal > 0) {
-                          // Forma não definida mas tem comprovante — exibe como PIX (fallback mais comum)
-                          const banco = v.banco_pix || v.banco || "ITAU";
-                          pagParts.push(`💸 PIX ${banco}: ${fmt(compVal)}`);
-                        }
-                        // Sem forma definida mas tem complemento a pagar
-                        if (!v.forma && resto > 0 && compVal <= 0) {
-                          pagParts.push(`Complemento: ${fmt(resto)}`);
-                        }
-                        if (v.banco_alt) {
-                          pagParts.push(`2o: ${v.banco_alt} ${v.parc_alt || 0}x${v.band_alt ? ` ${v.band_alt}` : ""}${v.comp_alt ? ` (${fmt(v.comp_alt)})` : ""}`);
+                        if (!hasMultiData) {
+                          if (v.forma === "CARTAO" && v.qnt_parcelas) {
+                            pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
+                          } else if (v.banco === "MERCADO_PAGO") {
+                            pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
+                          } else if (v.forma && v.forma !== "CARTAO") {
+                            const lbl = formaLabel(v.forma);
+                            const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
+                            const valorForma = resto > 0 ? resto : (compVal > 0 ? compVal : 0);
+                            if (valorForma > 0) pagParts.push(`${lbl}${banco}: ${fmt(valorForma)}`);
+                          } else if (!v.forma && compVal > 0) {
+                            // Forma não definida mas tem comprovante — exibe como PIX (fallback mais comum)
+                            const banco = v.banco_pix || v.banco || "ITAU";
+                            pagParts.push(`💸 PIX ${banco}: ${fmt(compVal)}`);
+                          }
+                          // Sem forma definida mas tem complemento a pagar
+                          if (!v.forma && resto > 0 && compVal <= 0) {
+                            pagParts.push(`Complemento: ${fmt(resto)}`);
+                          }
+                          if (v.banco_alt) {
+                            pagParts.push(`2o: ${v.banco_alt} ${v.parc_alt || 0}x${v.band_alt ? ` ${v.band_alt}` : ""}${v.comp_alt ? ` (${fmt(v.comp_alt)})` : ""}`);
+                          }
                         }
 
                         return (
