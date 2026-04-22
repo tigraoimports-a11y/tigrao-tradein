@@ -676,7 +676,7 @@ function CompraForm() {
           // claro o somado antes de descontos/troca.
           ...(produtosExtras.length > 0 ? [`*Subtotal:* R$ ${fmt(subtotalBruto)}`] : []),
           ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
-          ...(descontoParam > 0 || produtosExtras.length > 0 ? [`*Total:* R$ ${fmt(valorBaseFinal)}`] : []),
+          ...(descontoParam > 0 || produtosExtras.length > 0 ? [`*Total com desconto:* R$ ${fmt(valorBaseFinal)}`] : []),
         ];
       })(),
       "",
@@ -1084,22 +1084,32 @@ function CompraForm() {
             {/* Selecao de cor — obrigatoria. Se ja veio pre-selecionada pelo operador
                 (cor detectada no nome do produto ou passada via URL), OCULTA a selecao
                 completamente — a cor ja esta nos nomes dos produtos acima. Cliente so
-                precisa escolher se nao veio preenchida. */}
-            {(produtoInput || produtoParam) && !corSel && (
-              <div id="escolha-cor" className={`mt-3 pt-3 border-t border-[#E8740E]`}>
-                <p className={`text-xs uppercase tracking-wider font-semibold mb-2 text-[#E8740E]`}>
-                  Escolha a cor *<span className="ml-1 normal-case font-medium">(obrigatório)</span>
-                </p>
-                {coresDisponiveis.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {coresDisponiveis.map(cor => (
+                precisa escolher se nao veio preenchida.
+                Fallback: quando o catalogo nao tem cores (ex: produto vindo do
+                simulador sem match no /api/produtos-disponiveis), mostra lista
+                com cores Apple comuns em chips + input livre. Antes caia so num
+                text input pequeno e facil de passar batido. */}
+            {(produtoInput || produtoParam) && !corSel && (() => {
+              const CORES_FALLBACK = [
+                "Preto", "Branco", "Azul", "Verde", "Prata", "Dourado", "Roxo", "Rosa", "Vermelho",
+                "Titânio Preto", "Titânio Azul", "Titânio Natural", "Titânio Branco", "Titânio Deserto",
+                "Laranja Cósmico", "Azul Profundo", "Estelar", "Meia-Noite",
+              ];
+              const coresMostrar = coresDisponiveis.length > 0 ? coresDisponiveis : CORES_FALLBACK;
+              return (
+                <div id="escolha-cor" className="mt-3 pt-3 border-t-2 border-[#E8740E] bg-[#FFF5EB] -mx-4 px-4 pb-3 rounded-b-xl">
+                  <p className="text-sm uppercase tracking-wider font-bold mb-2 text-[#E8740E]">
+                    ⚠ Escolha a cor do produto *
+                  </p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {coresMostrar.map(cor => (
                       <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all border bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]">
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all border bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E] hover:bg-[#FFF5EB]">
                         {cor}
                       </button>
                     ))}
                   </div>
-                ) : (
+                  <p className="text-xs text-[#86868B] mb-1">Ou digite se não encontrar acima:</p>
                   <input
                     type="text"
                     value={corSel}
@@ -1107,9 +1117,9 @@ function CompraForm() {
                     placeholder="Ex: Preto, Azul, Titânio..."
                     className={inputCls}
                   />
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
           </>
         ) : Object.keys(catalogoAtivo).length > 0 ? (
           <>
