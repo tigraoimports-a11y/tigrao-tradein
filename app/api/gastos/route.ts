@@ -159,10 +159,27 @@ export async function PATCH(req: NextRequest) {
 
   // Se veio grupo_id, é edição de gasto dividido: apagar os antigos e inserir novos
   if (body.grupo_id && Array.isArray(body.items)) {
+    // Preservar pedido_fornecedor_id do grupo (senão os produtos vinculados ficam órfãos)
+    const { data: grupoExistente } = await supabase
+      .from("gastos")
+      .select("pedido_fornecedor_id")
+      .eq("grupo_id", body.grupo_id)
+      .limit(1)
+      .single();
+    const pedidoFornecedorIdExistente = grupoExistente?.pedido_fornecedor_id || null;
+
     const { error: delErr } = await supabase.from("gastos").delete().eq("grupo_id", body.grupo_id);
     if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
-    const { data, error: insErr } = await supabase.from("gastos").insert(body.items).select();
+    // Reinjetar pedido_fornecedor_id nos novos items (se ainda não vier do frontend)
+    const itemsComPedido = pedidoFornecedorIdExistente
+      ? body.items.map((it: Record<string, unknown>) => ({
+          ...it,
+          pedido_fornecedor_id: it.pedido_fornecedor_id ?? pedidoFornecedorIdExistente,
+        }))
+      : body.items;
+
+    const { data, error: insErr } = await supabase.from("gastos").insert(itemsComPedido).select();
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
     const totalValor = body.items.reduce((s: number, i: { valor?: number }) => s + Number(i.valor || 0), 0);
