@@ -344,7 +344,12 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   try {
     const body = await req.json();
-    const { postId, detalhesExtras } = body as { postId?: string; detalhesExtras?: string };
+    const { postId, detalhesExtras, estilo: estiloOverride, preservarImagens } = body as {
+      postId?: string;
+      detalhesExtras?: string;
+      estilo?: string;
+      preservarImagens?: boolean;
+    };
     if (!postId) return NextResponse.json({ error: "postId obrigatório" }, { status: 400 });
 
     const { data: post, error: fetchErr } = await supabase
@@ -356,9 +361,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: fetchErr?.message || "post não encontrado" }, { status: 404 });
     }
 
+    // Se admin pediu outro estilo, valida e usa ele; senao mantem o do post.
+    const estilosValidos = ["PADRAO", "EMANUEL_PESSOA", "CARIOCA_DESCONTRAIDO", "STORYTELLING_PREMIUM", "COMPARATIVO_TECNICO", "VIRAL_POLEMICO", "EDUCATIVO_DIDATICO"];
+    const estiloAtivo = estiloOverride && estilosValidos.includes(estiloOverride) ? estiloOverride : (post.estilo || "PADRAO");
+
     await supabase.from("instagram_posts").update({ status: "GERANDO", erro: null, updated_at: new Date().toISOString() }).eq("id", postId);
 
-    const systemPrompt = buildSystemPrompt(post.tipo, post.numero_slides, post.estilo || "PADRAO");
+    const systemPrompt = buildSystemPrompt(post.tipo, post.numero_slides, estiloAtivo);
 
     const detalhesTrim = (detalhesExtras || "").trim();
     const temDetalhes = detalhesTrim.length > 0 && !!post.slides_json && Array.isArray(post.slides_json) && post.slides_json.length > 0;
@@ -432,9 +441,17 @@ Refaça o carrossel incorporando as informações adicionais acima. Mantenha a e
       return NextResponse.json({ error: msg }, { status: 500 });
     }
 
-    const { error: updErr } = await supabase.from("instagram_posts").update({
+    // Merge: preserva imagem_url por POSICAO quando admin trocou de linguagem.
+    // Slide N novo herda imagem do slide N antigo — permite re-escrever texto
+    // sem perder as imagens que admin ja refinou/trocou/fez upload.
+    const slidesAntigos = Array.isArray(post.slides_json) ? (post.slides_json as Array<{ imagem_url?: string | null }>) : [];
+    const slidesFinais = preservarImagens
+      ? resultado.slides.map((s, i) => ({ ...s, imagem_url: slidesAntigos[i]?.imagem_url ?? null }))
+      : resultado.slides;
+
+    const atualizacoes: Record<string, unknown> = {
       status: "GERADO",
-      slides_json: resultado.slides,
+      slides_json: slidesFinais,
       legenda: resultado.legenda,
       hashtags: resultado.hashtags,
       pesquisa_json: {
@@ -443,7 +460,12 @@ Refaça o carrossel incorporando as informações adicionais acima. Mantenha a e
       },
       erro: null,
       updated_at: new Date().toISOString(),
-    }).eq("id", postId);
+    };
+    // Se admin trocou de linguagem, persiste no post pra render usar o novo estilo.
+    if (estiloOverride && estilosValidos.includes(estiloOverride) && estiloOverride !== post.estilo) {
+      atualizacoes.estilo = estiloOverride;
+    }
+    const { error: updErr } = await supabase.from("instagram_posts").update(atualizacoes).eq("id", postId);
 
     if (updErr) {
       return NextResponse.json({ error: updErr.message }, { status: 500 });

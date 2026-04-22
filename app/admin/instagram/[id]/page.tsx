@@ -93,6 +93,10 @@ export default function InstagramPostPage() {
   const [mostrandoDetalhes, setMostrandoDetalhes] = useState(false);
   const [detalhesExtras, setDetalhesExtras] = useState("");
 
+  // Trocar linguagem (re-gerar texto em outro estilo, preservando imagens)
+  const [mostrandoTrocarLing, setMostrandoTrocarLing] = useState(false);
+  const [novoEstilo, setNovoEstilo] = useState("");
+
   const fetchPost = useCallback(async () => {
     if (!password || !id) return;
     try {
@@ -111,11 +115,14 @@ export default function InstagramPostPage() {
 
   useEffect(() => { fetchPost(); }, [fetchPost]);
 
-  const gerar = async (detalhes?: string) => {
+  const gerar = async (detalhes?: string, opts?: { estilo?: string; preservarImagens?: boolean }) => {
     const temDetalhes = !!detalhes && detalhes.trim().length > 0;
+    const trocouLinguagem = !!opts?.estilo;
     setGerando(true);
     setMsg(
-      temDetalhes
+      trocouLinguagem
+        ? `Re-gerando texto em outra linguagem (imagens preservadas)... (~2 min)`
+        : temDetalhes
         ? "Re-gerando com suas informações adicionais... (~2 min)"
         : "Gerando... isso pode levar até 2 minutos (pesquisa + fact-check)."
     );
@@ -123,7 +130,12 @@ export default function InstagramPostPage() {
       const res = await fetch("/api/instagram/gerar", {
         method: "POST",
         headers: apiHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ postId: id, detalhesExtras: temDetalhes ? detalhes : undefined }),
+        body: JSON.stringify({
+          postId: id,
+          detalhesExtras: temDetalhes ? detalhes : undefined,
+          estilo: opts?.estilo,
+          preservarImagens: opts?.preservarImagens,
+        }),
       });
       const j = await res.json();
       if (!res.ok || !j.ok) {
@@ -135,10 +147,20 @@ export default function InstagramPostPage() {
       if (j.data.slides_json) setSlidesEdit(j.data.slides_json);
       if (j.data.legenda) setLegendaEdit(j.data.legenda);
       if (j.data.hashtags) setHashtagsEdit(j.data.hashtags.join(" "));
-      setMsg(temDetalhes ? "Re-gerado com seus detalhes incorporados." : "Gerado com sucesso.");
+      setMsg(
+        trocouLinguagem
+          ? "Texto re-gerado na nova linguagem. Imagens mantidas. Lembra de clicar Re-renderizar."
+          : temDetalhes
+          ? "Re-gerado com seus detalhes incorporados."
+          : "Gerado com sucesso."
+      );
       if (temDetalhes) {
         setDetalhesExtras("");
         setMostrandoDetalhes(false);
+      }
+      if (trocouLinguagem) {
+        setNovoEstilo("");
+        setMostrandoTrocarLing(false);
       }
     } catch (e) {
       setMsg("Erro de rede: " + (e instanceof Error ? e.message : String(e)));
@@ -512,6 +534,14 @@ export default function InstagramPostPage() {
                   {mostrandoDetalhes ? "✖ Fechar detalhes" : "✍️ Adicionar detalhes"}
                 </button>
                 <button
+                  onClick={() => setMostrandoTrocarLing(v => !v)}
+                  disabled={gerando}
+                  className="px-3 py-1.5 rounded-xl border border-[#E8740E] text-xs text-[#E8740E] hover:bg-[#FFF5EB] disabled:opacity-50"
+                  title="Re-gera o texto em outra linguagem. Imagens dos slides são preservadas."
+                >
+                  {mostrandoTrocarLing ? "✖ Fechar linguagem" : "🎨 Trocar linguagem"}
+                </button>
+                <button
                   onClick={() => salvarEdicao()}
                   disabled={salvando}
                   className="px-3 py-1.5 rounded-xl border border-[#D2D2D7] text-xs text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50"
@@ -528,6 +558,48 @@ export default function InstagramPostPage() {
               </div>
             )}
           </div>
+
+          {/* Trocar linguagem (preserva imagens) */}
+          {podeEditar && mostrandoTrocarLing && (
+            <div className="bg-[#FFF5EB] border border-[#E8740E]/30 rounded-2xl p-4 mb-4">
+              <h3 className="text-sm font-semibold text-[#1D1D1F] mb-1">🎨 Trocar linguagem do texto</h3>
+              <p className="text-xs text-[#6E6E73] mb-3">
+                Re-gera o texto dos slides em outro estilo de escrita. <strong>As imagens já atribuídas a cada slide ficam preservadas</strong>. Depois clica em Re-renderizar pra atualizar os PNGs.
+              </p>
+              <label className="text-xs font-medium text-[#6E6E73] mb-1 block">Novo estilo</label>
+              <select
+                value={novoEstilo}
+                onChange={e => setNovoEstilo(e.target.value)}
+                disabled={gerando}
+                className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm bg-white focus:outline-none focus:border-[#E8740E] mb-2"
+              >
+                <option value="">-- Escolher --</option>
+                <option value="PADRAO" disabled={post?.estilo === "PADRAO"}>Padrão Tigrão (descontraído + técnico){post?.estilo === "PADRAO" ? " — atual" : ""}</option>
+                <option value="EMANUEL_PESSOA" disabled={post?.estilo === "EMANUEL_PESSOA"}>Emanuel Pessoa (narrativa didática){post?.estilo === "EMANUEL_PESSOA" ? " — atual" : ""}</option>
+                <option value="CARIOCA_DESCONTRAIDO" disabled={post?.estilo === "CARIOCA_DESCONTRAIDO"}>Carioca descontraído (papo de balcão){post?.estilo === "CARIOCA_DESCONTRAIDO" ? " — atual" : ""}</option>
+                <option value="STORYTELLING_PREMIUM" disabled={post?.estilo === "STORYTELLING_PREMIUM"}>Storytelling premium (narrativa Apple Keynote){post?.estilo === "STORYTELLING_PREMIUM" ? " — atual" : ""}</option>
+                <option value="COMPARATIVO_TECNICO" disabled={post?.estilo === "COMPARATIVO_TECNICO"}>Comparativo técnico (dados + veredicto){post?.estilo === "COMPARATIVO_TECNICO" ? " — atual" : ""}</option>
+                <option value="VIRAL_POLEMICO" disabled={post?.estilo === "VIRAL_POLEMICO"}>Viral polêmico (hot-take){post?.estilo === "VIRAL_POLEMICO" ? " — atual" : ""}</option>
+                <option value="EDUCATIVO_DIDATICO" disabled={post?.estilo === "EDUCATIVO_DIDATICO"}>Educativo didático (passo-a-passo){post?.estilo === "EDUCATIVO_DIDATICO" ? " — atual" : ""}</option>
+              </select>
+              <div className="flex gap-2 mt-3 justify-end">
+                <button
+                  onClick={() => { setNovoEstilo(""); setMostrandoTrocarLing(false); }}
+                  disabled={gerando}
+                  className="px-3 py-1.5 rounded-xl border border-[#D2D2D7] text-xs text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => gerar(undefined, { estilo: novoEstilo, preservarImagens: true })}
+                  disabled={gerando || !novoEstilo}
+                  className="px-4 py-1.5 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+                >
+                  {gerando ? "Re-gerando..." : "🎨 Re-gerar texto na nova linguagem"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Adicionar detalhes e re-gerar */}
           {podeEditar && mostrandoDetalhes && (
