@@ -1145,6 +1145,17 @@ export default function VendasPage() {
       status_pagamento: multiDatePagamento
         ? (() => {
             const totalEntries = pagEntries.reduce((s, e) => s + (parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0), 0);
+            // Se ALGUMA parcela tem data futura, a venda nao pode finalizar
+            // automaticamente — vai pra AGUARDANDO (aparece em "Em Andamento")
+            // ate o admin finalizar manualmente quando cobrar tudo. Antes o
+            // sistema finalizava direto so por bater valor total >= preco,
+            // ignorando que parte do dinheiro ainda iria entrar.
+            const hojeISO = hojeBR();
+            const temDataFutura = pagEntries.some(e => {
+              const valor = parseFloat(e.valor.replace(/\./g, "").replace(",", ".")) || 0;
+              return valor > 0 && e.data && e.data > hojeISO;
+            });
+            if (temDataFutura) return "AGUARDANDO";
             return totalEntries >= pPrecoVendido ? "FINALIZADO" : "PROGRAMADA";
           })()
         : vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA")
