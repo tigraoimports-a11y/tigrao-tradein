@@ -1678,10 +1678,20 @@ export default function GerarLinkPage() {
                   onClick={async () => {
                     const d = editDados;
                     const l = editLink;
+                    const extras = Array.isArray(editLinkExtras) ? editLinkExtras.filter(Boolean) : [];
                     const lines: string[] = ["*PEDIDO — TIGRAO IMPORTS*", ""];
-                    if (l.produto) lines.push(`*Produto:* ${l.produto}`);
-                    if (l.cor) lines.push(`*Cor:* ${l.cor}`);
-                    if (l.valor) lines.push(`*Valor:* R$ ${Number(l.valor).toLocaleString("pt-BR")}`);
+                    if (extras.length > 0) {
+                      // Multi-produto: lista cada um. `valor` aqui e o TOTAL (pro
+                      // admin UI nao ha campo individual por produto, so o somado).
+                      if (l.produto) lines.push(`*Produto 1:* ${l.produto}`);
+                      extras.forEach((pe, i) => lines.push(`*Produto ${i + 2}:* ${pe}`));
+                      if (l.cor) lines.push(`*Cor (produto 1):* ${l.cor}`);
+                      if (l.valor) lines.push(`*Valor total:* R$ ${Number(l.valor).toLocaleString("pt-BR")}`);
+                    } else {
+                      if (l.produto) lines.push(`*Produto:* ${l.produto}`);
+                      if (l.cor) lines.push(`*Cor:* ${l.cor}`);
+                      if (l.valor) lines.push(`*Valor:* R$ ${Number(l.valor).toLocaleString("pt-BR")}`);
+                    }
                     if (Number(l.desconto) > 0) lines.push(`*Desconto:* R$ ${Number(l.desconto).toLocaleString("pt-BR")}`);
                     lines.push("");
                     const nome = d.nome || l.cliente_nome;

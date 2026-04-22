@@ -659,12 +659,26 @@ function CompraForm() {
       `*Endereço:* ${enderecoFull}`,
       `*Bairro:* ${bairro}`,
       "",
-      // Produtos
-      `*▸ ${produtosExtras.length > 0 ? "PRODUTOS" : "PRODUTO"}*`,
-      `*Produto 1:* ${produtoFinal}${corSel ? ` — ${corSel}` : ""}${precoFinal > 0 ? ` — R$ ${fmt(precoFinal)}` : ""}`,
-      ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p.nome}${p.preco > 0 ? ` — R$ ${fmt(p.preco)}` : ""}`)),
-      ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
-      ...(descontoParam > 0 || produtosExtras.length > 0 ? [`*Total:* R$ ${fmt(valorBaseFinal)}`] : []),
+      // Produtos — precoFinal e o TOTAL somado (conforme gerar-link envia).
+      // Quando ha extras com preco individual, calcula Produto 1 = total -
+      // soma dos extras. Evita mensagem mostrando valor total na linha do
+      // primeiro produto (ex: "iPhone — R$ 21.294" quando na verdade e a
+      // soma com o Mac Mini).
+      ...(() => {
+        const somaExtras = produtosExtras.reduce((s, p) => s + (Number(p.preco) || 0), 0);
+        const precoP1 = somaExtras > 0 && precoFinal > somaExtras ? precoFinal - somaExtras : precoFinal;
+        const subtotalBruto = precoFinal; // soma de todos sem desconto/troca
+        return [
+          `*▸ ${produtosExtras.length > 0 ? "PRODUTOS" : "PRODUTO"}*`,
+          `*Produto 1:* ${produtoFinal}${corSel ? ` — ${corSel}` : ""}${precoP1 > 0 ? ` — R$ ${fmt(precoP1)}` : ""}`,
+          ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p.nome}${p.preco > 0 ? ` — R$ ${fmt(p.preco)}` : ""}`)),
+          // Subtotal so aparece quando tem mais de um produto — pra deixar
+          // claro o somado antes de descontos/troca.
+          ...(produtosExtras.length > 0 ? [`*Subtotal:* R$ ${fmt(subtotalBruto)}`] : []),
+          ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
+          ...(descontoParam > 0 || produtosExtras.length > 0 ? [`*Total:* R$ ${fmt(valorBaseFinal)}`] : []),
+        ];
+      })(),
       "",
       // Pagamento
       `*▸ PAGAMENTO*`,
