@@ -224,21 +224,59 @@ function CompraForm() {
   // Prioridade: param URL (do gerador de link) > whatsapp_formularios > whatsapp_principal > fallback
   const whatsappFinal = whatsapp || whatsappFormConfig || whatsappPrincipalConfig || WHATSAPP_FORMULARIO;
 
+  // Catálogo oficial de cores por modelo (catalogo_modelo_configs) — cores
+  // teóricas (todas as cores Apple daquele modelo), complementa o estoque real
+  // quando o modelo nao tem peças em estoque no momento.
+  const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
+
   // Fetch products + config
   useEffect(() => {
     Promise.all([
       fetch("/api/produtos").then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/produtos-disponiveis").then(r => r.json()).catch(() => ({ categorias: {} })),
       fetch("/api/tradein-config").then(r => r.json()).catch(() => ({ data: null })),
-    ]).then(([prodRes, catRes, cfgRes]) => {
+      fetch("/api/catalogo-cores").then(r => r.json()).catch(() => ({ modelos: {} })),
+    ]).then(([prodRes, catRes, cfgRes, corRes]) => {
       // /api/produtos retorna array direto (não {data: []})
       if (Array.isArray(prodRes)) setAllProducts(prodRes);
       else if (prodRes.data) setAllProducts(prodRes.data);
       if (catRes.categorias) setCatalogo(catRes.categorias);
       if (cfgRes.data?.whatsapp_formularios) setWhatsappFormConfig(cfgRes.data.whatsapp_formularios);
       if (cfgRes.data?.whatsapp_principal) setWhatsappPrincipalConfig(cfgRes.data.whatsapp_principal);
+      if (corRes?.modelos) setCatalogoCores(corRes.modelos);
     });
   }, []);
+
+  // Cores oficiais do modelo via match por tokens (mesma lógica do /admin/gerar-link).
+  // Ex: "iPhone 17 Pro Max 1TB" matches "iPhone 17 Pro Max" no catálogo.
+  const coresParaProduto = useMemo(() => (nomeProduto: string): string[] => {
+    if (!nomeProduto) return [];
+    if (/Apple Watch Ultra/i.test(nomeProduto)) return [];
+    if (/Pencil|Cable|Cabo|Carregador|Adapter|Hub|Case|Capa|Pelicula/i.test(nomeProduto)) return [];
+    const normGen = (s: string) => s
+      .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
+      .replace(/(\d+)\s*[ºª°]/g, "$1")
+      .replace(/\bGENERATION\b/gi, "GEN")
+      .replace(/\bGERAÇÃO\b/gi, "GEN");
+    const stripNoise = (s: string) => normGen(s)
+      .replace(/\b\d+\s*(GB|TB)\b/gi, "")
+      .replace(/[""\(\)\+\-]/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
+    const tokens = (s: string) => stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t));
+    const prodTokens = new Set(tokens(nomeProduto));
+    let raw: string[] = [];
+    let bestCount = 0;
+    for (const [nome, cores] of Object.entries(catalogoCores)) {
+      const catTokens = tokens(nome);
+      if (catTokens.length === 0) continue;
+      if (catTokens.every(t => prodTokens.has(t)) && catTokens.length > bestCount) {
+        raw = cores;
+        bestCount = catTokens.length;
+      }
+    }
+    return raw;
+  }, [catalogoCores]);
 
   // Auto-fill price when product selected
   useEffect(() => {
@@ -247,23 +285,38 @@ function CompraForm() {
     if (match) setPrecoAuto(match.precoPix);
   }, [produtoInput, allProducts, precoParam]);
 
-  // Fetch cores disponíveis do estoque para o produto selecionado.
-  // Usa MATCH EXATO (startsWith com produto completo) pra evitar misturar cores de
-  // modelos diferentes. Se não achar nada, coresDisponiveis fica vazio e mostramos
-  // input manual pro cliente digitar a cor (ver seção "Escolha a cor").
+  // Monta cores disponíveis combinando 2 fontes:
+  //   1. ESTOQUE (catalogo) — cores reais em estoque, match por startsWith
+  //   2. CATÁLOGO OFICIAL (catalogoCores) — todas as cores Apple do modelo,
+  //      match por tokens (reusa lógica do /admin/gerar-link)
+  // Isso impede o cliente de digitar cor inválida (ex: "ROSA" num iPhone 17
+  // Pro Max). Deduplica pela tradução PT pra nao mostrar "Black Titanium" e
+  // "Titânio Preto" lado a lado — exibe só "TITÂNIO PRETO".
   useEffect(() => {
     const prod = produtoInput || produtoParam;
     if (!prod) { setCoresDisponiveis([]); return; }
-    const cores = new Set<string>();
+
+    const bruto: string[] = [];
+    // 1. Estoque (cor raw do banco, ex: "Titânio Preto")
     for (const items of Object.values(catalogo)) {
       for (const item of items) {
-        if (item.cor && item.produto.startsWith(prod)) {
-          cores.add(item.cor.toUpperCase());
-        }
+        if (item.cor && item.produto.startsWith(prod)) bruto.push(item.cor);
       }
     }
-    setCoresDisponiveis([...cores].sort());
-  }, [produtoInput, produtoParam, catalogo]);
+    // 2. Catálogo (cor EN, ex: "Black Titanium")
+    bruto.push(...coresParaProduto(prod));
+
+    // Dedup por tradução PT uppercase
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of bruto) {
+      const pt = corParaPT(c).toUpperCase().trim();
+      if (!pt || seen.has(pt)) continue;
+      seen.add(pt);
+      out.push(pt);
+    }
+    setCoresDisponiveis(out.sort());
+  }, [produtoInput, produtoParam, catalogo, coresParaProduto]);
 
   // Se auto-detect populou corSel ANTES do cliente tocar no campo, esconde
   // o picker (operador efetivamente preencheu a cor via nome do produto).
@@ -1279,17 +1332,29 @@ function CompraForm() {
                 <p className="text-sm uppercase tracking-wider font-bold mb-2 text-[#E8740E]">
                   ⚠ Escolha a cor do produto *
                 </p>
-                <input
-                  type="text"
-                  value={corSel}
-                  onChange={(e) => {
-                    clienteTocouCorRef.current = true;
-                    setCorSel(e.target.value.toUpperCase());
-                  }}
-                  placeholder="Ex: Preto, Azul, Titânio Preto, Meia-Noite..."
-                  className={inputCls}
-                  autoComplete="off"
-                />
+                {coresDisponiveis.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {coresDisponiveis.map(cor => (
+                      <button key={cor} type="button"
+                        onClick={() => { clienteTocouCorRef.current = true; setCorSel(corSel === cor ? "" : cor); }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                        {cor}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={corSel}
+                    onChange={(e) => {
+                      clienteTocouCorRef.current = true;
+                      setCorSel(e.target.value.toUpperCase());
+                    }}
+                    placeholder="Ex: Preto, Azul, Titânio Preto, Meia-Noite..."
+                    className={inputCls}
+                    autoComplete="off"
+                  />
+                )}
               </div>
             )}
           </>

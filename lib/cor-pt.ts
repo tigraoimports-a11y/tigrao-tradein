@@ -59,6 +59,8 @@ export const COR_EN_TO_PT_SIMPLES: Record<string, string> = {
   "Desert Titanium": "Titânio Deserto",
   "Natural Titanium": "Titânio Natural",
   "White Titanium": "Titânio Branco",
+  "Silver Titanium": "Titânio Prata",
+  "Orange Titanium": "Titânio Laranja",
   "Natural": "Titânio Natural",
 };
 
