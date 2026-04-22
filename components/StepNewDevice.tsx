@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { NewProduct, TradeInConfig, SeminovoCategoria } from "@/lib/types";
-import { SEMINOVO_CATEGORIAS, SEMINOVO_CAT_LABELS } from "@/lib/types";
+import type { NewProduct, TradeInConfig, SeminovoCategoria, SeminovoVariante } from "@/lib/types";
+import { SEMINOVO_CATEGORIAS, SEMINOVO_CAT_LABELS, getSeminovoVariantes } from "@/lib/types";
 import { getUniqueModels, getStoragesForModel, getProductPrice } from "@/lib/sheets";
 import { formatBRL, calculateQuote, getAnyConditionLines, type AnyConditionData, type DeviceType } from "@/lib/calculations";
 import { WHATSAPP_SEMINOVO } from "@/lib/whatsapp-config";
@@ -53,12 +53,13 @@ function getCategory(modelo: string): ProductCategory {
   return "iPhone";
 }
 
-// Defaults usados apenas quando o banco não respondeu ainda
-const SEMINOVOS_DEFAULT: { modelo: string; storages: string[]; ativo: boolean; categoria: SeminovoCategoria }[] = [
-  { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
-  { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true, categoria: "iphone" },
-  { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
-  { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true, categoria: "iphone" },
+// Defaults usados apenas quando o banco não respondeu ainda (todas sem preço
+// → fallback para WhatsApp manual, mesmo comportamento pré-refactor).
+const SEMINOVOS_DEFAULT: { modelo: string; variantes: SeminovoVariante[]; ativo: boolean; categoria: SeminovoCategoria }[] = [
+  { modelo: "iPhone 15 Pro", variantes: [{ storage: "128GB", ativo: true }, { storage: "256GB", ativo: true }], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 15 Pro Max", variantes: [{ storage: "256GB", ativo: true }, { storage: "512GB", ativo: true }], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 16 Pro", variantes: [{ storage: "128GB", ativo: true }, { storage: "256GB", ativo: true }], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 16 Pro Max", variantes: [{ storage: "256GB", ativo: true }], ativo: true, categoria: "iphone" },
 ];
 
 export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, usedColor, whatsappNumber, condition, deviceType, tradeinConfig, usedModel2, usedStorage2, usedColor2, condition2, deviceType2, tradeInValue1, tradeInValue2 }: StepNewDeviceProps) {
@@ -75,16 +76,24 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   // porque os dois universos são independentes (mesma divisão do admin).
   const [semiCat, setSemiCat] = useState<SeminovoCategoria | "">("");
 
-  // Normaliza a lista vinda do DB com categoria (backfill: item sem categoria → iphone).
-  // Inclui apenas ativos, já prontos pra uso.
+  // Normaliza a lista vinda do DB (backfill: categoria ausente → iphone) e já
+  // converte legado `storages[]` em `variantes[]` via helper. Filtra:
+  //  • Modelo inativo → oculto
+  //  • Variante inativa → removida
+  //  • Modelo sem variante ativa → oculto (sem storage pra escolher)
   const seminovosAll = useMemo(() => {
     const raw = tradeinConfig?.seminovos?.filter((s) => s.ativo);
     const src = raw && raw.length > 0 ? raw : SEMINOVOS_DEFAULT;
-    return src.map((s) => ({
-      modelo: s.modelo,
-      storages: s.storages,
-      categoria: ((s as { categoria?: string }).categoria as SeminovoCategoria) || "iphone",
-    }));
+    return src
+      .map((s) => {
+        const variantes = getSeminovoVariantes(s).filter((v) => v.ativo !== false && v.storage.trim());
+        return {
+          modelo: s.modelo,
+          variantes,
+          categoria: ((s as { categoria?: string }).categoria as SeminovoCategoria) || "iphone",
+        };
+      })
+      .filter((s) => s.variantes.length > 0);
   }, [tradeinConfig]);
 
   // Categorias com ao menos 1 seminovo ativo (as únicas abas clicáveis).
@@ -355,23 +364,58 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
             </Sec>
           )}
 
-          {semiModel && (
-            <Sec title="Armazenamento">
-              <div className="flex gap-2 flex-wrap">
-                {seminovos.find(s => s.modelo === semiModel)?.storages.map((st) => (
-                  <button key={st} onClick={() => setSemiStorage(st)}
-                    className="flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200"
-                    style={semiStorage === st
-                      ? { backgroundColor: "var(--ti-accent-light)", color: "var(--ti-accent-text)", border: "1px solid var(--ti-accent)" }
-                      : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }}>
-                    {st}
-                  </button>
-                ))}
-              </div>
-            </Sec>
-          )}
+          {semiModel && (() => {
+            const variantes = seminovos.find(s => s.modelo === semiModel)?.variantes || [];
+            return (
+              <Sec title="Armazenamento">
+                <div className="flex gap-2 flex-wrap">
+                  {variantes.map((v) => (
+                    <button key={v.storage} onClick={() => setSemiStorage(v.storage)}
+                      className="flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 flex flex-col items-center gap-1"
+                      style={semiStorage === v.storage
+                        ? { backgroundColor: "var(--ti-accent-light)", color: "var(--ti-accent-text)", border: "1px solid var(--ti-accent)" }
+                        : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }}>
+                      <span className="font-semibold">{v.storage}</span>
+                      {typeof v.preco === "number" && (
+                        <span className="text-[12px] font-normal" style={{ opacity: 0.7 }}>{formatBRL(v.preco)}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </Sec>
+            );
+          })()}
 
-          {semiModel && semiStorage && (
+          {semiModel && semiStorage && (() => {
+            // Busca a variante selecionada pra decidir o fluxo: preço definido
+            // → orçamento automático (onNext → StepQuote); senão → WhatsApp.
+            const selectedVariante = seminovos
+              .find((s) => s.modelo === semiModel)?.variantes
+              .find((v) => v.storage === semiStorage);
+            const precoAuto = typeof selectedVariante?.preco === "number" ? selectedVariante.preco : null;
+            if (precoAuto !== null) {
+              // Orçamento automático — envia pro StepQuote com preço conhecido.
+              // O marker "SEMINOVO" no modelo permite ao StepQuote ajustar a
+              // mensagem (garantia 3 meses, sem "lacrado na caixa").
+              return (
+                <div className="space-y-3 animate-fadeIn">
+                  <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
+                    <p className="text-[13px] mb-2" style={{ color: "var(--ti-muted)" }}>Voce selecionou:</p>
+                    <p className="text-[18px] font-bold" style={{ color: "var(--ti-text)" }}>{semiModel} {semiStorage}</p>
+                    <p className="text-[12px] mt-1" style={{ color: "var(--ti-accent)" }}>SEMINOVO</p>
+                    <p className="text-[16px] font-bold mt-2" style={{ color: "var(--ti-text)" }}>{formatBRL(precoAuto)}</p>
+                  </div>
+                  <button
+                    onClick={() => onNext({ newModel: `${semiModel} SEMINOVO`, newStorage: semiStorage, newPrice: precoAuto })}
+                    className="w-full py-4 rounded-2xl text-[15px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
+                    style={{ backgroundColor: "var(--ti-accent)" }}>
+                    Ver cotação
+                  </button>
+                </div>
+              );
+            }
+            // Fluxo WhatsApp manual — variante sem preço cadastrado.
+            return (
             <div className="space-y-3 animate-fadeIn">
               <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
                 <p className="text-[13px] mb-2" style={{ color: "var(--ti-muted)" }}>Voce selecionou:</p>
@@ -435,7 +479,8 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                 Consultar no WhatsApp
               </button>
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
