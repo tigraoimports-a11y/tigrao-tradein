@@ -42,11 +42,14 @@ interface BodyIn {
   numero?: string;
   complemento?: string;
   bairro?: string;
-  // Produto
+  // Produto principal
   produto: string;
   cor?: string;
   preco: number;
   desconto?: number;
+  // Multi-produto: quando link foi gerado com produto2/3... no /admin/gerar-link,
+  // cada extra vira uma venda separada com o mesmo grupo_id.
+  produtosExtras?: Array<{ nome: string; preco: number }>;
   // Pagamento
   formaPagamento?: string;
   parcelas?: string | number;
@@ -153,13 +156,15 @@ export async function POST(req: NextRequest) {
   const trocaBateria = extrairBateria(body.trocaCondicao);
   const trocaBateria2 = extrairBateria(body.trocaCondicao2);
 
-  // Payload canônico pra inserir/atualizar em vendas
-  const payload: Record<string, unknown> = {
+  const extras = Array.isArray(body.produtosExtras) ? body.produtosExtras.filter(p => p?.nome) : [];
+  const temExtras = extras.length > 0;
+
+  // Dados compartilhados por todas as vendas do grupo (cliente/pagamento/entrega)
+  const dadosComuns: Record<string, unknown> = {
     short_code: body.shortCode,
     status_pagamento: "FORMULARIO_PREENCHIDO",
     tipo,
     data: hojeStr,
-    // Cliente
     cliente: body.nome,
     cpf: body.pessoa === "PJ" ? null : (cpfDigits || null),
     cnpj: body.pessoa === "PJ" ? (cnpjDigits || null) : null,
@@ -167,15 +172,22 @@ export async function POST(req: NextRequest) {
     email: body.email || null,
     endereco: enderecoFull || null,
     cep: body.cep || null,
-    // Produto — cor vai concatenada no nome (ex: "iPhone 17 Pro Max 1TB ROSA"),
-    // tabela vendas não tem coluna `cor` separada (ao contrário de link_compras).
-    produto: body.cor ? `${body.produto} ${String(body.cor).toUpperCase()}`.trim() : body.produto,
-    preco_vendido: valorLiquido,
-    // Pagamento
     forma,
     banco,
     recebimento,
     qnt_parcelas: forma === "CARTAO" ? parcelasNum : 1,
+    origem: "FORMULARIO",
+    origem_detalhe: body.origem || null,
+    vendedor: body.vendedor || null,
+    estoque_id: null,
+  };
+
+  // Produto principal: recebe o desconto, troca e sinal_antecipado.
+  // Extras: só produto/preço. Admin soma tudo ao exibir o grupo.
+  const payloadPrincipal: Record<string, unknown> = {
+    ...dadosComuns,
+    produto: body.cor ? `${body.produto} ${String(body.cor).toUpperCase()}`.trim() : body.produto,
+    preco_vendido: valorLiquido,
     sinal_antecipado: entradaPixNum > 0 ? entradaPixNum : null,
     // Troca (aparelho 1) — admin lê produto_na_troca como VALOR MONETÁRIO em
     // string (não "SIM"/"NAO"). Mantemos troca_valor também pra contratos/reports.
@@ -198,59 +210,66 @@ export async function POST(req: NextRequest) {
     troca_caixa2: body.trocaCaixa2 === true ? "SIM" : (body.trocaCaixa2 === false ? "NAO" : null),
     troca_serial2: body.trocaSerial2 || null,
     troca_imei2: body.trocaImei2 || null,
-    // Origem canônica: "FORMULARIO" (constraint da tabela vendas).
-    // O origem bruto que o cliente respondeu (Anúncio/Story/Indicação/etc) fica
-    // guardado em `origem_detalhe` pro admin ver na aba Formulários Preenchidos.
-    origem: "FORMULARIO",
-    origem_detalhe: body.origem || null,
-    vendedor: body.vendedor || null,
-    // estoque_id: NULL por design — equipe vincula depois na aba Formulários Preenchidos
-    estoque_id: null,
   };
 
-  // Deduplicação: já existe venda com esse short_code?
-  const { data: existente } = await supabase
+  // Gera grupo_id só quando há extras — caso único segue sem grupo pra não
+  // mexer em vendas antigas que não usam grupo_id.
+  const grupoId = temExtras ? (globalThis.crypto?.randomUUID?.() ?? `grp_${Date.now()}_${Math.random().toString(36).slice(2,10)}`) : null;
+  if (grupoId) payloadPrincipal.grupo_id = grupoId;
+
+  const payloadsExtras = extras.map(p => ({
+    ...dadosComuns,
+    produto: p.nome,
+    preco_vendido: Number(p.preco) || 0,
+    grupo_id: grupoId,
+    produto_na_troca: null,
+  }));
+
+  // Idempotência: se já existem vendas FORMULARIO_PREENCHIDO desse short_code,
+  // apaga e reinsere. Se existir venda em outro status, mantém e pula (equipe
+  // já moveu pra AGUARDANDO/FINALIZADO).
+  const { data: existentes } = await supabase
     .from("vendas")
     .select("id, status_pagamento")
-    .eq("short_code", body.shortCode)
-    .maybeSingle();
+    .eq("short_code", body.shortCode);
 
-  if (existente) {
-    // Só atualiza se ainda está em rascunho. Se equipe já moveu pra
-    // AGUARDANDO/FINALIZADO, não sobrescreve o trabalho deles.
-    if (existente.status_pagamento !== "FORMULARIO_PREENCHIDO") {
-      return NextResponse.json({
-        ok: true,
-        vendaId: existente.id,
-        skipped: true,
-        reason: `Venda já está em status ${existente.status_pagamento} — não atualizado.`,
-      });
+  const jaProcessado = existentes?.find(v => v.status_pagamento !== "FORMULARIO_PREENCHIDO");
+  if (jaProcessado) {
+    return NextResponse.json({
+      ok: true,
+      vendaId: jaProcessado.id,
+      skipped: true,
+      reason: `Venda já está em status ${jaProcessado.status_pagamento} — não atualizado.`,
+    });
+  }
+  const idsAntigos = (existentes || []).map(v => v.id);
+  if (idsAntigos.length > 0) {
+    const { error: delErr } = await supabase.from("vendas").delete().in("id", idsAntigos);
+    if (delErr) {
+      console.error("[vendas/from-formulario] delete err:", delErr);
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
     }
-    const { error: updErr } = await supabase
-      .from("vendas")
-      .update(payload)
-      .eq("id", existente.id);
-    if (updErr) {
-      console.error("[vendas/from-formulario] update err:", updErr);
-      return NextResponse.json({ error: updErr.message }, { status: 500 });
-    }
-    const contrato = await gerarContratoSeTiverTroca(supabase, body.shortCode, body.trocaProduto);
-    return NextResponse.json({ ok: true, vendaId: existente.id, action: "updated", contrato });
   }
 
-  const { data: nova, error: insErr } = await supabase
+  const todosPayloads = [payloadPrincipal, ...payloadsExtras];
+  const { data: inseridas, error: insErr } = await supabase
     .from("vendas")
-    .insert(payload)
-    .select("id")
-    .single();
-
-  if (insErr || !nova) {
+    .insert(todosPayloads)
+    .select("id");
+  if (insErr || !inseridas || inseridas.length === 0) {
     console.error("[vendas/from-formulario] insert err:", insErr);
     return NextResponse.json({ error: insErr?.message || "Erro ao criar venda" }, { status: 500 });
   }
 
   const contrato = await gerarContratoSeTiverTroca(supabase, body.shortCode, body.trocaProduto);
-  return NextResponse.json({ ok: true, vendaId: nova.id, action: "created", contrato });
+  return NextResponse.json({
+    ok: true,
+    vendaId: inseridas[0].id,
+    vendaIds: inseridas.map(v => v.id),
+    grupoId,
+    action: idsAntigos.length > 0 ? "replaced" : "created",
+    contrato,
+  });
 }
 
 // Helper: dispara termo de procedência só se a venda tem troca. Erros são
