@@ -1843,9 +1843,14 @@ function CompraForm() {
                       </div>
                     )}
                     {url && ocr.state === "fail" && (
-                      <p className="text-xs text-amber-700 mb-1.5">
-                        ⚠️ Não consegui ler o {tipoLabel} do print. Digite manualmente abaixo.
-                      </p>
+                      <div className="text-xs text-amber-700 mb-1.5">
+                        <p>⚠️ Não consegui ler o {tipoLabel} do print. Digite manualmente abaixo.</p>
+                        {ocr.error && (
+                          <p className="text-[10px] text-amber-600 mt-0.5 opacity-80 font-mono break-all">
+                            (debug: {ocr.error})
+                          </p>
+                        )}
+                      </div>
                     )}
                     {url && isManual && (
                       <input
