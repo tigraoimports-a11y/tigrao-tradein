@@ -155,9 +155,9 @@ export async function POST(req: NextRequest) {
     email: body.email || null,
     endereco: enderecoFull || null,
     cep: body.cep || null,
-    // Produto
-    produto: body.produto,
-    cor: body.cor || null,
+    // Produto — cor vai concatenada no nome (ex: "iPhone 17 Pro Max 1TB ROSA"),
+    // tabela vendas não tem coluna `cor` separada (ao contrário de link_compras).
+    produto: body.cor ? `${body.produto} ${String(body.cor).toUpperCase()}`.trim() : body.produto,
     preco_vendido: valorLiquido,
     // Pagamento
     forma,
