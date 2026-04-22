@@ -179,7 +179,7 @@ export function formatProdutoDisplay(p: {
  * Gera chave de agrupamento por modelo (sem cor) — compartilhado entre estoque e vendas.
  * Inclui tamanho/conectividade pra Watch, RAM+SSD pra MacBook, storage pra iPhone/iPad.
  */
-export function getModeloBase(produto: string, categoria: string): string {
+export function getModeloBase(produto: string, categoria: string, observacao?: string | null): string {
   const p = (produto || "").toUpperCase().trim();
   let baseCat = getBaseCat(categoria || "");
   if (!baseCat || !["IPHONES","IPADS","MACBOOK","MAC_MINI","APPLE_WATCH","AIRPODS","ACESSORIOS"].includes(baseCat)) {
@@ -283,6 +283,14 @@ export function getModeloBase(produto: string, categoria: string): string {
       return `AirPods ${gen}`;
     }
     return "AirPods";
+  }
+  if (baseCat === "ACESSORIOS") {
+    // Tela (ex: 11", 13") vem na observacao como [TELA:X"] — inclui no nome base
+    // pra separar variantes do mesmo modelo (Magic Keyboard 11" != 13")
+    const telaMatch = observacao?.match(/\[TELA:([^\]]+)\]/);
+    const tela = telaMatch ? ` ${telaMatch[1].trim().replace(/"?$/, '"')}` : "";
+    const nome = (produto || "").replace(/\s*[-–]\s*$/, "").trim();
+    return `${nome}${tela}`;
   }
   return (produto || "").replace(/\s*[-–]\s*$/, "").trim();
 }

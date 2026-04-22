@@ -2718,7 +2718,7 @@ export default function EstoquePage() {
   const reposicaoCount = (() => {
     const groups: Record<string, { qntEstoque: number; qntACaminho: number; min: number | null }> = {};
     for (const p of novos) {
-      const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+      const base = getModeloBase(p.produto, p.categoria, p.observacao).toUpperCase();
       const cor = (p.cor || "").toUpperCase();
       const key = `${base}|||${cor}`;
       if (!groups[key]) groups[key] = { qntEstoque: 0, qntACaminho: 0, min: null };
@@ -2728,7 +2728,7 @@ export default function EstoquePage() {
       }
     }
     for (const p of aCaminho) {
-      const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+      const base = getModeloBase(p.produto, p.categoria, p.observacao).toUpperCase();
       const cor = (p.cor || "").toUpperCase();
       const key = `${base}|||${cor}`;
       if (!groups[key]) groups[key] = { qntEstoque: 0, qntACaminho: 0, min: null };
@@ -3536,7 +3536,7 @@ export default function EstoquePage() {
 
         // Helper pra adicionar item ao acumulador
         const addToAcc = (p: ProdutoEstoque, isACaminho: boolean) => {
-          const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+          const base = getModeloBase(p.produto, p.categoria, p.observacao).toUpperCase();
           const cat = p.categoria || "OUTROS";
           const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString().trim();
           if (!corRaw) return;
