@@ -5605,8 +5605,10 @@ export default function VendasPage() {
                                           ✏️ Editar
                                         </button>}
                                         {/* Enviar pra Assinar Digital — so quando ha troca. Botao "Gerar Termo (PDF)" foi
-                                            removido pois a assinatura digital via ZapSign substituiu o fluxo de papel. */}
+                                            removido pois a assinatura digital via ZapSign substituiu o fluxo de papel.
+                                            Esconde o botao quando o termo ja foi assinado — so aparece a badge "Termo Assinado". */}
                                         {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (<>
+                                          {termosPorVenda[v.id]?.status !== "ASSINADO" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -5684,6 +5686,7 @@ export default function VendasPage() {
                                           >
                                             📱 Enviar pra Assinar Digital
                                           </button>
+                                          )}
                                           {/* Badge de status do termo de procedencia (aparece se foi enviado) */}
                                           {(() => {
                                             const termo = termosPorVenda[v.id];
