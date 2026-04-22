@@ -174,21 +174,104 @@ export async function POST(req: NextRequest) {
 }
 
 // ============================================================
-// OCR via Claude Haiku Vision
+// OCR via Claude Vision
 // ============================================================
 // Recebe o buffer da imagem + tipo (serial|imei) e retorna o número
 // extraído da tela "Ajustes > Geral > Sobre" do iPhone.
 //
-// Modelo: claude-haiku-4-5 (rápido, barato ~$0.01/imagem, suficiente
-// pra leitura de números de tela Apple com alta legibilidade).
+// Modelo primário: Haiku 4.5 (barato, ~$0.01/imagem).
+// Fallback: Sonnet 4.6 (se Haiku retornar NAO_ENCONTRADO) — prints
+// amassados, contraste ruim ou resolução baixa às vezes confundem Haiku.
 //
-// Fallback: se falhar (API fora, imagem ilegível, timeout), retorna
-// { ok: false } e o frontend permite o cliente digitar manualmente.
+// Logs detalhados em [upload-print:ocr] pra debugar via Vercel logs.
+// Fallback final: se ambos falharem, frontend permite digitar manualmente.
 // ============================================================
 interface ExtractResult {
   ok: boolean;
   value?: string;
   error?: string;
+  rawResponse?: string;
+}
+
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+const SONNET_MODEL = "claude-sonnet-4-6";
+
+function buildPrompt(tipo: "serial" | "imei"): string {
+  if (tipo === "imei") {
+    return `Você está analisando uma captura de tela do iPhone (tela "Ajustes > Geral > Sobre").
+
+Sua tarefa: extrair o **IMEI** do aparelho.
+
+Como o IMEI aparece na tela:
+- Sempre 15 dígitos numéricos (sem letras)
+- Rótulo "IMEI" ou "IMEI 1" (aparelho principal) — se tiver "IMEI2", IGNORE, pegue o primeiro
+- Pode aparecer com espaços separando grupos (ex: "35 799960 736598 0"). Retorne concatenado sem espaços.
+- Fica na seção "Pessoal" ou similar, perto de "Operadora", "ICCID"
+
+Responda APENAS os 15 dígitos do IMEI principal, sem nenhum outro texto, label, explicação ou formatação. Exemplo de resposta correta: 357999607365980
+
+Se a imagem NÃO contém a tela Ajustes>Sobre do iPhone, ou se nenhum IMEI está visível/legível, responda exatamente: NAO_ENCONTRADO`;
+  }
+  return `Você está analisando uma captura de tela do iPhone (tela "Ajustes > Geral > Sobre").
+
+Sua tarefa: extrair o **Número de Série** do aparelho.
+
+Como o Número de Série aparece na tela:
+- Código alfanumérico (letras maiúsculas e números) com 10-12 caracteres (ex: "KWRL2WNXNH", "F2LMD0P9P27L")
+- Rótulo "Número de Série" ou "Serial Number"
+- Fica no mesmo card que "Nome", "Versão do iOS", "Nome do Modelo", "Nº do Modelo"
+- NÃO é o "Nº do Modelo" (que tem formato diferente, ex: "MFXL4LL/A")
+
+Responda APENAS o Número de Série, em MAIÚSCULAS, sem espaços, traços ou qualquer outro texto. Exemplo de resposta correta: KWRL2WNXNH
+
+Se a imagem NÃO contém a tela Ajustes>Sobre do iPhone, ou se o Número de Série não está visível/legível, responda exatamente: NAO_ENCONTRADO`;
+}
+
+async function callClaude(
+  client: Anthropic,
+  model: string,
+  base64: string,
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+  prompt: string
+): Promise<string> {
+  const response = await client.messages.create({
+    model,
+    max_tokens: 100,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+  });
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+}
+
+function validateAndSanitize(text: string, tipo: "serial" | "imei"): ExtractResult {
+  if (!text || /NAO[_\s]?ENCONTRADO/i.test(text)) {
+    return { ok: false, error: "Claude não conseguiu identificar o número no print", rawResponse: text };
+  }
+  const cleaned = text.replace(/[\s\-.]/g, "");
+  if (tipo === "imei") {
+    const digits = cleaned.replace(/\D/g, "");
+    if (digits.length < 14 || digits.length > 17) {
+      return { ok: false, error: `IMEI com ${digits.length} dígitos (esperado 15)`, rawResponse: text };
+    }
+    return { ok: true, value: digits };
+  }
+  // serial: alfanumérico, tipicamente 10-12 chars
+  if (cleaned.length < 6 || cleaned.length > 20) {
+    return { ok: false, error: `Serial com ${cleaned.length} chars (fora do esperado 10-12)`, rawResponse: text };
+  }
+  // Normaliza pra maiúsculas (Apple usa serial em caps)
+  return { ok: true, value: cleaned.toUpperCase() };
 }
 
 async function extractNumberFromPrint(
@@ -196,74 +279,55 @@ async function extractNumberFromPrint(
   mediaType: string,
   tipo: "serial" | "imei"
 ): Promise<ExtractResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.error("[upload-print:ocr] ANTHROPIC_API_KEY não configurado");
+    return { ok: false, error: "ANTHROPIC_API_KEY não configurado no ambiente" };
+  }
+
+  const supportedTypes: Record<string, "image/jpeg" | "image/png" | "image/gif" | "image/webp"> = {
+    "image/jpeg": "image/jpeg",
+    "image/jpg": "image/jpeg",
+    "image/png": "image/png",
+    "image/gif": "image/gif",
+    "image/webp": "image/webp",
+  };
+  const mt = supportedTypes[mediaType.toLowerCase()] || "image/png";
+  const base64 = buffer.toString("base64");
+  const client = new Anthropic({ apiKey });
+  const prompt = buildPrompt(tipo);
+
+  // Tentativa 1: Haiku 4.5 (barato e rápido)
+  let haikuText = "";
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return { ok: false, error: "ANTHROPIC_API_KEY não configurado" };
-    }
-
-    // Claude aceita apenas image/jpeg, image/png, image/gif, image/webp
-    const supportedTypes: Record<string, "image/jpeg" | "image/png" | "image/gif" | "image/webp"> = {
-      "image/jpeg": "image/jpeg",
-      "image/jpg": "image/jpeg",
-      "image/png": "image/png",
-      "image/gif": "image/gif",
-      "image/webp": "image/webp",
-    };
-    const mt = supportedTypes[mediaType.toLowerCase()] || "image/png";
-
-    const base64 = buffer.toString("base64");
-    const client = new Anthropic({ apiKey });
-
-    const prompt = tipo === "imei"
-      ? `Esta é uma captura de tela do iPhone na tela "Ajustes > Geral > Sobre". Extraia APENAS o IMEI (15 dígitos, geralmente aparece como "IMEI" ou "IMEI 1"). Retorne SOMENTE os 15 dígitos sem espaços, traços, pontos ou qualquer outro caractere. Se houver múltiplos IMEIs, retorne o primeiro. Se não conseguir identificar o IMEI com certeza, retorne exatamente "NAO_ENCONTRADO".`
-      : `Esta é uma captura de tela do iPhone na tela "Ajustes > Geral > Sobre". Extraia APENAS o Número de Série (aparece como "Número de Série" ou "Serial Number"). Retorne SOMENTE o código alfanumérico (letras e números, sem espaços ou traços). Se não conseguir identificar o Número de Série com certeza, retorne exatamente "NAO_ENCONTRADO".`;
-
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 100,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: mt, data: base64 },
-            },
-            { type: "text", text: prompt },
-          ],
-        },
-      ],
-    });
-
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
-
-    if (!text || text === "NAO_ENCONTRADO") {
-      return { ok: false, error: "Não foi possível ler o número do print" };
-    }
-
-    // Sanitiza: remove espaços, traços, pontos
-    const cleaned = text.replace(/[\s\-.]/g, "");
-
-    // Validação mínima por tipo
-    if (tipo === "imei") {
-      const digits = cleaned.replace(/\D/g, "");
-      if (digits.length < 14 || digits.length > 17) {
-        return { ok: false, error: `IMEI com ${digits.length} dígitos (esperado 15)` };
-      }
-      return { ok: true, value: digits };
-    }
-    // serial: alfanumérico, tipicamente 10-12 chars
-    if (cleaned.length < 6 || cleaned.length > 20) {
-      return { ok: false, error: `Serial com ${cleaned.length} chars (fora do esperado)` };
-    }
-    return { ok: true, value: cleaned };
+    haikuText = await callClaude(client, HAIKU_MODEL, base64, mt, prompt);
+    console.log(`[upload-print:ocr] haiku ${tipo} response:`, JSON.stringify(haikuText));
+    const result = validateAndSanitize(haikuText, tipo);
+    if (result.ok) return result;
   } catch (err) {
-    console.error("[upload-print:ocr]", err);
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[upload-print:ocr] haiku ${tipo} FAIL:`, msg);
+    // Se foi erro de modelo não existir, tenta direto Sonnet. Outros erros sobem também pra tentar.
+  }
+
+  // Tentativa 2 (fallback): Sonnet 4.6 — mais poderoso, ~2x o custo
+  try {
+    const sonnetText = await callClaude(client, SONNET_MODEL, base64, mt, prompt);
+    console.log(`[upload-print:ocr] sonnet ${tipo} response:`, JSON.stringify(sonnetText));
+    const result = validateAndSanitize(sonnetText, tipo);
+    if (result.ok) return result;
+    return {
+      ok: false,
+      error: `Haiku e Sonnet falharam. Sonnet disse: "${sonnetText.slice(0, 80)}"`,
+      rawResponse: sonnetText,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[upload-print:ocr] sonnet ${tipo} FAIL:`, msg);
+    return {
+      ok: false,
+      error: `Erro de API: ${msg}. Haiku disse: "${haikuText.slice(0, 80)}"`,
+      rawResponse: haikuText,
+    };
   }
 }
