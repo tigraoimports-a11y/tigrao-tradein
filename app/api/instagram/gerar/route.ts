@@ -252,7 +252,7 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   try {
     const body = await req.json();
-    const { postId } = body;
+    const { postId, detalhesExtras } = body as { postId?: string; detalhesExtras?: string };
     if (!postId) return NextResponse.json({ error: "postId obrigatório" }, { status: 400 });
 
     const { data: post, error: fetchErr } = await supabase
@@ -267,7 +267,23 @@ export async function POST(req: NextRequest) {
     await supabase.from("instagram_posts").update({ status: "GERANDO", erro: null, updated_at: new Date().toISOString() }).eq("id", postId);
 
     const systemPrompt = buildSystemPrompt(post.tipo, post.numero_slides, post.estilo || "PADRAO");
-    const userPrompt = `Tema do post: "${post.tema}"\n\nPesquise, verifique os fatos e monte o carrossel. Chame salvar_post no final.`;
+
+    const detalhesTrim = (detalhesExtras || "").trim();
+    const temDetalhes = detalhesTrim.length > 0 && !!post.slides_json && Array.isArray(post.slides_json) && post.slides_json.length > 0;
+
+    const userPrompt = temDetalhes
+      ? `Tema do post: "${post.tema}"
+
+CARROSSEL ATUAL (já gerado anteriormente — use como base, mantenha o que está bom):
+${JSON.stringify({ slides: post.slides_json, legenda: post.legenda, hashtags: post.hashtags }, null, 2)}
+
+INFORMAÇÕES ADICIONAIS QUE O USUÁRIO QUER INCLUIR (OBRIGATÓRIO incorporar no carrossel refeito — não omita):
+"""
+${detalhesTrim}
+"""
+
+Refaça o carrossel incorporando as informações adicionais acima. Mantenha a estrutura, tom e fatos já verificados, mas ajuste/expanda o conteúdo para incluir os pontos trazidos pelo usuário. Pode reorganizar slides se fizer sentido. Continue seguindo as regras de fact-check (web_search se precisar validar algum fato novo trazido pelo usuário). Chame salvar_post no final.`
+      : `Tema do post: "${post.tema}"\n\nPesquise, verifique os fatos e monte o carrossel. Chame salvar_post no final.`;
 
     const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }];
 
