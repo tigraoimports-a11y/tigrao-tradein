@@ -1678,11 +1678,34 @@ export default function GerarLinkPage() {
                   onClick={async () => {
                     const d = editDados;
                     const l = editLink;
+                    const extras = Array.isArray(editLinkExtras) ? editLinkExtras.filter(Boolean) : [];
+                    // Puxa precos individuais do carrinho (se existirem) pra
+                    // mostrar 'Produto N - R$ X'. Se o carrinho nao foi usado
+                    // (schema antigo ou edicao manual), so tem l.valor (total).
+                    const precosCarrinho = carrinhoLink.length > 0 ? carrinhoLink.map(c => c.preco || 0) : [];
+                    const valorTotal = Number(l.valor) || 0;
+                    const descontoNum = Number(l.desconto) || 0;
+                    const trocaTotalNum = (Number(l.troca_valor) || 0) + (Number(l.troca_valor2) || 0);
+                    const valorFinal = Math.max(valorTotal - descontoNum - trocaTotalNum, 0);
+                    const somaExtras = precosCarrinho.slice(1).reduce((s, p) => s + p, 0);
+                    const precoP1 = precosCarrinho[0] ?? (somaExtras > 0 ? valorTotal - somaExtras : valorTotal);
+
                     const lines: string[] = ["*PEDIDO — TIGRAO IMPORTS*", ""];
-                    if (l.produto) lines.push(`*Produto:* ${l.produto}`);
-                    if (l.cor) lines.push(`*Cor:* ${l.cor}`);
-                    if (l.valor) lines.push(`*Valor:* R$ ${Number(l.valor).toLocaleString("pt-BR")}`);
-                    if (Number(l.desconto) > 0) lines.push(`*Desconto:* R$ ${Number(l.desconto).toLocaleString("pt-BR")}`);
+                    const fmtBR = (n: number) => Number(n).toLocaleString("pt-BR");
+                    if (extras.length > 0) {
+                      if (l.produto) lines.push(`*Produto 1:* ${l.produto}${l.cor ? ` — ${l.cor}` : ""}${precoP1 > 0 ? ` — R$ ${fmtBR(precoP1)}` : ""}`);
+                      extras.forEach((pe, i) => {
+                        const pExtra = precosCarrinho[i + 1] || 0;
+                        lines.push(`*Produto ${i + 2}:* ${pe}${pExtra > 0 ? ` — R$ ${fmtBR(pExtra)}` : ""}`);
+                      });
+                      if (valorTotal > 0) lines.push(`*Subtotal:* R$ ${fmtBR(valorTotal)}`);
+                    } else {
+                      if (l.produto) lines.push(`*Produto:* ${l.produto}${l.cor ? ` — ${l.cor}` : ""}${valorTotal > 0 ? ` — R$ ${fmtBR(valorTotal)}` : ""}`);
+                    }
+                    if (descontoNum > 0) lines.push(`*Desconto:* - R$ ${fmtBR(descontoNum)}`);
+                    if (descontoNum > 0 || extras.length > 0 || trocaTotalNum > 0) {
+                      lines.push(`*Total com desconto:* R$ ${fmtBR(valorFinal)}`);
+                    }
                     lines.push("");
                     const nome = d.nome || l.cliente_nome;
                     if (nome) lines.push(`*Cliente:* ${nome}`);
