@@ -1493,34 +1493,43 @@ export default function VendasPage() {
           // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa)
           const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
-          let comprovanteDistribuido = 0;
           let vendidoDistribuido = 0;
           let pixDistribuido = 0;
           let especieDistribuido = 0;
+          // Passo 1: distribuir preco_vendido, entrada_pix, entrada_especie proporcional ao custo
           for (let i = 0; i < payloads.length; i++) {
             const custoItem = Number(payloads[i].custo || 0);
             const proporcao = custoItem / totalCusto;
 
             if (i === payloads.length - 1) {
               // Last item gets the remainder (avoids rounding errors)
-              payloads[i].valor_comprovante = Math.round(comprovanteTotal - comprovanteDistribuido);
               payloads[i].preco_vendido = Math.round(totalRecebido - vendidoDistribuido);
               payloads[i].entrada_pix = Math.round((gEntradaPix - pixDistribuido) * 100) / 100;
               payloads[i].entrada_especie = Math.round((gEntradaEspecie - especieDistribuido) * 100) / 100;
             } else {
-              const compProporcional = Math.round(comprovanteTotal * proporcao);
               const vendidoProporcional = Math.round(totalRecebido * proporcao);
               const pixProporcional = Math.round(gEntradaPix * proporcao * 100) / 100;
               const especieProporcional = Math.round(gEntradaEspecie * proporcao * 100) / 100;
-              payloads[i].valor_comprovante = compProporcional;
               payloads[i].preco_vendido = vendidoProporcional;
               payloads[i].entrada_pix = pixProporcional;
               payloads[i].entrada_especie = especieProporcional;
-              comprovanteDistribuido += compProporcional;
               vendidoDistribuido += vendidoProporcional;
               pixDistribuido += pixProporcional;
               especieDistribuido += especieProporcional;
             }
+          }
+          // Passo 2: valor_comprovante por produto = preco - troca_do_produto - pix - especie
+          // (troca pertence a UM produto específico, não pode ser distribuída; comprovante fecha a conta)
+          // Se forma é cartão com taxa, converte líquido -> bruto
+          for (let i = 0; i < payloads.length; i++) {
+            const preco = Number(payloads[i].preco_vendido || 0);
+            const troca = parseFloat(String(payloads[i].produto_na_troca || "0")) || 0;
+            const pix = Number(payloads[i].entrada_pix || 0);
+            const esp = Number(payloads[i].entrada_especie || 0);
+            const compLiquido = preco - troca - pix - esp;
+            payloads[i].valor_comprovante = gTaxa > 0 && compLiquido > 0
+              ? Math.round(compLiquido / (1 - gTaxa / 100))
+              : Math.max(0, Math.round(compLiquido));
           }
         }
       }
@@ -1579,32 +1588,40 @@ export default function VendasPage() {
               // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa)
               const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
-              let comprovanteDistribuido = 0;
               let vendidoDistribuido = 0;
               let pixDistribuido = 0;
               let especieDistribuido = 0;
+              // Passo 1: distribuir preco_vendido, entrada_pix, entrada_especie proporcional ao custo
               for (let i = 0; i < groupPayloads.length; i++) {
                 const custoItem = Number(groupPayloads[i].custo || 0);
                 const proporcao = custoItem / totalCusto;
                 if (i === groupPayloads.length - 1) {
-                  groupPayloads[i].valor_comprovante = Math.round(comprovanteTotal - comprovanteDistribuido);
                   groupPayloads[i].preco_vendido = Math.round(totalRecebido - vendidoDistribuido);
                   groupPayloads[i].entrada_pix = Math.round((gEntradaPix - pixDistribuido) * 100) / 100;
                   groupPayloads[i].entrada_especie = Math.round((gEntradaEspecie - especieDistribuido) * 100) / 100;
                 } else {
-                  const compProporcional = Math.round(comprovanteTotal * proporcao);
                   const vendidoProporcional = Math.round(totalRecebido * proporcao);
                   const pixProporcional = Math.round(gEntradaPix * proporcao * 100) / 100;
                   const especieProporcional = Math.round(gEntradaEspecie * proporcao * 100) / 100;
-                  groupPayloads[i].valor_comprovante = compProporcional;
                   groupPayloads[i].preco_vendido = vendidoProporcional;
                   groupPayloads[i].entrada_pix = pixProporcional;
                   groupPayloads[i].entrada_especie = especieProporcional;
-                  comprovanteDistribuido += compProporcional;
                   vendidoDistribuido += vendidoProporcional;
                   pixDistribuido += pixProporcional;
                   especieDistribuido += especieProporcional;
                 }
+              }
+              // Passo 2: valor_comprovante por produto = preco - troca_do_produto - pix - especie
+              // (troca pertence a UM produto; comprovante fecha a conta de cada venda)
+              for (let i = 0; i < groupPayloads.length; i++) {
+                const preco = Number(groupPayloads[i].preco_vendido || 0);
+                const troca = parseFloat(String(groupPayloads[i].produto_na_troca || "0")) || 0;
+                const pix = Number(groupPayloads[i].entrada_pix || 0);
+                const esp = Number(groupPayloads[i].entrada_especie || 0);
+                const compLiquido = preco - troca - pix - esp;
+                groupPayloads[i].valor_comprovante = gTaxa > 0 && compLiquido > 0
+                  ? Math.round(compLiquido / (1 - gTaxa / 100))
+                  : Math.max(0, Math.round(compLiquido));
               }
             }
           }
