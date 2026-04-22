@@ -389,13 +389,31 @@ function CompraForm() {
   const [printsErro, setPrintsErro] = useState<Record<string, string>>({});
   const temSegundoAparelho = !!trocaProduto2Param;
 
-  // Cliente digita o IMEI e Nº de Série dos aparelhos na troca (campo texto
-  // ao lado do print — o print serve como comprovação visual, o texto fica
-  // disponível pronto pro contrato/venda e aparece no WhatsApp do pedido).
+  // IMEI e Nº de Série dos aparelhos na troca.
+  // Fluxo: cliente anexa o print → backend usa Claude Vision pra ler o
+  // número automaticamente → valor aparece preenchido aqui (read-only por
+  // default, com botão "Corrigir" como fallback se o OCR errar).
   const [trocaSerial1, setTrocaSerial1] = useState("");
   const [trocaImei1, setTrocaImei1] = useState("");
   const [trocaSerial2, setTrocaSerial2] = useState("");
   const [trocaImei2, setTrocaImei2] = useState("");
+
+  // Resultado do OCR por slot (serial1/imei1/serial2/imei2).
+  // "ok" = OCR conseguiu ler; "fail" = OCR falhou (cliente digita manual).
+  type OcrStatus = { state: "idle" | "reading" | "ok" | "fail"; error?: string };
+  const [ocrStatus, setOcrStatus] = useState<Record<string, OcrStatus>>({});
+  // Controla se o cliente abriu o input manual via "Corrigir" (mesmo quando OCR deu certo).
+  const [manualMode, setManualMode] = useState<Record<string, boolean>>({});
+
+  function setTextBySlot(slot: PrintSlot, value: string) {
+    if (slot.aparelho === 1) {
+      if (slot.tipo === "serial") setTrocaSerial1(value);
+      else setTrocaImei1(value);
+    } else {
+      if (slot.tipo === "serial") setTrocaSerial2(value);
+      else setTrocaImei2(value);
+    }
+  }
 
   async function uploadPrint(slot: PrintSlot, file: File) {
     if (!shortCode) {
@@ -405,6 +423,7 @@ function CompraForm() {
     const key = `${slot.tipo}${slot.aparelho}`;
     setPrintsUploading((p) => ({ ...p, [key]: true }));
     setPrintsErro((p) => ({ ...p, [key]: "" }));
+    setOcrStatus((p) => ({ ...p, [key]: { state: "reading" } }));
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -422,11 +441,20 @@ function CompraForm() {
       const json = await res.json();
       if (json.ok) {
         setPrintsUrls((p) => ({ ...p, [key]: json.url }));
+        if (json.extractedOk && json.extracted) {
+          setTextBySlot(slot, json.extracted);
+          setOcrStatus((p) => ({ ...p, [key]: { state: "ok" } }));
+        } else {
+          setOcrStatus((p) => ({ ...p, [key]: { state: "fail", error: json.extractedError || "Não consegui ler o print" } }));
+          setManualMode((p) => ({ ...p, [key]: true }));
+        }
       } else {
         setPrintsErro((p) => ({ ...p, [key]: json.error || "Falha no upload" }));
+        setOcrStatus((p) => ({ ...p, [key]: { state: "idle" } }));
       }
     } catch {
       setPrintsErro((p) => ({ ...p, [key]: "Erro ao enviar" }));
+      setOcrStatus((p) => ({ ...p, [key]: { state: "idle" } }));
     } finally {
       setPrintsUploading((p) => ({ ...p, [key]: false }));
     }
@@ -553,9 +581,9 @@ function CompraForm() {
         return;
       }
 
-      // Valida IMEI/Serial digitados (mínimo 6 chars, sem espaços/traços contados).
-      // IMEI tem 15 dígitos, Serial varia (iPhone antigo: 11-12 chars; novo: até 12).
-      // Usamos 6 como limite seguro contra preenchimento preguiçoso ("123").
+      // Valida que o IMEI e Nº de Série foram extraídos com sucesso (via OCR
+      // ou preenchidos manualmente quando OCR falha). Serial mínimo 6 chars,
+      // IMEI mínimo 14 dígitos (IMEI tem 15, aceita 14+ pra tolerar 1 falha do OCR).
       const soDigitos = (s: string) => s.replace(/\D/g, "");
       const serial1Ok = trocaSerial1.trim().length >= 6;
       const imei1Ok = soDigitos(trocaImei1).length >= 14;
@@ -568,7 +596,7 @@ function CompraForm() {
           el.classList.add("ring-4", "ring-red-500", "animate-pulse");
           setTimeout(() => el.classList.remove("ring-4", "ring-red-500", "animate-pulse"), 3000);
         }
-        alert("Digite o Nº de Série e o IMEI de cada aparelho na troca. O IMEI tem 15 dígitos — você encontra nos prints que enviou.");
+        alert("Não conseguimos ler o Nº de Série ou o IMEI em algum dos prints. Tire novos prints mais nítidos (tela do iPhone em Ajustes > Geral > Sobre) ou use o botão 'Corrigir' pra digitar manualmente.");
         return;
       }
     }
@@ -1642,9 +1670,9 @@ function CompraForm() {
             <p className={sectionTitle}>📸 Nº de Série e IMEI do seu aparelho (obrigatório)</p>
             <div id="prints-troca" className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 transition-all">
               <p className="text-xs text-[#6E6E73] mb-3">
-                No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong>. Para cada aparelho da troca,
-                <strong> digite</strong> os números do <strong>Nº de Série</strong> e <strong>IMEI</strong>,
-                e <strong>anexe 2 prints</strong> da tela (um mostrando o Nº de Série e outro o IMEI) como prova.
+                No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong> e tire <strong>2 prints</strong>:
+                um mostrando o <strong>Nº de Série</strong> e outro o <strong>IMEI</strong>. Nosso sistema lê
+                os números automaticamente — você só precisa anexar os prints.
               </p>
 
               {/* Explicação do POR QUE pedimos essa info — passa segurança ao cliente */}
@@ -1670,40 +1698,30 @@ function CompraForm() {
                 const url = printsUrls[key];
                 const uploading = printsUploading[key];
                 const erro = printsErro[key];
-                // Valor digitado + setter do input de texto do mesmo slot
+                const ocr = ocrStatus[key] || { state: "idle" };
+                const isManual = manualMode[key] === true;
                 const textValue =
                   slot.aparelho === 1
                     ? (slot.tipo === "serial" ? trocaSerial1 : trocaImei1)
                     : (slot.tipo === "serial" ? trocaSerial2 : trocaImei2);
-                const setTextValue = (v: string) => {
-                  if (slot.aparelho === 1) {
-                    if (slot.tipo === "serial") setTrocaSerial1(v); else setTrocaImei1(v);
-                  } else {
-                    if (slot.tipo === "serial") setTrocaSerial2(v); else setTrocaImei2(v);
-                  }
-                };
                 const isImei = slot.tipo === "imei";
                 const placeholder = isImei ? "Digite os 15 dígitos do IMEI" : "Digite o Nº de Série";
+                const tipoLabel = isImei ? "IMEI" : "Nº de Série";
                 return (
                   <div key={key} className="mb-3 last:mb-0">
                     <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">{slot.label} *</label>
-                    <input
-                      type="text"
-                      inputMode={isImei ? "numeric" : "text"}
-                      autoComplete="off"
-                      value={textValue}
-                      onChange={(e) => setTextValue(e.target.value)}
-                      placeholder={placeholder}
-                      maxLength={isImei ? 20 : 30}
-                      className="w-full px-3 py-2 mb-2 rounded-lg border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:border-[#E8740E]"
-                    />
                     {url ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-2">
                         <img src={url} alt={slot.label} className="w-14 h-14 rounded-lg object-cover border border-[#D2D2D7]" />
                         <span className="text-xs text-green-600 font-semibold">✓ Print enviado</span>
                         <button
                           type="button"
-                          onClick={() => setPrintsUrls((p) => { const n = { ...p }; delete n[key]; return n; })}
+                          onClick={() => {
+                            setPrintsUrls((p) => { const n = { ...p }; delete n[key]; return n; });
+                            setOcrStatus((p) => ({ ...p, [key]: { state: "idle" } }));
+                            setManualMode((p) => ({ ...p, [key]: false }));
+                            setTextBySlot(slot, "");
+                          }}
                           className="text-xs text-red-600 hover:underline ml-auto"
                         >
                           Trocar
@@ -1723,10 +1741,46 @@ function CompraForm() {
                           }}
                         />
                         <span className="text-sm text-[#E8740E] font-semibold">
-                          {uploading ? "⏳ Enviando..." : "📤 Anexar print como prova"}
+                          {uploading
+                            ? (ocr.state === "reading" ? "⏳ Lendo número..." : "⏳ Enviando...")
+                            : "📤 Anexar print"}
                         </span>
                       </label>
                     )}
+
+                    {/* Resultado do OCR (após upload) */}
+                    {url && ocr.state === "ok" && !isManual && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-300">
+                        <span className="text-xs text-green-800">
+                          ✓ <strong>{tipoLabel} detectado:</strong> <span className="font-mono">{textValue}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setManualMode((p) => ({ ...p, [key]: true }))}
+                          className="text-[11px] text-[#6E6E73] hover:text-[#E8740E] hover:underline ml-auto"
+                        >
+                          Corrigir
+                        </button>
+                      </div>
+                    )}
+                    {url && ocr.state === "fail" && (
+                      <p className="text-xs text-amber-700 mb-1.5">
+                        ⚠️ Não consegui ler o {tipoLabel} do print. Digite manualmente abaixo.
+                      </p>
+                    )}
+                    {url && isManual && (
+                      <input
+                        type="text"
+                        inputMode={isImei ? "numeric" : "text"}
+                        autoComplete="off"
+                        value={textValue}
+                        onChange={(e) => setTextBySlot(slot, e.target.value)}
+                        placeholder={placeholder}
+                        maxLength={isImei ? 20 : 30}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:border-[#E8740E]"
+                      />
+                    )}
+
                     {erro && <p className="text-xs text-red-600 mt-1">{erro}</p>}
                   </div>
                 );
