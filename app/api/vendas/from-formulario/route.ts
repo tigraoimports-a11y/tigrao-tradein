@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimitSubmission, checkHoneypot } from "@/lib/rate-limit";
+import { dispararContratoAuto } from "@/lib/contrato-auto";
 
 // ============================================================
 // POST /api/vendas/from-formulario
@@ -215,7 +216,8 @@ export async function POST(req: NextRequest) {
       console.error("[vendas/from-formulario] update err:", updErr);
       return NextResponse.json({ error: updErr.message }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, vendaId: existente.id, action: "updated" });
+    const contrato = await gerarContratoSeTiverTroca(supabase, body.shortCode, body.trocaProduto);
+    return NextResponse.json({ ok: true, vendaId: existente.id, action: "updated", contrato });
   }
 
   const { data: nova, error: insErr } = await supabase
@@ -229,5 +231,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insErr?.message || "Erro ao criar venda" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, vendaId: nova.id, action: "created" });
+  const contrato = await gerarContratoSeTiverTroca(supabase, body.shortCode, body.trocaProduto);
+  return NextResponse.json({ ok: true, vendaId: nova.id, action: "created", contrato });
+}
+
+// Helper: dispara termo de procedência só se a venda tem troca. Erros são
+// logados mas não falham o from-formulario (venda já foi criada com sucesso).
+async function gerarContratoSeTiverTroca(
+  supabase: ReturnType<typeof getSupabase>,
+  shortCode: string,
+  trocaProduto?: string,
+): Promise<{ ok: boolean; skipped?: boolean; termoId?: string; error?: string } | null> {
+  if (!trocaProduto) return null;
+  try {
+    const result = await dispararContratoAuto(supabase, shortCode);
+    if (!result.ok) {
+      console.error("[vendas/from-formulario] contrato FAIL:", result.error);
+    }
+    return { ok: result.ok, skipped: result.skipped, termoId: result.termoId, error: result.error };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[vendas/from-formulario] contrato THROWN:", msg);
+    return { ok: false, error: msg };
+  }
 }
