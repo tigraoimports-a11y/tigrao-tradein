@@ -170,6 +170,11 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
     const fullOrigem = IPHONE_ORIGENS.find(o => o.startsWith(origemCode + " ") || o === origemCode) || origemCode;
     spec.ip_origem = fullOrigem;
   }
+  // Tela de acessorio: ler da observacao [TELA:X"]
+  if (cat === "ACESSORIOS") {
+    const telaMatch = p.observacao?.match(/\[TELA:([^\]]+)\]/);
+    if (telaMatch) spec.ac_tela = telaMatch[1].trim();
+  }
   const caixaInicial = !!(p.observacao && p.observacao.includes("[COM_CAIXA]"));
   const GRADE_TAG_MAP: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
   const gradeTagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
@@ -196,7 +201,7 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
     grade: gradeInicial,
     bateria: p.bateria ? String(p.bateria) : "",
     garantia: p.garantia || "",
-    observacao: (p.observacao || "").replace(/\[GRADE_[^\]]+\]|\[COM_CAIXA\]|\[COM_CABO\]|\[COM_FONTE\]|\[NAO_ATIVADO\]|\[SEMINOVO\]/g, "").trim(),
+    observacao: (p.observacao || "").replace(/\[GRADE_[^\]]+\]|\[COM_CAIXA\]|\[COM_CABO\]|\[COM_FONTE\]|\[NAO_ATIVADO\]|\[SEMINOVO\]|\[TELA:[^\]]+\]/g, "").trim(),
   };
 }
 
@@ -250,12 +255,13 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     const key = obs?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
     return key ? GRADE_TAG[key] : "";
   };
-  const buildObs = (condicao: string, origem: string, caixa?: boolean, grade?: string): string | null => {
+  const buildObs = (condicao: string, origem: string, caixa?: boolean, grade?: string, acTela?: string): string | null => {
     const prefix = condicao && condicao !== "NOVO" ? `[${condicao}]` : "";
     const caixaTag = caixa ? "[COM_CAIXA]" : "";
     const gradeKey = grade ? (grade) : "";
     const gradeTag = gradeKey ? `[GRADE_${gradeKey}]` : "";
-    const tags = `${prefix}${caixaTag}${gradeTag}`;
+    const telaTag = acTela ? `[TELA:${acTela}]` : "";
+    const tags = `${prefix}${caixaTag}${gradeTag}${telaTag}`;
     const combined = tags ? (origem ? `${tags} ${origem}` : tags) : origem;
     return combined || null;
   };
@@ -278,7 +284,8 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     if (!newRowState) return;
     setSavingNew(true);
     try {
-      const obs = buildObs(newRowState.condicao, "", newRowState.caixa, newRowState.grade);
+      const acTela = newRowState.categoria === "ACESSORIOS" ? (newRowState.spec?.ac_tela || "") : "";
+      const obs = buildObs(newRowState.condicao, "", newRowState.caixa, newRowState.grade, acTela);
       // Copiar data_compra, data_entrada, origem_compra, origem de outro produto
       // do mesmo pedido — senão o novo fica orfao (sem data/origem) e aparece
       // em grupo separado "SEM ORIGEM DEFINIDA" na listagem a caminho.
@@ -387,8 +394,9 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       const novoFornecedor = editRowState.cliente?.trim() || editRowState.fornecedor || null;
       if (novoFornecedor !== (original?.fornecedor || null)) updates.fornecedor = novoFornecedor;
 
-      // Observacao: condição + caixa + grade (origem agora vai no campo próprio)
-      const newObs = buildObs(editRowState.condicao || "NOVO", "", editRowState.caixa, editRowState.grade);
+      // Observacao: condição + caixa + grade + tela_acessorio (origem vai no campo próprio)
+      const acTela = editRowState.categoria === "ACESSORIOS" ? (editRowState.spec?.ac_tela || "") : "";
+      const newObs = buildObs(editRowState.condicao || "NOVO", "", editRowState.caixa, editRowState.grade, acTela);
       if (newObs !== originalObs) updates.observacao = newObs;
 
       // Tipo: SEMPRE atualizado conforme condição para produtos já em estoque
