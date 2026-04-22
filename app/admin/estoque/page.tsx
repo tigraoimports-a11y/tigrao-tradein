@@ -1049,6 +1049,14 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
     }
     return "AirPods";
   }
+  if (baseCat === "ACESSORIOS") {
+    // Tela (ex: 11", 13") vem na observacao como [TELA:X"] — inclui no nome base
+    // pra separar variantes do mesmo modelo (Magic Keyboard 11" != 13")
+    const telaMatch = observacao?.match(/\[TELA:([^\]]+)\]/);
+    const tela = telaMatch ? ` ${telaMatch[1].trim().replace(/"?$/, '"')}` : "";
+    const nome = produto.replace(/\s*[-–]\s*$/, "").trim();
+    return `${nome}${tela}`;
+  }
   // Fallback: normalizar trailing dashes/espaços
   return produto.replace(/\s*[-–]\s*$/, "").trim();
 }
