@@ -5593,7 +5593,9 @@ export default function EstoquePage() {
                             const telaObsMatch = (p.observacao || "").match(/\[TELA:([^\]]+)\]/);
                             if (telaObsMatch) spec.ac_tela = telaObsMatch[1].trim();
                           }
-                          setRecatRow({ ...base, categoria: baseCat || p.categoria || "IPHONES", spec, cor: p.cor || "" });
+                          // Passar produto pro auto-match identificar o catalogo_modelo_id,
+                          // senao o dropdown Tela (e outros specs do catalogo) nao aparece
+                          setRecatRow({ ...base, categoria: baseCat || p.categoria || "IPHONES", spec, cor: p.cor || "", produto: p.produto || "" });
                           setRecatMode(true);
                         } else {
                           setRecatMode(false);
