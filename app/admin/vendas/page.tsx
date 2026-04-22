@@ -4594,11 +4594,33 @@ export default function VendasPage() {
         /* Vendas Em Andamento / Finalizadas */
         (() => {
           const hoje = hojeStr;
+          // Mapa grupo_id -> vendas do mesmo grupo (venda em conjunto).
+          // Usado por isNFPendente pra tratar o grupo como uma unica pendencia
+          // (uma NF cobre todos os produtos da transacao).
+          const grupoPorId = new Map<string, typeof vendas>();
+          for (const vx of vendas) {
+            if (!vx.grupo_id) continue;
+            const list = grupoPorId.get(vx.grupo_id) || [];
+            list.push(vx);
+            grupoPorId.set(vx.grupo_id, list);
+          }
           // Helpers de pendencia: NF (nao anexada ou anexada sem envio) e Termo (troca sem termo assinado)
           const isNFPendente = (v: typeof vendas[number]): boolean => {
             if (v.is_brinde) return false;
             // Atacado nao emite NF (revendedor emite na ponta). Nunca considerar pendente.
             if (v.tipo === "ATACADO") return false;
+            // Venda em conjunto: trata o grupo como uma unica NF. Soh o primeiro
+            // item carrega a pendencia — senao cada item do grupo conta/avisa
+            // duas vezes o mesmo NF. E se qualquer venda do grupo tem NF
+            // anexada/enviada, todas consideram atendida.
+            const irmaos = v.grupo_id ? grupoPorId.get(v.grupo_id) : null;
+            if (irmaos && irmaos.length > 1) {
+              if (irmaos[0].id !== v.id) return false;
+              const anyNF = irmaos.some(g => g.nota_fiscal_url);
+              if (!anyNF) return true;
+              const anySent = irmaos.some(g => (g as unknown as { nota_fiscal_enviada?: boolean }).nota_fiscal_enviada);
+              return !!(v.email && !anySent);
+            }
             if (!v.nota_fiscal_url) return true;
             const enviada = (v as unknown as { nota_fiscal_enviada?: boolean }).nota_fiscal_enviada;
             return !!(v.email && !enviada);
@@ -5834,8 +5856,10 @@ export default function VendasPage() {
                                           </button>
                                         </>)}
                                       </div>
-                                      {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO e pra quem só tem vendas_andamento) */}
-                                      {podeVerHistorico && v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">
+                                      {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO, pra quem só tem vendas_andamento
+                                          e para itens nao-primeiros de uma venda em conjunto: uma unica NF cobre o grupo todo,
+                                          entao so o primeiro item mostra o upload/envio). */}
+                                      {podeVerHistorico && v.origem !== "ATACADO" && (!isGrupo || isFirstInGrupo) && <div className="flex gap-2 flex-wrap items-center">
                                         {v.nota_fiscal_url ? (
                                           <>
                                             <a href={v.nota_fiscal_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
