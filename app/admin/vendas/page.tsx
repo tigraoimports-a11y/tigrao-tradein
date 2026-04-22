@@ -26,8 +26,8 @@ export default function VendasPage() {
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [termosPorVenda, setTermosPorVenda] = useState<Record<string, { id: string; status: string; zapsign_sign_url?: string | null; signed_pdf_url?: string | null }>>({});
   const [loading, setLoading] = useState(true);
-  const VENDAS_TABS = ["nova", "andamento", "programadas", "hoje", "finalizadas", "correios"] as const;
-  const [tab, setTab] = useTabParam<"nova" | "andamento" | "programadas" | "hoje" | "finalizadas" | "correios">("nova", VENDAS_TABS);
+  const VENDAS_TABS = ["nova", "formularios", "andamento", "programadas", "hoje", "finalizadas", "correios"] as const;
+  const [tab, setTab] = useTabParam<"nova" | "formularios" | "andamento" | "programadas" | "hoje" | "finalizadas" | "correios">("nova", VENDAS_TABS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -2118,6 +2118,7 @@ export default function VendasPage() {
         <div className="flex gap-2">
           {([
             { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: podeVerHistorico || !!(user?.permissoes?.includes("vendas_registrar")) },
+            { key: "formularios", label: "📝 Formulários Preenchidos", count: vendas.filter(v => v.status_pagamento === "FORMULARIO_PREENCHIDO").length, color: "bg-indigo-500", visible: podeVerAndamento },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
             { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hojeStr).length, color: "bg-blue-500", visible: podeVerAndamento },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
@@ -4534,6 +4535,8 @@ export default function VendasPage() {
           const hoje = hojeStr;
           const filteredRaw = (tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
+            : tab === "formularios"
+            ? vendas.filter(v => v.status_pagamento === "FORMULARIO_PREENCHIDO")
             : tab === "programadas"
             ? vendas.filter(v => v.status_pagamento === "PROGRAMADA")
             : tab === "hoje"
@@ -4579,7 +4582,7 @@ export default function VendasPage() {
           }
           const datasOrdenadas = [...vendasPorData.keys()].sort((a, b) => b.localeCompare(a));
 
-          const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : tab === "correios" ? "📦 Envios pelos Correios" : tab === "programadas" ? "Vendas Programadas" : "Histórico de Vendas";
+          const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "formularios" ? "📝 Formulários Preenchidos pelo Cliente" : tab === "hoje" ? "Finalizadas Hoje" : tab === "correios" ? "📦 Envios pelos Correios" : tab === "programadas" ? "Vendas Programadas" : "Histórico de Vendas";
           const filteredFinanceiro = filtered.filter(v => v.status_pagamento !== "PROGRAMADA");
           const totalVendido = filteredFinanceiro.reduce((s, v) => s + (v.preco_vendido || 0), 0);
           const totalLucro = filteredFinanceiro.reduce((s, v) => s + (v.lucro || 0), 0);
@@ -4655,6 +4658,36 @@ export default function VendasPage() {
                   })()}
                   {selecionadas.size > 0 && (
                     <div className="flex gap-2">
+                      {tab === "formularios" && (
+                        <button
+                          disabled={finalizandoLote}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const ids = Array.from(selecionadas);
+                            if (ids.length === 0) return;
+                            if (!confirm(`Enviar ${ids.length} venda(s) para "Vendas Pendentes"?\n\nDepois disso cada venda vai aparecer na aba "Em Andamento" para finalização.`)) return;
+                            setFinalizandoLote(true);
+                            let ok = 0, fail = 0;
+                            for (const id of ids) {
+                              try {
+                                const res = await fetch("/api/vendas", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                  body: JSON.stringify({ id, status_pagamento: "AGUARDANDO" }),
+                                });
+                                if (res.ok) ok++; else fail++;
+                              } catch { fail++; }
+                            }
+                            setVendas(prev => prev.map(v => ids.includes(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
+                            setSelecionadas(new Set());
+                            setFinalizandoLote(false);
+                            setMsg(fail > 0 ? `${ok} enviada(s), ${fail} falha(s)` : `${ok} venda(s) enviada(s) para Pendentes!`);
+                          }}
+                          className="px-4 py-1.5 rounded-lg bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition-colors"
+                        >
+                          {finalizandoLote ? "Enviando..." : `➡️ Enviar ${selecionadas.size} para Pendentes`}
+                        </button>
+                      )}
                       {tab === "andamento" && (
                         <button
                           disabled={finalizandoLote}
@@ -4777,7 +4810,7 @@ export default function VendasPage() {
               ) : (
                 <div>
                   {filtered.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : tab === "correios" ? "com rastreio dos Correios" : "finalizada"}</div>
+                    <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "formularios" ? "com formulário preenchido aguardando conferência" : tab === "hoje" ? "finalizada hoje" : tab === "correios" ? "com rastreio dos Correios" : "finalizada"}</div>
                   ) : datasOrdenadas.map((dataKey) => {
                     const vendasDoDia = vendasPorData.get(dataKey) || [];
                     const vendasDoDiaFinanceiro = vendasDoDia.filter(v => v.status_pagamento !== "PROGRAMADA");

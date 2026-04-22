@@ -866,6 +866,50 @@ function CompraForm() {
           body: payload,
         }).catch(() => {});
       }
+
+      // Cria/atualiza venda em status FORMULARIO_PREENCHIDO — equipe vê na aba
+      // "📝 Formulários Preenchidos" de /admin/vendas, confere e envia pra
+      // "Vendas Pendentes" manualmente. Fire-and-forget via sendBeacon/keepalive.
+      const vendaPayload = JSON.stringify({
+        shortCode,
+        nome, pessoa, cpf, cnpj, email, telefone, instagram,
+        cep, endereco, numero, complemento, bairro,
+        produto: produtoFinal, cor: corSel, preco: precoFinal, desconto: descontoNum,
+        formaPagamento, parcelas, entradaPix: entradaPixNum,
+        trocaProduto: temTroca ? trocaProduto : undefined,
+        trocaCor: temTroca ? trocaCorParam : undefined,
+        trocaValor: temTroca ? trocaNum1 : undefined,
+        trocaCondicao: temTroca ? trocaCond : undefined,
+        trocaCaixa: temTroca ? trocaCaixaParam === "1" : undefined,
+        trocaSerial: temTroca ? trocaSerial1.trim() : undefined,
+        trocaImei: temTroca ? trocaImei1.trim() : undefined,
+        trocaProduto2: temTroca && temSegundoAparelho ? trocaProduto2Param : undefined,
+        trocaCor2: temTroca && temSegundoAparelho ? trocaCor2Param : undefined,
+        trocaValor2: temTroca && temSegundoAparelho ? trocaNum2 : undefined,
+        trocaCondicao2: temTroca && temSegundoAparelho ? trocaCond2Param : undefined,
+        trocaCaixa2: temTroca && temSegundoAparelho ? trocaCaixa2Param === "1" : undefined,
+        trocaSerial2: temTroca && temSegundoAparelho ? trocaSerial2.trim() : undefined,
+        trocaImei2: temTroca && temSegundoAparelho ? trocaImei2.trim() : undefined,
+        localEntrega: localStr, dataEntrega, horarioEntrega: horario,
+        vendedor, origem,
+        website: honeypot,
+      });
+      const vendaUrl = "/api/vendas/from-formulario";
+      let vendaBeaconOk = false;
+      if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+        try {
+          const blob = new Blob([vendaPayload], { type: "application/json" });
+          vendaBeaconOk = navigator.sendBeacon(vendaUrl, blob);
+        } catch { /* fallback */ }
+      }
+      if (!vendaBeaconOk) {
+        fetch(vendaUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: vendaPayload,
+        }).catch(() => {});
+      }
     }
 
     const url = `https://wa.me/${whatsappFinal}?text=${encodeURIComponent(lines.join("\n"))}`;
@@ -1029,6 +1073,40 @@ function CompraForm() {
       if (!res.ok || !json.init_point) {
         throw new Error(json.error || "Não foi possível gerar o link de pagamento");
       }
+
+      // Cria venda em FORMULARIO_PREENCHIDO antes de redirecionar pro MP.
+      // Fire-and-forget — se falhar por qq motivo, não bloqueia o cliente.
+      try {
+        await fetch("/api/vendas/from-formulario", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            shortCode,
+            nome, pessoa, cpf, cnpj, email, telefone, instagram,
+            cep, endereco, numero, complemento, bairro,
+            produto: produtoFinal, cor: corSel, preco: precoFinal, desconto: descontoFinal,
+            formaPagamento: formaPagamento || "Link de Pagamento",
+            parcelas, entradaPix: entradaFinal,
+            trocaProduto: trocaProdutoParam || undefined,
+            trocaCor: trocaCorParam || undefined,
+            trocaValor: trocaNum1 || undefined,
+            trocaCondicao: trocaCondParam || undefined,
+            trocaCaixa: trocaCaixaParam === "1",
+            trocaSerial: trocaSerial1.trim() || undefined,
+            trocaImei: trocaImei1.trim() || undefined,
+            trocaProduto2: trocaProduto2Param || undefined,
+            trocaCor2: trocaCor2Param || undefined,
+            trocaValor2: trocaNum2 || undefined,
+            trocaCondicao2: trocaCond2Param || undefined,
+            trocaCaixa2: trocaCaixa2Param === "1",
+            trocaSerial2: trocaSerial2.trim() || undefined,
+            trocaImei2: trocaImei2.trim() || undefined,
+            vendedor, origem,
+            website: honeypot,
+          }),
+        });
+      } catch { /* não bloqueia redirect */ }
 
       // Redireciona pro Mercado Pago (troca a URL, não abre nova aba — assim
       // o cliente não perde o contexto do pedido).
