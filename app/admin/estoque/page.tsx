@@ -2440,6 +2440,8 @@ export default function EstoquePage() {
       .replace(/\[BAND:[^\]]+\]/g, "")
       .replace(/\[RESP:[^\]]+\]/g, "")
       .replace(/\[COM_QUEM:[^\]]+\]/g, "")
+      .replace(/\[TELA:[^\]]+\]/g, "")
+      .replace(/\[NUCLEOS:[^\]]+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
