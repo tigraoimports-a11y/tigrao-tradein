@@ -72,15 +72,81 @@ export const SEMINOVO_CAT_LABELS: Record<SeminovoCategoria, { label: string; ico
   watch: { label: "Apple Watch", icon: "⌚" },
 };
 
+/** Uma variação de armazenamento de um seminovo.
+ *  `preco` definido → orçamento automático (como lacrado).
+ *  `preco` ausente → flow WhatsApp manual (cotação sob medida).
+ *  `ativo === false` esconde esta variante sem apagar (útil quando só um
+ *  storage está temporariamente esgotado). Por padrão variantes são ativas. */
+export interface SeminovoVariante {
+  storage: string;
+  preco?: number;
+  ativo?: boolean;
+}
+
 /** Configuração do formulário trade-in (Supabase tradein_config).
- *  `preco` é opcional e reservado para futura precificação direta —
- *  ainda não aparece no formulário do cliente. */
+ *  `variantes` é o formato canônico. `storages` + `preco` (legado, pré-refactor
+ *  das variantes) continuam aceitos na leitura via `getSeminovoVariantes`
+ *  — nenhuma migration é necessária porque o campo `seminovos` é JSONB livre. */
 export interface SeminovoOption {
   modelo: string;
-  storages: string[];
   ativo: boolean;
   categoria: SeminovoCategoria;
+  variantes?: SeminovoVariante[];
+  /** @deprecated use `variantes` */
+  storages?: string[];
+  /** @deprecated preço por modelo — agora vive em cada variante */
   preco?: number;
+}
+
+/** Retorna a lista normalizada de variantes, convertendo o formato legado
+ *  (`storages` + `preco` por modelo) quando `variantes` não está presente. */
+export function getSeminovoVariantes(s: SeminovoOption): SeminovoVariante[] {
+  if (Array.isArray(s.variantes) && s.variantes.length > 0) return s.variantes;
+  const storages = Array.isArray(s.storages) ? s.storages : [];
+  return storages.map((storage) => ({
+    storage,
+    preco: typeof s.preco === "number" ? s.preco : undefined,
+    ativo: true,
+  }));
+}
+
+/** Mescla duplicatas de modelo (case-insensitive, dentro da mesma categoria).
+ *  Ao salvar o admin, evita que duas entradas de "iPhone 15 Pro" sobrevivam.
+ *  Variantes são deduplicadas por `storage` — a primeira entrada com preço
+ *  definido vence se houver conflito. */
+export function consolidateSeminovos(list: SeminovoOption[]): SeminovoOption[] {
+  const byKey = new Map<string, SeminovoOption>();
+  for (const raw of list) {
+    const modelo = (raw.modelo || "").trim();
+    if (!modelo) continue;
+    const categoria = raw.categoria || "iphone";
+    const key = `${categoria}::${modelo.toLowerCase()}`;
+    const variantes = getSeminovoVariantes(raw);
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, { modelo, categoria, ativo: raw.ativo !== false, variantes });
+      continue;
+    }
+    // Mescla: ativo OR, variantes deduplicadas por storage
+    const byStorage = new Map<string, SeminovoVariante>();
+    for (const v of [...(prev.variantes || []), ...variantes]) {
+      const storage = v.storage.trim();
+      if (!storage) continue;
+      const existing = byStorage.get(storage);
+      if (!existing) { byStorage.set(storage, v); continue; }
+      // Mantém a primeira, mas se ela não tem preço e a nova tem, promove
+      if (typeof existing.preco !== "number" && typeof v.preco === "number") {
+        byStorage.set(storage, { ...existing, preco: v.preco });
+      }
+    }
+    byKey.set(key, {
+      modelo: prev.modelo,
+      categoria,
+      ativo: prev.ativo || raw.ativo !== false,
+      variantes: [...byStorage.values()],
+    });
+  }
+  return [...byKey.values()];
 }
 
 export interface TradeInConfig {

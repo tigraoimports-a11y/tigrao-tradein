@@ -115,7 +115,11 @@ export default function StepQuote(p: StepQuoteProps) {
   const origemTexto = clienteOrigem ? (origemMap[origemKey] || origemMap[clienteOrigem?.toLowerCase().normalize("NFC") || ""] || `Vim por ${clienteOrigem}`) : "";
   const origemLine = origemTexto ? `\n${origemTexto} e desejo fechar meu pedido!\n` : "";
 
-  const waMsg = `Olá, me chamo ${clienteNome}. ${origemTexto || "Vi meu orçamento no site"} e desejo fechar meu pedido!\n\n*WhatsApp:* ${clienteWhatsApp}\n${igLine}\n*ORÇAMENTO DE TROCA -- TigraoImports*\n---\n\n*Produto novo:*\n${newModel} ${newStorage} -- ${f2(newPrice)}\nLacrado | 1 ano de garantia | Nota Fiscal\n\n${usadoSec}\n\n---\n*Diferença no PIX: ${f2(dif)}*\n\n*Forma de pagamento escolhida:*\n${formaPag}\n\n_Validade deste orçamento: ${validadeHoras} horas_`;
+  // StepNewDevice marca seminovos embutindo " SEMINOVO" no newModel — a
+  // mensagem do WhatsApp troca garantia/descrição sem precisar de prop extra.
+  const isSeminovo = / SEMINOVO$/i.test(newModel);
+  const produtoDesc = isSeminovo ? "Seminovo | garantia 3 meses | Nota Fiscal" : "Lacrado | 1 ano de garantia | Nota Fiscal";
+  const waMsg = `Olá, me chamo ${clienteNome}. ${origemTexto || "Vi meu orçamento no site"} e desejo fechar meu pedido!\n\n*WhatsApp:* ${clienteWhatsApp}\n${igLine}\n*ORÇAMENTO DE TROCA -- TigraoImports*\n---\n\n*Produto novo:*\n${newModel} ${newStorage} -- ${f2(newPrice)}\n${produtoDesc}\n\n${usadoSec}\n\n---\n*Diferença no PIX: ${f2(dif)}*\n\n*Forma de pagamento escolhida:*\n${formaPag}\n\n_Validade deste orçamento: ${validadeHoras} horas_`;
   const waUrl = getWhatsAppUrl(whatsappNumero, waMsg);
   const condLines = getAnyConditionLines(deviceType, condition);
 

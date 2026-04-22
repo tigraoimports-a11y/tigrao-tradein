@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoCategoria, SEMINOVO_CAT_LABELS } from "@/lib/types";
+import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoVariante, SeminovoCategoria, SEMINOVO_CAT_LABELS, getSeminovoVariantes, consolidateSeminovos } from "@/lib/types";
 
 interface Props {
   password: string;
@@ -485,10 +485,10 @@ const DEFAULT_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_SEMINOVOS: SeminovoOption[] = [
-  { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
-  { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true, categoria: "iphone" },
-  { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true, categoria: "iphone" },
-  { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true, categoria: "iphone" },
+  { modelo: "iPhone 15 Pro", ativo: true, categoria: "iphone", variantes: [{ storage: "128GB", ativo: true }, { storage: "256GB", ativo: true }] },
+  { modelo: "iPhone 15 Pro Max", ativo: true, categoria: "iphone", variantes: [{ storage: "256GB", ativo: true }, { storage: "512GB", ativo: true }] },
+  { modelo: "iPhone 16 Pro", ativo: true, categoria: "iphone", variantes: [{ storage: "128GB", ativo: true }, { storage: "256GB", ativo: true }] },
+  { modelo: "iPhone 16 Pro Max", ativo: true, categoria: "iphone", variantes: [{ storage: "256GB", ativo: true }] },
 ];
 
 const DEFAULT_ORIGENS = ["Anúncio", "Story", "Direct", "WhatsApp", "Indicação", "Já sou cliente"];
@@ -535,7 +535,6 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [newOrigem, setNewOrigem] = useState("");
   const [newSemiModelo, setNewSemiModelo] = useState("");
-  const [newSemiStorage, setNewSemiStorage] = useState("");
 
   // Itens sem categoria (pré-migration) caem em "iphone" para compatibilidade.
   const categoriaAtiva: SeminovoCategoria = (deviceTab as SeminovoCategoria) in SEMINOVO_CAT_LABELS ? (deviceTab as SeminovoCategoria) : "iphone";
@@ -566,10 +565,14 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
         const d = json.data;
         if (d) {
           if (Array.isArray(d.seminovos) && d.seminovos.length > 0) {
-            // Backfill: itens antigos sem categoria caem em "iphone"
+            // Backfill: itens antigos sem categoria caem em "iphone"; legado
+            // sem `variantes` é convertido via helper. Não mexemos no banco —
+            // só no estado local; a forma canônica será escrita no próximo save.
             const normalized: SeminovoOption[] = d.seminovos.map((s: SeminovoOption) => ({
-              ...s,
+              modelo: s.modelo,
+              ativo: s.ativo !== false,
               categoria: (s.categoria as SeminovoCategoria) || "iphone",
+              variantes: getSeminovoVariantes(s),
             }));
             setSeminovos(normalized);
           }
@@ -584,10 +587,16 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
   async function handleSave() {
     setSaving(true);
     try {
+      // Consolida duplicatas antes de persistir. Operador pode ter criado
+      // "iPhone 15 Pro" duas vezes editando categorias diferentes — aqui colapsa
+      // em uma única entrada com todas variantes.
+      const consolidated = consolidateSeminovos(seminovos);
+      // Reflete a consolidação no state pra UI já mostrar o resultado final.
+      if (consolidated.length !== seminovos.length) setSeminovos(consolidated);
       const res = await fetch("/api/admin/tradein-config", {
         method: "PUT",
         headers: getHeaders(),
-        body: JSON.stringify({ seminovos, labels, origens }),
+        body: JSON.stringify({ seminovos: consolidated, labels, origens }),
       });
       const json = await res.json();
       if (json.ok) {
@@ -660,8 +669,26 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
           )}
           {visibleIndices.map((si) => {
             const s = seminovos[si];
+            const variantes = s.variantes || [];
+            const updateVariante = (vi: number, patch: Partial<SeminovoVariante>) => {
+              const arr = [...seminovos];
+              const v = [...(arr[si].variantes || [])];
+              v[vi] = { ...v[vi], ...patch };
+              arr[si] = { ...arr[si], variantes: v };
+              setSeminovos(arr);
+            };
+            const removeVariante = (vi: number) => {
+              const arr = [...seminovos];
+              arr[si] = { ...arr[si], variantes: (arr[si].variantes || []).filter((_, i) => i !== vi) };
+              setSeminovos(arr);
+            };
+            const addVariante = () => {
+              const arr = [...seminovos];
+              arr[si] = { ...arr[si], variantes: [...(arr[si].variantes || []), { storage: "", ativo: true }] };
+              setSeminovos(arr);
+            };
             return (
-            <div key={si} className={`rounded-lg border border-[#E5E5EA] p-3 space-y-2 ${!s.ativo ? "opacity-50" : ""}`}>
+            <div key={si} className={`rounded-lg border border-[#E5E5EA] p-3 space-y-3 ${!s.ativo ? "opacity-50" : ""}`}>
               <div className="flex items-center gap-2">
                 <input
                   value={s.modelo}
@@ -679,6 +706,7 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
                     arr[si] = { ...arr[si], ativo: !arr[si].ativo };
                     setSeminovos(arr);
                   }}
+                  title={s.ativo ? "Modelo visível ao cliente" : "Modelo oculto"}
                   className={`w-10 h-5 rounded-full transition-colors relative ${s.ativo ? "bg-[#E8740E]" : "bg-[#D2D2D7]"}`}
                 >
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${s.ativo ? "left-5" : "left-0.5"}`} />
@@ -686,71 +714,72 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
                 <button
                   onClick={() => setSeminovos(seminovos.filter((_, i) => i !== si))}
                   className="text-red-400 hover:text-red-600 text-sm px-1"
+                  title="Remover modelo"
                 >
                   ✕
                 </button>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {s.storages.map((st, sti) => (
-                  <span key={sti} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F5F5F7] text-xs text-[#1D1D1F]">
-                    {st}
-                    <button
-                      onClick={() => {
-                        const arr = [...seminovos];
-                        arr[si] = { ...arr[si], storages: arr[si].storages.filter((_, i) => i !== sti) };
-                        setSeminovos(arr);
+
+              {/* Variantes: uma linha por storage. Preço definido → orçamento
+                  automático no cliente; sem preço → fallback WhatsApp manual. */}
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-1 text-[10px] font-semibold uppercase tracking-wider text-[#86868B]">
+                  <span>Storage</span>
+                  <span className="text-right pr-1">Preço (R$)</span>
+                  <span className="text-center w-10">Ativo</span>
+                  <span className="w-4" />
+                </div>
+                {variantes.length === 0 && (
+                  <div className="text-[11px] italic text-[#86868B] px-1 py-1">
+                    Sem variantes. Adicione ao menos uma abaixo.
+                  </div>
+                )}
+                {variantes.map((v, vi) => (
+                  <div key={vi} className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center ${v.ativo === false ? "opacity-50" : ""}`}>
+                    <input
+                      value={v.storage}
+                      onChange={(e) => updateVariante(vi, { storage: e.target.value })}
+                      placeholder="Ex: 256GB"
+                      className="px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                    />
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={typeof v.preco === "number" ? String(v.preco) : ""}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        const num = raw === "" ? undefined : Number(raw);
+                        updateVariante(vi, { preco: Number.isFinite(num as number) ? (num as number) : undefined });
                       }}
-                      className="text-[#86868B] hover:text-red-500 text-[10px]"
+                      placeholder="—"
+                      className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-xs text-right focus:outline-none focus:border-[#E8740E]"
+                    />
+                    <button
+                      onClick={() => updateVariante(vi, { ativo: v.ativo === false })}
+                      title={v.ativo !== false ? "Variante visível" : "Variante oculta"}
+                      className={`w-10 h-5 rounded-full transition-colors relative ${v.ativo !== false ? "bg-[#E8740E]" : "bg-[#D2D2D7]"}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${v.ativo !== false ? "left-5" : "left-0.5"}`} />
+                    </button>
+                    <button
+                      onClick={() => removeVariante(vi)}
+                      className="text-[#86868B] hover:text-red-500 text-xs w-4"
+                      title="Remover variante"
                     >
                       ✕
                     </button>
-                  </span>
+                  </div>
                 ))}
-                <div className="inline-flex items-center gap-1">
-                  <input
-                    value={si === visibleIndices[visibleIndices.length - 1] ? newSemiStorage : ""}
-                    onChange={(e) => setNewSemiStorage(e.target.value)}
-                    onFocus={() => setNewSemiStorage("")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && newSemiStorage.trim()) {
-                        const arr = [...seminovos];
-                        arr[si] = { ...arr[si], storages: [...arr[si].storages, newSemiStorage.trim()] };
-                        setSeminovos(arr);
-                        setNewSemiStorage("");
-                      }
-                    }}
-                    placeholder="+ storage"
-                    className="w-20 px-2 py-0.5 rounded border border-dashed border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
-                  />
-                </div>
+                <button
+                  onClick={addVariante}
+                  className="text-[11px] font-semibold text-[#E8740E] hover:underline mt-1"
+                >
+                  + Adicionar variante
+                </button>
+                <p className="text-[10px] text-[#86868B] leading-relaxed pt-1">
+                  Com preço → orçamento automático. Sem preço → cliente é levado ao WhatsApp pra cotação manual.
+                </p>
               </div>
-              {/* Campo de preço — reservado pra futuro. Hoje opcional e escondido
-                  atrás de um detalhamento pra não poluir a UI. O valor já é
-                  persistido no banco (preco?: number), então quando ativarmos
-                  a precificação automática nada precisa ser migrado. */}
-              <details className="text-[11px] text-[#86868B]">
-                <summary className="cursor-pointer select-none hover:text-[#1D1D1F]">
-                  Preço (opcional — uso futuro){typeof s.preco === "number" ? ` · R$ ${s.preco.toLocaleString("pt-BR")}` : ""}
-                </summary>
-                <div className="mt-2 flex items-center gap-2">
-                  <span>R$</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={typeof s.preco === "number" ? String(s.preco) : ""}
-                    onChange={(e) => {
-                      const arr = [...seminovos];
-                      const raw = e.target.value.trim();
-                      const num = raw === "" ? undefined : Number(raw);
-                      arr[si] = { ...arr[si], preco: Number.isFinite(num as number) ? (num as number) : undefined };
-                      setSeminovos(arr);
-                    }}
-                    placeholder="Ex: 5500"
-                    className="w-32 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
-                  />
-                  <span className="text-[10px] italic">Ainda não exibido ao cliente.</span>
-                </div>
-              </details>
             </div>
             );
           })}
@@ -764,12 +793,16 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
             <button
               onClick={() => {
                 if (newSemiModelo.trim()) {
-                  // Novo item herda a categoria da aba aberta.
+                  // Novo item herda a categoria da aba aberta e vem com duas
+                  // variantes vazias — operador preenche storage/preço inline.
                   setSeminovos([...seminovos, {
                     modelo: newSemiModelo.trim(),
-                    storages: ["128GB", "256GB"],
                     ativo: true,
                     categoria: categoriaAtiva,
+                    variantes: [
+                      { storage: "128GB", ativo: true },
+                      { storage: "256GB", ativo: true },
+                    ],
                   }]);
                   setNewSemiModelo("");
                 }
