@@ -965,6 +965,19 @@ export default function ProdutoSpecFields({
         </div>
       )}
 
+      {/* Acessórios: campo Tela se o modelo tem telas configuradas em /admin/catalogo */}
+      {row.categoria === "ACESSORIOS" && hasCatalogModel && (modeloConfigs.telas?.length || 0) > 0 && (
+        <div className={`grid grid-cols-2 gap-3 p-3 ${bgSection} rounded-lg`}>
+          <div>
+            <p className={labelCls}>Tela</p>
+            <select value={row.spec.ac_tela} onChange={(e) => setSpec("ac_tela", e.target.value)} className={inputCls}>
+              <option value="">— Selecionar —</option>
+              {modeloConfigs.telas?.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* Cor — após specs específicos da categoria */}
       {(hasCatalogModel || !categoryModelos.length) && (
         <div className={`grid gap-3 ${compactMode ? "grid-cols-1" : "grid-cols-2 md:grid-cols-3"}`}>

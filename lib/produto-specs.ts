@@ -267,6 +267,7 @@ export interface ProdutoSpec {
   ipad_modelo: string; ipad_chip: string; ipad_tela: string; ipad_storage: string; ipad_conn: string;
   aw_modelo: string; aw_tamanho: string; aw_conn: string; aw_pulseira: string; aw_band: string;
   air_modelo: string; air_descricao: string;
+  ac_tela: string;
 }
 
 export const DEFAULT_SPEC: ProdutoSpec = {
@@ -277,6 +278,7 @@ export const DEFAULT_SPEC: ProdutoSpec = {
   ipad_modelo: "AIR M4", ipad_chip: "", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
   aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
   air_modelo: "AIRPODS 4", air_descricao: "",
+  ac_tela: "",
 };
 
 // ── Mapa de cores Português → Inglês (nomes comerciais Apple) ──
