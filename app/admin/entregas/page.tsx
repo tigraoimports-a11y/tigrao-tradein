@@ -201,28 +201,31 @@ function formatPagamentoDisplay(
  */
 function formatProdutoMotoboy(produto: string | null | undefined): string {
   if (!produto) return "—";
-  const parts = produto.split(" + ").map(s => s.trim()).filter(Boolean);
-  if (parts.length <= 1) return produto;
+  const rawParts = produto.split(" + ").map(s => s.trim()).filter(Boolean);
+  if (rawParts.length <= 1) return produto;
 
   const deviceRegex = /\b(iphone|macbook|ipad|apple\s*watch|airpods?|mac\s*mini|mac\s*studio|imac)\b/i;
-  const devicesCount = parts.filter(p => deviceRegex.test(p)).length;
-  if (devicesCount > 1) {
-    // Multi-produto real — mantem bullets
-    return "\n" + parts.map(p => `   • ${p}`).join("\n");
+  const startsWithStorage = (s: string) => /^\d+\s*(GB|TB)\b/i.test(s);
+
+  // Agrupa parts: cada device inicia um grupo; specs sem device (ex:
+  // "512GB" do Mac Mini) ficam anexados ao grupo anterior. Evita que um
+  // unico produto com RAM/SSD em campos separados vire bullets separados.
+  const grupos: string[] = [];
+  for (const part of rawParts) {
+    if (deviceRegex.test(part) || grupos.length === 0) {
+      grupos.push(part);
+    } else {
+      const last = grupos[grupos.length - 1];
+      const sep = startsWithStorage(part) && startsWithStorage(last.split(" ").pop() || "") ? "/" : " ";
+      grupos[grupos.length - 1] = last + sep + part;
+    }
   }
 
-  // Mesmo produto com specs colados por "+". Junta em linha unica.
-  // Separadores: "/" entre tokens que comecam com NUMERO+GB/TB (storage/RAM),
-  //              espaco no resto.
-  const startsWithStorage = (s: string) => /^\d+\s*(GB|TB)\b/i.test(s);
-  let out = parts[0];
-  for (let i = 1; i < parts.length; i++) {
-    const prev = parts[i - 1];
-    const curr = parts[i];
-    const sep = startsWithStorage(prev) && startsWithStorage(curr) ? "/" : " ";
-    out += sep + curr;
+  if (grupos.length > 1) {
+    // Multi-produto real — mantem bullets
+    return "\n" + grupos.map(p => `   • ${p}`).join("\n");
   }
-  return out;
+  return grupos[0];
 }
 
 export default function EntregasPage() {
