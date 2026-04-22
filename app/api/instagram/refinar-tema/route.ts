@@ -32,6 +32,66 @@ Mesmo para DICA, COMPARATIVO ou NOTICIA em estilo Emanuel Pessoa, o título deve
 - DICA + Emanuel Pessoa: "A bateria do seu iPhone morre às 18h. Tem solução — e não é carregador novo."
 - COMPARATIVO + Emanuel Pessoa: "iPhone 17 vs 17 Pro: o Pro é superior. Só que não pro que você faz com o celular."
 - NOTICIA + Emanuel Pessoa: "Apple Watch Ultra 3 chegou. E tem um motivo pra Apple não ter feito alarde."`,
+
+  CARIOCA_DESCONTRAIDO: `TÍTULO — estilo carioca descontraído (papo de balcão)
+Escreva como um balconista gente-boa no shopping do Rio conversando com o cliente. Soa humano, levemente irreverente, sem forçar gíria. Humor leve é bem-vindo.
+
+Padrões que funcionam:
+- Conversa direta: "Chegou o 17 Pro Max, mano — e a história desse aparelho é boa."
+- Convite casual: "Passa aqui que eu te mostro o iPhone que tá saindo mais esse mês."
+- Humor leve: "iPad pro estudante: comprei pra anotar aula, virei YouTuber."
+- Opinião pessoal: "Minha opinião? O 16 seminovo ainda é o melhor negócio de 2026."
+
+Evite: gíria forçada ("bora", "top demais", "manin maneirinho"), palavrão, formalismo.
+Prefira: leveza + autoridade de quem vende iPhone há anos. Máx 110 caracteres.`,
+
+  STORYTELLING_PREMIUM: `TÍTULO — estilo storytelling premium (narrativa cinematográfica)
+Escreva como se fosse narração de comercial Apple. Tom aspiracional, emocional, evocativo. Fala do produto pelo que ele MUDA na vida, não pelas specs.
+
+Padrões que funcionam:
+- Tempo suspenso: "Três anos depois, ele ainda te pergunta: vale a pena trocar?"
+- Promessa implícita: "Um iPhone não é sobre o chip. É sobre o que você deixa de perder."
+- Contemplativo: "A câmera do 17 Pro não foi feita pra postar. Foi feita pra lembrar."
+- Pergunta íntima: "Quando foi a última vez que seu celular te surpreendeu?"
+
+Evite: specs no título ("48MP", "A19 Pro"), dados secos, clickbait.
+Prefira: emoção > razão. Concreto e curto. Máx 100 caracteres.`,
+
+  COMPARATIVO_TECNICO: `TÍTULO — estilo comparativo técnico (direto ao número)
+Escreva como um review de canal sério de tecnologia. Título declarativo, com número específico, sem floreio. Promete dado útil.
+
+Padrões que funcionam:
+- X vs Y em N pontos: "16 Pro vs 17 Pro: 4 diferenças que importam, 3 que não"
+- Veredicto curto: "iPad Air M4 vs iPad Pro M5: pro freelancer, qual compra?"
+- Pergunta objetiva: "Trocar do 15 pro 17 vale os R$ 4 mil de diferença?"
+- Dado isolado: "Bateria do 17 Pro Max: 38% a mais que o 16 Pro Max em uso real"
+
+Evite: adjetivos ("incrível", "impressionante"), emoção, gíria.
+Prefira: número no título + 1 pergunta de decisão. Máx 95 caracteres.`,
+
+  VIRAL_POLEMICO: `TÍTULO — estilo viral polêmico (hot-take com contexto)
+Escreva um hot-take que faz o leitor parar. Controvérsia calculada — precisa ter tese defensável no post, não é clickbait vazio. Frases curtíssimas, PONTO FINAL marcado.
+
+Padrões que funcionam:
+- Negação provocadora: "Você NÃO deveria comprar o 17 Pro Max. A não ser que..."
+- Tese impopular: "iPhone 16 é melhor que iPhone 17. Em 2026, pelo menos."
+- Declaração absoluta: "Ninguém precisa de iPad Pro M5. Sério."
+- Unpopular ranking: "O iPhone mais subestimado da Apple é o 15 Plus."
+
+Evite: "você não vai acreditar", "chocante", "bombou", clickbait barato.
+Prefira: tese específica + gancho de "mas tem um motivo". Máx 90 caracteres. Use CAPS em 1 palavra pra enfatizar.`,
+
+  EDUCATIVO_DIDATICO: `TÍTULO — estilo educativo didático (professor gente-boa)
+Escreva como um professor passo-a-passo que quer realmente ENSINAR. Título promete um skill/resultado concreto e diz em quanto tempo.
+
+Padrões que funcionam:
+- Como + tempo: "Como transferir tudo pro iPhone novo em 15 minutos (passo a passo)"
+- Resultado + número: "3 ajustes no iPhone que dobram a bateria no dia-a-dia"
+- "Você sabia": "Você sabia que o iPhone salva a localização onde você tirou cada foto?"
+- Objetivo claro: "Pra quem vai comprar o primeiro Mac em 2026: 4 coisas a saber antes"
+
+Evite: mistério, gancho emocional, clickbait, frase solta sem promessa.
+Prefira: verbo de ação + número + resultado mensurável. Máx 110 caracteres.`,
 };
 
 function buildSystemPrompt(estilo: string): string {

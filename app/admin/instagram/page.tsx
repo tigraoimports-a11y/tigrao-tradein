@@ -6,7 +6,14 @@ import { useRouter } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 type Tipo = "DICA" | "COMPARATIVO" | "NOTICIA" | "ANALISE_PROFUNDA";
-type Estilo = "PADRAO" | "EMANUEL_PESSOA";
+type Estilo =
+  | "PADRAO"
+  | "EMANUEL_PESSOA"
+  | "CARIOCA_DESCONTRAIDO"
+  | "STORYTELLING_PREMIUM"
+  | "COMPARATIVO_TECNICO"
+  | "VIRAL_POLEMICO"
+  | "EDUCATIVO_DIDATICO";
 
 interface Post {
   id: string;
@@ -42,6 +49,11 @@ const TIPO_LABEL: Record<Post["tipo"], string> = {
 const ESTILO_LABEL: Record<Post["estilo"], string> = {
   PADRAO: "Padrão Tigrão",
   EMANUEL_PESSOA: "Emanuel Pessoa",
+  CARIOCA_DESCONTRAIDO: "Carioca descontraído",
+  STORYTELLING_PREMIUM: "Storytelling premium",
+  COMPARATIVO_TECNICO: "Comparativo técnico",
+  VIRAL_POLEMICO: "Viral polêmico",
+  EDUCATIVO_DIDATICO: "Educativo didático",
 };
 
 export default function InstagramListPage() {
@@ -269,13 +281,22 @@ export default function InstagramListPage() {
                   onChange={e => setForm({ ...form, estilo: e.target.value as Post["estilo"] })}
                   className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                 >
-                  <option value="PADRAO">Padrão Tigrão (descontraído + técnico, layout capa/meio/CTA)</option>
-                  <option value="EMANUEL_PESSOA">Emanuel Pessoa (narrativa didática, negrito, foto real no rodapé)</option>
+                  <option value="PADRAO">Padrão Tigrão (descontraído + técnico)</option>
+                  <option value="EMANUEL_PESSOA">Emanuel Pessoa (narrativa didática, negrito)</option>
+                  <option value="CARIOCA_DESCONTRAIDO">Carioca descontraído (papo de balcão)</option>
+                  <option value="STORYTELLING_PREMIUM">Storytelling premium (narrativa Apple Keynote)</option>
+                  <option value="COMPARATIVO_TECNICO">Comparativo técnico (dados + veredicto)</option>
+                  <option value="VIRAL_POLEMICO">Viral polêmico (hot-take com tese defensável)</option>
+                  <option value="EDUCATIVO_DIDATICO">Educativo didático (passo-a-passo)</option>
                 </select>
                 <p className="text-xs text-[#86868B] mt-1">
-                  {form.estilo === "EMANUEL_PESSOA"
-                    ? "Frases curtas, parágrafos separados, **negrito** em frases-chave, header tipo tweet + imagem real ocupando metade do slide."
-                    : "Estilo original da loja com capa, slides de meio e CTA final."}
+                  {form.estilo === "EMANUEL_PESSOA" && "Frases curtas, parágrafos separados, **negrito** em frases-chave, header tipo tweet + imagem real ocupando metade do slide."}
+                  {form.estilo === "PADRAO" && "Estilo original da loja com capa, slides de meio e CTA final."}
+                  {form.estilo === "CARIOCA_DESCONTRAIDO" && "Papo de balcão gente-boa, gíria carioca sem forçar, opinião pessoal. Ideal pra lançamento e novidade."}
+                  {form.estilo === "STORYTELLING_PREMIUM" && "Narrativa emocional estilo Apple Keynote — vende o momento, não a spec. Ideal pra review."}
+                  {form.estilo === "COMPARATIVO_TECNICO" && "Direto ao ponto, dados confirmados, veredicto por dimensão (bateria, câmera, chip). Ideal pra comparativo."}
+                  {form.estilo === "VIRAL_POLEMICO" && "Hot-take com tese defensável, frases curtíssimas, caps em palavras-chave. Ideal pra engajamento alto."}
+                  {form.estilo === "EDUCATIVO_DIDATICO" && "Professor passo-a-passo, resultado concreto + tempo, antecipa dúvidas. Ideal pra tutorial."}
                 </p>
               </div>
               <div>
