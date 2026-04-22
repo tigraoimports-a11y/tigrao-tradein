@@ -867,13 +867,14 @@ export default function GastosPage() {
         // Para categorias estruturadas, SEMPRE usar buildProdutoName (ignora nome livre)
         const isStructured = STRUCTURED_CATS.includes(p.categoria);
         const nome = isStructured ? buildProdutoName(p.categoria, p.spec, p.cor) : (p.produto || "");
-        // Condição + caixa + grade → prefixo no observacao
+        // Condição + caixa + grade + tela acessório → prefixo no observacao
         const _cond = p.condicao || "NOVO";
         const _prefix = _cond !== "NOVO" ? `[${_cond}]` : "";
         const _caixaTag = p.caixa ? "[COM_CAIXA]" : "";
         const _gradeKey = p.grade ? (p.grade) : "";
         const _gradeTag = _gradeKey ? `[GRADE_${_gradeKey}]` : "";
-        const _tags = `${_prefix}${_caixaTag}${_gradeTag}`;
+        const _telaTag = p.categoria === "ACESSORIOS" && p.spec.ac_tela ? `[TELA:${p.spec.ac_tela}]` : "";
+        const _tags = `${_prefix}${_caixaTag}${_gradeTag}${_telaTag}`;
         const obsCondicao = _tags || null;
         // Cliente registrado sobrescreve fornecedor
         const fornecedorFinal = p.cliente?.trim() || p.fornecedor || null;
