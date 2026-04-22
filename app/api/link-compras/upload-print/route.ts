@@ -295,8 +295,18 @@ async function extractNumberFromPrint(
     "image/gif": "image/gif",
     "image/webp": "image/webp",
   };
-  const mt = supportedTypes[mediaType.toLowerCase()] || "image/png";
+  const originalMime = mediaType.toLowerCase();
+  const mt = supportedTypes[originalMime] || "image/png";
+  const mimeMismatch = !supportedTypes[originalMime];
   const base64 = buffer.toString("base64");
+  console.log(`[upload-print:ocr] image ${tipo}: mime=${originalMime} → ${mt}${mimeMismatch ? " (FALLBACK - Claude pode rejeitar)" : ""}, size=${buffer.length} bytes, base64=${base64.length} chars`);
+  if (mimeMismatch) {
+    console.warn(`[upload-print:ocr] MIME type não suportado pelo Claude Vision: ${originalMime}. HEIC/HEIF precisa ser convertido antes do upload.`);
+    return {
+      ok: false,
+      error: `Formato "${originalMime}" não suportado. Use JPG ou PNG (tire o print de novo com Botão Direito + Botão Volume).`,
+    };
+  }
   const client = new Anthropic({ apiKey });
   const prompt = buildPrompt(tipo);
 
