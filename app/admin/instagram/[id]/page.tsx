@@ -675,7 +675,15 @@ export default function InstagramPostPage() {
                   disabled={!podeEditar}
                   placeholder="Texto"
                   rows={3}
+                  className="w-full mb-2 px-3 py-2 rounded-lg border border-[#E8E8ED] text-sm focus:outline-none focus:border-[#E8740E]"
+                />
+                <input
+                  value={slide.destaque || ""}
+                  onChange={e => atualizarSlide(idx, "destaque", e.target.value)}
+                  disabled={!podeEditar}
+                  placeholder="💥 Destaque (texto GIGANTE em laranja — deixa vazio pra não aparecer)"
                   className="w-full px-3 py-2 rounded-lg border border-[#E8E8ED] text-sm focus:outline-none focus:border-[#E8740E]"
+                  maxLength={10}
                 />
                 <div className="text-xs text-[#86868B] mt-1 flex gap-4 flex-wrap">
                   <span>Título: {slide.titulo.length} chars</span>
