@@ -2472,13 +2472,14 @@ export default function EstoquePage() {
       const nome = (isStructured ? buildProdutoNameFromSpec(p.categoria, p.spec, p.cor) : p.produto || "").toUpperCase();
       if (!nome) continue;
 
-      // Monta observacao com tags (grade/caixa/cabo/fonte) + texto livre
+      // Monta observacao com tags (grade/caixa/cabo/fonte/tela_acessorio) + texto livre
       const obsParts: string[] = [];
       if (p.observacao?.trim()) obsParts.push(p.observacao.trim());
       if (p.grade) obsParts.push(`[GRADE_${p.grade}]`);
       if (p.caixa) obsParts.push("[COM_CAIXA]");
       if (p.cabo) obsParts.push("[COM_CABO]");
       if (p.fonte) obsParts.push("[COM_FONTE]");
+      if (p.categoria === "ACESSORIOS" && p.spec?.ac_tela) obsParts.push(`[TELA:${p.spec.ac_tela}]`);
       // tipo=A_CAMINHO com condicao diferente de NOVO: prefixa
       if (form.tipo === "A_CAMINHO" && p.condicao && p.condicao !== "NOVO") obsParts.unshift(`[${p.condicao}]`);
       const obsFinal = obsParts.length > 0 ? obsParts.join(" ") : null;
@@ -5577,6 +5578,10 @@ export default function EstoquePage() {
                             if (ramMatch) spec.mb_ram = ramMatch[1];
                             if (storageMatch) spec.mb_storage = storageMatch[1];
                             if (nucleosMatch) spec.mb_nucleos = nucleosMatch[1];
+                          } else if (baseCat === "ACESSORIOS") {
+                            // Tela de acessório vem como [TELA:X"] na observação
+                            const telaObsMatch = (p.observacao || "").match(/\[TELA:([^\]]+)\]/);
+                            if (telaObsMatch) spec.ac_tela = telaObsMatch[1].trim();
                           }
                           setRecatRow({ ...base, categoria: baseCat || p.categoria || "IPHONES", spec, cor: p.cor || "" });
                           setRecatMode(true);
@@ -5621,19 +5626,28 @@ export default function EstoquePage() {
                             if (!novoNome) { setMsg("Selecione o modelo para gerar o nome"); return; }
                             const novaCor = recatRow.cor || null;
                             const novaCategoria = recatRow.categoria || p.categoria;
-                            // Salvar nucleos na observacao se MacBook/Mac Mini
+                            // Salvar nucleos e tela_acessorio na observacao
                             const specNucleos = recatRow.spec?.mb_nucleos || recatRow.spec?.mm_nucleos || "";
+                            const specAcTela = novaCategoria === "ACESSORIOS" ? (recatRow.spec?.ac_tela || "") : "";
                             let novaObs = p.observacao || "";
+                            let obsChanged = false;
                             if (specNucleos) {
                               novaObs = novaObs.replace(/\s*\[NUCLEOS:[^\]]+\]/gi, "").trim();
                               novaObs = (novaObs + ` [NUCLEOS:${specNucleos}]`).trim();
+                              obsChanged = true;
+                            }
+                            // Remove tag TELA antiga e adiciona nova (só se ACESSORIOS)
+                            if (novaCategoria === "ACESSORIOS") {
+                              const obsSemTela = novaObs.replace(/\s*\[TELA:[^\]]+\]/gi, "").trim();
+                              novaObs = specAcTela ? `${obsSemTela} [TELA:${specAcTela}]`.trim() : obsSemTela;
+                              obsChanged = true;
                             }
                             try {
                               const nomeAntigo = p.produto;
                               const patchData: Record<string, unknown> = { produto: novoNome, categoria: novaCategoria, cor: novaCor };
-                              if (specNucleos) patchData.observacao = novaObs;
+                              if (obsChanged) patchData.observacao = novaObs;
                               await apiPatch(p.id, patchData);
-                              const updatedFields = { produto: novoNome, categoria: novaCategoria, cor: novaCor, ...(specNucleos ? { observacao: novaObs } : {}) };
+                              const updatedFields = { produto: novoNome, categoria: novaCategoria, cor: novaCor, ...(obsChanged ? { observacao: novaObs } : {}) };
                               setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, ...updatedFields } : x));
                               setDetailProduct(prev => prev ? { ...prev, ...updatedFields } : null);
                               let vendaMsg = "";
