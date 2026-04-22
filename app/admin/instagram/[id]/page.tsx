@@ -306,6 +306,35 @@ export default function InstagramPostPage() {
     }
   };
 
+  // Baixa cada PNG renderizado como arquivo no Mac do admin. Usa fetch + blob
+  // pra forçar download (alternativa <a download> direta falha quando URL é
+  // cross-origin como Supabase Storage — browser abre em nova aba em vez de baixar).
+  const baixarTodas = async () => {
+    if (!post?.imagens_urls || post.imagens_urls.length === 0) return;
+    setMsg("Baixando slides...");
+    const slug = (post.tema || "post").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40) || "post";
+    try {
+      for (let i = 0; i < post.imagens_urls.length; i++) {
+        const url = post.imagens_urls[i];
+        const r = await fetch(url, { cache: "no-store" });
+        const blob = await r.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = `${slug}-${String(i + 1).padStart(2, "0")}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      }
+      setMsg(`${post.imagens_urls.length} slides baixados.`);
+    } catch (err) {
+      setMsg("Erro ao baixar: " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
   const salvarEdicao = async (novoStatus?: Post["status"], silent = false) => {
     setSalvando(true);
     if (!silent) setMsg("");
@@ -706,13 +735,25 @@ export default function InstagramPostPage() {
                     return <p className="text-xs text-[#2ECC71] mt-1">✓ Todos os {comImg} slides com imagem.</p>;
                   })()}
                 </div>
-                <button
-                  onClick={renderizar}
-                  disabled={renderizando || salvando}
-                  className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50"
-                >
-                  {renderizando ? "⏳ Renderizando..." : temImagensRenderizadas ? "🔄 Re-renderizar" : "🎨 Renderizar slides"}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {temImagensRenderizadas && (
+                    <button
+                      onClick={baixarTodas}
+                      disabled={renderizando || salvando}
+                      className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#6E6E73] text-sm font-semibold hover:bg-[#F5F5F7] disabled:opacity-50"
+                      title={`Baixa os ${post.imagens_urls!.length} PNGs pro seu Mac`}
+                    >
+                      📥 Baixar todas
+                    </button>
+                  )}
+                  <button
+                    onClick={renderizar}
+                    disabled={renderizando || salvando}
+                    className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+                  >
+                    {renderizando ? "⏳ Renderizando..." : temImagensRenderizadas ? "🔄 Re-renderizar" : "🎨 Renderizar slides"}
+                  </button>
+                </div>
               </div>
               {temImagensRenderizadas && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-3">
