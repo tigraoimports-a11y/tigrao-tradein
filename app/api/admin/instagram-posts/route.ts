@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (!["DICA", "COMPARATIVO", "NOTICIA", "ANALISE_PROFUNDA"].includes(tipo)) {
     return NextResponse.json({ error: "tipo inválido" }, { status: 400, headers: noCache });
   }
-  if (!["PADRAO", "EMANUEL_PESSOA"].includes(estilo)) {
+  if (!["PADRAO", "EMANUEL_PESSOA", "CARIOCA_DESCONTRAIDO", "STORYTELLING_PREMIUM", "COMPARATIVO_TECNICO", "VIRAL_POLEMICO", "EDUCATIVO_DIDATICO"].includes(estilo)) {
     return NextResponse.json({ error: "estilo inválido" }, { status: 400, headers: noCache });
   }
   const n = Number(numero_slides);

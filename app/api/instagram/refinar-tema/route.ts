@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const ideia = typeof body?.ideia === "string" ? body.ideia.trim() : "";
   const estiloRaw = typeof body?.estilo === "string" ? body.estilo : "PADRAO";
-  const estilo = ["PADRAO", "EMANUEL_PESSOA"].includes(estiloRaw) ? estiloRaw : "PADRAO";
+  const estilo = ["PADRAO", "EMANUEL_PESSOA", "CARIOCA_DESCONTRAIDO", "STORYTELLING_PREMIUM", "COMPARATIVO_TECNICO", "VIRAL_POLEMICO", "EDUCATIVO_DIDATICO"].includes(estiloRaw) ? estiloRaw : "PADRAO";
   if (!ideia) return NextResponse.json({ error: "ideia obrigatória" }, { status: 400 });
   if (ideia.length > 500) return NextResponse.json({ error: "ideia muito longa (máx 500)" }, { status: 400 });
 
