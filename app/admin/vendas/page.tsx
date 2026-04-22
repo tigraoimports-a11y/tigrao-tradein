@@ -5997,7 +5997,7 @@ export default function VendasPage() {
                                         >
                                           💲 Reajuste
                                         </button>}
-                                        {podeVerHistorico && v.status_pagamento === "FINALIZADO" && (
+                                        {podeVerHistorico && (v.status_pagamento === "FINALIZADO" || v.status_pagamento === "FORMULARIO_PREENCHIDO") && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
