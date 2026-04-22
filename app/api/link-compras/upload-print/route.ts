@@ -237,6 +237,9 @@ async function callClaude(
   const response = await client.messages.create({
     model,
     max_tokens: 100,
+    // temperature: 0 → determinístico: mesma imagem sempre gera mesma resposta.
+    // Sem isso, Haiku às vezes acerta e às vezes retorna NAO_ENCONTRADO na mesma imagem.
+    temperature: 0,
     messages: [
       {
         role: "user",
@@ -303,11 +306,14 @@ async function extractNumberFromPrint(
     haikuText = await callClaude(client, HAIKU_MODEL, base64, mt, prompt);
     console.log(`[upload-print:ocr] haiku ${tipo} response:`, JSON.stringify(haikuText));
     const result = validateAndSanitize(haikuText, tipo);
-    if (result.ok) return result;
+    if (result.ok) {
+      console.log(`[upload-print:ocr] haiku ${tipo} SUCCESS → returning "${result.value}"`);
+      return result;
+    }
+    console.warn(`[upload-print:ocr] haiku ${tipo} validation failed: ${result.error}. Trying Sonnet...`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[upload-print:ocr] haiku ${tipo} FAIL:`, msg);
-    // Se foi erro de modelo não existir, tenta direto Sonnet. Outros erros sobem também pra tentar.
   }
 
   // Tentativa 2 (fallback): Sonnet 4.6 — mais poderoso, ~2x o custo
@@ -315,10 +321,14 @@ async function extractNumberFromPrint(
     const sonnetText = await callClaude(client, SONNET_MODEL, base64, mt, prompt);
     console.log(`[upload-print:ocr] sonnet ${tipo} response:`, JSON.stringify(sonnetText));
     const result = validateAndSanitize(sonnetText, tipo);
-    if (result.ok) return result;
+    if (result.ok) {
+      console.log(`[upload-print:ocr] sonnet ${tipo} SUCCESS → returning "${result.value}"`);
+      return result;
+    }
+    console.warn(`[upload-print:ocr] sonnet ${tipo} validation failed: ${result.error}`);
     return {
       ok: false,
-      error: `Haiku e Sonnet falharam. Sonnet disse: "${sonnetText.slice(0, 80)}"`,
+      error: `Haiku e Sonnet falharam. Haiku: "${haikuText.slice(0, 40)}" | Sonnet: "${sonnetText.slice(0, 40)}"`,
       rawResponse: sonnetText,
     };
   } catch (err) {
