@@ -245,7 +245,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
   };
   const getOrigemFromObs = (obs: string | null): string => {
     if (!obs) return "";
-    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_(A\+|AB|A|B)\])?\s*/, "");
+    return obs.replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
   };
   const getCaixaFromObs = (obs: string | null): boolean => {
     return !!(obs && obs.includes("[COM_CAIXA]"));
