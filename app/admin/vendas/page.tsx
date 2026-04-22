@@ -4597,6 +4597,8 @@ export default function VendasPage() {
           // Helpers de pendencia: NF (nao anexada ou anexada sem envio) e Termo (troca sem termo assinado)
           const isNFPendente = (v: typeof vendas[number]): boolean => {
             if (v.is_brinde) return false;
+            // Atacado nao emite NF (revendedor emite na ponta). Nunca considerar pendente.
+            if (v.tipo === "ATACADO") return false;
             if (!v.nota_fiscal_url) return true;
             const enviada = (v as unknown as { nota_fiscal_enviada?: boolean }).nota_fiscal_enviada;
             return !!(v.email && !enviada);
@@ -4726,7 +4728,8 @@ export default function VendasPage() {
                       enviada. Confirma antes, mostra contagem e erros. */}
                   {(() => {
                     const pendentesNF = filtered.filter(v =>
-                      v.nota_fiscal_url
+                      v.tipo !== "ATACADO"
+                      && v.nota_fiscal_url
                       && v.email
                       && !((v as unknown as { nota_fiscal_enviada?: boolean }).nota_fiscal_enviada)
                     );
