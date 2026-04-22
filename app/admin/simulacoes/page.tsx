@@ -273,16 +273,16 @@ export default function AdminPage() {
       let items: HistoricoItem[] = [];
       if (res.ok) {
         const json = await res.json();
-        // Mostra todo cliente que preencheu o formulario de compra — tanto
-        // via Simulador de trade-in quanto via link manual do /gerar-link. O
-        // filtro anterior exigia operador === "Simulador" OU simulacao_id,
-        // excluindo clientes reais que o vendedor atendeu diretamente pelo
-        // link manual (ex: MARCELLA 21/04).
+        // Mostra so clientes que completaram o funil COM troca de aparelho.
+        // Qualquer origem (Simulador, link manual, via preview, etc) entra
+        // desde que tenha troca_produto preenchido — compras simples sem
+        // upgrade ficam so na aba Simulacoes/Gerar Link.
         const valido = (r: HistoricoItem) =>
           (!!r.cliente_preencheu_em || !!r.entrega_id || !!r.pagamento_pago) &&
           r.status !== "GOSTEI" &&
           r.status !== "SAIR" &&
-          r.status !== "AGUARDANDO_MP";
+          r.status !== "AGUARDANDO_MP" &&
+          !!(r.troca_produto || r.troca_produto2);
         items = (json.data || []).filter(valido);
       }
       setHistorico(items);
