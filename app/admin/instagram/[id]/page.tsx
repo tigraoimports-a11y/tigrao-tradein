@@ -89,6 +89,10 @@ export default function InstagramPostPage() {
   const [agendando, setAgendando] = useState(false);
   const [agendadoInput, setAgendadoInput] = useState("");
 
+  // Adicionar detalhes e re-gerar
+  const [mostrandoDetalhes, setMostrandoDetalhes] = useState(false);
+  const [detalhesExtras, setDetalhesExtras] = useState("");
+
   const fetchPost = useCallback(async () => {
     if (!password || !id) return;
     try {
@@ -107,14 +111,19 @@ export default function InstagramPostPage() {
 
   useEffect(() => { fetchPost(); }, [fetchPost]);
 
-  const gerar = async () => {
+  const gerar = async (detalhes?: string) => {
+    const temDetalhes = !!detalhes && detalhes.trim().length > 0;
     setGerando(true);
-    setMsg("Gerando... isso pode levar até 2 minutos (pesquisa + fact-check).");
+    setMsg(
+      temDetalhes
+        ? "Re-gerando com suas informações adicionais... (~2 min)"
+        : "Gerando... isso pode levar até 2 minutos (pesquisa + fact-check)."
+    );
     try {
       const res = await fetch("/api/instagram/gerar", {
         method: "POST",
         headers: apiHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ postId: id }),
+        body: JSON.stringify({ postId: id, detalhesExtras: temDetalhes ? detalhes : undefined }),
       });
       const j = await res.json();
       if (!res.ok || !j.ok) {
@@ -126,7 +135,11 @@ export default function InstagramPostPage() {
       if (j.data.slides_json) setSlidesEdit(j.data.slides_json);
       if (j.data.legenda) setLegendaEdit(j.data.legenda);
       if (j.data.hashtags) setHashtagsEdit(j.data.hashtags.join(" "));
-      setMsg("Gerado com sucesso.");
+      setMsg(temDetalhes ? "Re-gerado com seus detalhes incorporados." : "Gerado com sucesso.");
+      if (temDetalhes) {
+        setDetalhesExtras("");
+        setMostrandoDetalhes(false);
+      }
     } catch (e) {
       setMsg("Erro de rede: " + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -462,7 +475,7 @@ export default function InstagramPostPage() {
             Clique pra a IA pesquisar o tema, verificar os fatos em múltiplas fontes e montar os {post.numero_slides} slides do carrossel.
           </p>
           <button
-            onClick={gerar}
+            onClick={() => gerar()}
             disabled={gerando}
             className="px-5 py-2.5 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
           >
@@ -485,11 +498,18 @@ export default function InstagramPostPage() {
             {podeEditar && (
               <div className="flex gap-2 flex-wrap">
                 <button
-                  onClick={gerar}
+                  onClick={() => gerar()}
                   disabled={gerando}
                   className="px-3 py-1.5 rounded-xl border border-[#D2D2D7] text-xs text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50"
                 >
                   {gerando ? "Gerando..." : "🔄 Re-gerar texto"}
+                </button>
+                <button
+                  onClick={() => setMostrandoDetalhes(v => !v)}
+                  disabled={gerando}
+                  className="px-3 py-1.5 rounded-xl border border-[#4F46E5] text-xs text-[#4338CA] hover:bg-[#EEF2FF] disabled:opacity-50"
+                >
+                  {mostrandoDetalhes ? "✖ Fechar detalhes" : "✍️ Adicionar detalhes"}
                 </button>
                 <button
                   onClick={() => salvarEdicao()}
@@ -508,6 +528,40 @@ export default function InstagramPostPage() {
               </div>
             )}
           </div>
+
+          {/* Adicionar detalhes e re-gerar */}
+          {podeEditar && mostrandoDetalhes && (
+            <div className="bg-[#EEF2FF] border border-[#4F46E5]/30 rounded-2xl p-4 mb-4">
+              <h3 className="text-sm font-semibold text-[#1D1D1F] mb-1">✍️ Adicionar mais detalhes</h3>
+              <p className="text-xs text-[#6E6E73] mb-3">
+                Escreva o que você quer que seja incluído/ajustado no carrossel. A IA vai pegar o texto atual + o que você escrever aqui e refazer os slides incorporando seus pontos.
+              </p>
+              <textarea
+                value={detalhesExtras}
+                onChange={e => setDetalhesExtras(e.target.value)}
+                placeholder="Ex: menciona também que temos em estoque no RJ para retirada imediata; destaca que aceitamos trade-in; o modelo Ultra tem botão Action dedicado..."
+                rows={5}
+                className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:border-[#4F46E5]"
+                disabled={gerando}
+              />
+              <div className="flex gap-2 mt-3 justify-end">
+                <button
+                  onClick={() => { setDetalhesExtras(""); setMostrandoDetalhes(false); }}
+                  disabled={gerando}
+                  className="px-3 py-1.5 rounded-xl border border-[#D2D2D7] text-xs text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => gerar(detalhesExtras)}
+                  disabled={gerando || !detalhesExtras.trim()}
+                  className="px-4 py-1.5 rounded-xl bg-[#4F46E5] text-white text-xs font-semibold hover:bg-[#4338CA] disabled:opacity-50"
+                >
+                  {gerando ? "Re-gerando..." : "🔄 Re-gerar com detalhes"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Ilustrar slides */}
           {podeEditar && (
