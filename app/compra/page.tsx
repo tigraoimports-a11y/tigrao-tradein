@@ -458,9 +458,35 @@ function CompraForm() {
       const json = await res.json();
       if (json.ok) {
         setPrintsUrls((p) => ({ ...p, [key]: json.url }));
-        if (json.extractedOk && json.extracted) {
-          setTextBySlot(slot, json.extracted);
+        // Backend retorna both serial E imei (quando detecta cada um). Preenchemos
+        // ambos os campos do aparelho independente de qual slot foi anexado —
+        // assim se cliente troca os 2 prints de lugar, ainda funciona.
+        const extractedSerial: string | null = json.extractedSerial || null;
+        const extractedImei: string | null = json.extractedImei || null;
+        if (extractedSerial) {
+          if (slot.aparelho === 1) setTrocaSerial1(extractedSerial);
+          else setTrocaSerial2(extractedSerial);
+        }
+        if (extractedImei) {
+          if (slot.aparelho === 1) setTrocaImei1(extractedImei);
+          else setTrocaImei2(extractedImei);
+        }
+        // Status do slot depende do que era esperado ali
+        const valorDoSlot = slot.tipo === "serial" ? extractedSerial : extractedImei;
+        const valorDoOutro = slot.tipo === "serial" ? extractedImei : extractedSerial;
+        if (valorDoSlot) {
           setOcrStatus((p) => ({ ...p, [key]: { state: "ok" } }));
+        } else if (valorDoOutro) {
+          const nomeOutro = slot.tipo === "serial" ? "IMEI" : "Nº de Série";
+          const nomeSlot = slot.tipo === "serial" ? "Nº de Série" : "IMEI";
+          setOcrStatus((p) => ({
+            ...p,
+            [key]: {
+              state: "fail",
+              error: `Esse print é do ${nomeOutro} (salvei lá!). Anexe o print do ${nomeSlot} aqui, ou digite manualmente abaixo.`,
+            },
+          }));
+          setManualMode((p) => ({ ...p, [key]: true }));
         } else {
           setOcrStatus((p) => ({ ...p, [key]: { state: "fail", error: json.extractedError || "Não consegui ler o print" } }));
           setManualMode((p) => ({ ...p, [key]: true }));
@@ -1843,9 +1869,14 @@ function CompraForm() {
                       </div>
                     )}
                     {url && ocr.state === "fail" && (
-                      <p className="text-xs text-amber-700 mb-1.5">
-                        ⚠️ Não consegui ler o {tipoLabel} do print. Digite manualmente abaixo.
-                      </p>
+                      <div className="text-xs text-amber-700 mb-1.5">
+                        <p>⚠️ Não consegui ler o {tipoLabel} do print. Digite manualmente abaixo.</p>
+                        {ocr.error && (
+                          <p className="text-[10px] text-amber-600 mt-0.5 opacity-80 font-mono break-all">
+                            (debug: {ocr.error})
+                          </p>
+                        )}
+                      </div>
                     )}
                     {url && isManual && (
                       <input

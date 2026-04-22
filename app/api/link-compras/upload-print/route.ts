@@ -128,28 +128,26 @@ export async function POST(req: NextRequest) {
       .getPublicUrl(uploadData?.path || filename);
     const publicUrl = urlData?.publicUrl || "";
 
-    // OCR com Claude Haiku Vision: extrai o número digitado no print.
-    // Roda em paralelo com a gravação da URL no banco.
-    const extracted = await extractNumberFromPrint(buffer, file.type, tipo);
+    // OCR: Claude Vision extrai AMBOS serial e IMEI do print, não importa qual
+    // foi anexado (cliente às vezes troca os 2 prints de lugar — a tela Sobre é
+    // comprida e precisa 2 prints pra mostrar tudo).
+    const both = await extractBothFromPrint(buffer, file.type);
 
-    // Mapeia qual coluna da URL do print atualizar
+    // Mapeia qual coluna da URL do print atualizar (isso segue o slot original)
     const urlCol =
       tipo === "serial" && aparelhoNum === 1 ? "troca_print_serial_url" :
       tipo === "imei" && aparelhoNum === 1 ? "troca_print_imei_url" :
       tipo === "serial" && aparelhoNum === 2 ? "troca_print_serial2_url" :
       "troca_print_imei2_url";
 
-    // Mapeia qual coluna de texto (IMEI/Serial digitado) atualizar
-    const textCol =
-      tipo === "serial" && aparelhoNum === 1 ? "troca_serial" :
-      tipo === "imei" && aparelhoNum === 1 ? "troca_imei" :
-      tipo === "serial" && aparelhoNum === 2 ? "troca_serial2" :
-      "troca_imei2";
-
+    // Preenche whichever campo do banco Claude encontrou — independente de
+    // qual slot foi anexado. Se print anexado em "serial" contém IMEI,
+    // preenchemos troca_imei em vez de troca_serial.
+    const colSerial = aparelhoNum === 1 ? "troca_serial" : "troca_serial2";
+    const colImei = aparelhoNum === 1 ? "troca_imei" : "troca_imei2";
     const updatePayload: Record<string, string> = { [urlCol]: publicUrl };
-    if (extracted.ok && extracted.value) {
-      updatePayload[textCol] = extracted.value;
-    }
+    if (both.serial) updatePayload[colSerial] = both.serial;
+    if (both.imei) updatePayload[colImei] = both.imei;
 
     const { error: updateError } = await supabase
       .from("link_compras")
@@ -164,9 +162,10 @@ export async function POST(req: NextRequest) {
       ok: true,
       url: publicUrl,
       field: urlCol,
-      extracted: extracted.value || null,
-      extractedOk: extracted.ok,
-      extractedError: extracted.ok ? null : extracted.error,
+      extractedSerial: both.serial,
+      extractedImei: both.imei,
+      extractedOk: !!(both.serial || both.imei),
+      extractedError: both.error,
     });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
@@ -176,55 +175,74 @@ export async function POST(req: NextRequest) {
 // ============================================================
 // OCR via Claude Vision
 // ============================================================
-// Recebe o buffer da imagem + tipo (serial|imei) e retorna o número
-// extraído da tela "Ajustes > Geral > Sobre" do iPhone.
+// Recebe o buffer da imagem e retorna TANTO o Nº de Série QUANTO o IMEI
+// encontrados no print, se estiverem visíveis.
 //
-// Modelo primário: Haiku 4.5 (barato, ~$0.01/imagem).
-// Fallback: Sonnet 4.6 (se Haiku retornar NAO_ENCONTRADO) — prints
-// amassados, contraste ruim ou resolução baixa às vezes confundem Haiku.
+// A tela "Ajustes > Geral > Sobre" do iPhone é comprida e precisa de 2 prints
+// pra mostrar tudo (parte de cima: Nº de Série. Parte de baixo: IMEI). Cliente
+// às vezes troca os 2 prints de lugar — extraindo both, a API preenche o
+// campo certo independente do slot onde foi anexado.
 //
-// Logs detalhados em [upload-print:ocr] pra debugar via Vercel logs.
-// Fallback final: se ambos falharem, frontend permite digitar manualmente.
+// Modelo primário: Haiku 4.5. Fallback: Sonnet 4.6.
 // ============================================================
-interface ExtractResult {
-  ok: boolean;
-  value?: string;
+interface BothExtracted {
+  serial: string | null;
+  imei: string | null;
+  descricao: string | null;
   error?: string;
-  rawResponse?: string;
 }
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const SONNET_MODEL = "claude-sonnet-4-6";
 
-function buildPrompt(tipo: "serial" | "imei"): string {
-  if (tipo === "imei") {
-    return `Você está analisando uma captura de tela do iPhone (tela "Ajustes > Geral > Sobre").
+const BOTH_PROMPT = `Você está analisando uma captura de tela do iPhone — provavelmente da tela "Ajustes > Geral > Sobre".
 
-Sua tarefa: extrair o **IMEI** do aparelho.
+Sua tarefa: extrair o **Número de Série** E/OU o **IMEI** do aparelho, se estiverem visíveis. Essa tela é comprida e precisa ser rolada — um print captura a parte de cima (Nº de Série) e outro a parte de baixo (IMEI). Nem sempre os dois aparecem no mesmo print.
 
-Como o IMEI aparece na tela:
-- Sempre 15 dígitos numéricos (sem letras)
-- Rótulo "IMEI" ou "IMEI 1" (aparelho principal) — se tiver "IMEI2", IGNORE, pegue o primeiro
-- Pode aparecer com espaços separando grupos (ex: "35 799960 736598 0"). Retorne concatenado sem espaços.
-- Fica na seção "Pessoal" ou similar, perto de "Operadora", "ICCID"
+Como aparecem na tela:
+- **Número de Série**: código alfanumérico com 10-12 caracteres (letras maiúsculas e números, ex: "KWRL2WNXNH", "F2LMD0P9P27L"). Rótulo "Número de Série" ou "Serial Number". Fica perto de "Nome", "Versão do iOS", "Nome do Modelo". NÃO é o "Nº do Modelo" (formato MFXL4LL/A).
+- **IMEI**: 15 dígitos numéricos. Rótulo "IMEI" ou "IMEI 1" (se tiver "IMEI 2", ignore, pegue o primeiro). Pode aparecer com espaços separando grupos (ex: "35 799960 736598 0"). Fica perto de "ICCID", "SEID", "EID", "Bloqueio de Operadora".
 
-Responda APENAS os 15 dígitos do IMEI principal, sem nenhum outro texto, label, explicação ou formatação. Exemplo de resposta correta: 357999607365980
+Responda APENAS um JSON válido, sem markdown, sem explicação, sem code fences. Formato:
+{"serial": "KWRL2WNXNH", "imei": "357999607365980", "descricao": "tela Sobre completa"}
 
-Se a imagem NÃO contém a tela Ajustes>Sobre do iPhone, ou se nenhum IMEI está visível/legível, responda exatamente: NAO_ENCONTRADO`;
+Se algum campo não aparecer na imagem, use null:
+{"serial": null, "imei": "357999607365980", "descricao": "parte de baixo da tela Sobre com IMEI, ICCID, SEID"}
+{"serial": "KWRL2WNXNH", "imei": null, "descricao": "parte de cima da tela Sobre com Nome, Versão, Modelo, Serial"}
+
+Se nenhum aparecer:
+{"serial": null, "imei": null, "descricao": "tela de Wi-Fi, não é a tela Sobre"}
+{"serial": null, "imei": null, "descricao": "foto desfocada, não consigo ler os textos"}`;
+
+function parseJsonResponse(text: string): { serial: string | null; imei: string | null; descricao: string | null } | null {
+  // Remove markdown code fences se Claude adicionar (apesar do prompt pedir pra não adicionar)
+  const cleaned = text.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
+  try {
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    if (typeof parsed !== "object" || parsed === null) return null;
+    return {
+      serial: typeof parsed.serial === "string" ? parsed.serial : null,
+      imei: typeof parsed.imei === "string" ? parsed.imei : null,
+      descricao: typeof parsed.descricao === "string" ? parsed.descricao : null,
+    };
+  } catch {
+    return null;
   }
-  return `Você está analisando uma captura de tela do iPhone (tela "Ajustes > Geral > Sobre").
+}
 
-Sua tarefa: extrair o **Número de Série** do aparelho.
+function sanitizeSerial(raw: string | null): string | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[\s\-.]/g, "").toUpperCase();
+  if (cleaned.length < 8 || cleaned.length > 15) return null;
+  if (!/^[A-Z0-9]+$/.test(cleaned)) return null;
+  return cleaned;
+}
 
-Como o Número de Série aparece na tela:
-- Código alfanumérico (letras maiúsculas e números) com 10-12 caracteres (ex: "KWRL2WNXNH", "F2LMD0P9P27L")
-- Rótulo "Número de Série" ou "Serial Number"
-- Fica no mesmo card que "Nome", "Versão do iOS", "Nome do Modelo", "Nº do Modelo"
-- NÃO é o "Nº do Modelo" (que tem formato diferente, ex: "MFXL4LL/A")
-
-Responda APENAS o Número de Série, em MAIÚSCULAS, sem espaços, traços ou qualquer outro texto. Exemplo de resposta correta: KWRL2WNXNH
-
-Se a imagem NÃO contém a tela Ajustes>Sobre do iPhone, ou se o Número de Série não está visível/legível, responda exatamente: NAO_ENCONTRADO`;
+function sanitizeImei(raw: string | null): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length !== 15) return null;
+  return digits;
 }
 
 async function callClaude(
@@ -236,7 +254,12 @@ async function callClaude(
 ): Promise<string> {
   const response = await client.messages.create({
     model,
-    max_tokens: 100,
+    // 300 tokens permite o modelo explicar o que viu quando não acha o número
+    // (formato "NAO_ENCONTRADO: descrição"). Antes 100 cortava no meio da frase.
+    max_tokens: 300,
+    // temperature: 0 → determinístico: mesma imagem sempre gera mesma resposta.
+    // Sem isso, Haiku às vezes acerta e às vezes retorna NAO_ENCONTRADO na mesma imagem.
+    temperature: 0,
     messages: [
       {
         role: "user",
@@ -254,35 +277,39 @@ async function callClaude(
     .trim();
 }
 
-function validateAndSanitize(text: string, tipo: "serial" | "imei"): ExtractResult {
-  if (!text || /NAO[_\s]?ENCONTRADO/i.test(text)) {
-    return { ok: false, error: "Claude não conseguiu identificar o número no print", rawResponse: text };
-  }
-  const cleaned = text.replace(/[\s\-.]/g, "");
-  if (tipo === "imei") {
-    const digits = cleaned.replace(/\D/g, "");
-    if (digits.length < 14 || digits.length > 17) {
-      return { ok: false, error: `IMEI com ${digits.length} dígitos (esperado 15)`, rawResponse: text };
+async function tryExtract(
+  client: Anthropic,
+  model: string,
+  base64: string,
+  mt: "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+  label: string
+): Promise<{ serial: string | null; imei: string | null; descricao: string | null; rawText: string } | null> {
+  try {
+    const rawText = await callClaude(client, model, base64, mt, BOTH_PROMPT);
+    console.log(`[upload-print:ocr] ${label} response:`, JSON.stringify(rawText));
+    const parsed = parseJsonResponse(rawText);
+    if (!parsed) {
+      console.warn(`[upload-print:ocr] ${label} JSON parse failed`);
+      return { serial: null, imei: null, descricao: null, rawText };
     }
-    return { ok: true, value: digits };
+    return {
+      serial: sanitizeSerial(parsed.serial),
+      imei: sanitizeImei(parsed.imei),
+      descricao: parsed.descricao,
+      rawText,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[upload-print:ocr] ${label} FAIL:`, msg);
+    return null;
   }
-  // serial: alfanumérico, tipicamente 10-12 chars
-  if (cleaned.length < 6 || cleaned.length > 20) {
-    return { ok: false, error: `Serial com ${cleaned.length} chars (fora do esperado 10-12)`, rawResponse: text };
-  }
-  // Normaliza pra maiúsculas (Apple usa serial em caps)
-  return { ok: true, value: cleaned.toUpperCase() };
 }
 
-async function extractNumberFromPrint(
-  buffer: Buffer,
-  mediaType: string,
-  tipo: "serial" | "imei"
-): Promise<ExtractResult> {
+async function extractBothFromPrint(buffer: Buffer, mediaType: string): Promise<BothExtracted> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error("[upload-print:ocr] ANTHROPIC_API_KEY não configurado");
-    return { ok: false, error: "ANTHROPIC_API_KEY não configurado no ambiente" };
+    return { serial: null, imei: null, descricao: null, error: "ANTHROPIC_API_KEY não configurado no ambiente" };
   }
 
   const supportedTypes: Record<string, "image/jpeg" | "image/png" | "image/gif" | "image/webp"> = {
@@ -292,42 +319,42 @@ async function extractNumberFromPrint(
     "image/gif": "image/gif",
     "image/webp": "image/webp",
   };
-  const mt = supportedTypes[mediaType.toLowerCase()] || "image/png";
+  const originalMime = mediaType.toLowerCase();
+  const mt = supportedTypes[originalMime];
+  if (!mt) {
+    console.warn(`[upload-print:ocr] MIME não suportado: ${originalMime}`);
+    return {
+      serial: null,
+      imei: null,
+      descricao: null,
+      error: `Formato "${originalMime}" não suportado. Use JPG ou PNG (print com Botão Lateral + Volume).`,
+    };
+  }
   const base64 = buffer.toString("base64");
+  console.log(`[upload-print:ocr] image: mime=${originalMime}, size=${buffer.length} bytes`);
   const client = new Anthropic({ apiKey });
-  const prompt = buildPrompt(tipo);
 
-  // Tentativa 1: Haiku 4.5 (barato e rápido)
-  let haikuText = "";
-  try {
-    haikuText = await callClaude(client, HAIKU_MODEL, base64, mt, prompt);
-    console.log(`[upload-print:ocr] haiku ${tipo} response:`, JSON.stringify(haikuText));
-    const result = validateAndSanitize(haikuText, tipo);
-    if (result.ok) return result;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[upload-print:ocr] haiku ${tipo} FAIL:`, msg);
-    // Se foi erro de modelo não existir, tenta direto Sonnet. Outros erros sobem também pra tentar.
+  // Haiku primeiro (barato e rápido)
+  const haiku = await tryExtract(client, HAIKU_MODEL, base64, mt, "haiku");
+  if (haiku && (haiku.serial || haiku.imei)) {
+    console.log(`[upload-print:ocr] haiku SUCCESS → serial=${haiku.serial || "null"}, imei=${haiku.imei || "null"}`);
+    return { serial: haiku.serial, imei: haiku.imei, descricao: haiku.descricao };
   }
 
-  // Tentativa 2 (fallback): Sonnet 4.6 — mais poderoso, ~2x o custo
-  try {
-    const sonnetText = await callClaude(client, SONNET_MODEL, base64, mt, prompt);
-    console.log(`[upload-print:ocr] sonnet ${tipo} response:`, JSON.stringify(sonnetText));
-    const result = validateAndSanitize(sonnetText, tipo);
-    if (result.ok) return result;
-    return {
-      ok: false,
-      error: `Haiku e Sonnet falharam. Sonnet disse: "${sonnetText.slice(0, 80)}"`,
-      rawResponse: sonnetText,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[upload-print:ocr] sonnet ${tipo} FAIL:`, msg);
-    return {
-      ok: false,
-      error: `Erro de API: ${msg}. Haiku disse: "${haikuText.slice(0, 80)}"`,
-      rawResponse: haikuText,
-    };
+  // Fallback Sonnet
+  const sonnet = await tryExtract(client, SONNET_MODEL, base64, mt, "sonnet");
+  if (sonnet && (sonnet.serial || sonnet.imei)) {
+    console.log(`[upload-print:ocr] sonnet SUCCESS → serial=${sonnet.serial || "null"}, imei=${sonnet.imei || "null"}`);
+    return { serial: sonnet.serial, imei: sonnet.imei, descricao: sonnet.descricao };
   }
+
+  // Ambos falharam: monta erro com descrição do que Claude viu (se houver)
+  const haikuDesc = haiku?.descricao || haiku?.rawText?.slice(0, 150) || "sem resposta";
+  const sonnetDesc = sonnet?.descricao || sonnet?.rawText?.slice(0, 150) || "sem resposta";
+  return {
+    serial: null,
+    imei: null,
+    descricao: sonnet?.descricao || haiku?.descricao || null,
+    error: `Claude não achou serial nem IMEI. Haiku viu: "${haikuDesc}" | Sonnet viu: "${sonnetDesc}"`,
+  };
 }
