@@ -166,7 +166,9 @@ export function formatProdutoDisplay(p: {
     else if (hasGps) parts.push("GPS");
     if (cor) parts.push(cor);
   } else {
-    return cleanProdutoDisplay(nomeRaw);
+    // ACESSORIOS e outras categorias não estruturadas: nome limpo + cor em PT
+    parts.push(cleanProdutoDisplay(nomeRaw));
+    if (cor) parts.push(cor);
   }
 
   return parts.filter(Boolean).join(" ");
