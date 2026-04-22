@@ -304,6 +304,30 @@ export default function AdminPage() {
   // Caso legado (clientes que fizeram trade-in antes de 14/04 — bug da race condition
   // no StepQuote): não existe link_compras nenhum. A gente cria um link_compras na
   // hora usando os dados da simulação, pra que o admin possa prosseguir com a entrega.
+  // Exclui definitivamente um registro do historico (so admin). Pede confirmacao
+  // e atualiza o state local sem refetch full da lista.
+  const excluirHistorico = useCallback(async (h: HistoricoItem) => {
+    if (!password) return;
+    const nome = h.cliente_nome || h.cliente_telefone || h.id.slice(0, 8);
+    if (!confirm(`Excluir definitivamente o registro de "${nome}"? Esta acao nao pode ser desfeita.`)) return;
+    try {
+      const res = await fetch("/api/admin/link-compras", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": password,
+          "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
+        },
+        body: JSON.stringify({ id: h.id }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) { alert(`Erro ao excluir: ${j.error || res.status}`); return; }
+      setHistorico(prev => prev.filter(x => x.id !== h.id));
+    } catch (e) {
+      alert(`Erro: ${String(e)}`);
+    }
+  }, [password, user]);
+
   const openGerarEntrega = useCallback(async (h: HistoricoItem) => {
     let target = h;
     if (h.id.startsWith("sim_")) {
@@ -792,6 +816,15 @@ export default function AdminPage() {
                             )}
                             {h.entrega_id && <span className="text-[10px] text-green-600 font-semibold">✅ Entrega criada</span>}
                             <span className="text-[10px] text-[#C0C0C5]">{h.vendedor || h.operador || ""}</span>
+                            {user?.role === "admin" && (
+                              <button
+                                onClick={() => excluirHistorico(h)}
+                                className="px-2 py-1 rounded-lg text-[10px] font-semibold text-red-500 hover:bg-red-500 hover:text-white transition-colors whitespace-nowrap border border-red-200"
+                                title="Excluir definitivamente este registro"
+                              >
+                                🗑️ Excluir
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1011,6 +1044,15 @@ export default function AdminPage() {
                       className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold text-center transition-colors disabled:opacity-50"
                     >
                       {encaminhando === h.id ? "Criando..." : "🚚 Gerar Entrega"}
+                    </button>
+                  )}
+                  {user?.role === "admin" && (
+                    <button
+                      onClick={() => excluirHistorico(h)}
+                      className="py-2.5 px-3 rounded-xl bg-red-50 hover:bg-red-500 hover:text-white text-red-600 text-sm font-semibold transition-colors border border-red-200"
+                      title="Excluir definitivamente"
+                    >
+                      🗑️
                     </button>
                   )}
                 </div>
