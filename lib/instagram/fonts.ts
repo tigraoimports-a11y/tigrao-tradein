@@ -16,11 +16,19 @@ const FONT_URLS: Record<Weight, string> = {
 async function loadOne(w: Weight): Promise<ArrayBuffer> {
   const cached = FONT_CACHE.get(w);
   if (cached) return cached;
-  const res = await fetch(FONT_URLS[w]);
-  if (!res.ok) throw new Error(`Falha ao carregar fonte Inter ${w}: ${res.status}`);
-  const buf = await res.arrayBuffer();
-  FONT_CACHE.set(w, buf);
-  return buf;
+  // Timeout de 8s por fonte — se jsdelivr estiver lento/fora do ar,
+  // aborta em vez de travar o request inteiro (que pode ser render-post).
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const res = await fetch(FONT_URLS[w], { signal: controller.signal });
+    if (!res.ok) throw new Error(`Falha ao carregar fonte Inter ${w}: ${res.status}`);
+    const buf = await res.arrayBuffer();
+    FONT_CACHE.set(w, buf);
+    return buf;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function loadInterFonts() {

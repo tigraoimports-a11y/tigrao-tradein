@@ -58,53 +58,79 @@ export async function POST(req: NextRequest) {
   // Pre-fetch imagens dos slides e converte pra data URL. Evita que o Satori
   // tente fetchar URLs recem-uploaded do Supabase Storage (que as vezes
   // retornam 404 por propagacao de CDN) e falhe silenciosamente.
+  // TIMEOUT de 10s por imagem — se a URL externa não responder, seguimos sem
+  // ela (o slide renderiza sem foto, melhor que travar o job inteiro).
   const slidesComImagens = await Promise.all(
     slides.map(async (slide, idx) => {
       if (!slide.imagem_url) return slide;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
       try {
-        const r = await fetch(slide.imagem_url, { cache: "no-store" });
+        const r = await fetch(slide.imagem_url, { cache: "no-store", signal: controller.signal });
         if (!r.ok) {
           console.error(`[render-post] slide ${idx + 1} imagem HTTP ${r.status}: ${slide.imagem_url}`);
-          return slide;
+          return { ...slide, imagem_url: null };
         }
         const buf = await r.arrayBuffer();
         const mime = r.headers.get("content-type") || "image/jpeg";
         const b64 = Buffer.from(buf).toString("base64");
         return { ...slide, imagem_url: `data:${mime};base64,${b64}` };
       } catch (err) {
-        console.error(`[render-post] slide ${idx + 1} imagem erro:`, err);
-        return slide;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[render-post] slide ${idx + 1} imagem erro (${msg}): ${slide.imagem_url}`);
+        // Retorna slide SEM a imagem. Satori nao trava tentando refetch.
+        return { ...slide, imagem_url: null };
+      } finally {
+        clearTimeout(timeout);
       }
     })
   );
 
   const urls: string[] = [];
+  const falhas: Array<{ slide: number; erro: string }> = [];
   const ts = Date.now();
 
   for (let i = 0; i < slidesComImagens.length; i++) {
     const slide = slidesComImagens[i];
-    const jsx = renderSlideJSX(slide, cfg, {
-      index: i,
-      total: slides.length,
-      tipo: post.tipo,
-      estilo: post.estilo || "PADRAO",
-    });
-    const img = new ImageResponse(jsx, {
-      width: SLIDE_W,
-      height: SLIDE_H,
-      fonts,
-    });
-    const pngBuffer = Buffer.from(await img.arrayBuffer());
+    try {
+      const jsx = renderSlideJSX(slide, cfg, {
+        index: i,
+        total: slides.length,
+        tipo: post.tipo,
+        estilo: post.estilo || "PADRAO",
+      });
+      const img = new ImageResponse(jsx, {
+        width: SLIDE_W,
+        height: SLIDE_H,
+        fonts,
+      });
+      const pngBuffer = Buffer.from(await img.arrayBuffer());
 
-    const path = `render/${postId}/${ts}-${String(i + 1).padStart(2, "0")}.png`;
-    const { error: upErr } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, pngBuffer, { contentType: "image/png", upsert: true });
-    if (upErr) {
-      return NextResponse.json({ error: `falha ao subir slide ${i + 1}: ${upErr.message}` }, { status: 500 });
+      const path = `render/${postId}/${ts}-${String(i + 1).padStart(2, "0")}.png`;
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, pngBuffer, { contentType: "image/png", upsert: true });
+      if (upErr) {
+        console.error(`[render-post] slide ${i + 1} upload fail:`, upErr.message);
+        falhas.push({ slide: i + 1, erro: `upload: ${upErr.message}` });
+        continue;
+      }
+      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      urls.push(pub.publicUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[render-post] slide ${i + 1} render fail:`, msg);
+      falhas.push({ slide: i + 1, erro: msg });
     }
-    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    urls.push(pub.publicUrl);
+  }
+
+  // Se TODOS falharam, retorna erro. Se alguns passaram, salva o que deu e
+  // devolve aviso pro admin ver quais slides precisam ser re-renderizados.
+  if (urls.length === 0) {
+    return NextResponse.json({
+      error: "Falha ao renderizar todos os slides",
+      falhas,
+    }, { status: 500 });
   }
 
   // Remove PNGs antigos desse post (mantém só o render atual).
@@ -129,5 +155,5 @@ export async function POST(req: NextRequest) {
     .eq("id", postId);
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, urls });
+  return NextResponse.json({ ok: true, urls, falhas: falhas.length > 0 ? falhas : undefined });
 }
