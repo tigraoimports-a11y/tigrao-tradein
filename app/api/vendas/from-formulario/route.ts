@@ -141,6 +141,18 @@ export async function POST(req: NextRequest) {
   // Se tem troca → tipo UPGRADE; senão → VENDA
   const tipo = body.trocaProduto ? "UPGRADE" : "VENDA";
 
+  // A condição do trade-in vem como texto livre (ex: "Bateria 90% | Com caixa
+  // original | Sem marcas de uso"). O admin usa coluna `troca_bateria` separada
+  // pra exibir no form Editar, então extraímos o número daqui. Resto do texto
+  // vai pra `troca_obs` pro admin ver.
+  const extrairBateria = (cond?: string): string | null => {
+    if (!cond) return null;
+    const m = cond.match(/bateria\s+(\d+)\s*%/i);
+    return m ? m[1] : null;
+  };
+  const trocaBateria = extrairBateria(body.trocaCondicao);
+  const trocaBateria2 = extrairBateria(body.trocaCondicao2);
+
   // Payload canônico pra inserir/atualizar em vendas
   const payload: Record<string, unknown> = {
     short_code: body.shortCode,
@@ -165,18 +177,24 @@ export async function POST(req: NextRequest) {
     recebimento,
     qnt_parcelas: forma === "CARTAO" ? parcelasNum : 1,
     sinal_antecipado: entradaPixNum > 0 ? entradaPixNum : null,
-    // Troca (aparelho 1)
-    produto_na_troca: body.trocaProduto ? "SIM" : "NAO",
+    // Troca (aparelho 1) — admin lê produto_na_troca como VALOR MONETÁRIO em
+    // string (não "SIM"/"NAO"). Mantemos troca_valor também pra contratos/reports.
+    produto_na_troca: body.trocaProduto ? String(trocaValorNum || 0) : null,
     troca_produto: body.trocaProduto || null,
     troca_cor: body.trocaCor || null,
     troca_valor: trocaValorNum || null,
+    troca_bateria: trocaBateria,
+    troca_obs: body.trocaCondicao || null,
     troca_caixa: body.trocaCaixa === true ? "SIM" : (body.trocaCaixa === false ? "NAO" : null),
     troca_serial: body.trocaSerial || null,
     troca_imei: body.trocaImei || null,
     // Troca (aparelho 2)
+    produto_na_troca2: body.trocaProduto2 ? String(trocaValor2Num || 0) : null,
     troca_produto2: body.trocaProduto2 || null,
     troca_cor2: body.trocaCor2 || null,
     troca_valor2: trocaValor2Num || null,
+    troca_bateria2: trocaBateria2,
+    troca_obs2: body.trocaCondicao2 || null,
     troca_caixa2: body.trocaCaixa2 === true ? "SIM" : (body.trocaCaixa2 === false ? "NAO" : null),
     troca_serial2: body.trocaSerial2 || null,
     troca_imei2: body.trocaImei2 || null,
