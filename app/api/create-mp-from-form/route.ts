@@ -62,6 +62,8 @@ interface CreateMpFromFormBody {
       valor?: number;
       condicao?: string;
       caixa?: boolean;
+      serial?: string;
+      imei?: string;
     }>;
     descricaoLivre?: string;
   };
@@ -202,6 +204,11 @@ export async function POST(req: NextRequest) {
     troca_valor: Number(body.troca?.aparelhos?.[0]?.valor) || 0,
     troca_produto2: body.troca?.aparelhos?.[1]?.modelo || null,
     troca_valor2: Number(body.troca?.aparelhos?.[1]?.valor) || 0,
+    // IMEI/Serial digitados pelo cliente (prints anexados ficam em troca_print_*_url)
+    troca_serial: body.troca?.aparelhos?.[0]?.serial || null,
+    troca_imei: body.troca?.aparelhos?.[0]?.imei || null,
+    troca_serial2: body.troca?.aparelhos?.[1]?.serial || null,
+    troca_imei2: body.troca?.aparelhos?.[1]?.imei || null,
     // Snapshot completo
     cliente_dados_preenchidos: snapshot,
     // IMPORTANTE: NÃO setamos cliente_preencheu_em aqui. Esse timestamp só
