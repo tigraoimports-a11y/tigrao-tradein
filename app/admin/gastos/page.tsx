@@ -279,6 +279,10 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     setSavingNew(true);
     try {
       const obs = buildObs(newRowState.condicao, "", newRowState.caixa, newRowState.grade);
+      // Copiar data_compra, data_entrada, origem_compra, origem de outro produto
+      // do mesmo pedido — senão o novo fica orfao (sem data/origem) e aparece
+      // em grupo separado "SEM ORIGEM DEFINIDA" na listagem a caminho.
+      const ref: Record<string, unknown> | undefined = produtos[0] as Record<string, unknown> | undefined;
       const row = {
         produto: newRowState.produto,
         categoria: newRowState.categoria,
@@ -293,6 +297,10 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
         status: "A CAMINHO",
         tipo: "A_CAMINHO",
         pedido_fornecedor_id: pedidoFornecedorId,
+        data_compra: ref?.data_compra ?? null,
+        data_entrada: ref?.data_entrada ?? null,
+        origem_compra: ref?.origem_compra ?? null,
+        origem: ref?.origem ?? null,
       };
       const res = await fetch("/api/estoque", {
         method: "POST",
