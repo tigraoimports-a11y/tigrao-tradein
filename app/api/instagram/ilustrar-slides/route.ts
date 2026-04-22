@@ -48,7 +48,13 @@ REGRAS CRÍTICAS (⚠️ não quebre)
 
 ⚠️ COERÊNCIA TEMÁTICA: a imagem DEVE refletir o texto do slide. Se o slide fala de "Veredito honesto", busque foto de balança, iPads enfileirados, ou comparação lado-a-lado — NÃO foto aleatória de revista, meme ou coisa não relacionada.
 
-⚠️ SEM TEXTO EM INGLÊS (nem em qualquer idioma) NA IMAGEM: o carrossel é em PORTUGUÊS. NÃO use thumbnails de YouTube, capas de artigo com overlay de título ("Hidden in macOS Tahoe", "Spotlight Clipboard History"), infográficos ou banners com palavras. Imagens com texto em inglês quebram o visual. Prefira foto LIMPA do produto ou screenshot da tela do app SEM overlay editorial.
+⚠️ SEM TEXTO EM INGLÊS (nem em qualquer idioma) SOBREPOSTO NA IMAGEM: o carrossel é em PORTUGUÊS. ANTES de escolher uma imagem, OLHE ela mentalmente: ela tem palavras desenhadas/sobrepostas? Se sim, REJEITA e busca outra.
+Exemplos reais de imagens que VAZARAM e não podem mais aparecer:
+- "TAKE CRISP 48MP PICTURES" escrito ao lado de iPhone com borboleta → REJEITA (é capa de artigo/review)
+- "Hidden in macOS Tahoe" com rosto de apresentador → REJEITA (é thumb de vídeo)
+- "Spotlight Clipboard History" em banner vermelho → REJEITA (é capa de tutorial)
+- "Top 10 Tips", "iPhone Tricks", qualquer overlay com texto → REJEITA
+⚠️ OBS: texto do próprio iOS dentro do screenshot (ex: palavra "Ajustes" no topo da tela) é OK — isso é a tela do sistema, não overlay editorial. Só rejeita overlay de TÍTULO editorial (capa de post/vídeo).
 
 ⚠️ FOTO REAL, NÃO RENDER ARTÍSTICO: pra capas e slides genéricos sobre produto Apple, busque FOTO REAL do produto (oficial apple.com, newsroom, reviews de canais tech) — NÃO setups artísticos com luzes coloridas, monitor curvo + teclado mecânico + RGB, wallpapers abstratos, mockups 3D renderizados. O leitor tem que reconhecer "aquilo é um MacBook/iPhone/iPad de verdade", não uma cena de Pinterest.
 
@@ -60,6 +66,13 @@ REGRAS GERAIS
    - Slide "Tela OLED ProMotion" → close-up de tela iPad Pro mostrando cor vibrante.
    - Slide "Conectividade Wi-Fi 7" → iPad com indicador de rede, ou ícone Wi-Fi 7 oficial.
    - Slide "Tamanhos e peso" → iPads enfileirados por tamanho, ou foto comparativa de 11" vs 13".
+
+1.1. SLIDES DE PASSO-A-PASSO / TUTORIAL → SCREENSHOT DA TELA.
+Quando o texto do slide cita um caminho de menu (ex: "Ajustes > Câmera > Formatos", "Configurações > Geral > X") ou uma instrução tipo "Abra X", "Ligue Y", "Ative Z", a melhor imagem é um SCREENSHOT REAL daquela tela específica do iOS/iPadOS/macOS.
+- Busque: "iPhone Ajustes Camera Formatos screenshot", "iOS 17 Settings Camera Formats screen", "support.apple.com screenshot Camera"
+- Fontes: support.apple.com, apple.com/ios, 9to5Mac, MacRumors, iMore, The Verge (artigos com screenshots de tutorial), Tecnoblog, TechTudo.
+- Evite: foto genérica do iPhone em fundo colorido quando o slide é instrutivo — não ensina nada. O leitor precisa VER a tela exata do sistema.
+- Se for multi-passo e não achar 1 screenshot só, vale usar \`composicao\` com 2-3 screenshots consecutivos da sequência.
 
 2. COMPARATIVO entre 2 ou 3 modelos — use COMPOSIÇÃO:
    Se o texto do slide cita N modelos específicos (ex: "iPad 11, Air M4 ou Pro M5"), em vez de buscar uma imagem com todos juntos (raro ter boa), faça N buscas individuais — UMA foto oficial de cada modelo — e retorne no campo \`composicao: [url1, url2, url3]\`. O backend vai compor as N imagens lado a lado automaticamente.
@@ -98,7 +111,7 @@ REGRAS GERAIS
    - Screenshots de slide/apresentação (meta).
    - Imagens de capa de revista ou trending TikTok (CORECORE, coisas do tipo — sem relação).
    - **Thumbnails de YouTube** (i.ytimg.com, img.youtube.com): sempre têm rosto + texto overlay + setas vermelhas.
-   - **Imagens com texto em inglês sobreposto** (ex: "Hidden in macOS Tahoe", "Top 10 Tips"): conflitam com post em PT-BR.
+   - **Imagens com texto em inglês sobreposto** (ex: "Hidden in macOS Tahoe", "Top 10 Tips", "Take Crisp 48MP Pictures"): conflitam com post em PT-BR. Olha a imagem antes — se tem palavras desenhadas nela, NÃO usa.
    - **Setups artísticos** tipo Pinterest (monitor + RGB + teclado mecânico + plantas) quando o slide fala genericamente de Mac/iPad — use foto real do produto.
    - Imagem que já apareceu em outro slide (VER REGRA CRÍTICA acima).
 
