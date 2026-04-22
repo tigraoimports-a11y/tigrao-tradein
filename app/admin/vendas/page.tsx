@@ -787,7 +787,8 @@ export default function VendasPage() {
 
   // Recalcular preco_vendido automaticamente no modo "Datas diferentes".
   // Sem isso, preco_vendido fica 0 e a venda grava com lucro negativo (custo - 0).
-  // Soma valor liquido de cada pagEntry respeitando a forma (taxa de cartao/link/debito).
+  // Soma valor LIQUIDO de cada pagEntry respeitando a forma (taxa de cartao/link/debito).
+  // Se for PIX/ESPECIE/FIADO: liquido = bruto (sem taxa).
   useEffect(() => {
     if (!multiDatePagamento) return;
     const pTroca1 = parseFloat(form.produto_na_troca) || 0;
@@ -796,7 +797,16 @@ export default function VendasPage() {
     const totalPagEntries = pagEntries.reduce((sum, e) => {
       const bruto = parseFloat(String(e.valor).replace(/\./g, "").replace(",", ".")) || 0;
       if (bruto <= 0) return sum;
-      // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+      const forma = e.forma || "";
+      if (forma === "CARTAO" || forma === "LINK" || forma === "DEBITO") {
+        const banco = forma === "LINK" ? "MERCADO_PAGO" : (e.banco || "ITAU");
+        const parcelas = parseInt(e.parcelas) || 0;
+        const bandeira = e.bandeira || null;
+        const formaTaxa = (forma === "LINK" ? "CARTAO" : forma) as "CARTAO" | "DEBITO";
+        const taxa = getTaxa(banco, bandeira, parcelas, formaTaxa);
+        return sum + (taxa > 0 ? calcularLiquido(bruto, taxa) : bruto);
+      }
+      // PIX, ESPECIE, DINHEIRO, FIADO: sem taxa
       return sum + bruto;
     }, 0);
     const newVendido = String(Math.round(totalPagEntries + totalTroca));
