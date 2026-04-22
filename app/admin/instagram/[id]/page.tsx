@@ -19,7 +19,7 @@ interface Pesquisa {
 }
 
 type Tipo = "DICA" | "COMPARATIVO" | "NOTICIA" | "ANALISE_PROFUNDA";
-type Estilo = "PADRAO" | "EMANUEL_PESSOA";
+type Estilo = "PADRAO" | "EMANUEL_PESSOA" | "CARIOCA_DESCONTRAIDO" | "STORYTELLING_PREMIUM" | "COMPARATIVO_TECNICO" | "VIRAL_POLEMICO" | "EDUCATIVO_DIDATICO";
 
 interface Post {
   id: string;
@@ -62,6 +62,11 @@ const TIPO_LABEL: Record<Post["tipo"], string> = {
 const ESTILO_LABEL: Record<Post["estilo"], string> = {
   PADRAO: "Padrão Tigrão",
   EMANUEL_PESSOA: "Emanuel Pessoa",
+  CARIOCA_DESCONTRAIDO: "Carioca descontraído",
+  STORYTELLING_PREMIUM: "Storytelling premium",
+  COMPARATIVO_TECNICO: "Comparativo técnico",
+  VIRAL_POLEMICO: "Viral polêmico",
+  EDUCATIVO_DIDATICO: "Educativo didático",
 };
 
 export default function InstagramPostPage() {
