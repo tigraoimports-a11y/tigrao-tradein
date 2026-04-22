@@ -206,11 +206,17 @@ Como o IMEI aparece na tela:
 - Sempre 15 dígitos numéricos (sem letras)
 - Rótulo "IMEI" ou "IMEI 1" (aparelho principal) — se tiver "IMEI2", IGNORE, pegue o primeiro
 - Pode aparecer com espaços separando grupos (ex: "35 799960 736598 0"). Retorne concatenado sem espaços.
-- Fica na seção "Pessoal" ou similar, perto de "Operadora", "ICCID"
+- Em iPhones modernos pode estar em seção separada "Dados do Celular" ou "Pessoal"
 
-Responda APENAS os 15 dígitos do IMEI principal, sem nenhum outro texto, label, explicação ou formatação. Exemplo de resposta correta: 357999607365980
+Se ACHAR o IMEI, responda APENAS os 15 dígitos, sem texto, label, explicação ou formatação. Exemplo de resposta correta: 357999607365980
 
-Se a imagem NÃO contém a tela Ajustes>Sobre do iPhone, ou se nenhum IMEI está visível/legível, responda exatamente: NAO_ENCONTRADO`;
+Se NÃO achar, responda EXATAMENTE com este formato:
+NAO_ENCONTRADO: [descreva em 1 frase curta o que você vê no print — qual tela do iPhone é, quais labels aparecem]
+
+Exemplos de resposta quando não encontra:
+- NAO_ENCONTRADO: tela de Ajustes > Wi-Fi, não é a tela Sobre
+- NAO_ENCONTRADO: tela Sobre mas cortada antes do IMEI, só mostra Nome, Versão, Nº Modelo
+- NAO_ENCONTRADO: foto desfocada, não consigo ler os textos`;
   }
   return `Você está analisando uma captura de tela do iPhone (tela "Ajustes > Geral > Sobre").
 
@@ -222,9 +228,15 @@ Como o Número de Série aparece na tela:
 - Fica no mesmo card que "Nome", "Versão do iOS", "Nome do Modelo", "Nº do Modelo"
 - NÃO é o "Nº do Modelo" (que tem formato diferente, ex: "MFXL4LL/A")
 
-Responda APENAS o Número de Série, em MAIÚSCULAS, sem espaços, traços ou qualquer outro texto. Exemplo de resposta correta: KWRL2WNXNH
+Se ACHAR o Número de Série, responda APENAS o código, em MAIÚSCULAS, sem espaços, traços ou qualquer outro texto. Exemplo: KWRL2WNXNH
 
-Se a imagem NÃO contém a tela Ajustes>Sobre do iPhone, ou se o Número de Série não está visível/legível, responda exatamente: NAO_ENCONTRADO`;
+Se NÃO achar, responda EXATAMENTE com este formato:
+NAO_ENCONTRADO: [descreva em 1 frase curta o que você vê no print — qual tela do iPhone é, quais labels aparecem]
+
+Exemplos de resposta quando não encontra:
+- NAO_ENCONTRADO: tela de Ajustes > Wi-Fi, não é a tela Sobre
+- NAO_ENCONTRADO: tela Sobre mas cortada antes do Nº de Série, só vejo Capacidade e Modelo
+- NAO_ENCONTRADO: foto desfocada, não consigo ler os textos`;
 }
 
 async function callClaude(
@@ -236,7 +248,9 @@ async function callClaude(
 ): Promise<string> {
   const response = await client.messages.create({
     model,
-    max_tokens: 100,
+    // 300 tokens permite o modelo explicar o que viu quando não acha o número
+    // (formato "NAO_ENCONTRADO: descrição"). Antes 100 cortava no meio da frase.
+    max_tokens: 300,
     // temperature: 0 → determinístico: mesma imagem sempre gera mesma resposta.
     // Sem isso, Haiku às vezes acerta e às vezes retorna NAO_ENCONTRADO na mesma imagem.
     temperature: 0,
@@ -338,7 +352,7 @@ async function extractNumberFromPrint(
     console.warn(`[upload-print:ocr] sonnet ${tipo} validation failed: ${result.error}`);
     return {
       ok: false,
-      error: `Haiku e Sonnet falharam. Haiku: "${haikuText.slice(0, 40)}" | Sonnet: "${sonnetText.slice(0, 40)}"`,
+      error: `Haiku: "${haikuText.slice(0, 200)}" | Sonnet: "${sonnetText.slice(0, 200)}"`,
       rawResponse: sonnetText,
     };
   } catch (err) {
