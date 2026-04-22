@@ -389,6 +389,14 @@ function CompraForm() {
   const [printsErro, setPrintsErro] = useState<Record<string, string>>({});
   const temSegundoAparelho = !!trocaProduto2Param;
 
+  // Cliente digita o IMEI e Nº de Série dos aparelhos na troca (campo texto
+  // ao lado do print — o print serve como comprovação visual, o texto fica
+  // disponível pronto pro contrato/venda e aparece no WhatsApp do pedido).
+  const [trocaSerial1, setTrocaSerial1] = useState("");
+  const [trocaImei1, setTrocaImei1] = useState("");
+  const [trocaSerial2, setTrocaSerial2] = useState("");
+  const [trocaImei2, setTrocaImei2] = useState("");
+
   async function uploadPrint(slot: PrintSlot, file: File) {
     if (!shortCode) {
       setPrintsErro((p) => ({ ...p, [`${slot.tipo}${slot.aparelho}`]: "Link de compra inválido" }));
@@ -544,6 +552,25 @@ function CompraForm() {
         }
         return;
       }
+
+      // Valida IMEI/Serial digitados (mínimo 6 chars, sem espaços/traços contados).
+      // IMEI tem 15 dígitos, Serial varia (iPhone antigo: 11-12 chars; novo: até 12).
+      // Usamos 6 como limite seguro contra preenchimento preguiçoso ("123").
+      const soDigitos = (s: string) => s.replace(/\D/g, "");
+      const serial1Ok = trocaSerial1.trim().length >= 6;
+      const imei1Ok = soDigitos(trocaImei1).length >= 14;
+      const serial2Ok = !temSegundoAparelho || trocaSerial2.trim().length >= 6;
+      const imei2Ok = !temSegundoAparelho || soDigitos(trocaImei2).length >= 14;
+      if (!serial1Ok || !imei1Ok || !serial2Ok || !imei2Ok) {
+        const el = document.getElementById("prints-troca");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("ring-4", "ring-red-500", "animate-pulse");
+          setTimeout(() => el.classList.remove("ring-4", "ring-red-500", "animate-pulse"), 3000);
+        }
+        alert("Digite o Nº de Série e o IMEI de cada aparelho na troca. O IMEI tem 15 dígitos — você encontra nos prints que enviou.");
+        return;
+      }
     }
 
     // Janela de agendamento: rejeita datas fora de [min, max] e domingos.
@@ -695,6 +722,8 @@ function CompraForm() {
         if (trocaNum1 > 0) lines.push(`*Valor avaliado:* R$ ${fmt(trocaNum1)}`);
         if (trocaCond) lines.push(`*Condição:* ${trocaCond}`);
         if (trocaCaixaParam) lines.push(`*Caixa original:* ${trocaCaixaParam === "1" ? "Sim" : "Não"}`);
+        if (trocaSerial1.trim()) lines.push(`*Nº de Série:* ${trocaSerial1.trim()}`);
+        if (trocaImei1.trim()) lines.push(`*IMEI:* ${trocaImei1.trim()}`);
       } else if (descTroca) {
         lines.push(`*Modelo:* ${descTroca}`);
       }
@@ -706,6 +735,8 @@ function CompraForm() {
         if (trocaNum2 > 0) lines.push(`*Valor avaliado:* R$ ${fmt(trocaNum2)}`);
         if (trocaCond2Param) lines.push(`*Condição:* ${trocaCond2Param}`);
         if (trocaCaixa2Param) lines.push(`*Caixa original:* ${trocaCaixa2Param === "1" ? "Sim" : "Não"}`);
+        if (trocaSerial2.trim()) lines.push(`*Nº de Série:* ${trocaSerial2.trim()}`);
+        if (trocaImei2.trim()) lines.push(`*IMEI:* ${trocaImei2.trim()}`);
       }
       if (valorBase > 0) { lines.push(""); lines.push(`*Diferença a pagar:* R$ ${fmt(valorBase)}`); }
     }
@@ -751,6 +782,10 @@ function CompraForm() {
           forma_pagamento: pagLines.join(" | "),
           local: localStr, horario, data_entrega: dataEntrega,
           vendedor, origem,
+          troca_serial: temTroca ? trocaSerial1.trim() : "",
+          troca_imei: temTroca ? trocaImei1.trim() : "",
+          troca_serial2: temTroca && temSegundoAparelho ? trocaSerial2.trim() : "",
+          troca_imei2: temTroca && temSegundoAparelho ? trocaImei2.trim() : "",
           website: honeypot,
         },
       });
@@ -886,6 +921,8 @@ function CompraForm() {
                         valor: trocaNum1,
                         condicao: trocaCondParam,
                         caixa: trocaCaixaParam === "1",
+                        serial: trocaSerial1.trim() || undefined,
+                        imei: trocaImei1.trim() || undefined,
                       }]
                     : []),
                   ...(trocaProduto2Param
@@ -895,6 +932,8 @@ function CompraForm() {
                         valor: trocaNum2,
                         condicao: trocaCond2Param,
                         caixa: trocaCaixa2Param === "1",
+                        serial: trocaSerial2.trim() || undefined,
+                        imei: trocaImei2.trim() || undefined,
                       }]
                     : []),
                 ],
@@ -1576,11 +1615,12 @@ function CompraForm() {
             quanto quando o cliente marca troca manualmente */}
         {temTroca && shortCode && (
           <div className={cardCls}>
-            <p className={sectionTitle}>📸 Prints do seu aparelho (obrigatório)</p>
+            <p className={sectionTitle}>📸 Nº de Série e IMEI do seu aparelho (obrigatório)</p>
             <div id="prints-troca" className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 transition-all">
               <p className="text-xs text-[#6E6E73] mb-3">
-                No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong> e tire 2 prints:
-                um mostrando o <strong>Nº de Série</strong> e outro mostrando o <strong>IMEI</strong>.
+                No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong>. Para cada aparelho da troca,
+                <strong> digite</strong> os números do <strong>Nº de Série</strong> e <strong>IMEI</strong>,
+                e <strong>anexe 2 prints</strong> da tela (um mostrando o Nº de Série e outro o IMEI) como prova.
               </p>
 
               {/* Explicação do POR QUE pedimos essa info — passa segurança ao cliente */}
@@ -1606,13 +1646,37 @@ function CompraForm() {
                 const url = printsUrls[key];
                 const uploading = printsUploading[key];
                 const erro = printsErro[key];
+                // Valor digitado + setter do input de texto do mesmo slot
+                const textValue =
+                  slot.aparelho === 1
+                    ? (slot.tipo === "serial" ? trocaSerial1 : trocaImei1)
+                    : (slot.tipo === "serial" ? trocaSerial2 : trocaImei2);
+                const setTextValue = (v: string) => {
+                  if (slot.aparelho === 1) {
+                    if (slot.tipo === "serial") setTrocaSerial1(v); else setTrocaImei1(v);
+                  } else {
+                    if (slot.tipo === "serial") setTrocaSerial2(v); else setTrocaImei2(v);
+                  }
+                };
+                const isImei = slot.tipo === "imei";
+                const placeholder = isImei ? "Digite os 15 dígitos do IMEI" : "Digite o Nº de Série";
                 return (
                   <div key={key} className="mb-3 last:mb-0">
                     <label className="block text-xs font-medium text-[#1D1D1F] mb-1.5">{slot.label} *</label>
+                    <input
+                      type="text"
+                      inputMode={isImei ? "numeric" : "text"}
+                      autoComplete="off"
+                      value={textValue}
+                      onChange={(e) => setTextValue(e.target.value)}
+                      placeholder={placeholder}
+                      maxLength={isImei ? 20 : 30}
+                      className="w-full px-3 py-2 mb-2 rounded-lg border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:border-[#E8740E]"
+                    />
                     {url ? (
                       <div className="flex items-center gap-2">
                         <img src={url} alt={slot.label} className="w-14 h-14 rounded-lg object-cover border border-[#D2D2D7]" />
-                        <span className="text-xs text-green-600 font-semibold">✓ Enviado</span>
+                        <span className="text-xs text-green-600 font-semibold">✓ Print enviado</span>
                         <button
                           type="button"
                           onClick={() => setPrintsUrls((p) => { const n = { ...p }; delete n[key]; return n; })}
@@ -1635,7 +1699,7 @@ function CompraForm() {
                           }}
                         />
                         <span className="text-sm text-[#E8740E] font-semibold">
-                          {uploading ? "⏳ Enviando..." : "📤 Toque aqui pra escolher o print"}
+                          {uploading ? "⏳ Enviando..." : "📤 Anexar print como prova"}
                         </span>
                       </label>
                     )}
@@ -1644,11 +1708,14 @@ function CompraForm() {
                 );
               })}
 
-              {/* Aviso sobre o Termo de Procedência (aparece quando todos os prints foram enviados) */}
+              {/* Aviso sobre o Termo de Procedência (aparece quando todos os prints + textos foram preenchidos) */}
               {(() => {
-                const todosEnviados = temSegundoAparelho
+                const textosOk1 = trocaSerial1.trim().length >= 6 && trocaImei1.replace(/\D/g, "").length >= 14;
+                const textosOk2 = !temSegundoAparelho || (trocaSerial2.trim().length >= 6 && trocaImei2.replace(/\D/g, "").length >= 14);
+                const printsOk = temSegundoAparelho
                   ? !!(printsUrls.serial1 && printsUrls.imei1 && printsUrls.serial2 && printsUrls.imei2)
                   : !!(printsUrls.serial1 && printsUrls.imei1);
+                const todosEnviados = printsOk && textosOk1 && textosOk2;
                 if (!todosEnviados) return null;
                 return (
                   <div className="mt-4 p-3 rounded-lg bg-green-50 border-2 border-green-300">

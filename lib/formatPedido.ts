@@ -61,6 +61,8 @@ export interface PedidoTrocaItem {
   valor?: number;
   condicao?: string;
   caixa?: boolean;
+  serial?: string;
+  imei?: string;
 }
 
 export interface PedidoTroca {
@@ -266,6 +268,8 @@ export function formatPedidoMessage(
         if (ap.valor && ap.valor > 0) lines.push(`*Valor avaliado:* R$ ${fmt(ap.valor)}`);
         if (ap.condicao) lines.push(`*Condição:* ${ap.condicao}`);
         if (ap.caixa !== undefined) lines.push(`*Caixa original:* ${ap.caixa ? "Sim" : "Não"}`);
+        if (ap.serial && ap.serial.trim()) lines.push(`*Nº de Série:* ${ap.serial.trim()}`);
+        if (ap.imei && ap.imei.trim()) lines.push(`*IMEI:* ${ap.imei.trim()}`);
       });
     } else if (troca?.descricaoLivre) {
       lines.push(`*Modelo:* ${troca.descricaoLivre}`);

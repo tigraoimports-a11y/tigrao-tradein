@@ -183,6 +183,8 @@ function buildPedidoData(
       valor?: number;
       condicao?: string;
       caixa?: boolean;
+      serial?: string;
+      imei?: string;
     }>;
     descricaoLivre?: string;
   } | null;
