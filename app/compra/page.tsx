@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, useEffect, useMemo, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { WHATSAPP_FORMULARIO } from "@/lib/whatsapp-config";
 import { corParaPT } from "@/lib/cor-pt";
 import { getAgendamentoBounds } from "@/lib/date-utils";
@@ -183,6 +183,14 @@ function CompraForm() {
     return todas;
   }, [produtoParam, precoParam, allProducts, catalogo]);
   const [coresDisponiveis, setCoresDisponiveis] = useState<string[]>([]);
+  // Controla visibilidade do picker de cor independente do valor.
+  // Antes: o picker tinha `!corSel` na condicao — sumia assim que o cliente
+  // comecava a digitar (pior UX). Agora: decide UMA VEZ na montagem. Se o
+  // operador nao preencheu cor (via URL/auto-detect rapido), mostra e MANTEM
+  // visivel enquanto o cliente digita. So esconde se auto-detect populou
+  // corSel antes do cliente interagir.
+  const [precisaEscolherCor, setPrecisaEscolherCor] = useState(true);
+  const clienteTocouCorRef = useRef(false);
 
   // Catálogo construído da tabela de preços (fallback quando estoque vazio)
   const CAT_LABELS: Record<string, string> = {
@@ -256,6 +264,15 @@ function CompraForm() {
     }
     setCoresDisponiveis([...cores].sort());
   }, [produtoInput, produtoParam, catalogo]);
+
+  // Se auto-detect populou corSel ANTES do cliente tocar no campo, esconde
+  // o picker (operador efetivamente preencheu a cor via nome do produto).
+  // Se cliente ja comecou a digitar, mantem o picker visivel.
+  useEffect(() => {
+    if (corSel && !clienteTocouCorRef.current) {
+      setPrecisaEscolherCor(false);
+    }
+  }, [corSel]);
 
   // Auto-detect cor embutida no nome do produto (ex: "iPhone 15 Preto Espacial")
   useEffect(() => {
@@ -1120,45 +1137,29 @@ function CompraForm() {
               );
             })()}
 
-            {/* Selecao de cor — obrigatoria. Se ja veio pre-selecionada pelo operador
-                (cor detectada no nome do produto ou passada via URL), OCULTA a selecao
-                completamente — a cor ja esta nos nomes dos produtos acima. Cliente so
-                precisa escolher se nao veio preenchida.
-                Fallback: quando o catalogo nao tem cores (ex: produto vindo do
-                simulador sem match no /api/produtos-disponiveis), mostra lista
-                com cores Apple comuns em chips + input livre. Antes caia so num
-                text input pequeno e facil de passar batido. */}
-            {(produtoInput || produtoParam) && !corSel && (() => {
-              const CORES_FALLBACK = [
-                "Preto", "Branco", "Azul", "Verde", "Prata", "Dourado", "Roxo", "Rosa", "Vermelho",
-                "Titânio Preto", "Titânio Azul", "Titânio Natural", "Titânio Branco", "Titânio Deserto",
-                "Laranja Cósmico", "Azul Profundo", "Estelar", "Meia-Noite",
-              ];
-              const coresMostrar = coresDisponiveis.length > 0 ? coresDisponiveis : CORES_FALLBACK;
-              return (
-                <div id="escolha-cor" className="mt-3 pt-3 border-t-2 border-[#E8740E] bg-[#FFF5EB] -mx-4 px-4 pb-3 rounded-b-xl">
-                  <p className="text-sm uppercase tracking-wider font-bold mb-2 text-[#E8740E]">
-                    ⚠ Escolha a cor do produto *
-                  </p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {coresMostrar.map(cor => (
-                      <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all border bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E] hover:bg-[#FFF5EB]">
-                        {cor}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-[#86868B] mb-1">Ou digite se não encontrar acima:</p>
-                  <input
-                    type="text"
-                    value={corSel}
-                    onChange={(e) => setCorSel(e.target.value.toUpperCase())}
-                    placeholder="Ex: Preto, Azul, Titânio..."
-                    className={inputCls}
-                  />
-                </div>
-              );
-            })()}
+            {/* Selecao de cor — mostra APENAS quando o operador nao pre-preencheu
+                (via URL ou auto-detect do nome do produto). Uma vez decidido no
+                mount, mantem visivel enquanto cliente digita — antes o campo
+                sumia porque a condicao era `!corSel`, e assim que cliente
+                digitava 1 letra o bloco inteiro desaparecia. */}
+            {(produtoInput || produtoParam) && precisaEscolherCor && (
+              <div id="escolha-cor" className="mt-3 pt-3 border-t-2 border-[#E8740E] bg-[#FFF5EB] -mx-4 px-4 pb-3 rounded-b-xl">
+                <p className="text-sm uppercase tracking-wider font-bold mb-2 text-[#E8740E]">
+                  ⚠ Escolha a cor do produto *
+                </p>
+                <input
+                  type="text"
+                  value={corSel}
+                  onChange={(e) => {
+                    clienteTocouCorRef.current = true;
+                    setCorSel(e.target.value.toUpperCase());
+                  }}
+                  placeholder="Ex: Preto, Azul, Titânio Preto, Meia-Noite..."
+                  className={inputCls}
+                  autoComplete="off"
+                />
+              </div>
+            )}
           </>
         ) : Object.keys(catalogoAtivo).length > 0 ? (
           <>
