@@ -28,6 +28,8 @@ export default function VendasPage() {
   const [loading, setLoading] = useState(true);
   const VENDAS_TABS = ["nova", "formularios", "andamento", "programadas", "hoje", "finalizadas", "correios"] as const;
   const [tab, setTab] = useTabParam<"nova" | "formularios" | "andamento" | "programadas" | "hoje" | "finalizadas" | "correios">("nova", VENDAS_TABS);
+  // Filtro de pendencias (NF nao anexada/enviada, Termo nao assinado)
+  const [pendenciaFilter, setPendenciaFilter] = useState<"nf" | "termo" | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -4592,7 +4594,20 @@ export default function VendasPage() {
         /* Vendas Em Andamento / Finalizadas */
         (() => {
           const hoje = hojeStr;
-          const filteredRaw = (tab === "andamento"
+          // Helpers de pendencia: NF (nao anexada ou anexada sem envio) e Termo (troca sem termo assinado)
+          const isNFPendente = (v: typeof vendas[number]): boolean => {
+            if (v.is_brinde) return false;
+            if (!v.nota_fiscal_url) return true;
+            const enviada = (v as unknown as { nota_fiscal_enviada?: boolean }).nota_fiscal_enviada;
+            return !!(v.email && !enviada);
+          };
+          const isTermoPendente = (v: typeof vendas[number]): boolean => {
+            const temTroca = !!(v.troca_produto || v.produto_na_troca);
+            if (!temTroca) return false;
+            const termo = termosPorVenda[v.id];
+            return !termo || termo.status !== "ASSINADO";
+          };
+          const filteredRawSemPendencia = (tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
             : tab === "formularios"
             ? vendas.filter(v => v.status_pagamento === "FORMULARIO_PREENCHIDO")
@@ -4604,6 +4619,15 @@ export default function VendasPage() {
             ? vendas.filter(v => v.local === "CORREIO" && v.codigo_rastreio)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento)
           ).filter(v => !filtroBrinde || v.is_brinde);
+          // Aplicar filtro de pendencia (se ativo)
+          const filteredRaw = filteredRawSemPendencia.filter(v => {
+            if (pendenciaFilter === "nf") return isNFPendente(v);
+            if (pendenciaFilter === "termo") return isTermoPendente(v);
+            return true;
+          });
+          // Contagens para os chips (baseadas na aba atual, sem o filtro de pendencia)
+          const countNFPendente = filteredRawSemPendencia.filter(isNFPendente).length;
+          const countTermoPendente = filteredRawSemPendencia.filter(isTermoPendente).length;
           const tipoOrder = (t: string) => t === "UPGRADE" ? 0 : t === "VENDA" ? 1 : t === "ATACADO" ? 2 : 3;
           const filtered = [...filteredRaw].sort((a, b) => {
             if (ordenar === "origem") return (a.origem || "").localeCompare(b.origem || "");
@@ -4662,8 +4686,41 @@ export default function VendasPage() {
                     <option value="cliente">👤 Cliente</option>
                   </select>
                 </div>
-                <div className="flex gap-3 items-center text-xs text-[#86868B]">
+                <div className="flex gap-3 items-center flex-wrap text-xs text-[#86868B]">
                   <span>{filtered.length} vendas</span>
+                  {/* Chips de pendencias — clicar filtra a lista, clicar de novo remove filtro.
+                      Soh aparecem nas abas onde a pendencia faz sentido (vendas finalizaveis/finalizadas). */}
+                  {(tab === "andamento" || tab === "hoje" || tab === "finalizadas") && (countNFPendente > 0 || countTermoPendente > 0) && (
+                    <div className="flex gap-2 items-center">
+                      <span className="text-[10px] uppercase tracking-wider font-semibold">Pendências:</span>
+                      {countNFPendente > 0 && (
+                        <button
+                          onClick={() => setPendenciaFilter(pendenciaFilter === "nf" ? null : "nf")}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors inline-flex items-center gap-1 ${pendenciaFilter === "nf" ? "bg-amber-500 text-white border-amber-500" : "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"}`}
+                          title="Vendas sem NF anexada, ou com NF anexa aguardando envio por email"
+                        >
+                          📄 {countNFPendente} NF pendente{countNFPendente > 1 ? "s" : ""}
+                        </button>
+                      )}
+                      {countTermoPendente > 0 && (
+                        <button
+                          onClick={() => setPendenciaFilter(pendenciaFilter === "termo" ? null : "termo")}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors inline-flex items-center gap-1 ${pendenciaFilter === "termo" ? "bg-purple-500 text-white border-purple-500" : "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"}`}
+                          title="Vendas com troca cujo termo ainda nao foi assinado pelo cliente"
+                        >
+                          📝 {countTermoPendente} Termo{countTermoPendente > 1 ? "s" : ""} pendente{countTermoPendente > 1 ? "s" : ""}
+                        </button>
+                      )}
+                      {pendenciaFilter !== null && (
+                        <button
+                          onClick={() => setPendenciaFilter(null)}
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[#86868B] hover:text-[#1D1D1F] transition-colors"
+                        >
+                          ✕ Limpar filtro
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {/* Botao de envio em massa de NFs pendentes — aparece quando
                       ha vendas no filtro atual com NF anexa + email + ainda nao
                       enviada. Confirma antes, mostra contagem e erros. */}
@@ -5035,7 +5092,12 @@ export default function VendasPage() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm uppercase">{v.cliente}</td>
+                              <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm uppercase">
+                                {v.cliente}
+                                {/* Badges de pendencia — mini icones ao lado do cliente. Mostram mesmo sem filtro. */}
+                                {isNFPendente(v) && <span className="ml-1.5 text-xs" title="NF pendente (nao anexada ou nao enviada)">📄</span>}
+                                {isTermoPendente(v) && <span className="ml-1 text-xs" title="Termo pendente (nao assinado)">📝</span>}
+                              </td>
                               <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{v.origem}</span></td>
                               <td className="px-3 py-2.5">
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span>
