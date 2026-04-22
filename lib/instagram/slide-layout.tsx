@@ -164,8 +164,9 @@ function Header({ config, index, total }: { config: Config; index: number; total
 function Imagem({ url }: { url: string }) {
   // objectFit: contain — NUNCA corta a imagem. Composicoes (multi-produto
   // lado a lado) e fotos oficiais Apple com fundo branco ficam centralizadas
-  // preservando toda a informacao visual. Fundo cinza claro ocupa o espaco
-  // residual quando o ratio da imagem e mais largo/estreito que o container.
+  // preservando toda a informacao visual. Fundo BRANCO se funde com fotos
+  // Apple oficiais (que vem com fundo branco), criando visual "sem moldura"
+  // consistente entre todos os slides.
   return (
     <div
       style={{
@@ -176,7 +177,7 @@ function Imagem({ url }: { url: string }) {
         height: 620,
         borderRadius: 24,
         overflow: "hidden",
-        backgroundColor: "#F5F5F7",
+        backgroundColor: "#FFFFFF",
       }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -582,7 +583,7 @@ function LayoutEmanuelPessoa({ slide, config, meta }: { slide: SlideData; config
               height: 560,
               borderRadius: 18,
               overflow: "hidden",
-              backgroundColor: "#F5F5F7",
+              backgroundColor: "#FFFFFF",
               marginTop: "auto",
             }}
           >
