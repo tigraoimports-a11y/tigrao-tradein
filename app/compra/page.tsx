@@ -954,6 +954,10 @@ function CompraForm() {
         nome, pessoa, cpf, cnpj, email, telefone, instagram,
         cep, endereco, numero, complemento, bairro,
         produto: produtoFinal, cor: corSel, preco: precoFinal, desconto: descontoNum,
+        // Produtos adicionais (multi-produto): quando o link foi gerado com
+        // produto2, produto3... — backend cria uma venda por produto, todas
+        // com o mesmo grupo_id pra admin tratar como carrinho unificado.
+        produtosExtras,
         formaPagamento, parcelas, entradaPix: entradaPixNum,
         trocaProduto: temTroca ? trocaProduto : undefined,
         trocaCor: temTroca ? trocaCorParam : undefined,
