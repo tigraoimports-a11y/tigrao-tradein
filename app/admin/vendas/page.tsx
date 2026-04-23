@@ -5874,6 +5874,65 @@ export default function VendasPage() {
                                           >
                                             📱 Enviar pra Assinar Digital
                                           </button>
+                                          {/* Preview do Termo (PDF) — gera sem registrar, pra conferir dados antes de enviar */}
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              const aparelhosPrev: { modelo: string; capacidade?: string; cor: string; imei: string; serial: string; condicao: string }[] = [];
+                                              if (v.troca_produto) {
+                                                aparelhosPrev.push({
+                                                  modelo: v.troca_produto,
+                                                  capacidade: "",
+                                                  cor: v.troca_cor || "",
+                                                  imei: v.troca_imei || "",
+                                                  serial: v.troca_serial || "",
+                                                  condicao: [
+                                                    v.troca_bateria ? `Bateria ${v.troca_bateria}%` : "",
+                                                    v.troca_grade ? `Grade ${v.troca_grade}` : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (v.troca_produto2) {
+                                                aparelhosPrev.push({
+                                                  modelo: v.troca_produto2,
+                                                  cor: v.troca_cor2 || "",
+                                                  imei: v.troca_imei2 || "",
+                                                  serial: v.troca_serial2 || "",
+                                                  condicao: [
+                                                    v.troca_bateria2 ? `Bateria ${v.troca_bateria2}%` : "",
+                                                    v.troca_grade2 ? `Grade ${v.troca_grade2}` : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (aparelhosPrev.length === 0) { setMsg("Sem aparelhos de troca"); return; }
+                                              try {
+                                                const res = await fetch("/api/admin/termo-procedencia", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({
+                                                    cliente_nome: v.cliente,
+                                                    cliente_cpf: v.cpf || "",
+                                                    aparelhos: aparelhosPrev,
+                                                    venda_id: v.id,
+                                                    preview: true,
+                                                  }),
+                                                });
+                                                if (res.headers.get("content-type")?.includes("pdf")) {
+                                                  const blob = await res.blob();
+                                                  const url = URL.createObjectURL(blob);
+                                                  window.open(url, "_blank");
+                                                  setTimeout(() => URL.revokeObjectURL(url), 60000);
+                                                } else {
+                                                  const json = await res.json();
+                                                  setMsg("Erro: " + (json.error || "falha ao gerar preview"));
+                                                }
+                                              } catch { setMsg("Erro ao gerar preview do termo"); }
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                                            title="Gera PDF do termo sem enviar nem registrar — so pra conferir dados"
+                                          >
+                                            👁️ Preview Termo
+                                          </button>
                                           {/* Badge de status do termo de procedencia (aparece se foi enviado) */}
                                           {(() => {
                                             const termo = termosPorVenda[v.id];
