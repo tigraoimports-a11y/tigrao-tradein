@@ -22,6 +22,17 @@ export const DEFAULT_CATEGORIAS_PRECOS: Categoria[] = [
   { key: "ACESSORIOS", label: "Acess\u00F3rios", emoji: "\u{1F50C}" },
 ];
 
+/** Categorias fixas da aba "Alteração Valores Seminovos" em /admin/precos.
+ *  Deliberadamente mais enxuta que as de lacrados — só os 4 tipos que a loja
+ *  oferece como seminovo hoje. Não expõe botão de "+ Categoria" pra evitar
+ *  cadastros soltos que ninguém usa. */
+export const DEFAULT_CATEGORIAS_SEMINOVOS: Categoria[] = [
+  { key: "IPHONE_SEMINOVO", label: "iPhones", emoji: "\u{1F4F1}" },
+  { key: "IPAD_SEMINOVO", label: "iPads", emoji: "\u{1F4DF}" },
+  { key: "MACBOOK_SEMINOVO", label: "MacBooks", emoji: "\u{1F4BB}" },
+  { key: "APPLE_WATCH_SEMINOVO", label: "Apple Watch", emoji: "\u231A" },
+];
+
 export const DEFAULT_CATEGORIAS_ESTOQUE: Categoria[] = [
   { key: "IPHONES", label: "iPhones", emoji: "\u{1F4F1}" },
   { key: "IPADS", label: "iPads", emoji: "\u{1F4DF}" },

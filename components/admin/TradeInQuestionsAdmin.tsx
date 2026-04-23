@@ -1,6 +1,6 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
-import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoVariante, SeminovoCategoria, SEMINOVO_CAT_LABELS, getSeminovoVariantes, consolidateSeminovos } from "@/lib/types";
+import React, { useEffect, useState } from "react";
+import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoCategoria, getSeminovoVariantes, consolidateSeminovos } from "@/lib/types";
 
 interface Props {
   password: string;
@@ -523,7 +523,7 @@ const LABEL_GROUPS: { title: string; keys: { key: string; label: string }[] }[] 
   },
 ];
 
-function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceTab: string }) {
+function TradeInConfigAdmin({ password, deviceTab: _deviceTab }: { password: string; deviceTab: string }) {
   // Mantemos a lista inteira em memória — o banco persiste tudo num único
   // JSONB, então precisa voltar completa no PUT. A filtragem é por render.
   const [seminovos, setSeminovos] = useState<SeminovoOption[]>(DEFAULT_SEMINOVOS);
@@ -534,25 +534,11 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
   const [msg, setMsg] = useState("");
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [newOrigem, setNewOrigem] = useState("");
-  const [newSemiModelo, setNewSemiModelo] = useState("");
-
-  // Itens sem categoria (pré-migration) caem em "iphone" para compatibilidade.
-  const categoriaAtiva: SeminovoCategoria = (deviceTab as SeminovoCategoria) in SEMINOVO_CAT_LABELS ? (deviceTab as SeminovoCategoria) : "iphone";
-
-  // Índices reais na lista completa — toggles/edições precisam do índice certo
-  // mesmo com a UI filtrada.
-  const visibleIndices = useMemo(
-    () => seminovos.reduce<number[]>((acc, s, i) => {
-      if ((s.categoria || "iphone") === categoriaAtiva) acc.push(i);
-      return acc;
-    }, []),
-    [seminovos, categoriaAtiva]
-  );
-
-  const countCategoriaAtiva = useMemo(
-    () => seminovos.filter((s) => (s.categoria || "iphone") === categoriaAtiva && s.ativo).length,
-    [seminovos, categoriaAtiva]
-  );
+  // Seminovos continuam vivos em `seminovos`/`setSeminovos` pra manter compat
+  // com o PUT de config (que persiste o array inteiro). Mas a UI foi movida
+  // pro /admin/precos (aba "Valores Seminovos") — aqui so carrega e devolve
+  // sem alteracao. O deviceTab (iphone/ipad/macbook/watch) ainda e usado
+  // pelas perguntas do simulador de troca.
 
   function getHeaders() {
     return { "x-admin-password": password, "Content-Type": "application/json" };
@@ -652,168 +638,21 @@ function TradeInConfigAdmin({ password, deviceTab }: { password: string; deviceT
 
       {showMsg()}
 
-      {/* === SEMINOVOS ===
-          O botão mostra "(n)" = nº de modelos ativos NA CATEGORIA da aba atual
-          (antes mostrava o total geral, o que causava confusão). */}
-      {sectionBtn("seminovos", `Modelos Seminovo — ${SEMINOVO_CAT_LABELS[categoriaAtiva].label}`, countCategoriaAtiva)}
-      {expandedSection === "seminovos" && (
-        <div className="border border-[#D2D2D7] rounded-xl bg-white p-4 space-y-3">
-          <div className="text-[11px] text-[#86868B] bg-[#F5F5F7] rounded-lg px-3 py-2 leading-relaxed">
-            <strong>{SEMINOVO_CAT_LABELS[categoriaAtiva].label}:</strong> apenas os modelos seminovos desta categoria aparecem aqui.
-            Troque a aba acima para ver/editar outras categorias.
-          </div>
-          {visibleIndices.length === 0 && (
-            <div className="text-center text-sm text-[#86868B] py-4 italic">
-              Nenhum modelo seminovo cadastrado para {SEMINOVO_CAT_LABELS[categoriaAtiva].label}.
-            </div>
-          )}
-          {visibleIndices.map((si) => {
-            const s = seminovos[si];
-            const variantes = s.variantes || [];
-            const updateVariante = (vi: number, patch: Partial<SeminovoVariante>) => {
-              const arr = [...seminovos];
-              const v = [...(arr[si].variantes || [])];
-              v[vi] = { ...v[vi], ...patch };
-              arr[si] = { ...arr[si], variantes: v };
-              setSeminovos(arr);
-            };
-            const removeVariante = (vi: number) => {
-              const arr = [...seminovos];
-              arr[si] = { ...arr[si], variantes: (arr[si].variantes || []).filter((_, i) => i !== vi) };
-              setSeminovos(arr);
-            };
-            const addVariante = () => {
-              const arr = [...seminovos];
-              arr[si] = { ...arr[si], variantes: [...(arr[si].variantes || []), { storage: "", ativo: true }] };
-              setSeminovos(arr);
-            };
-            return (
-            <div key={si} className={`rounded-lg border border-[#E5E5EA] p-3 space-y-3 ${!s.ativo ? "opacity-50" : ""}`}>
-              <div className="flex items-center gap-2">
-                <input
-                  value={s.modelo}
-                  onChange={(e) => {
-                    const arr = [...seminovos];
-                    arr[si] = { ...arr[si], modelo: e.target.value };
-                    setSeminovos(arr);
-                  }}
-                  className="flex-1 px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                  placeholder="Nome do modelo"
-                />
-                <button
-                  onClick={() => {
-                    const arr = [...seminovos];
-                    arr[si] = { ...arr[si], ativo: !arr[si].ativo };
-                    setSeminovos(arr);
-                  }}
-                  title={s.ativo ? "Modelo visível ao cliente" : "Modelo oculto"}
-                  className={`w-10 h-5 rounded-full transition-colors relative ${s.ativo ? "bg-[#E8740E]" : "bg-[#D2D2D7]"}`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${s.ativo ? "left-5" : "left-0.5"}`} />
-                </button>
-                <button
-                  onClick={() => setSeminovos(seminovos.filter((_, i) => i !== si))}
-                  className="text-red-400 hover:text-red-600 text-sm px-1"
-                  title="Remover modelo"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Variantes: uma linha por storage. Preço definido → orçamento
-                  automático no cliente; sem preço → fallback WhatsApp manual. */}
-              <div className="space-y-1.5">
-                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-1 text-[10px] font-semibold uppercase tracking-wider text-[#86868B]">
-                  <span>Storage</span>
-                  <span className="text-right pr-1">Preço (R$)</span>
-                  <span className="text-center w-10">Ativo</span>
-                  <span className="w-4" />
-                </div>
-                {variantes.length === 0 && (
-                  <div className="text-[11px] italic text-[#86868B] px-1 py-1">
-                    Sem variantes. Adicione ao menos uma abaixo.
-                  </div>
-                )}
-                {variantes.map((v, vi) => (
-                  <div key={vi} className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center ${v.ativo === false ? "opacity-50" : ""}`}>
-                    <input
-                      value={v.storage}
-                      onChange={(e) => updateVariante(vi, { storage: e.target.value })}
-                      placeholder="Ex: 256GB"
-                      className="px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
-                    />
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={typeof v.preco === "number" ? String(v.preco) : ""}
-                      onChange={(e) => {
-                        const raw = e.target.value.trim();
-                        const num = raw === "" ? undefined : Number(raw);
-                        updateVariante(vi, { preco: Number.isFinite(num as number) ? (num as number) : undefined });
-                      }}
-                      placeholder="—"
-                      className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-xs text-right focus:outline-none focus:border-[#E8740E]"
-                    />
-                    <button
-                      onClick={() => updateVariante(vi, { ativo: v.ativo === false })}
-                      title={v.ativo !== false ? "Variante visível" : "Variante oculta"}
-                      className={`w-10 h-5 rounded-full transition-colors relative ${v.ativo !== false ? "bg-[#E8740E]" : "bg-[#D2D2D7]"}`}
-                    >
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${v.ativo !== false ? "left-5" : "left-0.5"}`} />
-                    </button>
-                    <button
-                      onClick={() => removeVariante(vi)}
-                      className="text-[#86868B] hover:text-red-500 text-xs w-4"
-                      title="Remover variante"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={addVariante}
-                  className="text-[11px] font-semibold text-[#E8740E] hover:underline mt-1"
-                >
-                  + Adicionar variante
-                </button>
-                <p className="text-[10px] text-[#86868B] leading-relaxed pt-1">
-                  Com preço → orçamento automático. Sem preço → cliente é levado ao WhatsApp pra cotação manual.
-                </p>
-              </div>
-            </div>
-            );
-          })}
-          <div className="flex gap-2">
-            <input
-              value={newSemiModelo}
-              onChange={(e) => setNewSemiModelo(e.target.value)}
-              placeholder={`Ex: ${categoriaAtiva === "iphone" ? "iPhone 17 Pro" : categoriaAtiva === "ipad" ? "iPad Pro M4" : categoriaAtiva === "macbook" ? "MacBook Air M3" : "Apple Watch Series 10"}`}
-              className="flex-1 px-3 py-2 rounded-lg border border-dashed border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-            />
-            <button
-              onClick={() => {
-                if (newSemiModelo.trim()) {
-                  // Novo item herda a categoria da aba aberta e vem com duas
-                  // variantes vazias — operador preenche storage/preço inline.
-                  setSeminovos([...seminovos, {
-                    modelo: newSemiModelo.trim(),
-                    ativo: true,
-                    categoria: categoriaAtiva,
-                    variantes: [
-                      { storage: "128GB", ativo: true },
-                      { storage: "256GB", ativo: true },
-                    ],
-                  }]);
-                  setNewSemiModelo("");
-                }
-              }}
-              className="px-4 py-2 rounded-lg text-sm font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
-            >
-              + Adicionar
-            </button>
-          </div>
+      {/* === SEMINOVOS (migrado) ===
+          A gestão de modelos/preço/status de seminovos foi movida para o
+          Painel de Preços (aba "Valores Seminovos"). Aqui fica só um aviso
+          pra operador saber pra onde ir. */}
+      <a
+        href="/admin/precos?tab=IPHONE_SEMINOVO"
+        className="block rounded-xl border border-[#E8740E]/30 bg-[#FFF7ED] px-4 py-3 text-xs text-[#1D1D1F] leading-relaxed hover:bg-[#FFEFE0] transition-colors"
+      >
+        <div className="font-semibold mb-1">📱 Modelos Seminovo → movido</div>
+        <div className="text-[#86868B]">
+          Cadastro e preços agora ficam em <strong className="text-[#E8740E]">Alteração de Preços → Valores Seminovos</strong>.
+          Clique aqui pra abrir.
         </div>
-      )}
+      </a>
+
 
       {/* === ORIGENS === */}
       {sectionBtn("origens", "Origens de Contato", origens.length)}

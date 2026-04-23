@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { NewProduct, TradeInConfig, SeminovoCategoria, SeminovoVariante } from "@/lib/types";
 import { SEMINOVO_CATEGORIAS, SEMINOVO_CAT_LABELS, getSeminovoVariantes } from "@/lib/types";
 import { getUniqueModels, getStoragesForModel, getProductPrice } from "@/lib/sheets";
@@ -76,12 +76,61 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   // porque os dois universos são independentes (mesma divisão do admin).
   const [semiCat, setSemiCat] = useState<SeminovoCategoria | "">("");
 
+  // Seminovos cadastrados em /admin/precos (fonte nova — Painel de Precos).
+  // Se retornar vazio, cai no fallback do tradein_config.seminovos (legado).
+  type SemiRow = { modelo: string; armazenamento: string; precoPix: number; categoria?: string | null };
+  const [seminovosDb, setSeminovosDb] = useState<SemiRow[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/produtos?tipo=SEMINOVO");
+        if (!res.ok) return;
+        const json = (await res.json()) as SemiRow[];
+        if (!cancelled) setSeminovosDb(Array.isArray(json) ? json : []);
+      } catch {
+        if (!cancelled) setSeminovosDb([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Mapeia categoria do Painel de Precos ("IPHONE_SEMINOVO"/...) para a chave
+  // do SeminovoCategoria usado aqui ("iphone"/"ipad"/"macbook"/"watch").
+  function categoriaPrecosToSemi(cat: string | null | undefined): SeminovoCategoria {
+    const c = (cat || "").toUpperCase();
+    if (c.startsWith("IPAD")) return "ipad";
+    if (c.startsWith("MACBOOK")) return "macbook";
+    if (c.startsWith("APPLE_WATCH")) return "watch";
+    return "iphone";
+  }
+
   // Normaliza a lista vinda do DB (backfill: categoria ausente → iphone) e já
   // converte legado `storages[]` em `variantes[]` via helper. Filtra:
   //  • Modelo inativo → oculto
   //  • Variante inativa → removida
   //  • Modelo sem variante ativa → oculto (sem storage pra escolher)
+  //
+  // Prioridade: 1) /api/produtos?tipo=SEMINOVO (fonte nova), 2) tradein_config.seminovos
+  // (fallback durante transicao), 3) hardcoded default (banco nao respondeu).
   const seminovosAll = useMemo(() => {
+    // Fonte 1: Painel de Precos — agrupa rows por modelo.
+    if (seminovosDb && seminovosDb.length > 0) {
+      const byModel = new Map<string, { modelo: string; variantes: SeminovoVariante[]; categoria: SeminovoCategoria }>();
+      for (const row of seminovosDb) {
+        const cat = categoriaPrecosToSemi(row.categoria);
+        const entry = byModel.get(row.modelo) || { modelo: row.modelo, variantes: [], categoria: cat };
+        // preco 0 (sentinela) → variante sem preco → fluxo WhatsApp manual.
+        entry.variantes.push({
+          storage: row.armazenamento,
+          preco: row.precoPix > 0 ? row.precoPix : undefined,
+          ativo: true,
+        });
+        byModel.set(row.modelo, entry);
+      }
+      return [...byModel.values()].filter((s) => s.variantes.length > 0);
+    }
+    // Fonte 2: tradein_config.seminovos (legado, sera removido apos migracao completa).
     const raw = tradeinConfig?.seminovos?.filter((s) => s.ativo);
     const src = raw && raw.length > 0 ? raw : SEMINOVOS_DEFAULT;
     return src
@@ -94,7 +143,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
         };
       })
       .filter((s) => s.variantes.length > 0);
-  }, [tradeinConfig]);
+  }, [seminovosDb, tradeinConfig]);
 
   // Categorias com ao menos 1 seminovo ativo (as únicas abas clicáveis).
   const semiCats = useMemo(() => {

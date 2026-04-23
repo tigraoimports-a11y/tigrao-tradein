@@ -14,6 +14,12 @@ const FALLBACK_PRODUCTS: NewProduct[] = [
 export async function GET(req: NextRequest) {
   const limited = rateLimitPublic(req);
   if (limited) return limited;
+
+  // ?tipo=SEMINOVO retorna apenas seminovos (nova aba do Painel de Preços).
+  // Sem ?tipo ou tipo=LACRADO mantém comportamento antigo (TRADEIN/CATALOGO/AMBOS/null).
+  const tipoFilter = req.nextUrl.searchParams.get("tipo");
+  const wantSeminovos = tipoFilter === "SEMINOVO";
+
   // Tenta Supabase primeiro (painel de preços)
   try {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -26,7 +32,13 @@ export async function GET(req: NextRequest) {
 
       if (data && data.length > 0) {
         const products: NewProduct[] = data
-          .filter((r) => r.status !== "esgotado" && (r.tipo === "TRADEIN" || r.tipo === "AMBOS" || r.tipo == null))
+          .filter((r) => {
+            if (r.status === "esgotado") return false;
+            if (wantSeminovos) return r.tipo === "SEMINOVO";
+            // Lacrados: tudo que não for seminovo (inclui null/undefined pra
+            // compatibilidade com rows antigas pré-refactor).
+            return r.tipo === "TRADEIN" || r.tipo === "AMBOS" || r.tipo == null;
+          })
           .map((r) => ({
             modelo: r.modelo,
             armazenamento: r.armazenamento,
@@ -40,7 +52,10 @@ export async function GET(req: NextRequest) {
     // fallthrough para Sheets
   }
 
-  // Fallback: Google Sheets
+  // Seminovos não têm fallback no Sheets — retorna vazio se não achou no DB.
+  if (wantSeminovos) return NextResponse.json([]);
+
+  // Fallback: Google Sheets (só pra lacrados)
   try {
     const products = await fetchNewProducts();
     return NextResponse.json(products);
