@@ -45,6 +45,11 @@ export async function GET() {
     if (labels._whatsapp_principal) result.whatsapp_principal = labels._whatsapp_principal;
     if (labels._whatsapp_formularios) result.whatsapp_formularios = labels._whatsapp_formularios;
     if (labels._whatsapp_formularios_seminovos) result.whatsapp_formularios_seminovos = labels._whatsapp_formularios_seminovos;
+    // WhatsApp por categoria de seminovo (fallback: whatsapp_formularios_seminovos).
+    if (labels._whatsapp_seminovo_iphone) result.whatsapp_seminovo_iphone = labels._whatsapp_seminovo_iphone;
+    if (labels._whatsapp_seminovo_ipad) result.whatsapp_seminovo_ipad = labels._whatsapp_seminovo_ipad;
+    if (labels._whatsapp_seminovo_macbook) result.whatsapp_seminovo_macbook = labels._whatsapp_seminovo_macbook;
+    if (labels._whatsapp_seminovo_watch) result.whatsapp_seminovo_watch = labels._whatsapp_seminovo_watch;
     if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
 
     // Backfill defensivo: garante que todo seminovo tenha categoria (fallback iphone).

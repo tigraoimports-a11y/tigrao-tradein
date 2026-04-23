@@ -22,6 +22,13 @@ export async function GET(req: NextRequest) {
   if (labels._whatsapp_principal) result.whatsapp_principal = labels._whatsapp_principal;
   if (labels._whatsapp_formularios) result.whatsapp_formularios = labels._whatsapp_formularios;
   if (labels._whatsapp_formularios_seminovos) result.whatsapp_formularios_seminovos = labels._whatsapp_formularios_seminovos;
+  // WhatsApp por categoria de seminovo — permite roteamento granular (iPhone
+  // vai pra X, iPad/MacBook/Watch pra Y, etc). Fallback no cliente cai em
+  // whatsapp_formularios_seminovos se a categoria nao tiver numero especifico.
+  if (labels._whatsapp_seminovo_iphone) result.whatsapp_seminovo_iphone = labels._whatsapp_seminovo_iphone;
+  if (labels._whatsapp_seminovo_ipad) result.whatsapp_seminovo_ipad = labels._whatsapp_seminovo_ipad;
+  if (labels._whatsapp_seminovo_macbook) result.whatsapp_seminovo_macbook = labels._whatsapp_seminovo_macbook;
+  if (labels._whatsapp_seminovo_watch) result.whatsapp_seminovo_watch = labels._whatsapp_seminovo_watch;
   if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
   if (labels._whatsapp_vendedores_nomes) result.whatsapp_vendedores_nomes = labels._whatsapp_vendedores_nomes;
   if (labels._whatsapp_vendedores_recebe_links) result.whatsapp_vendedores_recebe_links = labels._whatsapp_vendedores_recebe_links;
@@ -41,18 +48,28 @@ export async function PUT(req: NextRequest) {
   if (body.origens !== undefined) updates.origens = body.origens;
 
   // Salvar whatsapp config dentro do campo labels (JSONB) pra não depender de colunas novas
-  if (body.whatsapp_principal !== undefined || body.whatsapp_formularios !== undefined || body.whatsapp_formularios_seminovos !== undefined || body.whatsapp_vendedores !== undefined || body.whatsapp_vendedores_nomes !== undefined || body.whatsapp_vendedores_recebe_links !== undefined || body.whatsapp_vendedores_ativo !== undefined || body.labels !== undefined) {
+  const whatsappFields = [
+    "whatsapp_principal",
+    "whatsapp_formularios",
+    "whatsapp_formularios_seminovos",
+    "whatsapp_seminovo_iphone",
+    "whatsapp_seminovo_ipad",
+    "whatsapp_seminovo_macbook",
+    "whatsapp_seminovo_watch",
+    "whatsapp_vendedores",
+    "whatsapp_vendedores_nomes",
+    "whatsapp_vendedores_recebe_links",
+    "whatsapp_vendedores_ativo",
+  ] as const;
+  const hasAnyWaField = whatsappFields.some((k) => body[k] !== undefined);
+  if (hasAnyWaField || body.labels !== undefined) {
     const { data: current } = await supabase.from("tradein_config").select("labels").limit(1).single();
     const currentLabels = (current?.labels && typeof current.labels === "object") ? current.labels as Record<string, unknown> : {};
     const newLabels = { ...currentLabels };
     if (body.labels !== undefined) Object.assign(newLabels, body.labels);
-    if (body.whatsapp_principal !== undefined) newLabels._whatsapp_principal = body.whatsapp_principal;
-    if (body.whatsapp_formularios !== undefined) newLabels._whatsapp_formularios = body.whatsapp_formularios;
-    if (body.whatsapp_formularios_seminovos !== undefined) newLabels._whatsapp_formularios_seminovos = body.whatsapp_formularios_seminovos;
-    if (body.whatsapp_vendedores !== undefined) newLabels._whatsapp_vendedores = body.whatsapp_vendedores;
-    if (body.whatsapp_vendedores_nomes !== undefined) newLabels._whatsapp_vendedores_nomes = body.whatsapp_vendedores_nomes;
-    if (body.whatsapp_vendedores_recebe_links !== undefined) newLabels._whatsapp_vendedores_recebe_links = body.whatsapp_vendedores_recebe_links;
-    if (body.whatsapp_vendedores_ativo !== undefined) newLabels._whatsapp_vendedores_ativo = body.whatsapp_vendedores_ativo;
+    for (const k of whatsappFields) {
+      if (body[k] !== undefined) newLabels[`_${k}`] = body[k];
+    }
     updates.labels = newLabels;
   }
 
