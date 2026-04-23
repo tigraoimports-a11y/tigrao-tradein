@@ -9,11 +9,22 @@ import { getTaxa, calcularLiquido } from "./taxas";
 import { recalcularSaldoDia } from "./saldos";
 
 function sumByBanco(vendas: Venda[], banco: string): number {
-  // Banco principal recebe preco_vendido - entrada_pix_2; o 2o PIX vai pro
-  // banco_pix_2 via addSegundoPix.
+  // Banco principal recebe apenas o dinheiro real: preco_vendido menos as
+  // entradas que vao pra outros destinos (outro banco via PIX/2o PIX, caixa
+  // especie, troca). Mesma formula do fallback D+1 — corrige bug pre-existente
+  // em que troca contava como saldo bancario em vendas forma=PIX D+0.
   return vendas
     .filter((v) => v.banco === banco)
-    .reduce((s, v) => s + Number(v.preco_vendido) - Number(v.entrada_pix_2 || 0), 0);
+    .reduce(
+      (s, v) =>
+        s
+        + Number(v.preco_vendido)
+        - Number(v.entrada_pix || 0)
+        - Number(v.entrada_pix_2 || 0)
+        - Number(v.entrada_especie || 0)
+        - Number(v.produto_na_troca || 0),
+      0
+    );
 }
 
 /** Soma entrada_pix_2 nas vendas cujo banco_pix_2 === banco. */

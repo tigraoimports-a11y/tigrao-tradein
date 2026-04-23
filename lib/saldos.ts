@@ -62,10 +62,17 @@ export async function recalcularSaldoDia(
     .eq("recebimento", "D+0");
 
   const d0 = (vendasD0 ?? []) as Venda[];
-  // Banco principal recebe preco_vendido menos o que foi direcionado pro 2o PIX.
-  // (entrada_pix_2 é subtraída aqui e somada no loop abaixo, de modo que o total
-  // entre os dois bancos bate com preco_vendido.)
-  const d0MainVal = (v: Venda) => Number(v.preco_vendido) - Number(v.entrada_pix_2 || 0);
+  // Banco principal recebe apenas o dinheiro de verdade: preco_vendido menos
+  // entradas que vao pra outros destinos (outro banco via PIX/2o PIX, caixa
+  // especie, ou troca que nao e dinheiro). Mesma formula do fallback D+1 —
+  // corrige bug pre-existente em que troca era contabilizada como saldo
+  // bancario nas vendas forma=PIX D+0.
+  const d0MainVal = (v: Venda) =>
+    Number(v.preco_vendido)
+    - Number(v.entrada_pix || 0)
+    - Number(v.entrada_pix_2 || 0)
+    - Number(v.entrada_especie || 0)
+    - Number(v.produto_na_troca || 0);
   let pix_itau = d0.filter((v) => v.banco === "ITAU").reduce((s, v) => s + d0MainVal(v), 0);
   let pix_inf = d0.filter((v) => v.banco === "INFINITE").reduce((s, v) => s + d0MainVal(v), 0);
   let pix_mp = d0.filter((v) => v.banco === "MERCADO_PAGO").reduce((s, v) => s + d0MainVal(v), 0);
