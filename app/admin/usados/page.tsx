@@ -321,12 +321,18 @@ export function UsadosContent() {
   // Categoria selecionada
   const catPrefix = DEVICE_CATS.find(c => c.key === catFilter)?.prefix || "iPhone";
 
-  // Agrupar valores por modelo — filtrado pela categoria
+  // Agrupar valores por modelo — filtrado pela categoria e escondendo os que
+  // ja estao na aba "Excluidos" (pra nao editar em dois lugares). Match exato
+  // case-insensitive — diferente do cliente que usa `includes()` fuzzy.
+  const excluidosSet = new Set(excluidos.map((m) => m.toLowerCase()));
   const grouped: Record<string, ValorUsado[]> = {};
-  valores.filter(v => v.modelo.startsWith(catPrefix)).forEach((v) => {
-    if (!grouped[v.modelo]) grouped[v.modelo] = [];
-    grouped[v.modelo].push(v);
-  });
+  valores
+    .filter(v => v.modelo.startsWith(catPrefix))
+    .filter(v => !excluidosSet.has(v.modelo.toLowerCase()))
+    .forEach((v) => {
+      if (!grouped[v.modelo]) grouped[v.modelo] = [];
+      grouped[v.modelo].push(v);
+    });
   // Ordenar variantes dentro de cada modelo por capacidade crescente
   // (64GB → 128GB → 256GB → 512GB → 1TB). Formatos desconhecidos caem no
   // final. Mesma regra da listagem de seminovos em /admin/precos.
