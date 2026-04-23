@@ -7,6 +7,7 @@ import type { NewProduct } from "@/lib/types";
 import { calculateQuote, getWhatsAppUrl, getAnyConditionLines, formatBRL } from "@/lib/calculations";
 import { getHoneypotValue } from "@/lib/honeypot-client";
 import { getPublicBaseUrl } from "@/lib/public-url";
+import { withUTMs } from "@/lib/utm-tracker";
 import FlexiblePaymentSimulator, { type PaymentBlock, type PaymentSummary, calculatePaymentSummary } from "./FlexiblePaymentSimulator";
 
 const PARCELAS_OPCOES = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
@@ -28,7 +29,7 @@ interface StepQuoteProps {
 
 async function salvarLead(lead: LeadSaiu & { formaPagamento?: string; origem?: string; motivoSaida?: string }) {
   try {
-    const payload = { ...lead, website: getHoneypotValue() };
+    const payload = withUTMs({ ...lead, website: getHoneypotValue() });
     const res = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (res.status === 429) { console.warn("[salvarLead] Rate limit atingido, mas prosseguindo"); return; }
     const json = await res.json();
