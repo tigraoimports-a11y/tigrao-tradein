@@ -758,11 +758,47 @@ function cleanProductForAtacado(produto: string, categoria: string): { base: str
   return { base: nome, extra };
 }
 
-/**
- * Gera texto estruturado pro WhatsApp a partir de uma lista de produtos.
- * Agrupa por categoria, merge de cores/conectividades, Title Case.
- */
-function buildAtacadoText(fonte: ProdutoEstoque[]): string {
+const ATACADO_ORIGEM_CONFIG: Record<string, { emoji: string; label: string }> = {
+  RJ: { emoji: "🏙️", label: "Rio de Janeiro" },
+  SAO_PAULO: { emoji: "🚚", label: "São Paulo" },
+  PARAGUAI: { emoji: "🇵🇾", label: "Paraguai" },
+  EUA: { emoji: "🇺🇸", label: "Estados Unidos" },
+};
+const ATACADO_ORIGEM_ORDER = ["RJ", "SAO_PAULO", "PARAGUAI", "EUA", "SEM_ORIGEM"];
+
+/** Chave única por origem+data pra agrupar produtos do mesmo pedido. */
+function atacadoOrigemKey(p: ProdutoEstoque): { key: string; origem: string; data: string | null } {
+  const origem = p.origem_compra && ATACADO_ORIGEM_CONFIG[p.origem_compra] ? p.origem_compra : "SEM_ORIGEM";
+  const data = p.data_compra || null;
+  return { key: `${origem}::${data || "_SEM_DATA_"}`, origem, data };
+}
+
+/** Header legível do grupo (pra modal e texto): "🇺🇸 Estados Unidos — Pedido 15/04/2026". */
+function atacadoGroupHeader(origem: string, data: string | null): { emoji: string; label: string; full: string } {
+  const cfg = origem === "SEM_ORIGEM"
+    ? { emoji: "📦", label: "Sem origem definida" }
+    : ATACADO_ORIGEM_CONFIG[origem];
+  const dateLabel = data ? ` — Pedido ${fmtDate(data)}` : "";
+  return { emoji: cfg.emoji, label: cfg.label, full: `${cfg.emoji} ${cfg.label}${dateLabel}` };
+}
+
+/** Ordena chaves de grupo: origem na ordem padrão, depois data mais recente primeiro. */
+function atacadoSortGroupKeys(
+  keys: string[],
+  meta: Map<string, { origem: string; data: string | null }>,
+): string[] {
+  return [...keys].sort((a, b) => {
+    const ma = meta.get(a)!;
+    const mb = meta.get(b)!;
+    const ia = ATACADO_ORIGEM_ORDER.indexOf(ma.origem);
+    const ib = ATACADO_ORIGEM_ORDER.indexOf(mb.origem);
+    if (ia !== ib) return ia - ib;
+    return (mb.data || "").localeCompare(ma.data || "");
+  });
+}
+
+/** Linhas de produtos de UM grupo (origem+data), sub-agrupadas por categoria. */
+function buildAtacadoLinesByCategory(prods: ProdutoEstoque[]): string[] {
   const catEmoji: Record<string, string> = {
     IPHONES: "📱", IPADS: "📲", MACBOOK: "💻", MAC_MINI: "🖥️",
     APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
@@ -776,11 +812,10 @@ function buildAtacadoText(fonte: ProdutoEstoque[]): string {
   type Entry = { base: string; colors: string[]; extras: string[] };
   const groups: Record<string, Map<string, Entry>> = {};
 
-  for (const p of fonte) {
+  for (const p of prods) {
     const cat = getBaseCat(p.categoria || "OUTROS");
     if (!groups[cat]) groups[cat] = new Map();
     const { base, extra } = cleanProductForAtacado(p.produto || "", p.categoria || "");
-    // Pra Apple Watch, cor é agrupada junto com base (merge só conectividade)
     const keyForGroup = cat === "APPLE_WATCH"
       ? `${base}||${(p.cor || "").toUpperCase()}`
       : base;
@@ -804,21 +839,19 @@ function buildAtacadoText(fonte: ProdutoEstoque[]): string {
     const n = parseInt(m[1]);
     return m[2].toUpperCase() === "TB" ? n * 1024 : n;
   };
+  const modelPrefix = (base: string): string => base.replace(/\s*\d+(GB|TB)\b.*$/i, "").trim();
 
-  const lines: string[] = ["🚨 *ESTOQUE – ATACADO*", ""];
   const sortedCats = Object.keys(groups).sort((a, b) => {
     const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
 
+  const out: string[] = [];
   for (const cat of sortedCats) {
     const emoji = catEmoji[cat] || "📦";
     const label = catLabel[cat] || cat;
-    lines.push(`${emoji} *${label}*`);
+    out.push(`${emoji} *${label}*`);
     const entries = Array.from(groups[cat].values());
-
-    // Chave do "modelo" sem capacidade (prefixo) — pra sort e agrupamento visual
-    const modelPrefix = (base: string): string => base.replace(/\s*\d+(GB|TB)\b.*$/i, "").trim();
 
     if (cat === "IPHONES") {
       entries.sort((a, b) => {
@@ -831,12 +864,12 @@ function buildAtacadoText(fonte: ProdutoEstoque[]): string {
       let currentFamily = -1;
       for (const e of entries) {
         const f = iphoneFamily(e.base);
-        if (currentFamily !== -1 && f !== currentFamily) lines.push("");
+        if (currentFamily !== -1 && f !== currentFamily) out.push("");
         currentFamily = f;
         const parts = [e.base];
         if (e.extras.length > 0) parts.push(e.extras.join(" / "));
         if (e.colors.length > 0) parts.push(e.colors.join(" / "));
-        lines.push(parts.join(" – "));
+        out.push(parts.join(" – "));
       }
     } else {
       entries.sort((a, b) => {
@@ -848,10 +881,42 @@ function buildAtacadoText(fonte: ProdutoEstoque[]): string {
         const parts = [e.base];
         if (e.extras.length > 0) parts.push(e.extras.join(" / "));
         if (e.colors.length > 0) parts.push(e.colors.join(" / "));
-        lines.push(parts.join(" – "));
+        out.push(parts.join(" – "));
       }
     }
+    out.push("");
+  }
+
+  return out;
+}
+
+/**
+ * Gera texto estruturado pro WhatsApp a partir de uma lista de produtos.
+ * Agrupa por origem+data do pedido; dentro de cada grupo, sub-agrupa por categoria.
+ */
+function buildAtacadoText(fonte: ProdutoEstoque[]): string {
+  const byOrigemData = new Map<string, ProdutoEstoque[]>();
+  const keyMeta = new Map<string, { origem: string; data: string | null }>();
+
+  for (const p of fonte) {
+    const { key, origem, data } = atacadoOrigemKey(p);
+    if (!byOrigemData.has(key)) {
+      byOrigemData.set(key, []);
+      keyMeta.set(key, { origem, data });
+    }
+    byOrigemData.get(key)!.push(p);
+  }
+
+  const sortedKeys = atacadoSortGroupKeys(Array.from(byOrigemData.keys()), keyMeta);
+
+  const lines: string[] = ["🚨 *ESTOQUE – ATACADO*", ""];
+  for (const k of sortedKeys) {
+    const meta = keyMeta.get(k)!;
+    const header = atacadoGroupHeader(meta.origem, meta.data);
+    const dateLabel = meta.data ? ` — Pedido ${fmtDate(meta.data)}` : "";
+    lines.push(`${header.emoji} *${header.label}${dateLabel}*`);
     lines.push("");
+    lines.push(...buildAtacadoLinesByCategory(byOrigemData.get(k)!));
   }
 
   return lines.join("\n").trim();
@@ -7232,24 +7297,25 @@ export default function EstoquePage() {
         const incluidos = fonte.length;
         const totalBase = base.length;
 
-        // Agrupa por categoria + modelo/capacidade pra facilitar o toggle
-        const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
+        // Agrupa primeiro por origem+data (pedido), depois por categoria+modelo.
+        // Mesma ideia do texto: produtos do mesmo pedido ficam juntos.
+        const byOrigemData = new Map<string, ProdutoEstoque[]>();
+        const groupMeta = new Map<string, { origem: string; data: string | null }>();
         for (const p of base) {
-          const cat = getBaseCat(p.categoria || "OUTROS");
-          const { base: modelo } = cleanProductForAtacado(p.produto || "", p.categoria || "");
-          if (!byCat[cat]) byCat[cat] = {};
-          if (!byCat[cat][modelo]) byCat[cat][modelo] = [];
-          byCat[cat][modelo].push(p);
+          const { key, origem, data } = atacadoOrigemKey(p);
+          if (!byOrigemData.has(key)) {
+            byOrigemData.set(key, []);
+            groupMeta.set(key, { origem, data });
+          }
+          byOrigemData.get(key)!.push(p);
         }
+        const sortedGroupKeys = atacadoSortGroupKeys(Array.from(byOrigemData.keys()), groupMeta);
+
         const catLabels: Record<string, string> = {
           IPHONES: "📱 iPhones", IPADS: "📲 iPads", MACBOOK: "💻 MacBooks", MAC_MINI: "🖥️ Mac Mini",
           APPLE_WATCH: "⌚ Apple Watch", AIRPODS: "🎧 AirPods", ACESSORIOS: "🔌 Acessórios", OUTROS: "📦 Outros",
         };
         const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS", "OUTROS"];
-        const sortedCats = Object.keys(byCat).sort((a, b) => {
-          const ia = catOrder.indexOf(a), ib = catOrder.indexOf(b);
-          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-        });
 
         const toggleGroup = (prods: ProdutoEstoque[]) => {
           const allExcluded = prods.every(p => atacadoExcluded.has(p.id));
@@ -7290,43 +7356,71 @@ export default function EstoquePage() {
                       ✕ Desmarcar todos
                     </button>
                   </div>
-                  {sortedCats.map(cat => {
-                    const catProds = Object.values(byCat[cat]).flat();
-                    const allOff = catProds.every(p => atacadoExcluded.has(p.id));
+                  {sortedGroupKeys.map(gkey => {
+                    const meta = groupMeta.get(gkey)!;
+                    const groupProds = byOrigemData.get(gkey)!;
+                    const allOff = groupProds.every(p => atacadoExcluded.has(p.id));
+                    const totalQntGrupo = groupProds.reduce((s, p) => s + (p.qnt || 0), 0);
+                    const header = atacadoGroupHeader(meta.origem, meta.data);
+
+                    // Sub-agrupa por categoria + modelo dentro deste pedido
+                    const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
+                    for (const p of groupProds) {
+                      const cat = getBaseCat(p.categoria || "OUTROS");
+                      const { base: modelo } = cleanProductForAtacado(p.produto || "", p.categoria || "");
+                      if (!byCat[cat]) byCat[cat] = {};
+                      if (!byCat[cat][modelo]) byCat[cat][modelo] = [];
+                      byCat[cat][modelo].push(p);
+                    }
+                    const sortedCats = Object.keys(byCat).sort((a, b) => {
+                      const ia = catOrder.indexOf(a), ib = catOrder.indexOf(b);
+                      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                    });
+
                     return (
-                      <div key={cat}>
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>{catLabels[cat] || cat}</h4>
+                      <div key={gkey} className={`rounded-xl p-3 ${dm ? "bg-[#2C2C2E]/50 border border-[#3A3A3C]" : "bg-[#FFF8F0] border border-[#F5D5B0]"}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex flex-col">
+                            <h4 className={`text-sm font-bold ${textPrimary}`}>{header.full}</h4>
+                            <p className={`text-[10px] ${textMuted}`}>{totalQntGrupo} un. — {groupProds.length} SKU(s)</p>
+                          </div>
                           <button
-                            onClick={() => toggleGroup(catProds)}
+                            onClick={() => toggleGroup(groupProds)}
                             className={`text-[10px] font-semibold ${dm ? "text-[#F5A623] hover:underline" : "text-[#E8740E] hover:underline"}`}>
                             {allOff ? "Marcar tudo" : "Desmarcar tudo"}
                           </button>
                         </div>
-                        <div className="space-y-1">
-                          {Object.entries(byCat[cat])
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([modelo, prods]) => {
-                            const groupOff = prods.every(p => atacadoExcluded.has(p.id));
-                            const totalQnt = prods.reduce((s, p) => s + (p.qnt || 0), 0);
-                            return (
-                              <label key={modelo} className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${groupOff ? (dm ? "bg-[#2C2C2E] opacity-50" : "bg-[#F9F9F9] opacity-60") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]")}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={!groupOff}
-                                  onChange={() => toggleGroup(prods)}
-                                  className="mt-0.5 accent-[#E8740E]"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <p className={`text-xs font-semibold ${textPrimary} truncate`}>{modelo}</p>
-                                  <p className={`text-[10px] ${textMuted}`}>
-                                    {totalQnt} un. {prods.length > 1 ? `(${prods.length} variantes)` : ""}
-                                    {prods.some(p => p.cor) && ` — ${[...new Set(prods.map(p => p.cor).filter(Boolean).map(c => corParaPT(c!) || c))].join(", ")}`}
-                                  </p>
-                                </div>
-                              </label>
-                            );
-                          })}
+                        <div className="space-y-2 pl-1">
+                          {sortedCats.map(cat => (
+                            <div key={cat}>
+                              <h5 className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${textSecondary}`}>{catLabels[cat] || cat}</h5>
+                              <div className="space-y-1">
+                                {Object.entries(byCat[cat])
+                                  .sort(([a], [b]) => a.localeCompare(b))
+                                  .map(([modelo, prods]) => {
+                                  const groupOff = prods.every(p => atacadoExcluded.has(p.id));
+                                  const totalQnt = prods.reduce((s, p) => s + (p.qnt || 0), 0);
+                                  return (
+                                    <label key={modelo} className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${groupOff ? (dm ? "bg-[#1C1C1E] opacity-50" : "bg-white opacity-60") : (dm ? "hover:bg-[#3A3A3C] bg-[#1C1C1E]" : "hover:bg-[#F5F5F7] bg-white")}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={!groupOff}
+                                        onChange={() => toggleGroup(prods)}
+                                        className="mt-0.5 accent-[#E8740E]"
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <p className={`text-xs font-semibold ${textPrimary} truncate`}>{modelo}</p>
+                                        <p className={`text-[10px] ${textMuted}`}>
+                                          {totalQnt} un. {prods.length > 1 ? `(${prods.length} variantes)` : ""}
+                                          {prods.some(p => p.cor) && ` — ${[...new Set(prods.map(p => p.cor).filter(Boolean).map(c => corParaPT(c!) || c))].join(", ")}`}
+                                        </p>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     );
