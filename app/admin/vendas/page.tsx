@@ -4104,6 +4104,19 @@ export default function VendasPage() {
                 </div>
                 )}
 
+                {/* 2o PIX opcional — cart mode. Espelha o bloco do single-produto. */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div><p className={labelCls}>2º PIX (R$) — opcional</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_pix_2)} onChange={(e) => {
+                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                    setForm(f => ({ ...f, entrada_pix_2: clean, ...(parseFloat(clean) > 0 && !f.banco_pix_2 ? { banco_pix_2: "INFINITE" } : {}) }));
+                  }} placeholder="0" className={inputCls} /></div>
+                  {parseFloat(form.entrada_pix_2) > 0 && (
+                    <div><p className={labelCls}>Banco do 2º PIX</p><select value={form.banco_pix_2} onChange={(e) => set("banco_pix_2", e.target.value)} className={selectCls}>
+                      <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                    </select></div>
+                  )}
+                </div>
+
                 {/* Entrada Especie */}
                 {form.forma !== "ESPECIE" && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
