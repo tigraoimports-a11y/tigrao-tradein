@@ -877,6 +877,24 @@ export async function PATCH(req: NextRequest) {
       console.log(`[Vendas PATCH] Produto anterior devolvido ao estoque: ${estoqueIdAnterior} (novo: ${novoEstoqueId || "nenhum"})`);
     }
   }
+
+  // Se o admin vinculou um item NOVO do estoque (via _estoque_id), deduzir
+  // esse item. Cobre o caminho "aba Formularios Preenchidos → editar venda →
+  // selecionar produto do dropdown do estoque → salvar": o frontend manda
+  // _estoque_id mas nao sabia deduzir. A restauracao do item antigo acima
+  // cuida do lado contrario (produto trocado ou desvinculado).
+  if (!error && estoqueIdFoiEnviado && novoEstoqueId && novoEstoqueId !== estoqueIdAnterior) {
+    const { data: itemNovo } = await supabase.from("estoque").select("id, qnt, status, produto").eq("id", novoEstoqueId).single();
+    if (itemNovo && itemNovo.status === "EM ESTOQUE" && Number(itemNovo.qnt) > 0) {
+      const novaQnt = Math.max(0, Number(itemNovo.qnt) - 1);
+      await supabase.from("estoque").update({
+        qnt: novaQnt,
+        status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+        updated_at: new Date().toISOString(),
+      }).eq("id", novoEstoqueId);
+      await logActivity(usuario, "Estoque deduzido (vinculo via _estoque_id)", `${itemNovo.produto || "?"} — restam ${novaQnt} un.`, "estoque", novoEstoqueId);
+    }
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Debitar crédito de lojista (se enviado no PATCH)
@@ -949,6 +967,21 @@ export async function PATCH(req: NextRequest) {
           updated_at: new Date().toISOString(),
         }).eq("id", primeiro.id);
         await logActivity(usuario, "Venda vinculada + estoque deduzido (auto por serial)", `serial=${serialU}, qnt restante=${novaQnt}`, "vendas", id);
+      } else {
+        // Venda ja ligada, mas o item linkado ainda aparece EM ESTOQUE — legado
+        // do PR #703 (ligou sem deduzir). Deduzir agora pra evitar double-booking.
+        // Como o SELECT filtra por status=EM ESTOQUE, se o item ja foi deduzido
+        // antes ele nao aparece aqui e esse bloco nao roda de novo.
+        const linkado = estoqueItems.find(e => e.id === vendaEstoqueId);
+        if (linkado) {
+          const novaQnt = Math.max(0, Number(linkado.qnt || 0) - 1);
+          await supabase.from("estoque").update({
+            qnt: novaQnt,
+            status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+            updated_at: new Date().toISOString(),
+          }).eq("id", linkado.id);
+          await logActivity(usuario, "Estoque deduzido (venda ja ligada, legado)", `serial=${serialU}, qnt restante=${novaQnt}`, "vendas", id);
+        }
       }
       const idsParaEsgotar = estoqueItems
         .filter(e => e.id !== vendaEstoqueId)
