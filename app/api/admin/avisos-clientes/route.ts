@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
+import { annotateAvisoComEstoque, type EstoqueLinha } from "@/lib/avisos-match";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,9 +20,29 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status");
   let q = supabase.from("avisos_clientes").select("*").order("created_at", { ascending: false });
   if (status) q = q.eq("status", status);
-  const { data, error } = await q;
+
+  const [{ data, error }, estoqueRes] = await Promise.all([
+    q,
+    supabase.from("estoque").select("id,produto,cor,qnt,status,observacao,categoria").gt("qnt", 0).eq("status", "EM ESTOQUE"),
+  ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCache });
-  return NextResponse.json({ data: data || [] }, { headers: noCache });
+
+  const estoque = (estoqueRes.data || []) as EstoqueLinha[];
+  const enriched = (data || []).map(a => {
+    const { matches, disponivel_qnt } = annotateAvisoComEstoque(a.produto_desejado || "", estoque);
+    return {
+      ...a,
+      disponivel_qnt,
+      estoque_matches: matches.slice(0, 5).map(m => ({
+        id: m.id,
+        produto: m.produto,
+        cor: m.cor,
+        qnt: m.qnt,
+      })),
+    };
+  });
+
+  return NextResponse.json({ data: enriched }, { headers: noCache });
 }
 
 export async function POST(req: NextRequest) {
