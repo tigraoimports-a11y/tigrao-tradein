@@ -5097,6 +5097,10 @@ export default function VendasPage() {
                         }
                         if (valorTrocaTotal > 0 && !hasMultiData) pagParts.push(`Troca: ${fmt(valorTrocaTotal)}`);
                         if (temEntrada && !hasMultiData) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
+                        // 2o PIX (se presente) — mostra banco correto e valor.
+                        const entradaPix2Val = parseFloat(String((v as unknown as { entrada_pix_2?: number }).entrada_pix_2 || 0)) || 0;
+                        const bancoPix2Val = (v as unknown as { banco_pix_2?: string }).banco_pix_2 || "";
+                        if (entradaPix2Val > 0 && !hasMultiData) pagParts.push(`PIX ${bancoPix2Val || "?"}: ${fmt(entradaPix2Val)}`);
                         if (v.entrada_especie && v.entrada_especie > 0 && !hasMultiData) pagParts.push(`Especie: ${fmt(v.entrada_especie)}`);
                         const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
                         const espVal = parseFloat(String(v.entrada_especie || 0)) || 0;
@@ -5104,7 +5108,9 @@ export default function VendasPage() {
                         const creditoVal = parseFloat(String(v.credito_lojista_usado || 0)) || 0;
                         const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
                         if (creditoVal > 0 && !hasMultiData) pagParts.push(`Crédito: ${fmt(creditoVal)}`);
-                        const resto = hasMultiData ? 0 : Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal - creditoVal));
+                        // resto = parte paga via forma principal (cartao/PIX principal/etc). Subtrai pix2
+                        // pra nao contar em dobro: pix2 tem sua propria linha acima.
+                        const resto = hasMultiData ? 0 : Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - entradaPix2Val - espVal - compVal - creditoVal));
                         const formaLabel = (f: string | null | undefined) => {
                           if (!f) return "";
                           if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
