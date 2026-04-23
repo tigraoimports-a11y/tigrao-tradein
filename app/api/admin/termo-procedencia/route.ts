@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
   const usuario = getUsuario(req);
 
   let { cliente_nome, cliente_cpf, aparelhos, venda_id, encomenda_id, pendencia_id, cidade, gerar_pdf, cliente_whatsapp, enviar_para_assinatura } = body;
+  const preview: boolean = !!body.preview;
 
   // Se faltar nome/CPF, tentar buscar da venda ou encomenda vinculada
   if ((!cliente_nome || !cliente_cpf) && venda_id) {
@@ -79,6 +80,27 @@ export async function POST(req: NextRequest) {
 
   if (!aparelhos || !Array.isArray(aparelhos) || aparelhos.length === 0) {
     return NextResponse.json({ error: "aparelhos (array) obrigatório com pelo menos 1 item" }, { status: 400 });
+  }
+
+  // Preview: gerar PDF sem persistir registro. Usado pra conferir dados antes de enviar.
+  if (preview) {
+    try {
+      const pdfBuffer = await gerarTermoProcedenciaPDF({
+        clienteNome: cliente_nome.toUpperCase(),
+        clienteCPF: cliente_cpf,
+        aparelhos: aparelhos as AparelhoTermo[],
+        cidade: cidade || "Rio de Janeiro",
+      });
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="PREVIEW_TERMO_${cliente_nome.replace(/\s+/g, "_").toUpperCase()}.pdf"`,
+        },
+      });
+    } catch (pdfErr) {
+      return NextResponse.json({ error: `Falha ao gerar PDF de preview: ${pdfErr instanceof Error ? pdfErr.message : String(pdfErr)}` }, { status: 500 });
+    }
   }
 
   // Criar registro
