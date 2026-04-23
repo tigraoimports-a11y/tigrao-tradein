@@ -1164,6 +1164,10 @@ export default function EstoquePage() {
   // Filtros seminovos: linha de modelo e características
   const [filterLinha, setFilterLinha] = useState("");
   const [filterCaract, setFilterCaract] = useState<string[]>([]);
+  // Filtros novos: fornecedor + data de entrada + idade no estoque
+  const [filterFornecedor, setFilterFornecedor] = useState("");
+  const [filterDataEntradaRange, setFilterDataEntradaRange] = useState<"" | "hoje" | "7d" | "30d">("");
+  const [filterIdade, setFilterIdade] = useState<"" | "lt30" | "30a90" | "gt90">("");
   const [msg, setMsg] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
@@ -2863,6 +2867,33 @@ export default function EstoquePage() {
         if (f === "COM_PULSEIRA" && !obs.includes("[COM_PULSEIRA]")) return false;
       }
     }
+    // Filtro fornecedor (match exato case-insensitive)
+    if (filterFornecedor && (p.fornecedor || "").toLowerCase() !== filterFornecedor.toLowerCase()) {
+      return false;
+    }
+    // Filtro data de entrada (range relativo)
+    if (filterDataEntradaRange) {
+      const dataEntrada = p.data_entrada || p.data_compra;
+      if (!dataEntrada) return false;
+      const entradaTime = new Date(dataEntrada).getTime();
+      if (!Number.isFinite(entradaTime)) return false;
+      const agora = Date.now();
+      const diasDesde = (agora - entradaTime) / (24 * 60 * 60 * 1000);
+      if (filterDataEntradaRange === "hoje" && diasDesde > 1) return false;
+      if (filterDataEntradaRange === "7d" && diasDesde > 7) return false;
+      if (filterDataEntradaRange === "30d" && diasDesde > 30) return false;
+    }
+    // Filtro idade no estoque (parado X dias)
+    if (filterIdade) {
+      const dataEntrada = p.data_entrada || p.data_compra;
+      if (!dataEntrada) return false;
+      const entradaTime = new Date(dataEntrada).getTime();
+      if (!Number.isFinite(entradaTime)) return false;
+      const dias = (Date.now() - entradaTime) / (24 * 60 * 60 * 1000);
+      if (filterIdade === "lt30" && dias >= 30) return false;
+      if (filterIdade === "30a90" && (dias < 30 || dias > 90)) return false;
+      if (filterIdade === "gt90" && dias <= 90) return false;
+    }
     return true;
   });
 
@@ -3378,6 +3409,46 @@ export default function EstoquePage() {
               })()}
             </>)}
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className={`px-3 py-1.5 rounded-lg border text-[11px] w-44 focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "bg-white border-[#E5E5EA]"}`} />
+            {/* Filtro fornecedor — derivado das linhas de estoque (cobre tambem fornecedores nao cadastrados) */}
+            <select
+              value={filterFornecedor}
+              onChange={(e) => setFilterFornecedor(e.target.value)}
+              className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}
+              title="Filtrar por fornecedor"
+            >
+              <option value="">Todos fornecedores</option>
+              {(() => {
+                const set = new Set<string>();
+                estoque.forEach(p => { if (p.fornecedor) set.add(p.fornecedor); });
+                return [...set].sort((a, b) => a.localeCompare(b)).map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ));
+              })()}
+            </select>
+            {/* Filtro data de entrada (range relativo) */}
+            <select
+              value={filterDataEntradaRange}
+              onChange={(e) => setFilterDataEntradaRange(e.target.value as "" | "hoje" | "7d" | "30d")}
+              className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}
+              title="Quando entrou no estoque"
+            >
+              <option value="">Qualquer entrada</option>
+              <option value="hoje">Entrou hoje</option>
+              <option value="7d">Últimos 7 dias</option>
+              <option value="30d">Últimos 30 dias</option>
+            </select>
+            {/* Filtro idade no estoque (parado X dias) */}
+            <select
+              value={filterIdade}
+              onChange={(e) => setFilterIdade(e.target.value as "" | "lt30" | "30a90" | "gt90")}
+              className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}
+              title="Idade no estoque"
+            >
+              <option value="">Qualquer idade</option>
+              <option value="lt30">&lt; 30 dias</option>
+              <option value="30a90">30–90 dias</option>
+              <option value="gt90">⚠️ Parado &gt; 90 dias</option>
+            </select>
             <button onClick={() => setShowNewCat(!showNewCat)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E] transition-colors`}>
               + Categoria
             </button>
@@ -3427,9 +3498,12 @@ export default function EstoquePage() {
                 {label}
               </button>
             ))}
-            {(filterLinha || filterCaract.length > 0 || filterBateria) && (
+            {(filterLinha || filterCaract.length > 0 || filterBateria || filterFornecedor || filterDataEntradaRange || filterIdade) && (
               <button
-                onClick={() => { setFilterLinha(""); setFilterCaract([]); setFilterBateria(""); }}
+                onClick={() => {
+                  setFilterLinha(""); setFilterCaract([]); setFilterBateria("");
+                  setFilterFornecedor(""); setFilterDataEntradaRange(""); setFilterIdade("");
+                }}
                 className="px-2 py-1 rounded-lg text-[11px] font-medium text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400/60 transition-colors"
               >
                 ✕ Limpar filtros
