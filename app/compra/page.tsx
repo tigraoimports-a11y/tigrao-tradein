@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { WHATSAPP_FORMULARIO } from "@/lib/whatsapp-config";
 import { corParaPT } from "@/lib/cor-pt";
 import { getAgendamentoBounds } from "@/lib/date-utils";
+import { withUTMs } from "@/lib/utm-tracker";
 
 function maskCPF(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -949,7 +950,7 @@ function CompraForm() {
       // Cria/atualiza venda em status FORMULARIO_PREENCHIDO — equipe vê na aba
       // "📝 Formulários Preenchidos" de /admin/vendas, confere e envia pra
       // "Vendas Pendentes" manualmente. Fire-and-forget via sendBeacon/keepalive.
-      const vendaPayload = JSON.stringify({
+      const vendaPayload = JSON.stringify(withUTMs({
         shortCode,
         nome, pessoa, cpf, cnpj, email, telefone, instagram,
         cep, endereco, numero, complemento, bairro,
@@ -976,7 +977,7 @@ function CompraForm() {
         localEntrega: localStr, dataEntrega, horarioEntrega: horario,
         vendedor, origem,
         website: honeypot,
-      });
+      }));
       const vendaUrl = "/api/vendas/from-formulario";
       let vendaBeaconOk = false;
       if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
@@ -1164,7 +1165,7 @@ function CompraForm() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           keepalive: true,
-          body: JSON.stringify({
+          body: JSON.stringify(withUTMs({
             shortCode,
             nome, pessoa, cpf, cnpj, email, telefone, instagram,
             cep, endereco, numero, complemento, bairro,
@@ -1187,7 +1188,7 @@ function CompraForm() {
             trocaImei2: trocaImei2.trim() || undefined,
             vendedor, origem,
             website: honeypot,
-          }),
+          })),
         });
       } catch { /* não bloqueia redirect */ }
 

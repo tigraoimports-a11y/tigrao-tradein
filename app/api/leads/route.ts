@@ -43,6 +43,10 @@ export async function POST(req: NextRequest) {
     if (body.condicaoLinhas2) row.condicao_linhas2 = body.condicaoLinhas2;
     // Numero de WhatsApp destino: rastreio de para quem foi o formulario
     if (body.whatsappDestino) row.whatsapp_destino = String(body.whatsappDestino).replace(/\D/g, "") || null;
+    // UTM tracking — incluido pelo client via withUTMs() de lib/utm-tracker
+    for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]) {
+      if (body[k]) row[k] = String(body[k]).slice(0, 200);
+    }
 
     // Checagem de duplicidade real: mesmo whatsapp + produto novo + produto usado nos últimos 2 minutos
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();

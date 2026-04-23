@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import UTMCapture from "@/components/UTMCapture";
 
 export const metadata: Metadata = {
   title: "TigraoImports - Trade-In",
@@ -66,6 +67,7 @@ export default function RootLayout({
         {metaPixelId && (
           <noscript><img height="1" width="1" style={{ display: "none" }} src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`} alt="" /></noscript>
         )}
+        <UTMCapture />
         {children}
         <script
           dangerouslySetInnerHTML={{

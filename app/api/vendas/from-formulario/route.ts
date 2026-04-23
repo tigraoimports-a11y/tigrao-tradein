@@ -75,6 +75,12 @@ interface BodyIn {
   horarioEntrega?: string;
   vendedor?: string;
   origem?: string;
+  // UTM tracking — passado pelo client via withUTMs() de lib/utm-tracker
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
   // Honeypot
   website?: string;
 }
@@ -180,6 +186,11 @@ export async function POST(req: NextRequest) {
     origem_detalhe: body.origem || null,
     vendedor: body.vendedor || null,
     estoque_id: null,
+    utm_source: body.utm_source ? String(body.utm_source).slice(0, 200) : null,
+    utm_medium: body.utm_medium ? String(body.utm_medium).slice(0, 200) : null,
+    utm_campaign: body.utm_campaign ? String(body.utm_campaign).slice(0, 200) : null,
+    utm_content: body.utm_content ? String(body.utm_content).slice(0, 200) : null,
+    utm_term: body.utm_term ? String(body.utm_term).slice(0, 200) : null,
   };
 
   // Produto principal: recebe o desconto, troca e sinal_antecipado.
