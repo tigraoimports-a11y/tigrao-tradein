@@ -129,9 +129,11 @@ export default function OrcamentoPage() {
     })();
   }, [password, user]);
 
-  // Acessórios do estoque (não estão na tabela de preços) + custoMap (pra margem)
+  // Acessorios do estoque (nao estao na tabela de precos) + custoMap (pra margem)
+  // + stockMap (pra validar disponibilidade em tempo real)
   const [acessoriosEstoque, setAcessoriosEstoque] = useState<Produto[]>([]);
   const [custoMap, setCustoMap] = useState<Map<string, number>>(new Map());
+  const [stockMap, setStockMap] = useState<Map<string, number>>(new Map());
   useEffect(() => {
     if (!password) return;
     fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "admin") } })
@@ -153,25 +155,38 @@ export default function OrcamentoPage() {
         setAcessoriosEstoque(mapped);
 
         // custoMap — média do custo_unitario por (modeloBase normalizado)
-        // Considera tipo=NOVO (lacrados) com custo > 0. Usa média das linhas
-        // existentes do SKU no estoque — se chegaram remessas diferentes com
-        // custos diferentes, a média é a estimativa razoável.
-        const buckets = new Map<string, number[]>();
+        // stockMap — soma de qnt EM ESTOQUE por (modeloBase normalizado)
+        // Considera tipo=NOVO (lacrados). Status A CAMINHO/PENDENTE/ESGOTADO
+        // não contam como disponível agora, mas custos podem entrar.
+        const custoBuckets = new Map<string, number[]>();
+        const stock = new Map<string, number>();
         for (const p of all) {
           if (p.tipo !== "NOVO") continue;
-          const custo = Number(p.custo_unitario || 0);
-          if (custo <= 0) continue;
           const modeloBase = getModeloBase(p.produto || "", p.categoria || "", p.observacao);
           const key = normKey(modeloBase);
-          const list = buckets.get(key) || [];
-          list.push(custo);
-          buckets.set(key, list);
+
+          const custo = Number(p.custo_unitario || 0);
+          if (custo > 0) {
+            const list = custoBuckets.get(key) || [];
+            list.push(custo);
+            custoBuckets.set(key, list);
+          }
+
+          const qnt = Number(p.qnt || 0);
+          if (qnt > 0 && (p.status || "").toUpperCase() === "EM ESTOQUE") {
+            stock.set(key, (stock.get(key) || 0) + qnt);
+          } else if (!stock.has(key)) {
+            // Marca chave como conhecida (mesmo zerada), pra distinguir de
+            // "não cadastrado" (que deixamos sem entrada no map).
+            stock.set(key, 0);
+          }
         }
-        const next = new Map<string, number>();
-        for (const [k, vals] of buckets) {
-          next.set(k, vals.reduce((a, b) => a + b, 0) / vals.length);
+        const custos = new Map<string, number>();
+        for (const [k, vals] of custoBuckets) {
+          custos.set(k, vals.reduce((a, b) => a + b, 0) / vals.length);
         }
-        setCustoMap(next);
+        setCustoMap(custos);
+        setStockMap(stock);
       }).catch(() => {});
   }, [password, user]);
 
@@ -185,6 +200,19 @@ export default function OrcamentoPage() {
     const baseCat = PRECOS_CAT_TO_ESTOQUE_CAT[item.categoria] || item.categoria;
     const modeloBase = getModeloBase(item.nome, baseCat);
     return custoMap.get(normKey(modeloBase)) || 0;
+  };
+
+  // Estoque disponivel pro SKU. Retorna:
+  //   - undefined → SKU nao cadastrado no estoque (nao validar)
+  //   - 0 → confirmado esgotado
+  //   - n>0 → n unidades EM ESTOQUE
+  // Acessorios sao filtrados upstream (so entram com qnt>0), entao retorna
+  // sempre undefined pra eles — nao precisa avisar.
+  const getStockDisponivel = (item: { categoria: string; nome: string }): number | undefined => {
+    if (item.categoria === "ACESSORIOS") return undefined;
+    const baseCat = PRECOS_CAT_TO_ESTOQUE_CAT[item.categoria] || item.categoria;
+    const modeloBase = getModeloBase(item.nome, baseCat);
+    return stockMap.get(normKey(modeloBase));
   };
 
   // Combinar produtos da tabela preços + acessórios do estoque
@@ -458,9 +486,16 @@ export default function OrcamentoPage() {
                   }
                 }} className={inputCls}>
                   <option value="">— Selecionar produto —</option>
-                  {produtosFiltrados.map(p => (
-                    <option key={p.id} value={p.id}>{p.nome} — R$ {p.preco_pix.toLocaleString("pt-BR")}</option>
-                  ))}
+                  {produtosFiltrados.map(p => {
+                    const stock = getStockDisponivel({ categoria: p.categoria, nome: p.nome });
+                    let suffix = "";
+                    if (stock === 0) suffix = " — ESGOTADO";
+                    else if (stock !== undefined && stock <= 2) suffix = ` — últimas ${stock}`;
+                    else if (stock !== undefined) suffix = ` (${stock} em estoque)`;
+                    return (
+                      <option key={p.id} value={p.id}>{p.nome} — R$ {p.preco_pix.toLocaleString("pt-BR")}{suffix}</option>
+                    );
+                  })}
                 </select>
               )}
             </div>
@@ -588,6 +623,25 @@ export default function OrcamentoPage() {
                           </span>
                         </div>
                       )}
+                      {(() => {
+                        const stock = getStockDisponivel({ categoria: item.categoria, nome: item.nome });
+                        if (stock === undefined) return null;
+                        if (stock === 0) {
+                          return (
+                            <div className="text-[11px] pl-4 text-red-500 font-semibold">
+                              ⚠ Esgotado no estoque
+                            </div>
+                          );
+                        }
+                        if (item.qnt > stock) {
+                          return (
+                            <div className="text-[11px] pl-4 text-amber-600 font-semibold">
+                              ⚠ Só {stock} em estoque (cliente quer {item.qnt})
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                     );
                   })}
