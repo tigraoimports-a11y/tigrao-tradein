@@ -121,6 +121,38 @@ const DEVICE_CATS = [
   { key: "watch", label: "Apple Watch", prefix: "Apple Watch" },
 ];
 
+// Campos que compoem a string `armazenamento` ao adicionar modelo por categoria.
+// Ao salvar, valores sao juntados com " | " (mesmo padrao de /admin/precos).
+// Ex: iPad 256GB | 11" | Wifi → armazenamento = "256GB | 11\" | Wifi".
+type SpecField = { key: string; label: string; options: string[] };
+const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
+  iphone: [
+    { key: "armazenamento", label: "Armazenamento", options: ["64GB", "128GB", "256GB", "512GB", "1TB"] },
+  ],
+  ipad: [
+    { key: "armazenamento", label: "Armazenamento", options: ["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"] },
+    { key: "tela", label: "Tela", options: ['8.3"', '10.2"', '10.9"', '11"', '12.9"', '13"'] },
+    { key: "conectividade", label: "Conectividade", options: ["Wifi", "Wifi + Cel"] },
+  ],
+  macbook: [
+    { key: "tela", label: "Tela", options: ['13"', '14"', '15"', '16"'] },
+    { key: "ram", label: "RAM", options: ["8GB", "16GB", "24GB", "32GB", "64GB", "96GB", "128GB"] },
+    { key: "ssd", label: "SSD", options: ["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"] },
+  ],
+  watch: [
+    { key: "tamanho", label: "Tamanho", options: ["38mm", "40mm", "41mm", "42mm", "44mm", "45mm", "46mm", "49mm"] },
+    { key: "conectividade", label: "Conectividade", options: ["GPS", "GPS + Cel"] },
+  ],
+};
+
+// Placeholder do campo "Modelo" conforme a categoria aberta.
+const MODELO_PLACEHOLDER_BY_CAT: Record<string, string> = {
+  iphone: "Ex: iPhone 17 Pro Max",
+  ipad: "Ex: iPad Pro M4",
+  macbook: "Ex: MacBook Air M3",
+  watch: "Ex: Apple Watch Ultra 2",
+};
+
 interface CatConfig {
   categoria: string;
   modo: "automatico" | "manual";
@@ -151,7 +183,13 @@ export function UsadosContent() {
   const [novoBateria, setNovoBateria] = useState<{ modelo: string; threshold: string; desconto: string } | null>(null);
   const [novoGarantiaModelo, setNovoGarantiaModelo] = useState<{ modelo: string; detalhe: string; valor: string } | null>(null);
   const [showAddModelo, setShowAddModelo] = useState(false);
-  const [novoModelo, setNovoModelo] = useState({ modelo: "", armazenamento: "", valor_base: "" });
+  // `specs` guarda o valor de cada campo (key do SPEC_FIELDS_BY_CAT). No save
+  // junta tudo com " | " pra gravar no campo `armazenamento`.
+  const [novoModelo, setNovoModelo] = useState<{ modelo: string; specs: Record<string, string>; valor_base: string }>({
+    modelo: "",
+    specs: {},
+    valor_base: "",
+  });
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
   const [catFilter, setCatFilter] = useState("iphone");
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
@@ -263,26 +301,39 @@ export function UsadosContent() {
   };
 
   const handleAddModelo = async () => {
-    const { modelo, armazenamento, valor_base } = novoModelo;
-    if (!modelo.trim() || !armazenamento.trim() || !valor_base.trim()) {
-      setMsg("Preencha modelo, armazenamento e valor base");
+    const { modelo, specs, valor_base } = novoModelo;
+    const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+    // Exige todos os campos da categoria preenchidos (selectionados)
+    const missingSpec = specFields.find((f) => !specs[f.key]?.trim());
+    if (!modelo.trim() || missingSpec || !valor_base.trim()) {
+      setMsg(
+        !modelo.trim()
+          ? "Preencha o modelo"
+          : missingSpec
+          ? `Selecione ${missingSpec.label.toLowerCase()}`
+          : "Preencha o valor base"
+      );
       return;
     }
     const val = parseFloat(valor_base);
     if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
+    // Monta a string de armazenamento juntando os valores na ordem dos campos
+    const armazenamento = specFields.map((f) => specs[f.key].trim()).join(" | ");
     setSaving("add-modelo");
-    await apiPost({ action: "upsert_valor", modelo: modelo.trim(), armazenamento: armazenamento.trim(), valor_base: val });
+    await apiPost({ action: "upsert_valor", modelo: modelo.trim(), armazenamento, valor_base: val });
     setValores((prev) => {
-      const exists = prev.findIndex((v) => v.modelo === modelo.trim() && v.armazenamento === armazenamento.trim());
+      const exists = prev.findIndex((v) => v.modelo === modelo.trim() && v.armazenamento === armazenamento);
       if (exists >= 0) {
         const nv = [...prev];
         nv[exists] = { ...nv[exists], valor_base: val };
         return nv;
       }
-      return [...prev, { id: crypto.randomUUID(), modelo: modelo.trim(), armazenamento: armazenamento.trim(), valor_base: val, ativo: true, updated_at: new Date().toISOString() }];
+      return [...prev, { id: crypto.randomUUID(), modelo: modelo.trim(), armazenamento, valor_base: val, ativo: true, updated_at: new Date().toISOString() }];
     });
-    setMsg(`${modelo.trim()} ${armazenamento.trim()} adicionado com valor R$ ${val.toLocaleString("pt-BR")}!`);
-    setNovoModelo({ modelo: "", armazenamento: "", valor_base: "" });
+    setMsg(`${modelo.trim()} ${armazenamento} adicionado com valor R$ ${val.toLocaleString("pt-BR")}!`);
+    // Mantem o modelo preenchido pra facilitar adicionar variantes seguidas do
+    // mesmo modelo; so limpa os specs e o valor.
+    setNovoModelo((prev) => ({ modelo: prev.modelo, specs: {}, valor_base: "" }));
     setSaving(null);
   };
 
@@ -485,32 +536,40 @@ export function UsadosContent() {
 
       {msg && <div className="px-4 py-3 rounded-xl text-sm bg-green-50 text-green-700">{msg}</div>}
 
-      {/* Form adicionar modelo */}
-      {showAddModelo && (
+      {/* Form adicionar modelo — campos variam conforme a categoria aberta */}
+      {showAddModelo && (() => {
+        const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+        const placeholder = MODELO_PLACEHOLDER_BY_CAT[catFilter] || "Ex: iPhone 17 Pro Max";
+        // Total de colunas = 1 (modelo) + N (specs) + 1 (valor) + 1 (acoes)
+        const totalCols = 1 + specFields.length + 2;
+        const gridClass = totalCols <= 4 ? "md:grid-cols-4" : totalCols <= 5 ? "md:grid-cols-5" : "md:grid-cols-6";
+        return (
         <div className="bg-white border border-[#E8740E]/30 rounded-2xl p-5 shadow-sm space-y-3">
           <p className="text-sm font-bold text-[#1D1D1F]">Adicionar Modelo Seminovo</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 ${gridClass} gap-3`}>
             <div>
               <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Modelo</p>
               <input
                 value={novoModelo.modelo}
                 onChange={(e) => setNovoModelo({ ...novoModelo, modelo: e.target.value })}
-                placeholder="Ex: iPhone 17 Pro Max"
+                placeholder={placeholder}
                 className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                 autoFocus
               />
             </div>
-            <div>
-              <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Armazenamento</p>
-              <select
-                value={novoModelo.armazenamento}
-                onChange={(e) => setNovoModelo({ ...novoModelo, armazenamento: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-              >
-                <option value="">— Selecionar —</option>
-                {["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"].map((s) => <option key={s}>{s}</option>)}
-              </select>
-            </div>
+            {specFields.map((f) => (
+              <div key={f.key}>
+                <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">{f.label}</p>
+                <select
+                  value={novoModelo.specs[f.key] || ""}
+                  onChange={(e) => setNovoModelo({ ...novoModelo, specs: { ...novoModelo.specs, [f.key]: e.target.value } })}
+                  className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                >
+                  <option value="">— Selecionar —</option>
+                  {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            ))}
             <div>
               <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Valor Base (R$)</p>
               <input
@@ -531,9 +590,12 @@ export function UsadosContent() {
               </button>
             </div>
           </div>
-          <p className="text-[10px] text-[#86868B]">Dica: para adicionar vários armazenamentos do mesmo modelo, adicione um de cada vez.</p>
+          <p className="text-[10px] text-[#86868B]">
+            Dica: para adicionar várias variantes do mesmo modelo, adicione uma de cada vez — o campo <strong>Modelo</strong> fica preenchido.
+          </p>
         </div>
-      )}
+        );
+      })()}
 
       {/* Category tabs */}
       <div className="flex gap-2 flex-wrap">
