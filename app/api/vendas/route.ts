@@ -821,11 +821,39 @@ export async function PATCH(req: NextRequest) {
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
   // e status_pagamento (evitar reenvio de NF/Telegram em edicoes posteriores).
-  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento, troca_produto, produto_na_troca, troca_produto2, produto_na_troca2").eq("id", id).single();
+  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento, troca_produto, produto_na_troca, troca_produto2, produto_na_troca2, troca_serial, troca_imei, troca_serial2, troca_imei2, cliente").eq("id", id).single();
   const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
   const statusPagamentoAnterior = (vendaAnterior as unknown as { status_pagamento?: string } | null)?.status_pagamento || null;
   const jaTinhaTroca1Antes = !!((vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.troca_produto || (vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.produto_na_troca);
   const jaTinhaTroca2Antes = !!((vendaAnterior as unknown as { troca_produto2?: string; produto_na_troca2?: string } | null)?.troca_produto2 || (vendaAnterior as unknown as { troca_produto2?: string; produto_na_troca2?: string } | null)?.produto_na_troca2);
+
+  // Guard do botao "Recriar Pendencia": so deixa recriar se o produto da troca
+  // NAO estiver ja no estoque (nem como PENDENTE, nem como EM ESTOQUE). Evita
+  // duplicata quando a troca ja virou seminovo ou ja tem pendencia ativa.
+  if (forceRecriarPendencia) {
+    const vA = vendaAnterior as unknown as {
+      troca_produto?: string; troca_serial?: string; troca_imei?: string; cliente?: string;
+    } | null;
+    const tSerial = vA?.troca_serial ? String(vA.troca_serial).toUpperCase() : null;
+    const tImei = vA?.troca_imei ? String(vA.troca_imei).toUpperCase() : null;
+    const tProduto = vA?.troca_produto || null;
+    const tCliente = vA?.cliente ? String(vA.cliente).toUpperCase() : null;
+
+    let q = supabase.from("estoque").select("id, produto, status, tipo, serial_no, imei, fornecedor")
+      .in("status", ["PENDENTE", "EM ESTOQUE"]);
+    if (tSerial) q = q.eq("serial_no", tSerial);
+    else if (tImei) q = q.eq("imei", tImei);
+    else if (tProduto && tCliente) q = q.ilike("produto", tProduto).ilike("fornecedor", tCliente);
+    else q = q.eq("id", "__NO_MATCH__"); // sem identificador, nao bloqueia
+
+    const { data: existe } = await q.limit(1);
+    if (existe && existe.length > 0) {
+      const found = existe[0];
+      return NextResponse.json({
+        error: `Produto ja esta no estoque (status: ${found.status}${found.tipo === "PENDENCIA" ? ", pendencia" : ""}). Apague o item do estoque antes de recriar a pendencia.`,
+      }, { status: 400 });
+    }
+  }
 
   // Se o admin enviou _estoque_id (mesmo null), atualizar o vinculo na venda
   if (estoqueIdFoiEnviado) {
