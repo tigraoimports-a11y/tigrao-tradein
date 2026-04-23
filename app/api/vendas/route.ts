@@ -929,15 +929,26 @@ export async function PATCH(req: NextRequest) {
     let vendaEstoqueId = data[0].estoque_id;
     const { data: estoqueItems } = await supabase
       .from("estoque")
-      .select("id")
+      .select("id, qnt")
       .eq("serial_no", serialU)
       .eq("status", "EM ESTOQUE");
     if (estoqueItems && estoqueItems.length > 0) {
       if (!vendaEstoqueId) {
-        vendaEstoqueId = estoqueItems[0].id;
+        const primeiro = estoqueItems[0];
+        vendaEstoqueId = primeiro.id;
         await supabase.from("vendas").update({ estoque_id: vendaEstoqueId }).eq("id", id);
         data[0].estoque_id = vendaEstoqueId; // sync pros blocos seguintes (finalizacao)
-        await logActivity(usuario, "Venda vinculada ao estoque (auto por serial)", `serial=${serialU}`, "vendas", id);
+        // Vincular o serial ja compromete o item: deduzir agora. Se a venda for
+        // cancelada/trocada depois, a logica de DELETE/estoque_id restaura.
+        // (Sem essa deducao, a venda ficava ligada mas o estoque continuava
+        // "EM ESTOQUE" ate a finalizacao, permitindo double-booking.)
+        const novaQnt = Math.max(0, Number(primeiro.qnt || 0) - 1);
+        await supabase.from("estoque").update({
+          qnt: novaQnt,
+          status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+          updated_at: new Date().toISOString(),
+        }).eq("id", primeiro.id);
+        await logActivity(usuario, "Venda vinculada + estoque deduzido (auto por serial)", `serial=${serialU}, qnt restante=${novaQnt}`, "vendas", id);
       }
       const idsParaEsgotar = estoqueItems
         .filter(e => e.id !== vendaEstoqueId)
