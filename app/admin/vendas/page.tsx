@@ -5174,6 +5174,18 @@ export default function VendasPage() {
                                   const [y, m, d] = efetiva.split("-");
                                   return d && m ? `${d}/${m}` : efetiva;
                                 })()}
+                                {/* Badge HOJE/AMANHA/ATRASADO baseado em data_programada (facilita
+                                    escaneamento da aba "Formularios" — saber se a visita do cliente
+                                    e pra hoje/amanha sem abrir a venda). */}
+                                {(() => {
+                                  const efetiva = v.data_programada || v.data || "";
+                                  if (!efetiva) return null;
+                                  const amanhaStr = (() => { const d = new Date(hojeStr + "T12:00:00"); d.setDate(d.getDate() + 1); return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); })();
+                                  if (efetiva === hojeStr) return <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-300">HOJE</span>;
+                                  if (efetiva === amanhaStr) return <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-300">AMANHÃ</span>;
+                                  if (efetiva < hojeStr) return <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-200 text-gray-700 border border-gray-300" title="Data ja passou">ATRASADO</span>;
+                                  return null;
+                                })()}
                                 {v.data_programada && v.data_programada !== v.data && (
                                   <span className="block text-[10px] text-blue-500">
                                     Criado: {(() => { const [, m2, d2] = (v.data || "").split("-"); return d2 && m2 ? `${d2}/${m2}` : v.data; })()}
