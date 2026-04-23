@@ -22,7 +22,7 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
-      margins: { top: 60, bottom: 60, left: 60, right: 60 },
+      margins: { top: 40, bottom: 40, left: 60, right: 60 },
     });
 
     const chunks: Uint8Array[] = [];
@@ -37,7 +37,7 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
     // ── HEADER ──────────────────────────────────────────────
     // Logo text (centralizado, bold)
     doc.fontSize(11).font("Helvetica-Bold").fillColor("#1A1A2E");
-    doc.text("TERMO DE DECLARAÇÃO DE PROPRIEDADE E PROCEDÊNCIA DE APARELHO", leftMargin, 60, {
+    doc.text("TERMO DE DECLARAÇÃO DE PROPRIEDADE E PROCEDÊNCIA DE APARELHO", leftMargin, 40, {
       width: contentW,
       align: "center",
     });
@@ -48,11 +48,11 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
       align: "center",
     });
 
-    let y = doc.y + 30;
+    let y = doc.y + 18;
 
     // ── TEXTO JURÍDICO ──────────────────────────────────────
     const fontSize = 11;
-    const lineGap = 6;
+    const lineGap = 5;
     doc.fontSize(fontSize).font("Helvetica").fillColor("#333333");
 
     // Parágrafo 1: Declaração
@@ -65,7 +65,7 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
       { width: contentW, lineGap, align: "justify" }
     );
 
-    y = doc.y + 15;
+    y = doc.y + 10;
 
     // ── APARELHOS ───────────────────────────────────────────
     for (let i = 0; i < dados.aparelhos.length; i++) {
@@ -109,7 +109,7 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
       leftMargin, y,
       { width: contentW, lineGap, align: "justify" }
     );
-    y = doc.y + 15;
+    y = doc.y + 10;
 
     // Parágrafo 2: Anuência
     doc.text(
@@ -117,7 +117,7 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
       leftMargin, y,
       { width: contentW, lineGap, align: "justify" }
     );
-    y = doc.y + 15;
+    y = doc.y + 10;
 
     // Parágrafo 3: Isenção
     doc.text(
@@ -125,15 +125,39 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
       leftMargin, y,
       { width: contentW, lineGap, align: "justify" }
     );
-    y = doc.y + 15;
+    y = doc.y + 10;
 
-    // Parágrafo 4: Penalidades
+    // Parágrafo 4: Ausência de vícios ocultos
+    doc.text(
+      "        Declaro, ainda, que o(s) aparelho(s) ora entregue(s) na troca não possui(em) vícios ocultos, defeitos de funcionamento, danos internos ou histórico de reparos não informados, responsabilizando-me por qualquer ocorrência em contrário.",
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
+    );
+    y = doc.y + 10;
+
+    // Parágrafo 5: Trade-in é definitivo (CDC art. 49 não se aplica)
+    doc.text(
+      "        Reconheço que, por envolver a entrega de aparelho usado na troca (trade-in), esta operação é DEFINITIVA e não admite arrependimento, desistência ou cancelamento, não sendo aplicável o direito previsto no art. 49 do Código de Defesa do Consumidor, uma vez que o aparelho entregue é imediatamente recolocado à venda, tornando impossível a reversão da operação.",
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
+    );
+    y = doc.y + 10;
+
+    // Parágrafo 6: Responsabilidade financeira pela procedência
+    doc.text(
+      "        Assumo, de forma integral e irrevogável, a responsabilidade financeira por quaisquer prejuízos decorrentes da procedência do(s) aparelho(s) ora entregue(s), incluindo eventual apreensão, reivindicação por terceiros ou origem ilícita (furto, roubo, receptação, dentre outras hipóteses), comprometendo-me a reembolsar a Tigrão Imports LTDA por todos os valores envolvidos, inclusive o ressarcimento ao eventual adquirente do aparelho revendido.",
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
+    );
+    y = doc.y + 10;
+
+    // Parágrafo 7: Penalidades (atesto final)
     doc.text(
       "        Atesto a veracidade das informações prestadas e estou ciente das penalidades previstas nos arts. 297 a 299 e art. 180 do Código Penal.",
       leftMargin, y,
       { width: contentW, lineGap, align: "justify" }
     );
-    y = doc.y + 30;
+    y = doc.y + 20;
 
     // ── DATA E CIDADE ───────────────────────────────────────
     const cidade = dados.cidade || "Rio de Janeiro";
@@ -146,7 +170,7 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
 
     doc.fontSize(fontSize).font("Helvetica").fillColor("#333333");
     doc.text(`${cidade}, ${dataStr}.`, leftMargin, y, { width: contentW });
-    y = doc.y + 50;
+    y = doc.y + 40;
 
     // ── ASSINATURAS ─────────────────────────────────────────
     const sigW = contentW * 0.45;
