@@ -975,10 +975,9 @@ export default function VendasPage() {
 
     let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {
-      // Forma PIX: compVal ja inclui o 2o PIX (eles fazem parte do total
-      // recebido via PIX, so direcionado a bancos diferentes). Nao somar pix2
-      // aqui pra nao duplicar.
-      result = String(Math.round(compVal + esp + trc + liqAlt + credLoja));
+      // Forma PIX: compVal = PIX do banco principal; pix2 = 2o PIX enviado pra
+      // outro banco (separado, nao split do principal). Ambos somam no total.
+      result = String(Math.round(compVal + pix + pix2 + esp + trc + liqAlt + credLoja));
     } else if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
       result = String(Math.round(liqCartao + pix + pix2 + esp + trc + liqAlt + credLoja));
