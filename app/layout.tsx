@@ -25,6 +25,11 @@ export const metadata: Metadata = {
     description: "Simule o valor do seu iPhone usado na troca por um novo. Cotação instantânea.",
     images: ["https://tigrao-tradein.vercel.app/og-image.png"],
   },
+  // Verificacao de dominio do Meta Business — necessario pra configurar
+  // Eventos Prioritarios (Aggregated Event Measurement) e melhorar matching iOS.
+  other: {
+    "facebook-domain-verification": "j5bbljyri0x7yea766ygamf06j9rau",
+  },
 };
 
 export default function RootLayout({
