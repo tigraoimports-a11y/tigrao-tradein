@@ -5615,7 +5615,10 @@ export default function VendasPage() {
                                               entrada_pix: String(grupoVendas.reduce((s, gv) => s + (gv.entrada_pix || 0), 0) || ""),
                                               banco_pix: primaryVenda.banco_pix || "ITAU",
                                               entrada_pix_2: String(grupoVendas.reduce((s, gv) => s + (gv.entrada_pix_2 || 0), 0) || ""),
-                                              banco_pix_2: primaryVenda.banco_pix_2 || "INFINITE",
+                                              // pix_2 fica so na row 0 do payload, mas a ordem retornada pelo banco
+                                              // pode nao bater com primaryVenda — busca qualquer row do grupo com
+                                              // banco_pix_2 setado.
+                                              banco_pix_2: (grupoVendas.find(gv => gv.banco_pix_2)?.banco_pix_2) || "INFINITE",
                                               entrada_especie: String(grupoVendas.reduce((s, gv) => s + (gv.entrada_especie || 0), 0) || ""),
                                               entrada_fiado: String(primaryVenda.entrada_fiado || ""),
                                               fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
