@@ -18,7 +18,14 @@ export default function ConfiguracoesPage() {
   // Contato do formulário de troca
   const [principal, setPrincipal] = useState("5521972461357"); // Bianca default
   const [formLacrados, setFormLacrados] = useState(""); // WhatsApp formulários lacrados
-  const [formSeminovos, setFormSeminovos] = useState(""); // WhatsApp formulários seminovos
+  const [formSeminovos, setFormSeminovos] = useState(""); // WhatsApp formulários seminovos (fallback geral)
+  // Override por categoria de seminovo — se setado, sobrepoe o formSeminovos
+  // pra aquela categoria. Ex: iPhone Seminovo pro Nicolas, iPad Seminovo pro
+  // Rodrigo. Vazio = usa o fallback geral.
+  const [formSemiIphone, setFormSemiIphone] = useState("");
+  const [formSemiIpad, setFormSemiIpad] = useState("");
+  const [formSemiMacbook, setFormSemiMacbook] = useState("");
+  const [formSemiWatch, setFormSemiWatch] = useState("");
   const [vendedores, setVendedores] = useState(VENDEDORES_BASE.map(v => ({ ...v })));
 
   const [loading, setLoading] = useState(true);
@@ -38,6 +45,10 @@ export default function ConfiguracoesPage() {
         if (data.whatsapp_principal) setPrincipal(String(data.whatsapp_principal));
         if (data.whatsapp_formularios) setFormLacrados(String(data.whatsapp_formularios));
         if (data.whatsapp_formularios_seminovos) setFormSeminovos(String(data.whatsapp_formularios_seminovos));
+        if (data.whatsapp_seminovo_iphone) setFormSemiIphone(String(data.whatsapp_seminovo_iphone));
+        if (data.whatsapp_seminovo_ipad) setFormSemiIpad(String(data.whatsapp_seminovo_ipad));
+        if (data.whatsapp_seminovo_macbook) setFormSemiMacbook(String(data.whatsapp_seminovo_macbook));
+        if (data.whatsapp_seminovo_watch) setFormSemiWatch(String(data.whatsapp_seminovo_watch));
         // Merge padrão + banco em lib/vendedores.ts (fonte única).
         setVendedores(mergeVendedores(
           data.whatsapp_vendedores as Record<string, string> | null,
@@ -120,6 +131,11 @@ export default function ConfiguracoesPage() {
           whatsapp_principal: principal,
           whatsapp_formularios: formLacrados || principal,
           whatsapp_formularios_seminovos: formSeminovos || principal,
+          // Overrides por categoria: vazio = usa fallback (formSeminovos).
+          whatsapp_seminovo_iphone: formSemiIphone || "",
+          whatsapp_seminovo_ipad: formSemiIpad || "",
+          whatsapp_seminovo_macbook: formSemiMacbook || "",
+          whatsapp_seminovo_watch: formSemiWatch || "",
           whatsapp_vendedores: waMap,
           whatsapp_vendedores_nomes: waNomes,
           whatsapp_vendedores_recebe_links: waRecebe,
@@ -294,6 +310,75 @@ export default function ConfiguracoesPage() {
               🔗 Testar: wa.me/{formSeminovos}
             </a>
           )}
+        </div>
+
+        {/* WhatsApp Seminovos — por categoria (override do geral acima) */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-4">
+          <div>
+            <p className="font-bold text-[#1D1D1F]">🎯 WhatsApp Seminovos por Categoria</p>
+            <p className="text-xs text-[#86868B] mt-1">
+              Sobrepõe o número acima quando a avaliação for de um seminovo dessa categoria específica.
+              Deixe <b>vazio</b> pra usar o padrão (WhatsApp Troca — Seminovos).
+            </p>
+          </div>
+
+          {([
+            { key: "iphone", label: "iPhone Seminovo", icon: "📱", value: formSemiIphone, set: setFormSemiIphone },
+            { key: "ipad", label: "iPad Seminovo", icon: "📱", value: formSemiIpad, set: setFormSemiIpad },
+            { key: "macbook", label: "MacBook Seminovo", icon: "💻", value: formSemiMacbook, set: setFormSemiMacbook },
+            { key: "watch", label: "Apple Watch Seminovo", icon: "⌚", value: formSemiWatch, set: setFormSemiWatch },
+          ] as const).map((cat) => (
+            <div key={cat.key} className="border-t border-[#F5F5F7] pt-3 first:border-t-0 first:pt-0 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-sm text-[#1D1D1F]">{cat.icon} {cat.label}</p>
+                {cat.value && (
+                  <a
+                    href={`https://wa.me/${cat.value}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-[#E8740E] hover:underline"
+                  >
+                    🔗 wa.me/{cat.value}
+                  </a>
+                )}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => cat.set("")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    cat.value === ""
+                      ? "bg-[#E8740E] text-white shadow-sm"
+                      : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
+                  }`}
+                  title="Usa o WhatsApp Troca — Seminovos (fallback)"
+                >
+                  Usar padrão {cat.value === "" && "✓"}
+                </button>
+                {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
+                  <button
+                    key={v.nome}
+                    type="button"
+                    onClick={() => cat.set(v.numero)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      cat.value === v.numero
+                        ? "bg-[#E8740E] text-white shadow-sm"
+                        : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
+                    }`}
+                  >
+                    {v.nome} {cat.value === v.numero && "✓"}
+                  </button>
+                ))}
+              </div>
+              <input
+                value={cat.value}
+                onChange={e => cat.set(e.target.value.replace(/\D/g, ""))}
+                placeholder="5521... (opcional — vazio = usa padrão)"
+                className={inputCls}
+                inputMode="numeric"
+              />
+            </div>
+          ))}
         </div>
 
         {/* Números dos vendedores */}

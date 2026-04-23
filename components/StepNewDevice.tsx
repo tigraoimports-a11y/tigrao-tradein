@@ -17,6 +17,13 @@ interface StepNewDeviceProps {
   usedStorage?: string;
   usedColor?: string;
   whatsappNumber?: string;
+  // WhatsApp por categoria de seminovo (iPhone/iPad/MacBook/Watch). Se a
+  // categoria selecionada tiver config especifica, ganha do whatsappNumber
+  // generico. Sobrescrito por vendedorOverride quando cliente veio via ?ref=.
+  whatsappSeminovoByCat?: Record<SeminovoCategoria, string>;
+  // true quando o usuario veio via ?ref=<vendedor> — nesse caso whatsappNumber
+  // ja foi resolvido pro vendedor e o override por categoria NAO deve valer.
+  vendedorOverride?: boolean;
   condition?: AnyConditionData;
   deviceType?: DeviceType;
   tradeinConfig?: TradeInConfig | null;
@@ -62,7 +69,7 @@ const SEMINOVOS_DEFAULT: { modelo: string; variantes: SeminovoVariante[]; ativo:
   { modelo: "iPhone 16 Pro Max", variantes: [{ storage: "256GB", ativo: true }], ativo: true, categoria: "iphone" },
 ];
 
-export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, usedColor, whatsappNumber, condition, deviceType, tradeinConfig, usedModel2, usedStorage2, usedColor2, condition2, deviceType2, tradeInValue1, tradeInValue2 }: StepNewDeviceProps) {
+export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, usedColor, whatsappNumber, whatsappSeminovoByCat, vendedorOverride, condition, deviceType, tradeinConfig, usedModel2, usedStorage2, usedColor2, condition2, deviceType2, tradeInValue1, tradeInValue2 }: StepNewDeviceProps) {
   const [mode, setMode] = useState<"" | "lacrado" | "seminovo">("");
   const [category, setCategory] = useState<ProductCategory | "">("");
   const [line, setLine] = useState(""); const [model, setModel] = useState(""); const [storage, setStorage] = useState("");
@@ -484,12 +491,16 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                   // Salvar simulação seminovo no banco de dados (com dados completos de condição)
                   const condLines = condition && deviceType ? getAnyConditionLines(deviceType, condition) : [];
                   const condLines2 = condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
-                  // whatsappNumber eh passado pelo TradeInCalculator ja com a
-                  // logica correta pra seminovos (prefere vendedor selecionado;
-                  // senao tradeinConfig.whatsapp_formularios_seminovos; senao
-                  // principal). O fallback WHATSAPP_SEMINOVO so entra se o prop
-                  // nao foi passado (componente usado standalone).
-                  const waNum = whatsappNumber || WHATSAPP_SEMINOVO;
+                  // Cascata de roteamento pra seminovos:
+                  //  1. vendedor via ?ref= na URL (parent ja resolveu em whatsappNumber
+                  //     + marcou vendedorOverride=true) → usa, independente da categoria
+                  //  2. whatsapp da categoria selecionada (whatsappSeminovoByCat[semiCat])
+                  //     → permite iPhone Seminovo -> Nicolas, iPad Seminovo -> outro
+                  //  3. whatsappNumber (fallback geral: whatsapp_formularios_seminovos)
+                  //  4. WHATSAPP_SEMINOVO hardcoded (stand-alone use)
+                  const cat = semiCatEffective || "iphone";
+                  const waFromCat = !vendedorOverride && whatsappSeminovoByCat ? whatsappSeminovoByCat[cat] : "";
+                  const waNum = (vendedorOverride && whatsappNumber) || waFromCat || whatsappNumber || WHATSAPP_SEMINOVO;
                   fetch("/api/leads", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
