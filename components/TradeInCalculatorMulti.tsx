@@ -67,7 +67,9 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     return () => clearInterval(id);
   }, [temaParam, temaDia, temaNoite]);
 
-  const { trackStep, trackQuestion, trackComplete, trackAction } = useTradeInAnalytics();
+  const { trackSiteView, trackStep, trackQuestion, trackComplete, trackAction } = useTradeInAnalytics();
+
+  useEffect(() => { trackSiteView(); }, [trackSiteView]);
 
   // Meta Pixel helper — dispara eventos de conversao
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

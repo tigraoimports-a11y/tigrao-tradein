@@ -12,14 +12,16 @@ function getSessionId(): string {
   return id;
 }
 
+// Endpoint /api/funnel (e nao /api/analytics) — adblockers bloqueiam URLs com
+// "analytics" e isso fazia 99% dos eventos sumirem em produ
 function fire(payload: Record<string, unknown>) {
   try {
-    fetch("/api/analytics", {
+    fetch("/api/funnel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }).catch(() => {
-      /* silent — analytics should never break UX */
+      /* silent — tracking should never break UX */
     });
   } catch {
     /* silent */
@@ -27,8 +29,14 @@ function fire(payload: Record<string, unknown>) {
 }
 
 export function useTradeInAnalytics() {
-  // Track which steps we already sent "step_view" for to avoid duplicates within same session render
   const viewedSteps = useRef<Set<number>>(new Set());
+
+  const trackSiteView = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("tradein_site_view_sent")) return;
+    sessionStorage.setItem("tradein_site_view_sent", "1");
+    fire({ event: "site_view", sessionId: getSessionId() });
+  }, []);
 
   const trackStep = useCallback((step: number) => {
     if (viewedSteps.current.has(step)) return;
@@ -48,5 +56,5 @@ export function useTradeInAnalytics() {
     fire({ event: action, sessionId: getSessionId() });
   }, []);
 
-  return { trackStep, trackQuestion, trackComplete, trackAction };
+  return { trackSiteView, trackStep, trackQuestion, trackComplete, trackAction };
 }

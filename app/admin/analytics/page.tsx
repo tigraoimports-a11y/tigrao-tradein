@@ -7,6 +7,7 @@ interface FunnelStep {
   step: number;
   views: number;
   completes: number;
+  droppedHere: number;
 }
 
 interface QuestionBreakdown {
@@ -21,6 +22,8 @@ interface DailyData {
 }
 
 interface AnalyticsData {
+  visits: number;
+  startedCount: number;
   totalSessions: number;
   whatsappCount: number;
   exitCount: number;
@@ -61,7 +64,7 @@ export default function AnalyticsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/analytics?range=${range}`, {
+      const res = await fetch(`/api/funnel?range=${range}`, {
         headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
       if (res.ok) {
@@ -93,8 +96,6 @@ export default function AnalyticsPage() {
       </div>
     );
   }
-
-  const maxViews = Math.max(...data.funnel.map((f) => f.views), 1);
 
   return (
     <div className="space-y-6">
@@ -131,78 +132,123 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — top of funnel */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KPICard label="Sessoes" value={data.totalSessions} />
+        <KPICard label="Acessaram o site" value={data.visits} />
         <KPICard
-          label="WhatsApp"
+          label="Iniciaram simulacao"
+          value={data.startedCount}
+          sub={
+            data.visits > 0
+              ? `${((data.startedCount / data.visits) * 100).toFixed(0)}% dos acessos`
+              : undefined
+          }
+        />
+        <KPICard
+          label="Fecharam pedido"
           value={data.whatsappCount}
           accent
+          sub={
+            data.startedCount > 0
+              ? `${((data.whatsappCount / data.startedCount) * 100).toFixed(0)}% de quem iniciou`
+              : undefined
+          }
         />
-        <KPICard label="Saidas" value={data.exitCount} />
         <KPICard
-          label="Conversao"
+          label="Conversao geral"
           value={`${data.conversionRate}%`}
           accent
+          sub="fechou / acessou"
         />
       </div>
 
-      {/* Funnel */}
+      {/* Onde as pessoas param — drop-off por tela */}
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
+          Onde as pessoas param
+        </h2>
+        <p className="text-xs text-[#86868B] mb-4">
+          Quantos comecaram cada tela mas nao avancaram
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {data.funnel.map((f) => {
+            const pct = f.views > 0 ? ((f.droppedHere / f.views) * 100).toFixed(0) : "0";
+            return (
+              <div
+                key={f.step}
+                className="rounded-xl p-3 border border-[#D2D2D7] bg-[#FFF5F5]"
+              >
+                <p className="text-[11px] text-[#86868B] font-medium uppercase tracking-wide">
+                  Tela {f.step}: {STEP_LABELS[f.step]}
+                </p>
+                <p className="text-2xl font-bold mt-1 text-[#E74C3C]">
+                  {f.droppedHere}
+                </p>
+                <p className="text-[11px] text-[#86868B] mt-0.5">
+                  pararam aqui ({pct}%)
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Funnel — completo, do primeiro acesso ate fechar pedido */}
       <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
         <h2 className="text-base font-semibold text-[#1D1D1F] mb-4">
           Funil de Conversao
         </h2>
         <div className="space-y-3">
-          {data.funnel.map((f, idx) => {
-            const pct = maxViews > 0 ? (f.views / maxViews) * 100 : 0;
-            const completePct =
-              f.views > 0 ? ((f.completes / f.views) * 100).toFixed(0) : "0";
-            const nextStep = data.funnel[idx + 1];
-            const dropoff =
-              nextStep && f.views > 0
-                ? (
-                    ((f.views - nextStep.views) / f.views) *
-                    100
-                  ).toFixed(0)
-                : null;
-
-            return (
-              <div key={f.step}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-[#1D1D1F]">
-                    Etapa {f.step}: {STEP_LABELS[f.step] || `Step ${f.step}`}
-                  </span>
-                  <div className="flex items-center gap-3 text-xs text-[#86868B]">
-                    <span>
-                      {f.views} sessoes
+          {(() => {
+            const fullFunnel: { label: string; count: number; isFinal?: boolean }[] = [
+              { label: "Acessaram o site", count: data.visits },
+              { label: "Iniciaram simulacao", count: data.startedCount },
+              ...data.funnel.map((f) => ({
+                label: `Etapa ${f.step}: ${STEP_LABELS[f.step] || `Step ${f.step}`}`,
+                count: f.views,
+              })),
+              { label: "Fecharam pedido (WhatsApp)", count: data.whatsappCount, isFinal: true },
+            ];
+            const max = Math.max(...fullFunnel.map((s) => s.count), 1);
+            return fullFunnel.map((s, idx) => {
+              const pct = (s.count / max) * 100;
+              const next = fullFunnel[idx + 1];
+              const dropoff =
+                next && s.count > 0
+                  ? (((s.count - next.count) / s.count) * 100).toFixed(0)
+                  : null;
+              return (
+                <div key={s.label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-[#1D1D1F]">
+                      {s.label}
                     </span>
-                    <span className="text-[#2ECC71] font-medium">
-                      {completePct}% completaram
+                    <span className="text-xs text-[#86868B]">
+                      {s.count} sessoes
                     </span>
                   </div>
+                  <div className="h-8 bg-[#F5F5F7] rounded-lg overflow-hidden relative">
+                    <div
+                      className="h-full rounded-lg transition-all duration-500"
+                      style={{
+                        width: `${Math.max(pct, 2)}%`,
+                        backgroundColor: s.isFinal ? "#2ECC71" : "#E8740E",
+                        opacity: 0.7 + (idx / fullFunnel.length) * 0.3,
+                      }}
+                    />
+                    <span className="absolute inset-0 flex items-center pl-3 text-xs font-semibold text-white mix-blend-difference">
+                      {s.count}
+                    </span>
+                  </div>
+                  {dropoff && parseInt(dropoff) > 0 && (
+                    <p className="text-[11px] text-[#E74C3C] mt-0.5 text-right">
+                      {dropoff}% desistiram aqui
+                    </p>
+                  )}
                 </div>
-                <div className="h-8 bg-[#F5F5F7] rounded-lg overflow-hidden relative">
-                  <div
-                    className="h-full rounded-lg transition-all duration-500"
-                    style={{
-                      width: `${Math.max(pct, 2)}%`,
-                      backgroundColor:
-                        f.step === 4 ? "#2ECC71" : "#E8740E",
-                      opacity: 0.8 + (f.step / 4) * 0.2,
-                    }}
-                  />
-                  <span className="absolute inset-0 flex items-center pl-3 text-xs font-semibold text-white mix-blend-difference">
-                    {f.views}
-                  </span>
-                </div>
-                {dropoff && (
-                  <p className="text-[11px] text-[#E74C3C] mt-0.5 text-right">
-                    {dropoff}% desistiram aqui
-                  </p>
-                )}
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       </div>
 
@@ -318,10 +364,12 @@ function KPICard({
   label,
   value,
   accent,
+  sub,
 }: {
   label: string;
   value: number | string;
   accent?: boolean;
+  sub?: string;
 }) {
   return (
     <div
@@ -341,6 +389,9 @@ function KPICard({
       >
         {value}
       </p>
+      {sub && (
+        <p className="text-[10px] text-[#86868B] mt-0.5">{sub}</p>
+      )}
     </div>
   );
 }
