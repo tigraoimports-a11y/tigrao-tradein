@@ -124,6 +124,8 @@ export default function MostruarioPage() {
   const [editingCategory, setEditingCategory] = useState<Categoria | null>(null);
   const [editingProduct, setEditingProduct] = useState<Produto | null>(null);
   const [editingVariacao, setEditingVariacao] = useState<Variacao | null>(null);
+  // Preview do produto como o cliente ve (modal com card estilo loja)
+  const [previewProduct, setPreviewProduct] = useState<Produto | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -277,6 +279,7 @@ export default function MostruarioPage() {
               onToggleField={async (field, value) => { await apiCall("PATCH", { action: "update_produto", id: produto.id, [field]: value }); await fetchData(); showToast("Salvo!"); }}
               onDelete={async () => { if (!confirm(`Deletar "${produto.nome}" e todas suas variacoes?`)) return; await apiCall("DELETE", { action: "delete_produto", id: produto.id }); await fetchData(); showToast("Produto deletado!"); }}
               onEdit={() => setEditingProduct(produto)}
+              onPreview={() => setPreviewProduct(produto)}
               onUploadImage={(file) => uploadImage("produto_id", produto.id, file)}
               onAddVariacao={() => setShowNewVariacao(produto.id)}
               onEditVariacao={(v) => setEditingVariacao(v)}
@@ -309,6 +312,86 @@ export default function MostruarioPage() {
       {editingProduct && <EditProductModal produto={editingProduct} categorias={categorias} onClose={() => setEditingProduct(null)} onSave={async (data) => { await apiCall("PATCH", { action: "update_produto", id: editingProduct.id, ...data }); setEditingProduct(null); await fetchData(); showToast("Produto atualizado!"); }} />}
       {showNewVariacao && <NewVariacaoModal produtoId={showNewVariacao} onClose={() => setShowNewVariacao(null)} onSave={async (data) => { await apiCall("POST", { action: "create_variacao", ...data }); setShowNewVariacao(null); await fetchData(); showToast("Variacao criada!"); }} />}
       {editingVariacao && <EditVariacaoModal variacao={editingVariacao} onClose={() => setEditingVariacao(null)} onSave={async (data) => { await apiCall("PATCH", { action: "update_variacao", id: editingVariacao.id, ...data }); setEditingVariacao(null); await fetchData(); showToast("Variacao atualizada!"); }} />}
+      {previewProduct && (
+        <CustomerPreviewModal
+          produto={previewProduct}
+          categorias={categorias}
+          onClose={() => setPreviewProduct(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Customer Preview Modal — mostra o produto como o cliente ve no /troca ── */
+function CustomerPreviewModal({ produto, categorias, onClose }: { produto: Produto; categorias: Categoria[]; onClose: () => void }) {
+  const cat = categorias.find((c) => c.id === produto.categoria_id);
+  const variacoesVisiveis = (produto.variacoes || []).filter(v => v.preco > 0);
+  const minPreco = variacoesVisiveis.length > 0
+    ? Math.min(...variacoesVisiveis.map(v => Number(v.preco)))
+    : 0;
+  const parcela12 = minPreco > 0 ? Math.round((minPreco * 1.13) / 12) : 0;
+  // Storages unicos (caso variacoes tenham campo storage no atributos)
+  const storages = Array.from(new Set(variacoesVisiveis.map(v => v.atributos?.storage).filter(Boolean))) as string[];
+  // Cores unicas
+  const cores = Array.from(new Set(variacoesVisiveis.map(v => v.atributos?.cor).filter(Boolean))) as string[];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl font-bold hover:bg-white/20 z-10"
+      >
+        ✕
+      </button>
+      <div className="max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+        <p className="text-center text-white text-xs mb-3 opacity-70">📱 Como o cliente vê no site (mock)</p>
+        {/* Card simulando o do home page */}
+        <div className="bg-[#1C1C1E] rounded-3xl overflow-hidden shadow-2xl">
+          {/* Imagem */}
+          <div className="aspect-square bg-gradient-to-br from-[#2C2C2E] to-[#1C1C1E] flex items-center justify-center relative">
+            {produto.imagem_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-7xl">{cat?.emoji || "📦"}</span>
+            )}
+            <button className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm text-white/80 hover:bg-black/60 flex items-center justify-center text-sm">
+              🤍
+            </button>
+          </div>
+          {/* Info */}
+          <div className="p-4 space-y-1">
+            <h3 className="text-lg font-bold text-white">{produto.nome}</h3>
+            {storages.length > 0 && (
+              <p className="text-sm text-white/60">{storages.join(" | ")}</p>
+            )}
+            {minPreco > 0 ? (
+              <>
+                <p className="text-xs text-white/50 mt-2">a partir de</p>
+                <p className="text-2xl font-bold text-white">R$ {minPreco.toLocaleString("pt-BR")}</p>
+                <p className="text-xs text-white/50">ou 12x de <span className="text-white/80 font-semibold">R$ {parcela12.toLocaleString("pt-BR")}</span></p>
+              </>
+            ) : (
+              <p className="text-sm text-white/50 mt-2">Consulte o preço</p>
+            )}
+            {cores.length > 0 && (
+              <div className="flex gap-1.5 mt-3">
+                {cores.slice(0, 6).map(c => (
+                  <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/70">{c}</span>
+                ))}
+              </div>
+            )}
+            <button className="w-full mt-3 py-3 rounded-2xl bg-[#34C759] text-white font-semibold text-sm">
+              Comprar
+            </button>
+          </div>
+        </div>
+        <p className="text-center text-white/50 text-[10px] mt-3">
+          {variacoesVisiveis.length} variação{variacoesVisiveis.length !== 1 ? "ões" : ""} ativa{variacoesVisiveis.length !== 1 ? "s" : ""}
+          {!produto.visivel && " · ⚠️ Produto OCULTO no site"}
+        </p>
+      </div>
     </div>
   );
 }
@@ -486,7 +569,7 @@ function TemaAccordion({ label, sublabel, children }: { label: string; sublabel:
 }
 
 /* ── Product Card ── */
-function ProductCard({ produto, categorias, expanded, onToggleExpand, onToggleField, onDelete, onEdit, onUploadImage, onAddVariacao, onEditVariacao, onDeleteVariacao, onUploadVariacaoImage }: { produto: Produto; categorias: Categoria[]; expanded: boolean; onToggleExpand: () => void; onToggleField: (field: string, value: unknown) => void; onDelete: () => void; onEdit: () => void; onUploadImage: (file: File) => void; onAddVariacao: () => void; onEditVariacao: (v: Variacao) => void; onDeleteVariacao: (id: string) => void; onUploadVariacaoImage: (varId: string, file: File) => void }) {
+function ProductCard({ produto, categorias, expanded, onToggleExpand, onToggleField, onDelete, onEdit, onPreview, onUploadImage, onAddVariacao, onEditVariacao, onDeleteVariacao, onUploadVariacaoImage }: { produto: Produto; categorias: Categoria[]; expanded: boolean; onToggleExpand: () => void; onToggleField: (field: string, value: unknown) => void; onDelete: () => void; onEdit: () => void; onPreview: () => void; onUploadImage: (file: File) => void; onAddVariacao: () => void; onEditVariacao: (v: Variacao) => void; onDeleteVariacao: (id: string) => void; onUploadVariacaoImage: (varId: string, file: File) => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const cat = categorias.find((c) => c.id === produto.categoria_id);
   const minPreco = produto.variacoes.length > 0 ? Math.min(...produto.variacoes.map((v) => Number(v.preco)).filter((p) => p > 0)) : 0;
@@ -529,6 +612,7 @@ function ProductCard({ produto, categorias, expanded, onToggleExpand, onToggleFi
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => onToggleField("visivel", !produto.visivel)} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${produto.visivel ? "bg-[#34C759]/10 text-[#34C759]" : "bg-[#F5F5F7] text-[#AEAEB2]"}`}>{produto.visivel ? "👁️ Visivel" : "👁️‍🗨️ Oculto"}</button>
                 <button onClick={() => onToggleField("destaque", !produto.destaque)} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${produto.destaque ? "bg-[#FF9500]/10 text-[#FF9500]" : "bg-[#F5F5F7] text-[#AEAEB2]"}`}>{produto.destaque ? "⭐ Destaque" : "☆ Destaque"}</button>
+                <button onClick={onPreview} className="px-2 py-1 rounded-lg text-[11px] font-medium bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20">👁️ Preview cliente</button>
                 <button onClick={onEdit} className="px-2 py-1 rounded-lg text-[11px] font-medium bg-[#F5F5F7] text-[#86868B] hover:text-[#1D1D1F]">✏️ Editar</button>
                 <button onClick={onDelete} className="px-2 py-1 rounded-lg text-[11px] font-medium bg-[#F5F5F7] text-[#FF3B30] hover:bg-[#FF3B30]/10">🗑️ Deletar</button>
               </div>

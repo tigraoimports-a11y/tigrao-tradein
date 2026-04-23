@@ -80,6 +80,9 @@ export default function InstagramPostPage() {
   const [slidesEdit, setSlidesEdit] = useState<Slide[]>([]);
   const [legendaEdit, setLegendaEdit] = useState("");
   const [hashtagsEdit, setHashtagsEdit] = useState("");
+  // Preview do carrossel como vai aparecer no Instagram (modal swipeable)
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIdx, setPreviewIdx] = useState(0);
 
   // PR 2: imagens
   const [ilustrando, setIlustrando] = useState(false);
@@ -679,6 +682,22 @@ export default function InstagramPostPage() {
             </div>
           )}
 
+          {/* Botao de preview Instagram */}
+          {slidesEdit.length > 0 && (
+            <div className="flex items-center justify-between mb-3 bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCB045] rounded-2xl p-3">
+              <div className="text-white">
+                <p className="text-sm font-bold">📱 Preview Instagram</p>
+                <p className="text-[11px] opacity-90">Veja o carrossel como vai aparecer no feed</p>
+              </div>
+              <button
+                onClick={() => { setPreviewIdx(0); setPreviewOpen(true); }}
+                className="px-4 py-2 rounded-xl bg-white text-[#833AB4] text-sm font-bold hover:bg-white/90 transition-colors"
+              >
+                Abrir preview
+              </button>
+            </div>
+          )}
+
           {/* Cards de edição de slide */}
           <div className="grid gap-3 mb-6">
             {slidesEdit.map((slide, idx) => (
@@ -949,6 +968,116 @@ export default function InstagramPostPage() {
           )}
         </>
       )}
+
+      {/* Modal de preview do carrossel Instagram */}
+      {previewOpen && slidesEdit.length > 0 && (() => {
+        const total = slidesEdit.length;
+        const slide = slidesEdit[previewIdx] || slidesEdit[0];
+        const go = (dir: 1 | -1) => {
+          setPreviewIdx((i) => Math.min(Math.max(i + dir, 0), total - 1));
+        };
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewOpen(false)}>
+            <button
+              onClick={() => setPreviewOpen(false)}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl font-bold hover:bg-white/20 z-10"
+            >
+              ✕
+            </button>
+            <div className="max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+              <p className="text-center text-white text-xs mb-2 opacity-70">📱 Preview Instagram — slide {previewIdx + 1} de {total}</p>
+              {/* Instagram post frame */}
+              <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
+                {/* Header estilo Instagram */}
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-[#EFEFEF]">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#FCB045] p-0.5">
+                    <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-sm">🐯</div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-[#1F2937]">tigraoimports</p>
+                    <p className="text-[10px] text-[#667781]">Rio de Janeiro · Brasil</p>
+                  </div>
+                  <span className="text-[#1F2937]">⋯</span>
+                </div>
+                {/* Slide (quadrado 1080x1080) */}
+                <div className="aspect-square bg-[#1C1C1E] relative flex flex-col items-center justify-center p-6 text-center overflow-hidden">
+                  {slide.imagem_url ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={slide.imagem_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#E8740E] via-[#FD1D1D] to-[#833AB4]" />
+                  )}
+                  {slide.destaque && (
+                    <p className="relative text-white text-7xl font-black drop-shadow-2xl mb-3">{slide.destaque}</p>
+                  )}
+                  <h3 className="relative text-white text-2xl font-black leading-tight drop-shadow-lg mb-2">{slide.titulo || "(sem título)"}</h3>
+                  <p className="relative text-white/90 text-sm leading-relaxed whitespace-pre-wrap drop-shadow-md">{slide.texto || "(sem texto)"}</p>
+                  {/* Dots indicador de slides */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
+                    {slidesEdit.map((_, i) => (
+                      <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === previewIdx ? "bg-white" : "bg-white/40"}`} />
+                    ))}
+                  </div>
+                  {/* Navegação */}
+                  {previewIdx > 0 && (
+                    <button
+                      onClick={() => go(-1)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 text-white text-xl hover:bg-black/50"
+                    >‹</button>
+                  )}
+                  {previewIdx < total - 1 && (
+                    <button
+                      onClick={() => go(1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 text-white text-xl hover:bg-black/50"
+                    >›</button>
+                  )}
+                </div>
+                {/* Ações do post */}
+                <div className="flex items-center gap-3 px-3 py-2">
+                  <span className="text-xl">♡</span>
+                  <span className="text-xl">💬</span>
+                  <span className="text-xl">✈️</span>
+                  <span className="ml-auto text-xl">🔖</span>
+                </div>
+                {/* Legenda */}
+                {legendaEdit && (
+                  <div className="px-3 pb-3 text-xs">
+                    <p className="text-[#1F2937] leading-relaxed whitespace-pre-wrap">
+                      <span className="font-bold">tigraoimports </span>
+                      {legendaEdit.length > 150 ? legendaEdit.slice(0, 150) + "..." : legendaEdit}
+                    </p>
+                    {hashtagsEdit && (
+                      <p className="text-[#00376B] text-[11px] mt-1 leading-snug">{hashtagsEdit}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* Thumbnails pra navegar */}
+              <div className="flex gap-1.5 mt-3 overflow-x-auto pb-2">
+                {slidesEdit.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPreviewIdx(i)}
+                    className={`shrink-0 w-12 h-12 rounded-lg border-2 flex items-center justify-center text-xs font-bold overflow-hidden ${
+                      i === previewIdx ? "border-white" : "border-white/30"
+                    }`}
+                  >
+                    {s.imagem_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.imagem_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white bg-gradient-to-br from-[#833AB4] to-[#FCB045] w-full h-full flex items-center justify-center">{i + 1}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
