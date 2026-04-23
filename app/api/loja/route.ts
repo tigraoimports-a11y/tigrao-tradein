@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitPublic } from "@/lib/rate-limit";
+import {
+  buildEstoqueIndex,
+  buildEstoqueKeysPresentes,
+  checkVariacaoEsgotada,
+  type EstoqueRow,
+} from "@/lib/loja-estoque-match";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +56,8 @@ export async function GET(req: NextRequest) {
   try {
     const { supabase } = await import("@/lib/supabase");
 
-    // Fetch from new loja_* tables
-    const [categoriasRes, produtosRes, variacoesRes, configRes] = await Promise.all([
+    // Fetch from new loja_* tables + estoque (pra ocultar variações esgotadas)
+    const [categoriasRes, produtosRes, variacoesRes, configRes, estoqueRes] = await Promise.all([
       supabase
         .from("loja_categorias")
         .select("*")
@@ -74,11 +80,18 @@ export async function GET(req: NextRequest) {
         .select("*")
         .limit(1)
         .single(),
+      supabase
+        .from("estoque")
+        .select("produto,categoria,qnt,status,cor,observacao"),
     ]);
 
     const categorias = (categoriasRes.data ?? []) as CategoriaRow[];
     const produtosRaw = (produtosRes.data ?? []) as ProdutoRow[];
     const variacoes = (variacoesRes.data ?? []) as VariacaoRow[];
+    const estoqueRows = (estoqueRes.data ?? []) as EstoqueRow[];
+
+    const estoqueIndex = buildEstoqueIndex(estoqueRows);
+    const estoqueKeysPresentes = buildEstoqueKeysPresentes(estoqueRows);
 
     // Build categoria lookup
     const categoriaMap = new Map<string, CategoriaRow>();
@@ -94,7 +107,7 @@ export async function GET(req: NextRequest) {
       variacoesByProduto.set(v.produto_id, list);
     }
 
-    // Build produtos with variacoes
+    // Build produtos with variacoes (filtrando variações confirmadamente esgotadas)
     const produtos = produtosRaw
       .filter((p) => {
         // Only include products whose category exists and is visible
@@ -104,6 +117,21 @@ export async function GET(req: NextRequest) {
       .map((p) => {
         const cat = categoriaMap.get(p.categoria_id)!;
         const prodVariacoes = variacoesByProduto.get(p.id) ?? [];
+
+        const variacoesDisponiveis = prodVariacoes.filter((v) => {
+          const attrs = v.atributos ?? {};
+          const { esgotado } = checkVariacaoEsgotada(
+            {
+              produtoNome: p.nome,
+              categoriaSlug: cat.slug,
+              storage: attrs.storage,
+              cor: attrs.cor,
+            },
+            estoqueIndex,
+            estoqueKeysPresentes,
+          );
+          return !esgotado;
+        });
 
         return {
           id: p.id,
@@ -117,7 +145,7 @@ export async function GET(req: NextRequest) {
           imagem: p.imagem_url,
           destaque: p.destaque,
           tags: p.tags ?? ["Novo", "Lacrado", "1 ano garantia", "Nota Fiscal"],
-          variacoes: prodVariacoes.map((v) => ({
+          variacoes: variacoesDisponiveis.map((v) => ({
             id: v.id,
             nome: v.nome,
             preco: Number(v.preco),
@@ -126,7 +154,8 @@ export async function GET(req: NextRequest) {
             imagem: v.imagem_url,
           })),
         };
-      });
+      })
+      .filter((p) => p.variacoes.length > 0);
 
     // Config defaults
     const rawConfig = configRes.data ?? {
