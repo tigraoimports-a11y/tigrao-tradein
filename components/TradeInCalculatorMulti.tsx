@@ -9,6 +9,7 @@ import { useTradeInAnalytics } from "@/lib/useTradeInAnalytics";
 import StepBar from "./StepBar";
 import StepUsedDeviceMulti from "./StepUsedDeviceMulti";
 import StepNewDevice from "./StepNewDevice";
+import StepManualHandoff from "./StepManualHandoff";
 import StepClientData from "./StepClientData";
 import StepQuote from "./StepQuote";
 import ExitIntentPopup from "./ExitIntentPopup";
@@ -153,6 +154,31 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
   const [newPrice, setNewPrice] = useState(0);
 
   const totalTradeInValue = tradeInValue + (hasSecondDevice ? tradeInValue2 : 0);
+
+  // Avaliacao manual: cliente vai pro WhatsApp em vez de ver orcamento automatico.
+  // Aciona quando:
+  //   1. Categoria do aparelho usado esta em modo=manual em /admin/usados, ou
+  //   2. Modelo+armazenamento do usado nao tem valorBase cadastrado (ou = 0)
+  //   3. Se tem 2o aparelho, qualquer um dos dois sem preco ja forca manual
+  const deviceTypeToCategoria: Record<string, string> = {
+    iphone: "IPHONE", ipad: "IPAD", macbook: "MACBOOK", watch: "APPLE_WATCH",
+  };
+  function hasPriceFor(model: string, storage: string): boolean {
+    if (!model) return true; // nao selecionou ainda → assume auto
+    const row = usedData.usedValues.find(
+      (v) => v.modelo === model && v.armazenamento === storage
+    );
+    return !!row && Number(row.valorBase) > 0;
+  }
+  const catForcesManual = (dt: string) => {
+    const cat = deviceTypeToCategoria[dt];
+    const cfg = catConfigs.find((c) => c.categoria === cat);
+    return cfg?.modo === "manual";
+  };
+  const avaliacaoManual =
+    catForcesManual(deviceType) ||
+    !hasPriceFor(usedModel, usedStorage) ||
+    (hasSecondDevice && (catForcesManual(deviceType2) || !hasPriceFor(usedModel2, usedStorage2)));
 
   // Map MultiDeviceType to API device_type param
   const apiDeviceType: DeviceType = selectedDeviceType === "watch" ? "iphone" : (selectedDeviceType || "iphone");
@@ -418,6 +444,42 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
           </div>
         </div>
 
+        {/* Navegacao de teste — so no modo admin. Permite pular pra qualquer
+            etapa sem reiniciar, util pra validar perguntas/UX sem refazer o
+            fluxo inteiro a cada tweak. Cliente publico NAO ve essa barra. */}
+        {previewMode && (
+          <div className="mb-4 rounded-xl border border-dashed border-[#E8740E]/50 bg-[#FFF7ED] px-3 py-2">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="font-semibold text-[#E8740E]">🧪 Nav teste:</span>
+              {progressLabels.map((label, i) => {
+                const targetSteps = [0, 1, 2, 3, 4] as const;
+                const target = targetSteps[i];
+                const active = progressStep === i;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => { setStep(target); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    className={`px-2 py-1 rounded font-semibold transition-colors ${
+                      active
+                        ? "bg-[#E8740E] text-white"
+                        : "bg-white border border-[#E8740E]/40 text-[#1D1D1F] hover:bg-[#FFEFE0]"
+                    }`}
+                  >
+                    {i}. {label}
+                  </button>
+                );
+              })}
+              <button
+                onClick={handleReset}
+                className="ml-auto px-2 py-1 rounded font-semibold bg-white border border-[#86868B]/40 text-[#86868B] hover:bg-[#F5F5F7] transition-colors"
+                title="Volta pro step 0 e limpa os dados"
+              >
+                🔄 Reiniciar
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="animate-fadeIn">
           {/* Step 0 — Device type selector */}
           {step === 0 && (
@@ -526,7 +588,20 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               tradeinConfig={tradeinConfig} />
           )}
 
-          {step === 4 && (
+          {step === 4 && avaliacaoManual && (
+            <StepManualHandoff
+              usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} condition={condition} deviceType={deviceType}
+              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
+              condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
+              newModel={newModel} newStorage={newStorage} newPrice={newPrice}
+              clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
+              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal}
+              vendedor={vendedor}
+              onReset={handleReset}
+              onGoToStep={handleGoToStep}
+            />
+          )}
+          {step === 4 && !avaliacaoManual && (
             <StepQuote
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
               usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} condition={condition} deviceType={deviceType}
