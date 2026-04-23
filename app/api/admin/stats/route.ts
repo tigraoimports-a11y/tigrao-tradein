@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     .from("simulacoes")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(500);
+    .limit(5000);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
