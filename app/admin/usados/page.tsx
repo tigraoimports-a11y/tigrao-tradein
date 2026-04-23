@@ -175,12 +175,28 @@ const CAT_PREFIX: Record<string, string> = {
 // Monta o nome final juntando prefixo + linha + modelo. Caso especial do
 // iPad Entrada: a linha selecionada aparece como "iPad (Entrada)" no select
 // mas no nome final e so "iPad" — evita duplicar "iPad iPad 10o".
+//
+// Se o admin ja digitou o prefixo ou prefixo+linha no campo "Modelo"
+// (ex: "iPad Pro M2" em vez de "M2"), faz strip automatico pra nao virar
+// "iPad Pro iPad Pro M2". Comparacao case-insensitive no prefixo.
 function buildModeloName(cat: string, linha: string, modelo: string): string {
   const prefix = CAT_PREFIX[cat] || "";
-  const modeloTrim = modelo.trim();
-  // iPad Entrada: linha e o proprio prefixo, nao duplica
   const linhaFinal = linha === "iPad (Entrada)" ? "" : linha.trim();
-  const parts = [prefix, linhaFinal, modeloTrim].filter(Boolean);
+  let modeloClean = modelo.trim();
+
+  const stripIfPrefixed = (needle: string) => {
+    if (!needle) return;
+    const lower = modeloClean.toLowerCase();
+    const n = needle.toLowerCase();
+    if (lower === n) { modeloClean = ""; return; }
+    if (lower.startsWith(n + " ")) { modeloClean = modeloClean.substring(needle.length).trim(); }
+  };
+
+  // Tenta primeiro o combo "prefix + linha" (ex: "iPad Pro"), depois so o prefix
+  if (prefix && linhaFinal) stripIfPrefixed(`${prefix} ${linhaFinal}`);
+  if (prefix) stripIfPrefixed(prefix);
+
+  const parts = [prefix, linhaFinal, modeloClean].filter(Boolean);
   return parts.join(" ");
 }
 
@@ -222,12 +238,17 @@ export function UsadosContent() {
   // junta tudo com " | " pra gravar no campo `armazenamento`. `linha` e o
   // pre-seletor de linha (Air/Pro/mini/Series/etc) que ajuda a garantir que
   // o nome final do modelo case com o parser do cliente.
-  const [novoModelo, setNovoModelo] = useState<{ linha: string; modelo: string; specs: Record<string, string>; valor_base: string }>({
+  const [novoModelo, setNovoModelo] = useState<{ linha: string; modelo: string }>({
     linha: "",
     modelo: "",
-    specs: {},
-    valor_base: "",
   });
+  // Cada variante e uma combinacao (armaz/tela/conect/...) + valor_base pro
+  // mesmo linha+modelo. O form permite cadastrar varias de uma vez — ao salvar
+  // faz 1 upsert por variante valida. Campos vazios sao ignorados com aviso.
+  type VarianteNova = { id: string; specs: Record<string, string>; valor_base: string };
+  const [variantes, setVariantes] = useState<VarianteNova[]>([
+    { id: crypto.randomUUID(), specs: {}, valor_base: "" },
+  ]);
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
   const [catFilter, setCatFilter] = useState("iphone");
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
@@ -367,45 +388,54 @@ export function UsadosContent() {
   };
 
   const handleAddModelo = async () => {
-    const { linha, modelo, specs, valor_base } = novoModelo;
+    const { linha, modelo } = novoModelo;
     const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
     const linhas = LINHAS_BY_CAT[catFilter] || [];
-    // Exige linha (quando a categoria tem linhas), modelo (variante) e specs
-    const missingSpec = specFields.find((f) => !specs[f.key]?.trim());
-    if (linhas.length > 0 && !linha) {
-      setMsg("Selecione a linha");
-      return;
+
+    if (linhas.length > 0 && !linha) { setMsg("Selecione a linha"); return; }
+    if (!modelo.trim()) { setMsg("Preencha o modelo (variante)"); return; }
+
+    // Ignora variantes totalmente vazias (linhas ociosas do form) mas rejeita
+    // variantes parciais — se preencheu qualquer coisa, tem que preencher tudo.
+    const parsed: { armazenamento: string; valor_base: number }[] = [];
+    for (const [idx, v] of variantes.entries()) {
+      const hasAnySpec = specFields.some((f) => v.specs[f.key]?.trim());
+      const hasValor = v.valor_base.trim();
+      if (!hasAnySpec && !hasValor) continue; // linha vazia, pula
+      const missing = specFields.find((f) => !v.specs[f.key]?.trim());
+      if (missing) { setMsg(`Variante ${idx + 1}: selecione ${missing.label.toLowerCase()}`); return; }
+      if (!hasValor) { setMsg(`Variante ${idx + 1}: preencha o valor base`); return; }
+      const val = parseFloat(v.valor_base);
+      if (isNaN(val) || val < 0) { setMsg(`Variante ${idx + 1}: valor invalido`); return; }
+      parsed.push({
+        armazenamento: specFields.map((f) => v.specs[f.key].trim()).join(" | "),
+        valor_base: val,
+      });
     }
-    if (!modelo.trim() || missingSpec || !valor_base.trim()) {
-      setMsg(
-        !modelo.trim()
-          ? "Preencha o modelo (variante)"
-          : missingSpec
-          ? `Selecione ${missingSpec.label.toLowerCase()}`
-          : "Preencha o valor base"
-      );
-      return;
-    }
-    const val = parseFloat(valor_base);
-    if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
-    // Monta o nome final do modelo e a string de armazenamento
+    if (parsed.length === 0) { setMsg("Preencha pelo menos 1 variante"); return; }
+
     const modeloFinal = buildModeloName(catFilter, linha, modelo);
-    const armazenamento = specFields.map((f) => specs[f.key].trim()).join(" | ");
     setSaving("add-modelo");
-    await apiPost({ action: "upsert_valor", modelo: modeloFinal, armazenamento, valor_base: val });
+    for (const p of parsed) {
+      await apiPost({ action: "upsert_valor", modelo: modeloFinal, armazenamento: p.armazenamento, valor_base: p.valor_base });
+    }
     setValores((prev) => {
-      const exists = prev.findIndex((v) => v.modelo === modeloFinal && v.armazenamento === armazenamento);
-      if (exists >= 0) {
-        const nv = [...prev];
-        nv[exists] = { ...nv[exists], valor_base: val };
-        return nv;
+      const updated = [...prev];
+      for (const p of parsed) {
+        const exists = updated.findIndex((v) => v.modelo === modeloFinal && v.armazenamento === p.armazenamento);
+        if (exists >= 0) updated[exists] = { ...updated[exists], valor_base: p.valor_base };
+        else updated.push({ id: crypto.randomUUID(), modelo: modeloFinal, armazenamento: p.armazenamento, valor_base: p.valor_base, ativo: true });
       }
-      return [...prev, { id: crypto.randomUUID(), modelo: modeloFinal, armazenamento, valor_base: val, ativo: true, updated_at: new Date().toISOString() }];
+      return updated;
     });
-    setMsg(`${modeloFinal} ${armazenamento} adicionado com valor R$ ${val.toLocaleString("pt-BR")}!`);
-    // Mantem linha + modelo preenchidos pra facilitar adicionar variantes
-    // seguidas do mesmo modelo; so limpa os specs e o valor.
-    setNovoModelo((prev) => ({ linha: prev.linha, modelo: prev.modelo, specs: {}, valor_base: "" }));
+    setMsg(
+      parsed.length === 1
+        ? `${modeloFinal} ${parsed[0].armazenamento} adicionado com valor R$ ${parsed[0].valor_base.toLocaleString("pt-BR")}!`
+        : `${parsed.length} variantes de ${modeloFinal} adicionadas!`
+    );
+    // Reseta as variantes pra 1 linha vazia (mantem linha+modelo pra
+    // facilitar cadastrar outro modelo da mesma categoria em sequencia).
+    setVariantes([{ id: crypto.randomUUID(), specs: {}, valor_base: "" }]);
     setSaving(null);
   };
 
@@ -613,17 +643,20 @@ export function UsadosContent() {
         const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
         const linhas = LINHAS_BY_CAT[catFilter] || [];
         const placeholder = MODELO_PLACEHOLDER_BY_CAT[catFilter] || "Ex: 17 Pro Max";
-        // Total de colunas = (1 linha se houver) + 1 (modelo) + N (specs) + 1 (valor) + 1 (acoes)
-        const totalCols = (linhas.length > 0 ? 1 : 0) + 1 + specFields.length + 2;
-        const gridClass = totalCols <= 4 ? "md:grid-cols-4" : totalCols <= 5 ? "md:grid-cols-5" : "md:grid-cols-6";
         // Preview do nome final que vai ser gravado
         const nomePreview = novoModelo.linha && novoModelo.modelo
           ? buildModeloName(catFilter, novoModelo.linha, novoModelo.modelo)
           : "";
+        const varColsClass = specFields.length + 2 <= 3 ? "md:grid-cols-3" : specFields.length + 2 <= 4 ? "md:grid-cols-4" : "md:grid-cols-5";
+        const updateVariante = (id: string, patch: Partial<VarianteNova>) => {
+          setVariantes((prev) => prev.map((x) => x.id === id ? { ...x, ...patch, specs: { ...x.specs, ...(patch.specs || {}) } } : x));
+        };
         return (
-        <div className="bg-white border border-[#E8740E]/30 rounded-2xl p-5 shadow-sm space-y-3">
+        <div className="bg-white border border-[#E8740E]/30 rounded-2xl p-5 shadow-sm space-y-4">
           <p className="text-sm font-bold text-[#1D1D1F]">Adicionar Modelo Seminovo</p>
-          <div className={`grid grid-cols-2 ${gridClass} gap-3`}>
+
+          {/* Linha + Modelo (topo) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {linhas.length > 0 && (
               <div>
                 <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Linha</p>
@@ -638,8 +671,8 @@ export function UsadosContent() {
                 </select>
               </div>
             )}
-            <div>
-              <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Modelo</p>
+            <div className={linhas.length > 0 ? "md:col-span-2" : "md:col-span-3"}>
+              <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Modelo (variante)</p>
               <input
                 value={novoModelo.modelo}
                 onChange={(e) => setNovoModelo({ ...novoModelo, modelo: e.target.value })}
@@ -647,46 +680,78 @@ export function UsadosContent() {
                 className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
               />
             </div>
-            {specFields.map((f) => (
-              <div key={f.key}>
-                <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">{f.label}</p>
-                <select
-                  value={novoModelo.specs[f.key] || ""}
-                  onChange={(e) => setNovoModelo({ ...novoModelo, specs: { ...novoModelo.specs, [f.key]: e.target.value } })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                >
-                  <option value="">— Selecionar —</option>
-                  {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-            ))}
-            <div>
-              <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Valor Base (R$)</p>
-              <input
-                type="number"
-                value={novoModelo.valor_base}
-                onChange={(e) => setNovoModelo({ ...novoModelo, valor_base: e.target.value })}
-                placeholder="Ex: 3500"
-                className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                onKeyDown={(e) => e.key === "Enter" && handleAddModelo()}
-              />
-            </div>
-            <div className="flex items-end gap-2">
-              <button onClick={handleAddModelo} disabled={saving === "add-modelo"} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50">
-                {saving === "add-modelo" ? "..." : "Adicionar"}
-              </button>
-              <button onClick={() => setShowAddModelo(false)} className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E8740E]">
-                Fechar
-              </button>
-            </div>
           </div>
+
           {nomePreview && (
             <p className="text-[11px] text-[#86868B]">
               Sera gravado como: <strong className="text-[#1D1D1F]">{nomePreview}</strong>
             </p>
           )}
+
+          {/* Variantes (1+ configs pro mesmo modelo) */}
+          <div className="space-y-2 pt-2 border-t border-[#F5F5F7]">
+            <p className="text-[10px] font-semibold text-[#86868B] uppercase">Configuracoes ({variantes.length})</p>
+            {variantes.map((v, idx) => (
+              <div key={v.id} className={`grid grid-cols-1 ${varColsClass} gap-2 items-end bg-[#FAFAFC] rounded-xl p-2`}>
+                {specFields.map((f) => (
+                  <div key={f.key}>
+                    {idx === 0 && <p className="text-[9px] font-semibold text-[#86868B] uppercase mb-0.5">{f.label}</p>}
+                    <select
+                      value={v.specs[f.key] || ""}
+                      onChange={(e) => updateVariante(v.id, { specs: { [f.key]: e.target.value } })}
+                      className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                    >
+                      <option value="">— {f.label} —</option>
+                      {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                ))}
+                <div>
+                  {idx === 0 && <p className="text-[9px] font-semibold text-[#86868B] uppercase mb-0.5">Valor (R$)</p>}
+                  <input
+                    type="number"
+                    value={v.valor_base}
+                    onChange={(e) => updateVariante(v.id, { valor_base: e.target.value })}
+                    placeholder="3500"
+                    className="w-full px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                    onKeyDown={(e) => e.key === "Enter" && handleAddModelo()}
+                  />
+                </div>
+                <div className="flex items-center">
+                  <button
+                    onClick={() => {
+                      setVariantes((prev) => prev.length === 1
+                        ? [{ id: crypto.randomUUID(), specs: {}, valor_base: "" }]
+                        : prev.filter((x) => x.id !== v.id));
+                    }}
+                    title={variantes.length === 1 ? "Limpar" : "Remover variante"}
+                    className="px-2 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-red-600 border border-[#D2D2D7] hover:border-red-300"
+                  >
+                    {variantes.length === 1 ? "Limpar" : "Remover"}
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => setVariantes((prev) => [...prev, { id: crypto.randomUUID(), specs: {}, valor_base: "" }])}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-dashed border-[#E8740E] hover:bg-[#FFF7ED] transition-colors"
+            >
+              + Adicionar outra configuracao
+            </button>
+          </div>
+
+          {/* Acoes */}
+          <div className="flex gap-2 pt-2 border-t border-[#F5F5F7]">
+            <button onClick={handleAddModelo} disabled={saving === "add-modelo"} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50">
+              {saving === "add-modelo" ? "Salvando..." : variantes.length > 1 ? `Adicionar ${variantes.length} configuracoes` : "Adicionar"}
+            </button>
+            <button onClick={() => setShowAddModelo(false)} className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E8740E]">
+              Fechar
+            </button>
+          </div>
+
           <p className="text-[10px] text-[#86868B]">
-            Dica: selecione a linha primeiro. O <strong>Modelo</strong> e so a variante (ex: &quot;M3&quot;, &quot;10º Geracao&quot;) — o prefixo e a linha sao adicionados automaticamente. Linha + Modelo ficam preenchidos apos salvar pra facilitar cadastrar multiplas variantes.
+            Dica: o <strong>Modelo</strong> e so a variante (ex: &quot;M3&quot;, &quot;10º Geracao&quot;) — o prefixo e a linha sao adicionados automaticamente. Use &quot;+ Adicionar outra configuracao&quot; pra cadastrar varias variantes (armaz/tela/conect/valor) do mesmo modelo de uma vez.
           </p>
         </div>
         );
