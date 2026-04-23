@@ -918,42 +918,69 @@ export function UsadosContent() {
                         <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
                           <td className="px-5 py-3 font-medium">
                             {isEditSpecs ? (
-                              <div className="flex flex-col gap-1.5 min-w-[260px]">
-                                <input
-                                  type="text"
-                                  value={specs.armazenamento}
-                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, armazenamento: e.target.value } })}
-                                  placeholder="Armazenamento (ex: 64GB)"
-                                  className="px-2 py-1 rounded border border-[#E8740E] text-xs"
-                                  autoFocus
-                                />
-                                <input
-                                  type="text"
-                                  value={specs.tela}
-                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, tela: e.target.value } })}
-                                  placeholder='Tela (opcional, ex: 11")'
-                                  className="px-2 py-1 rounded border border-[#D2D2D7] text-xs"
-                                />
-                                <input
-                                  type="text"
-                                  value={specs.conectividade}
-                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, conectividade: e.target.value } })}
-                                  placeholder="Conectividade (opcional, ex: Wifi)"
-                                  className="px-2 py-1 rounded border border-[#D2D2D7] text-xs"
-                                />
-                                <div className="flex gap-2 mt-1">
-                                  <button onClick={() => handleSaveSpecs(v)} disabled={saving === specKey} className="px-2 py-1 rounded text-[11px] font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50">{saving === specKey ? "..." : "Salvar specs"}</button>
-                                  <button onClick={() => { const e = { ...editingSpecs }; delete e[specKey]; setEditingSpecs(e); }} className="px-2 py-1 rounded text-[11px] text-[#86868B]">Cancelar</button>
+                              <div className="flex items-end gap-2 flex-wrap">
+                                <div className="flex flex-col">
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Armaz.</label>
+                                  <input
+                                    type="text"
+                                    value={specs.armazenamento}
+                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, armazenamento: e.target.value } })}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
+                                    placeholder="64GB"
+                                    className="w-20 px-2 py-1 rounded border border-[#E8740E] text-xs"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="flex flex-col">
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Tela</label>
+                                  <input
+                                    type="text"
+                                    value={specs.tela}
+                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, tela: e.target.value } })}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
+                                    placeholder='11"'
+                                    className="w-16 px-2 py-1 rounded border border-[#D2D2D7] text-xs"
+                                  />
+                                </div>
+                                <div className="flex flex-col">
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Conect.</label>
+                                  <input
+                                    type="text"
+                                    value={specs.conectividade}
+                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, conectividade: e.target.value } })}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
+                                    placeholder="Wifi"
+                                    className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-xs"
+                                  />
+                                </div>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleSaveSpecs(v)}
+                                    disabled={saving === specKey}
+                                    title="Salvar (Enter)"
+                                    className="px-2 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
+                                  >
+                                    {saving === specKey ? "..." : "OK"}
+                                  </button>
+                                  <button
+                                    onClick={() => { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); }}
+                                    title="Cancelar (Esc)"
+                                    className="px-2 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]"
+                                  >
+                                    ✕
+                                  </button>
                                 </div>
                               </div>
                             ) : (
-                              <span
-                                className="cursor-pointer hover:text-[#E8740E] transition-colors"
+                              <button
+                                type="button"
                                 title="Clique para editar armazenamento, tela e conectividade"
                                 onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: parseStorageSpec(v.armazenamento) })}
+                                className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors group"
                               >
-                                {v.armazenamento} <span className="text-[#B0B0B0] text-xs">✏️</span>
-                              </span>
+                                {v.armazenamento}
+                                <span className="ml-1.5 text-[#C7C7CC] group-hover:text-[#E8740E] text-xs">✏️</span>
+                              </button>
                             )}
                           </td>
                           <td className="px-5 py-3">
