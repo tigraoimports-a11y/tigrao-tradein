@@ -3,6 +3,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
+interface EstoqueMatch {
+  id: string;
+  produto: string;
+  cor: string | null;
+  qnt: number;
+}
+
 interface Aviso {
   id: string;
   nome: string;
@@ -13,6 +20,8 @@ interface Aviso {
   status: "AGUARDANDO" | "NOTIFICADO" | "CANCELADO";
   notificado_em: string | null;
   created_at: string;
+  disponivel_qnt?: number;
+  estoque_matches?: EstoqueMatch[];
 }
 
 const STATUS_LABELS: Record<Aviso["status"], string> = {
@@ -21,11 +30,32 @@ const STATUS_LABELS: Record<Aviso["status"], string> = {
   CANCELADO: "❌ Cancelado",
 };
 
+function buildMensagemChegou(aviso: Aviso): string {
+  const linhas = [
+    `Oi ${aviso.nome.split(" ")[0]}! 👋`,
+    ``,
+    `Aqui é da TigrãoImports — o produto que você estava esperando chegou:`,
+    ``,
+    `🍎 *${aviso.produto_desejado}*`,
+  ];
+  if (aviso.estoque_matches && aviso.estoque_matches.length > 0) {
+    linhas.push(``, `Disponível agora:`);
+    for (const m of aviso.estoque_matches) {
+      linhas.push(`• ${m.produto}${m.cor ? ` — ${m.cor}` : ""} (${m.qnt} em estoque)`);
+    }
+  }
+  linhas.push(
+    ``,
+    `Quer fechar? É só responder aqui que te passo todos os detalhes 😉`,
+  );
+  return linhas.join("\n");
+}
+
 export default function AvisosClientesPage() {
   const { password, apiHeaders, darkMode: dm } = useAdmin();
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState<"TODOS" | Aviso["status"]>("AGUARDANDO");
+  const [filtro, setFiltro] = useState<"TODOS" | "DISPONIVEL" | Aviso["status"]>("DISPONIVEL");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
@@ -94,9 +124,21 @@ export default function AvisosClientesPage() {
     });
   };
 
-  const filtrados = filtro === "TODOS" ? avisos : avisos.filter(a => a.status === filtro);
+  const disponivelAgora = avisos.filter(a => a.status === "AGUARDANDO" && (a.disponivel_qnt || 0) > 0);
+  let filtrados: Aviso[];
+  if (filtro === "TODOS") filtrados = avisos;
+  else if (filtro === "DISPONIVEL") filtrados = disponivelAgora;
+  else filtrados = avisos.filter(a => a.status === filtro);
+  // Disponíveis primeiro (mesmo dentro de cada filtro), depois por data
+  filtrados = [...filtrados].sort((a, b) => {
+    const aHas = (a.disponivel_qnt || 0) > 0 && a.status === "AGUARDANDO" ? 1 : 0;
+    const bHas = (b.disponivel_qnt || 0) > 0 && b.status === "AGUARDANDO" ? 1 : 0;
+    if (aHas !== bHas) return bHas - aHas;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
   const contagem = {
     TODOS: avisos.length,
+    DISPONIVEL: disponivelAgora.length,
     AGUARDANDO: avisos.filter(a => a.status === "AGUARDANDO").length,
     NOTIFICADO: avisos.filter(a => a.status === "NOTIFICADO").length,
     CANCELADO: avisos.filter(a => a.status === "CANCELADO").length,
@@ -157,12 +199,22 @@ export default function AvisosClientesPage() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2">
-        {(["AGUARDANDO", "NOTIFICADO", "CANCELADO", "TODOS"] as const).map(s => {
+        {(["DISPONIVEL", "AGUARDANDO", "NOTIFICADO", "CANCELADO", "TODOS"] as const).map(s => {
           const active = filtro === s;
+          const label =
+            s === "TODOS" ? "Todos"
+            : s === "DISPONIVEL" ? "💚 Disponível agora"
+            : STATUS_LABELS[s as Aviso["status"]];
+          const isDisponivelTab = s === "DISPONIVEL";
+          const baseStyle = active
+            ? (isDisponivelTab ? "bg-green-500 text-white" : "bg-[#E8740E] text-white")
+            : isDisponivelTab && contagem.DISPONIVEL > 0
+              ? (dm ? "bg-green-900/40 text-green-300 hover:bg-green-900/60" : "bg-green-50 text-green-700 hover:bg-green-100 border border-green-300")
+              : (dm ? "bg-[#2C2C2E] text-[#98989D] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5EA]");
           return (
             <button key={s} onClick={() => setFiltro(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${active ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5EA]"}`}>
-              {s === "TODOS" ? "Todos" : STATUS_LABELS[s]} ({contagem[s]})
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${baseStyle}`}>
+              {label} ({contagem[s]})
             </button>
           );
         })}
@@ -173,20 +225,41 @@ export default function AvisosClientesPage() {
         <div className={`p-8 text-center ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Carregando...</div>
       ) : filtrados.length === 0 ? (
         <div className={`${cardCls} text-center`}>
-          <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Nenhum aviso {filtro !== "TODOS" ? STATUS_LABELS[filtro].toLowerCase() : ""}</p>
+          <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Nenhum aviso {filtro === "DISPONIVEL" ? "disponível agora" : filtro !== "TODOS" ? STATUS_LABELS[filtro].toLowerCase() : ""}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtrados.map(a => {
             const wa = a.whatsapp ? a.whatsapp.replace(/\D/g, "") : "";
+            const disponivel = (a.disponivel_qnt || 0) > 0 && a.status === "AGUARDANDO";
+            const cardBorder = disponivel
+              ? (dm ? "bg-green-900/10 border-green-500/40" : "bg-green-50/50 border-green-400")
+              : (dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]");
+            const linkWaChegou = wa
+              ? `https://wa.me/55${wa}?text=${encodeURIComponent(buildMensagemChegou(a))}`
+              : null;
             return (
-              <div key={a.id} className={`${cardCls} space-y-2`}>
+              <div key={a.id} className={`rounded-2xl p-4 sm:p-6 shadow-sm border space-y-2 ${cardBorder}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className={`text-sm font-bold ${titleCls}`}>{a.nome}</p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${a.status === "AGUARDANDO" ? (dm ? "bg-yellow-900/40 text-yellow-300" : "bg-yellow-100 text-yellow-700") : a.status === "NOTIFICADO" ? (dm ? "bg-green-900/40 text-green-300" : "bg-green-100 text-green-700") : (dm ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-700")}`}>
                     {STATUS_LABELS[a.status]}
                   </span>
                 </div>
+                {disponivel && (
+                  <div className={`rounded-lg px-3 py-2 ${dm ? "bg-green-900/30 border border-green-500/40" : "bg-green-100 border border-green-300"}`}>
+                    <p className={`text-xs font-bold ${dm ? "text-green-300" : "text-green-700"}`}>
+                      💚 DISPONÍVEL AGORA — {a.disponivel_qnt} em estoque
+                    </p>
+                    {a.estoque_matches && a.estoque_matches.length > 0 && (
+                      <ul className={`text-[11px] mt-1 ${dm ? "text-green-300/80" : "text-green-700/90"}`}>
+                        {a.estoque_matches.map(m => (
+                          <li key={m.id}>• {m.produto}{m.cor ? ` — ${m.cor}` : ""} ({m.qnt})</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 <p className={`text-sm font-semibold ${dm ? "text-[#E8740E]" : "text-[#E8740E]"}`}>🍎 {a.produto_desejado}</p>
                 {(a.whatsapp || a.instagram) && (
                   <div className="flex flex-wrap gap-2 text-xs">
@@ -200,6 +273,12 @@ export default function AvisosClientesPage() {
                   {a.notificado_em && <> · Notificado em {new Date(a.notificado_em).toLocaleDateString("pt-BR")}</>}
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#3A3A3C]">
+                  {disponivel && linkWaChegou && (
+                    <a href={linkWaChegou} target="_blank" rel="noopener noreferrer"
+                       className="px-2 py-1 rounded text-[11px] font-semibold bg-green-600 text-white hover:bg-green-700">
+                      💬 Avisar pelo WhatsApp
+                    </a>
+                  )}
                   {a.status !== "NOTIFICADO" && (
                     <button onClick={() => changeStatus(a.id, "NOTIFICADO")} className="px-2 py-1 rounded text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600">✅ Notificado</button>
                   )}
