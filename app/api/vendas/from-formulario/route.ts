@@ -171,6 +171,7 @@ export async function POST(req: NextRequest) {
     status_pagamento: "FORMULARIO_PREENCHIDO",
     tipo,
     data: hojeStr,
+    data_programada: body.dataEntrega || null,
     cliente: body.nome,
     cpf: body.pessoa === "PJ" ? null : (cpfDigits || null),
     cnpj: body.pessoa === "PJ" ? (cnpjDigits || null) : null,
