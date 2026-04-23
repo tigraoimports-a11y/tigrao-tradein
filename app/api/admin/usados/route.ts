@@ -194,6 +194,76 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "rename_modelo") {
+    // Renomeia um modelo em cascata pelas 4 tabelas que usam a string do
+    // modelo como chave. Valida colisao antes — se ja existe uma row com
+    // o novo nome + mesmo armazenamento em avaliacao_usados, recusa.
+    const { modelo_antigo, modelo_novo } = body;
+    if (!modelo_antigo || !modelo_novo) {
+      return NextResponse.json({ error: "modelo_antigo e modelo_novo required" }, { status: 400 });
+    }
+    const antigo = String(modelo_antigo).trim();
+    const novo = String(modelo_novo).trim();
+    if (!antigo || !novo) return NextResponse.json({ error: "nomes nao podem ser vazios" }, { status: 400 });
+    if (antigo === novo) return NextResponse.json({ ok: true, renamed: 0 });
+
+    // 1. Pega storages atuais do modelo antigo
+    const { data: rows } = await supabase
+      .from("avaliacao_usados")
+      .select("armazenamento")
+      .eq("modelo", antigo);
+    const storages = (rows ?? []).map((r) => r.armazenamento);
+
+    // 2. Verifica colisao: algum row (modelo_novo, storage) ja existe?
+    if (storages.length > 0) {
+      const { data: colisoes } = await supabase
+        .from("avaliacao_usados")
+        .select("modelo,armazenamento")
+        .eq("modelo", novo)
+        .in("armazenamento", storages);
+      if (colisoes && colisoes.length > 0) {
+        return NextResponse.json({
+          error: `Ja existe "${novo}" com armazenamentos: ${colisoes.map((c) => c.armazenamento).join(", ")}. Apague ou renomeie antes.`,
+        }, { status: 409 });
+      }
+    }
+
+    // 3. UPDATE em cascata. Se qualquer uma falhar, retorna erro imediato
+    // (parcial — mas o DB fica consistente pra proximo retry porque o
+    // update nao acontece nas tabelas seguintes).
+    const e1 = await supabase.from("avaliacao_usados").update({ modelo: novo }).eq("modelo", antigo);
+    if (e1.error) return NextResponse.json({ error: `avaliacao_usados: ${e1.error.message}` }, { status: 500 });
+
+    const e2 = await supabase.from("modelos_excluidos").update({ modelo: novo }).eq("modelo", antigo);
+    if (e2.error) return NextResponse.json({ error: `modelos_excluidos: ${e2.error.message}` }, { status: 500 });
+
+    const e3 = await supabase.from("tradein_garantia").update({ modelo: novo }).eq("modelo", antigo);
+    if (e3.error) return NextResponse.json({ error: `tradein_garantia: ${e3.error.message}` }, { status: 500 });
+
+    // 4. descontos_condicao usa formato "{modelo} - {detalhe}". Busca todas
+    // que comecam com o nome antigo + " - " e troca o prefixo.
+    const { data: descsAfetados } = await supabase
+      .from("descontos_condicao")
+      .select("condicao")
+      .like("condicao", `${antigo} - %`);
+    if (descsAfetados && descsAfetados.length > 0) {
+      for (const d of descsAfetados) {
+        const novaCondicao = `${novo}${d.condicao.substring(antigo.length)}`;
+        const e4 = await supabase
+          .from("descontos_condicao")
+          .update({ condicao: novaCondicao })
+          .eq("condicao", d.condicao);
+        if (e4.error) return NextResponse.json({ error: `descontos_condicao: ${e4.error.message}` }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      renamed: storages.length,
+      descontos_atualizados: descsAfetados?.length || 0,
+    });
+  }
+
   if (action === "import_defaults") {
     // Importar valores padrão do CLAUDE.md/fallback
     const defaults = body.valores as { modelo: string; armazenamento: string; valor_base: number }[];
