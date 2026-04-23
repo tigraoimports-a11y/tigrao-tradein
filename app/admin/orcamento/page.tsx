@@ -3,6 +3,29 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { corParaPT } from "@/lib/cor-pt";
+import { getModeloBase } from "@/lib/produto-display";
+
+// Mapeia a categoria da tabela `precos` (IPHONE, IPAD, ...) para a
+// categoria do estoque (IPHONES, IPADS, ...) — `getModeloBase` usa a
+// variante do estoque.
+const PRECOS_CAT_TO_ESTOQUE_CAT: Record<string, string> = {
+  IPHONE: "IPHONES",
+  IPAD: "IPADS",
+  MACBOOK: "MACBOOK",
+  MAC_MINI: "MAC_MINI",
+  APPLE_WATCH: "APPLE_WATCH",
+  AIRPODS: "AIRPODS",
+  ACESSORIOS: "ACESSORIOS",
+};
+
+function normKey(s: string): string {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 // Taxas para orçamento cliente (embutir no preço parcelado)
 const TAXAS_PARCELA: Record<number, number> = {
@@ -106,27 +129,63 @@ export default function OrcamentoPage() {
     })();
   }, [password, user]);
 
-  // Acessórios do estoque (não estão na tabela de preços)
+  // Acessórios do estoque (não estão na tabela de preços) + custoMap (pra margem)
   const [acessoriosEstoque, setAcessoriosEstoque] = useState<Produto[]>([]);
+  const [custoMap, setCustoMap] = useState<Map<string, number>>(new Map());
   useEffect(() => {
     if (!password) return;
     fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "admin") } })
       .then(r => r.json())
       .then(j => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const acess = (j.data ?? []).filter((p: any) => p.categoria === "ACESSORIOS" && p.tipo === "NOVO" && p.status === "EM ESTOQUE" && p.qnt > 0);
+        const all = (j.data ?? []) as any[];
+
+        // Acessórios — lista pra cadastro no carrinho
+        const acess = all.filter(p => p.categoria === "ACESSORIOS" && p.tipo === "NOVO" && p.status === "EM ESTOQUE" && p.qnt > 0);
         const seen = new Set<string>();
         const mapped: Produto[] = [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const p of acess as any[]) {
+        for (const p of acess) {
           if (!seen.has(p.produto)) {
             seen.add(p.produto);
             mapped.push({ id: p.id, modelo: p.produto, armazenamento: "", categoria: "ACESSORIOS", preco_pix: p.custo_unitario || 0, status: "ativo", nome: p.produto });
           }
         }
         setAcessoriosEstoque(mapped);
+
+        // custoMap — média do custo_unitario por (modeloBase normalizado)
+        // Considera tipo=NOVO (lacrados) com custo > 0. Usa média das linhas
+        // existentes do SKU no estoque — se chegaram remessas diferentes com
+        // custos diferentes, a média é a estimativa razoável.
+        const buckets = new Map<string, number[]>();
+        for (const p of all) {
+          if (p.tipo !== "NOVO") continue;
+          const custo = Number(p.custo_unitario || 0);
+          if (custo <= 0) continue;
+          const modeloBase = getModeloBase(p.produto || "", p.categoria || "", p.observacao);
+          const key = normKey(modeloBase);
+          const list = buckets.get(key) || [];
+          list.push(custo);
+          buckets.set(key, list);
+        }
+        const next = new Map<string, number>();
+        for (const [k, vals] of buckets) {
+          next.set(k, vals.reduce((a, b) => a + b, 0) / vals.length);
+        }
+        setCustoMap(next);
       }).catch(() => {});
   }, [password, user]);
+
+  // Dado um produto do carrinho, estima o custo unitario via custoMap
+  const getCustoUnitario = (item: { categoria: string; nome: string }): number => {
+    if (item.categoria === "ACESSORIOS") {
+      // Pra acessórios, preço = custo na base atual (já é cadastrado pelo custo).
+      // Retorna o próprio preço pra margem sair zero — não temos markup separado.
+      return 0;
+    }
+    const baseCat = PRECOS_CAT_TO_ESTOQUE_CAT[item.categoria] || item.categoria;
+    const modeloBase = getModeloBase(item.nome, baseCat);
+    return custoMap.get(normKey(modeloBase)) || 0;
+  };
 
   // Combinar produtos da tabela preços + acessórios do estoque
   const todosProdutos = useMemo(() => [...produtos, ...acessoriosEstoque], [produtos, acessoriosEstoque]);
@@ -492,27 +551,71 @@ export default function OrcamentoPage() {
             <>
 
               {/* Carrinho */}
-              {carrinho.length > 0 && (
+              {carrinho.length > 0 && (() => {
+                const totalVenda = carrinho.reduce((s, c) => s + c.preco * c.qnt, 0);
+                const totalCusto = carrinho.reduce((s, c) => s + getCustoUnitario({ categoria: c.categoria, nome: c.nome }) * c.qnt, 0);
+                const descontoVal = parseFloat(desconto) || 0;
+                const lucroEstimado = totalVenda - totalCusto - descontoVal;
+                const margemPct = totalVenda > 0 ? (lucroEstimado / totalVenda) * 100 : 0;
+                const algumSemCusto = carrinho.some(c => c.categoria !== "ACESSORIOS" && getCustoUnitario({ categoria: c.categoria, nome: c.nome }) === 0);
+
+                return (
                 <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
                   <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no orcamento ({carrinho.reduce((s, c) => s + c.qnt, 0)} itens)</p>
-                  {carrinho.map((item, i) => (
-                    <div key={item.key} className="flex items-center justify-between text-sm gap-2">
-                      <span className={`flex-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{i + 1}. {item.nome}</span>
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setCarrinho(prev => prev.map(c => c.key === item.key ? { ...c, qnt: Math.max(1, c.qnt - 1) } : c))} className={`w-6 h-6 rounded text-xs font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#86868B]"}`}>−</button>
-                        <span className={`w-6 text-center text-xs font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{item.qnt}</span>
-                        <button onClick={() => setCarrinho(prev => prev.map(c => c.key === item.key ? { ...c, qnt: c.qnt + 1 } : c))} className={`w-6 h-6 rounded text-xs font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#86868B]"}`}>+</button>
-                        <span className="font-semibold text-green-600 ml-1">R$ {(item.preco * item.qnt).toLocaleString("pt-BR")}</span>
-                        <button onClick={() => setCarrinho(prev => prev.filter(c => c.key !== item.key))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-1">✕</button>
+                  {carrinho.map((item, i) => {
+                    const custo = getCustoUnitario({ categoria: item.categoria, nome: item.nome });
+                    const lucroItem = (item.preco - custo) * item.qnt;
+                    const margemItem = item.preco > 0 ? ((item.preco - custo) / item.preco) * 100 : 0;
+                    const temCusto = custo > 0 && item.categoria !== "ACESSORIOS";
+                    return (
+                    <div key={item.key} className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between text-sm gap-2">
+                        <span className={`flex-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{i + 1}. {item.nome}</span>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => setCarrinho(prev => prev.map(c => c.key === item.key ? { ...c, qnt: Math.max(1, c.qnt - 1) } : c))} className={`w-6 h-6 rounded text-xs font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#86868B]"}`}>−</button>
+                          <span className={`w-6 text-center text-xs font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{item.qnt}</span>
+                          <button onClick={() => setCarrinho(prev => prev.map(c => c.key === item.key ? { ...c, qnt: c.qnt + 1 } : c))} className={`w-6 h-6 rounded text-xs font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#86868B]"}`}>+</button>
+                          <span className="font-semibold text-green-600 ml-1">R$ {(item.preco * item.qnt).toLocaleString("pt-BR")}</span>
+                          <button onClick={() => setCarrinho(prev => prev.filter(c => c.key !== item.key))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-1">✕</button>
+                        </div>
                       </div>
+                      {temCusto && (
+                        <div className={`text-[11px] pl-4 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                          Custo R$ {custo.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                          {" · "}
+                          <span className={lucroItem > 0 ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>
+                            Lucro R$ {lucroItem.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ({margemItem.toFixed(1)}%)
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                   <div className={`pt-2 border-t flex justify-between font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
                     <span>Total</span>
-                    <span className="text-green-600">R$ {carrinho.reduce((s, c) => s + c.preco * c.qnt, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                    <span className="text-green-600">R$ {totalVenda.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                   </div>
+                  <div className={`flex items-center justify-between text-xs pt-1 ${dm ? "border-t border-[#3A3A3C]" : "border-t border-green-300"}`}>
+                    <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>
+                      💼 Lucro estimado{descontoVal > 0 ? " (com desconto)" : ""}
+                    </span>
+                    <span className={`font-bold ${lucroEstimado > 0 ? "text-green-600" : "text-red-500"}`}>
+                      R$ {lucroEstimado.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ({margemPct.toFixed(1)}%)
+                    </span>
+                  </div>
+                  {algumSemCusto && (
+                    <p className={`text-[11px] italic ${dm ? "text-[#86868B]" : "text-[#86868B]"}`}>
+                      ⚠️ Algum produto sem custo no estoque — margem pode estar subestimada
+                    </p>
+                  )}
+                  {trocas.some(t => t.produto.trim() && parseFloat(t.valor) > 0) && (
+                    <p className={`text-[11px] italic ${dm ? "text-[#86868B]" : "text-[#86868B]"}`}>
+                      ℹ️ Trocas não entram na margem (viram receita futura ao revender)
+                    </p>
+                  )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* Botões adicionar mais + limpar */}
               <div className="flex gap-2">
