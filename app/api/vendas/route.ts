@@ -1101,7 +1101,7 @@ export async function PATCH(req: NextRequest) {
       // Buscar pendências existentes do cliente
       const { data: pendencias } = await supabase
         .from("estoque")
-        .select("id, produto, data_compra")
+        .select("id, produto, data_compra, serial_no, imei")
         .ilike("fornecedor", venda.cliente)
         .eq("status", "PENDENTE")
         .eq("tipo", "PENDENCIA")
@@ -1109,10 +1109,34 @@ export async function PATCH(req: NextRequest) {
 
       const existing = pendencias || [];
 
+      // Match por serial/imei primeiro (distingue produtos diferentes do mesmo cliente).
+      // Se a venda tem identificador unico (serial/imei) mas nao acha match, retorna
+      // null — forca INSERT em vez de reaproveitar pendencia de outro produto.
+      // Sem serial/imei na venda, fallback para match por data (comportamento antigo).
+      const findMatch = (
+        pool: typeof existing,
+        serial: string | null,
+        imei: string | null,
+      ): typeof existing[number] | null => {
+        if (serial) {
+          const bySerial = pool.find(p => p.serial_no === serial);
+          if (bySerial) return bySerial;
+        }
+        if (imei) {
+          const byImei = pool.find(p => p.imei === imei);
+          if (byImei) return byImei;
+        }
+        if (serial || imei) return null;
+        return pool.find(p => p.data_compra === venda.data) || pool[0] || null;
+      };
+
       // ── TROCA 1 ──
       const hasTroca1 = !!(venda.troca_produto || venda.produto_na_troca);
+      const serial1 = venda.troca_serial ? String(venda.troca_serial).toUpperCase() : null;
+      const imei1 = venda.troca_imei ? String(venda.troca_imei).toUpperCase() : null;
+      let p1: typeof existing[number] | null = null;
       if (hasTroca1) {
-        const p1 = existing.find(p => p.data_compra === venda.data) || existing[0];
+        p1 = findMatch(existing, serial1, imei1);
         // Se venda JA tinha troca antes desta edicao E nao encontrou pendencia
         // (provavelmente foi movida pra estoque como seminovo), NAO criar uma
         // nova. Antes, toda edicao de venda com troca criava uma pendencia
@@ -1194,10 +1218,10 @@ export async function PATCH(req: NextRequest) {
       // ── TROCA 2 ──
       const hasTroca2 = !!(venda.troca_produto2 || venda.produto_na_troca2);
       if (hasTroca2) {
-        // Segunda pendência = segunda na lista (ou primeira se não existir troca 1)
-        const p2 = existing.length >= 2
-          ? (existing.find(p => p.data_compra === venda.data && p.id !== existing[0]?.id) || existing[1])
-          : (hasTroca1 ? undefined : existing[0]);
+        const serial2 = venda.troca_serial2 ? String(venda.troca_serial2).toUpperCase() : null;
+        const imei2 = venda.troca_imei2 ? String(venda.troca_imei2).toUpperCase() : null;
+        const pool2 = p1 ? existing.filter(e => e.id !== p1!.id) : existing;
+        const p2 = findMatch(pool2, serial2, imei2);
         // Mesmo tratamento da troca 1: se venda ja tinha troca2 antes e nao
         // achou pendencia, a troca ja foi processada — nao duplicar.
         if (!p2 && jaTinhaTroca2Antes && !forceRecriarPendencia) {

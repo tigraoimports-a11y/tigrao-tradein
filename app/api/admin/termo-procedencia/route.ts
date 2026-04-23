@@ -223,7 +223,7 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = await req.json();
   if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
 
-  const allowed = ["status", "observacao", "cidade", "aparelhos", "cliente_nome", "cliente_cpf", "pdf_url"];
+  const allowed = ["status", "observacao", "cidade", "aparelhos", "cliente_nome", "cliente_cpf", "pdf_url", "signed_pdf_url", "signed_at", "venda_id"];
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const k of allowed) {
     if (k in fields) patch[k] = fields[k];
