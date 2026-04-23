@@ -98,16 +98,31 @@ export interface SeminovoOption {
   preco?: number;
 }
 
+/** Converte "128GB"/"1TB"/"2TB" etc. para GB numérico pra ordenação.
+ *  Formatos desconhecidos caem no fim da lista (retorna Infinity). */
+function storageToGB(s: string): number {
+  const m = s.match(/(\d+(?:[.,]\d+)?)\s*(TB|GB|MB)?/i);
+  if (!m) return Number.POSITIVE_INFINITY;
+  const num = parseFloat(m[1].replace(",", "."));
+  const unit = (m[2] || "GB").toUpperCase();
+  if (unit === "TB") return num * 1000;
+  if (unit === "MB") return num / 1000;
+  return num;
+}
+
 /** Retorna a lista normalizada de variantes, convertendo o formato legado
- *  (`storages` + `preco` por modelo) quando `variantes` não está presente. */
+ *  (`storages` + `preco` por modelo) quando `variantes` não está presente.
+ *  Já ordena por capacidade crescente (128 → 256 → 512 → 1TB) — cliente e
+ *  admin veem a mesma ordem sem depender da ordem de inserção. */
 export function getSeminovoVariantes(s: SeminovoOption): SeminovoVariante[] {
-  if (Array.isArray(s.variantes) && s.variantes.length > 0) return s.variantes;
-  const storages = Array.isArray(s.storages) ? s.storages : [];
-  return storages.map((storage) => ({
-    storage,
-    preco: typeof s.preco === "number" ? s.preco : undefined,
-    ativo: true,
-  }));
+  const raw = Array.isArray(s.variantes) && s.variantes.length > 0
+    ? s.variantes
+    : (Array.isArray(s.storages) ? s.storages : []).map((storage) => ({
+        storage,
+        preco: typeof s.preco === "number" ? s.preco : undefined,
+        ativo: true,
+      }));
+  return [...raw].sort((a, b) => storageToGB(a.storage) - storageToGB(b.storage));
 }
 
 /** Mescla duplicatas de modelo (case-insensitive, dentro da mesma categoria).
