@@ -327,6 +327,21 @@ export function UsadosContent() {
     if (!grouped[v.modelo]) grouped[v.modelo] = [];
     grouped[v.modelo].push(v);
   });
+  // Ordenar variantes dentro de cada modelo por capacidade crescente
+  // (64GB → 128GB → 256GB → 512GB → 1TB). Formatos desconhecidos caem no
+  // final. Mesma regra da listagem de seminovos em /admin/precos.
+  const storageToGB = (s: string): number => {
+    const m = s.match(/(\d+(?:[.,]\d+)?)\s*(TB|GB|MB)?/i);
+    if (!m) return Number.POSITIVE_INFINITY;
+    const num = parseFloat(m[1].replace(",", "."));
+    const unit = (m[2] || "GB").toUpperCase();
+    if (unit === "TB") return num * 1000;
+    if (unit === "MB") return num / 1000;
+    return num;
+  };
+  for (const modelo of Object.keys(grouped)) {
+    grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+  }
 
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
   const modelosMap = new Map<string, string>(); // lowercase → nome canônico
