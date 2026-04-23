@@ -564,6 +564,69 @@ export async function PATCH(req: NextRequest) {
     }).eq("id", antes.encomenda_id).in("status", ["PENDENTE", "COMPRADO", "A CAMINHO"]);
   }
 
+  // ── Sync serial/IMEI de PENDENCIA/SEMINOVO pra venda original ──
+  // Quando usuario edita serial/IMEI de um item vindo de troca (aba Pendencias),
+  // propagar pra vendas.troca_serial/troca_imei. Senao o Termo de Procedencia,
+  // que monta aparelhos a partir da venda, sai com dado antigo.
+  const editouSerialOuImei = fields.serial_no !== undefined || fields.imei !== undefined;
+  const vindoDeTroca = antes?.tipo === "PENDENCIA" || antes?.tipo === "SEMINOVO";
+  if (editouSerialOuImei && vindoDeTroca && antes?.cliente) {
+    try {
+      const novoSerial = fields.serial_no !== undefined ? (fields.serial_no as string | null) : (antes.serial_no as string | null);
+      const novoImei = fields.imei !== undefined ? (fields.imei as string | null) : (antes.imei as string | null);
+      const oldSerial = antes.serial_no as string | null;
+      const oldImei = antes.imei as string | null;
+
+      let vendaAlvo: { id: string; slot: 1 | 2 } | null = null;
+
+      // 1) Match deterministico pelos valores antigos (caso o sync nunca tenha rodado antes
+      //    os valores antigos do estoque podem nao estar na venda — ai cai no fallback).
+      const findByCol = async (col: string, value: string): Promise<string | null> => {
+        const { data } = await supabase.from("vendas").select("id").eq(col, value).limit(1).maybeSingle();
+        return (data?.id as string) || null;
+      };
+      if (oldSerial) {
+        const v1 = await findByCol("troca_serial", oldSerial); if (v1) vendaAlvo = { id: v1, slot: 1 };
+        if (!vendaAlvo) { const v2 = await findByCol("troca_serial2", oldSerial); if (v2) vendaAlvo = { id: v2, slot: 2 }; }
+      }
+      if (!vendaAlvo && oldImei) {
+        const v1 = await findByCol("troca_imei", oldImei); if (v1) vendaAlvo = { id: v1, slot: 1 };
+        if (!vendaAlvo) { const v2 = await findByCol("troca_imei2", oldImei); if (v2) vendaAlvo = { id: v2, slot: 2 }; }
+      }
+
+      // 2) Fallback: cliente + valor da troca (±50) — cobre quando serial/imei
+      //    estavam vazios antes ou quando o sync nao rodou na primeira edicao.
+      if (!vendaAlvo) {
+        const custo = Number(antes.custo_unitario || 0);
+        const { data: vs } = await supabase
+          .from("vendas")
+          .select("id, produto_na_troca, produto_na_troca2, created_at")
+          .ilike("cliente", antes.cliente as string)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        for (const v of vs || []) {
+          const val1 = Number(v.produto_na_troca || 0);
+          const val2 = Number((v as Record<string, unknown>).produto_na_troca2 || 0);
+          if (custo > 0 && val1 > 0 && Math.abs(val1 - custo) < 50) { vendaAlvo = { id: v.id as string, slot: 1 }; break; }
+          if (custo > 0 && val2 > 0 && Math.abs(val2 - custo) < 50) { vendaAlvo = { id: v.id as string, slot: 2 }; break; }
+        }
+      }
+
+      if (vendaAlvo) {
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (vendaAlvo.slot === 1) {
+          if (fields.serial_no !== undefined) patch.troca_serial = novoSerial;
+          if (fields.imei !== undefined) patch.troca_imei = novoImei;
+        } else {
+          if (fields.serial_no !== undefined) patch.troca_serial2 = novoSerial;
+          if (fields.imei !== undefined) patch.troca_imei2 = novoImei;
+        }
+        await supabase.from("vendas").update(patch).eq("id", vendaAlvo.id);
+        await logActivity(usuario, "Sync serial/IMEI pendencia->venda", `Venda ${vendaAlvo.id} (slot ${vendaAlvo.slot}): serial=${novoSerial || "—"}, imei=${novoImei || "—"}`, "vendas", vendaAlvo.id).catch(() => {});
+      }
+    } catch { /* silent — nao bloqueia o PATCH principal */ }
+  }
+
   // ── Sincronizar com Mostruário: estoque zerou ou voltou ──
   if (fields.qnt !== undefined) {
     const newQnt = Number(fields.qnt);
