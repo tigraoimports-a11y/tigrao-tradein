@@ -167,6 +167,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "rename_storage") {
+    // Renomeia a string do campo `armazenamento` pra um par (modelo, armazenamento).
+    // Atualiza em cascata avaliacao_usados + tradein_garantia. Valida colisao com
+    // o mesmo par (modelo, armazenamento_novo) antes — se ja existe, recusa.
+    const { modelo, armazenamento_antigo, armazenamento_novo } = body;
+    if (!modelo || !armazenamento_antigo || armazenamento_novo === undefined) {
+      return NextResponse.json({ error: "modelo, armazenamento_antigo e armazenamento_novo required" }, { status: 400 });
+    }
+    const antigo = String(armazenamento_antigo).trim();
+    const novo = String(armazenamento_novo).trim();
+    if (!antigo || !novo) return NextResponse.json({ error: "armazenamento nao pode ser vazio" }, { status: 400 });
+    if (antigo === novo) return NextResponse.json({ ok: true, renamed: 0 });
+
+    const { data: colisao } = await supabase
+      .from("avaliacao_usados")
+      .select("id")
+      .eq("modelo", modelo)
+      .eq("armazenamento", novo)
+      .maybeSingle();
+    if (colisao) {
+      return NextResponse.json({ error: `Ja existe "${modelo}" com armazenamento "${novo}". Renomeie ou apague antes.` }, { status: 409 });
+    }
+
+    const e1 = await supabase.from("avaliacao_usados").update({ armazenamento: novo }).eq("modelo", modelo).eq("armazenamento", antigo);
+    if (e1.error) return NextResponse.json({ error: `avaliacao_usados: ${e1.error.message}` }, { status: 500 });
+
+    const e2 = await supabase.from("tradein_garantia").update({ armazenamento: novo }).eq("modelo", modelo).eq("armazenamento", antigo);
+    if (e2.error) return NextResponse.json({ error: `tradein_garantia: ${e2.error.message}` }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  }
+
   // Toggle modo (automatico/manual) ou ativo (true/false) por categoria
   if (action === "update_cat_config") {
     const { categoria, modo, ativo } = body;
