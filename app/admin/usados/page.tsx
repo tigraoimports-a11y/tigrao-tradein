@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { parseStorageSpec, formatStorageSpec } from "@/lib/storage-spec";
 
 interface ValorUsado {
   id: string;
@@ -207,6 +208,10 @@ export function UsadosContent() {
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [editingDesc, setEditingDesc] = useState<Record<string, string>>({});
   const [editingGarantia, setEditingGarantia] = useState<Record<string, string>>({});
+  // Edicao inline dos specs (armazenamento/tela/conectividade) por linha.
+  // Chave = `${modelo}|${armazenamento_atual}` — o mesmo formato ja usado em
+  // editing/editingGarantia. Valor = { armazenamento, tela, conectividade }.
+  const [editingSpecs, setEditingSpecs] = useState<Record<string, { armazenamento: string; tela: string; conectividade: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
@@ -263,6 +268,34 @@ export function UsadosContent() {
     await apiPost({ action: "upsert_valor", modelo: v.modelo, armazenamento: v.armazenamento, valor_base: newVal });
     setValores((prev) => prev.map((r) => r.modelo === v.modelo && r.armazenamento === v.armazenamento ? { ...r, valor_base: newVal } : r));
     const e = { ...editing }; delete e[key]; setEditing(e);
+    setSaving(null);
+  };
+
+  const handleSaveSpecs = async (v: ValorUsado) => {
+    const key = `${v.modelo}|${v.armazenamento}`;
+    const spec = editingSpecs[key];
+    if (!spec) return;
+    const novoArmaz = formatStorageSpec(spec);
+    if (!novoArmaz) { alert("Armazenamento nao pode ficar vazio."); return; }
+    if (novoArmaz === v.armazenamento) {
+      const e = { ...editingSpecs }; delete e[key]; setEditingSpecs(e);
+      return;
+    }
+    setSaving(key);
+    const res = await apiPost({
+      action: "rename_storage",
+      modelo: v.modelo,
+      armazenamento_antigo: v.armazenamento,
+      armazenamento_novo: novoArmaz,
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(`Erro: ${j.error || "falha ao renomear"}`);
+      setSaving(null);
+      return;
+    }
+    setValores((prev) => prev.map((r) => r.modelo === v.modelo && r.armazenamento === v.armazenamento ? { ...r, armazenamento: novoArmaz } : r));
+    const e = { ...editingSpecs }; delete e[key]; setEditingSpecs(e);
     setSaving(null);
   };
 
@@ -813,9 +846,51 @@ export function UsadosContent() {
                       const key = `${v.modelo}|${v.armazenamento}`;
                       const isEditing = editing[key] !== undefined;
                       const isSaving = saving === key;
+                      const specKey = key;
+                      const isEditSpecs = editingSpecs[specKey] !== undefined;
+                      const specs = editingSpecs[specKey] || parseStorageSpec(v.armazenamento);
                       return (
                         <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
-                          <td className="px-5 py-3 font-medium">{v.armazenamento}</td>
+                          <td className="px-5 py-3 font-medium">
+                            {isEditSpecs ? (
+                              <div className="flex flex-col gap-1.5 min-w-[260px]">
+                                <input
+                                  type="text"
+                                  value={specs.armazenamento}
+                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, armazenamento: e.target.value } })}
+                                  placeholder="Armazenamento (ex: 64GB)"
+                                  className="px-2 py-1 rounded border border-[#E8740E] text-xs"
+                                  autoFocus
+                                />
+                                <input
+                                  type="text"
+                                  value={specs.tela}
+                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, tela: e.target.value } })}
+                                  placeholder='Tela (opcional, ex: 11")'
+                                  className="px-2 py-1 rounded border border-[#D2D2D7] text-xs"
+                                />
+                                <input
+                                  type="text"
+                                  value={specs.conectividade}
+                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, conectividade: e.target.value } })}
+                                  placeholder="Conectividade (opcional, ex: Wifi)"
+                                  className="px-2 py-1 rounded border border-[#D2D2D7] text-xs"
+                                />
+                                <div className="flex gap-2 mt-1">
+                                  <button onClick={() => handleSaveSpecs(v)} disabled={saving === specKey} className="px-2 py-1 rounded text-[11px] font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50">{saving === specKey ? "..." : "Salvar specs"}</button>
+                                  <button onClick={() => { const e = { ...editingSpecs }; delete e[specKey]; setEditingSpecs(e); }} className="px-2 py-1 rounded text-[11px] text-[#86868B]">Cancelar</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <span
+                                className="cursor-pointer hover:text-[#E8740E] transition-colors"
+                                title="Clique para editar armazenamento, tela e conectividade"
+                                onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: parseStorageSpec(v.armazenamento) })}
+                              >
+                                {v.armazenamento} <span className="text-[#B0B0B0] text-xs">✏️</span>
+                              </span>
+                            )}
+                          </td>
                           <td className="px-5 py-3">
                             {isEditing ? (
                               <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import type { UsedDeviceValue, TradeInQuestion } from "@/lib/types";
 import { corParaPT } from "@/lib/cor-pt";
+import { parseStorageSpec, hasStructuredStorage } from "@/lib/storage-spec";
 import { getUniqueUsedModels, getUsedStoragesForModel, getUsedBaseValue } from "@/lib/sheets";
 import {
   calculateAnyTradeInValue, getDiscountsForModel, formatBRL,
@@ -285,6 +286,23 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
 
   const storages = useMemo(() => (model ? getUsedStoragesForModel(filtered, model) : []), [filtered, model]);
   const baseValue = useMemo(() => (model && storage ? getUsedBaseValue(filtered, model, storage) : null), [filtered, model, storage]);
+  // Pra formatos estruturados (ex: "64GB | 11\" | Wifi"), so considera storage
+  // "completo" quando o cliente escolheu armaz + tela (se houver opcoes) +
+  // conectividade (se houver opcoes). Gate pras proximas perguntas — evita
+  // que o cliente pule tela/conectividade sem perceber.
+  const storageCompleto = useMemo(() => {
+    if (!storage) return false;
+    if (!hasStructuredStorage(storage)) return true;
+    const specs = storages.map(s => ({ raw: s, ...parseStorageSpec(s) }));
+    const cur = parseStorageSpec(storage);
+    const afterArmaz = specs.filter(s => s.armazenamento === cur.armazenamento);
+    const telaOpts = [...new Set(afterArmaz.map(s => s.tela).filter(Boolean))];
+    if (telaOpts.length > 0 && !cur.tela) return false;
+    const afterTela = afterArmaz.filter(s => !cur.tela || s.tela === cur.tela);
+    const conectOpts = [...new Set(afterTela.map(s => s.conectividade).filter(Boolean))];
+    if (conectOpts.length > 0 && !cur.conectividade) return false;
+    return true;
+  }, [storage, storages]);
 
   const calcDeviceType = toCalcDeviceType(deviceType);
 
@@ -350,7 +368,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
   const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
   const boxOk = !isQActive(qc, "hasOriginalBox") || hasOriginalBox !== null;
-  const canProceed = model && storage && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk && dynamicOk;
+  const canProceed = model && storageCompleto && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk && dynamicOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
   function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
@@ -482,6 +500,69 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               </Section>
             );
           })()
+        ) : storages.some(hasStructuredStorage) ? (
+          // Formato estruturado "armaz | tela | conect" (iPad/Watch com
+          // variantes). Renderiza em steps sequenciais ao inves de 1 botao
+          // por combinacao — cliente escolhe armaz → tela → conectividade.
+          (() => {
+            const specs = storages.map(s => ({ raw: s, ...parseStorageSpec(s) }));
+            const currentParts = storage ? parseStorageSpec(storage) : { armazenamento: "", tela: "", conectividade: "" };
+
+            const armazOpts = [...new Set(specs.map(s => s.armazenamento).filter(Boolean))];
+            const afterArmaz = specs.filter(s => s.armazenamento === currentParts.armazenamento);
+            const telaOpts = [...new Set(afterArmaz.map(s => s.tela).filter(Boolean))];
+            const afterTela = afterArmaz.filter(s => !currentParts.tela || s.tela === currentParts.tela);
+            const conectOpts = [...new Set(afterTela.map(s => s.conectividade).filter(Boolean))];
+
+            // Ao escolher um spec parcial, seta o `storage` pro raw da primeira
+            // variante compativel — vai refinando conforme o cliente escolhe.
+            const pickStorage = (armaz: string, tela: string, conect: string) => {
+              const match = specs.find(s =>
+                s.armazenamento === armaz &&
+                (!tela || s.tela === tela) &&
+                (!conect || s.conectividade === conect)
+              );
+              if (match) { setStorage(match.raw); tq("storage"); }
+            };
+
+            return (
+              <>
+                {armazOpts.length > 0 && (
+                  <Section title="Armazenamento">
+                    <div className={`grid gap-2 ${armazOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : armazOpts.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+                      {armazOpts.map(a => (
+                        <Btn key={a} sel={currentParts.armazenamento === a}
+                          onClick={() => pickStorage(a, "", "")}
+                          className="w-full text-center">{a}</Btn>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+                {currentParts.armazenamento && telaOpts.length > 0 && (
+                  <Section title="Tamanho da tela">
+                    <div className={`grid gap-2 ${telaOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {telaOpts.map(t => (
+                        <Btn key={t} sel={currentParts.tela === t}
+                          onClick={() => pickStorage(currentParts.armazenamento, t, "")}
+                          className="w-full text-center">{t}</Btn>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+                {currentParts.armazenamento && (telaOpts.length === 0 || currentParts.tela) && conectOpts.length > 0 && (
+                  <Section title="Conectividade">
+                    <div className={`grid gap-2 ${conectOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {conectOpts.map(c => (
+                        <Btn key={c} sel={currentParts.conectividade === c}
+                          onClick={() => pickStorage(currentParts.armazenamento, currentParts.tela, c)}
+                          className="w-full text-center">{c}</Btn>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+              </>
+            );
+          })()
         ) : (
           <Section title="Armazenamento">
             <div className="flex gap-2 flex-wrap">
@@ -492,7 +573,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       )}
 
       {/* Cor do aparelho */}
-      {model && storage && coresModelo.length > 0 && (
+      {model && storageCompleto && coresModelo.length > 0 && (
         <Section title="Qual a cor do seu aparelho?">
           <div className={`grid gap-2 ${coresModelo.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
             {coresModelo.map(c => (
@@ -509,7 +590,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       )}
 
       {/* Cor manual — quando não tem cores do catálogo */}
-      {model && storage && coresModelo.length === 0 && (
+      {model && storageCompleto && coresModelo.length === 0 && (
         <Section title="Qual a cor do seu aparelho?">
           <input
             type="text"
@@ -522,7 +603,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </Section>
       )}
 
-      {model && storage && !isExcluded && isQActive(qc, "hasDamage") && (
+      {model && storageCompleto && !isExcluded && isQActive(qc, "hasDamage") && (
         <Section title={getQTitle(qc, "hasDamage", "O aparelho esta trincado, quebrado ou com defeito?")}>
           <div className="flex gap-2">
             {(() => {
@@ -543,7 +624,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </Section>
       )}
 
-      {model && storage && !isExcluded && hasDamage === false && (
+      {model && storageCompleto && !isExcluded && hasDamage === false && (
         <>
           {isQActive(qc, "battery") && (
           <Section title={getQTitle(qc, "battery", deviceType === "macbook" ? "Ciclos de bateria" : "Saude da bateria")}>
@@ -566,6 +647,26 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
                 )}
               </div>
+              {(deviceType === "ipad" || deviceType === "macbook") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // iPad/MacBook as vezes so mostra "Normal" em vez de numero.
+                    // Cliente clica aqui pra liberar o fluxo assumindo que o aparelho
+                    // esta saudavel: iPad = 100% saude, MacBook = 0 ciclos (sem desconto).
+                    setBattery(deviceType === "macbook" ? 0 : 100);
+                    tq("battery");
+                  }}
+                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                  style={{
+                    backgroundColor: battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                    color: battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success)" : "var(--ti-muted)",
+                    border: `1px solid ${battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                  }}
+                >
+                  Aparece só &quot;Normal&quot; no meu {deviceType === "macbook" ? "Mac" : "iPad"}
+                </button>
+              )}
               {deviceType === "iphone" && (
                 <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
                   <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
