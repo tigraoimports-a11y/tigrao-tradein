@@ -5972,17 +5972,18 @@ export default function VendasPage() {
                                               </a>
                                             );
                                           })()}
-                                          {/* Colar link do PDF assinado — caso webhook ZapSign tenha falhado
-                                              (ex: admin reenviou termo e o link assinado ficou orfao). Aparece
-                                              quando nao ha termo ligado ou o termo atual nao esta ASSINADO. */}
+                                          {/* Colar/trocar link do PDF assinado — caso webhook ZapSign tenha falhado
+                                              (reenvio de termo, link bugado, etc). Aparece sempre que a venda
+                                              tem troca; se ja tem link assinado, pede confirmacao pra trocar. */}
                                           {(() => {
                                             const termo = termosPorVenda[v.id];
-                                            if (termo?.status === "ASSINADO") return null;
+                                            const jaAssinado = termo?.status === "ASSINADO";
                                             return (
                                               <button
                                                 onClick={async (e) => {
                                                   e.stopPropagation();
-                                                  const link = prompt("Cole o link do PDF assinado (copiado do ZapSign ou grupo do WhatsApp):");
+                                                  if (jaAssinado && !confirm("Ja existe link do termo assinado. Substituir pelo novo link?")) return;
+                                                  const link = prompt("Cole o link do PDF assinado (copiado do ZapSign ou grupo do WhatsApp):", jaAssinado ? (termo?.signed_pdf_url || "") : "");
                                                   if (link === null) return;
                                                   const url = link.trim();
                                                   if (!url) return;
@@ -6027,9 +6028,9 @@ export default function VendasPage() {
                                                   }
                                                 }}
                                                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-300 hover:bg-purple-200 transition-colors"
-                                                title="Se o cliente ja assinou mas o link nao ficou na venda (ex: reenvio), cole aqui o PDF assinado"
+                                                title={jaAssinado ? "Trocar o link do PDF assinado (ex: link atual bugado)" : "Se o cliente ja assinou mas o link nao ficou na venda (ex: reenvio), cole aqui o PDF assinado"}
                                               >
-                                                🔗 Colar Link Assinado
+                                                🔗 {jaAssinado ? "Trocar Link Assinado" : "Colar Link Assinado"}
                                               </button>
                                             );
                                           })()}
