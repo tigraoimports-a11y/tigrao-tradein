@@ -211,6 +211,7 @@ export async function POST(request: Request) {
     troca_cor2: body.troca_cor2 || null,
     desconto: Number(body.desconto) || 0,
     vendedor: body.vendedor || null,
+    campanha: body.campanha || null,
     operador: getUser(request),
     simulacao_id: body.simulacao_id || null,
     observacao: body.observacao || null,
@@ -259,7 +260,7 @@ export async function PATCH(request: Request) {
     "produtos_extras",
     "troca_produto", "troca_valor", "troca_condicao", "troca_cor",
     "troca_produto2", "troca_valor2", "troca_condicao2", "troca_cor2",
-    "vendedor", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
+    "vendedor", "campanha", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
     "pagamento_pago", "taxa_entrega",
     "mp_link", "mp_preference_id",
   ];

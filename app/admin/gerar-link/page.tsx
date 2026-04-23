@@ -212,6 +212,10 @@ export default function GerarLinkPage() {
   }, [carrinhoLink]);
 
   const [vendedorNome, setVendedorNome] = useState("");
+  // Tag de campanha/origem do link (ex: "Instagram Stories", "Anuncio Meta",
+  // "Indicacao") — fica em link_compras.campanha pra agrupar conversoes em
+  // analytics. Texto livre + presets rapidos.
+  const [campanha, setCampanha] = useState("");
   // Lista dinâmica de vendedores (editável em /admin/configuracoes).
   const vendedoresList = useVendedores(adminPw);
   const [forma, setForma] = useState("");
@@ -352,6 +356,7 @@ export default function GerarLinkPage() {
     troca_condicao2: string | null;
     troca_cor2: string | null;
     vendedor: string | null;
+    campanha: string | null;
     operador: string | null;
     status: string | null;
     cliente_dados_preenchidos: Record<string, unknown> | null;
@@ -656,6 +661,7 @@ export default function GerarLinkPage() {
           troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
           troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
           vendedor: vendedorNome || null,
+          campanha: campanha.trim() || null,
           cliente_nome: cliNome.trim() || null,
           cliente_telefone: cliTelefone.trim() || null,
           cliente_cpf: cliCpf.trim() || null,
@@ -680,6 +686,7 @@ export default function GerarLinkPage() {
         if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
         if (descontoNum > 0) shortData.dc = String(descontoNum);
         shortData.s = vendedorNome || "";
+        if (campanha.trim()) shortData.cm = campanha.trim();
         shortData.w = whatsappDestino;
         if (forma) shortData.f = forma;
         if (parcelas) shortData.x = parcelas;
@@ -777,6 +784,7 @@ export default function GerarLinkPage() {
     if (l.entrada) setEntradaPix(Number(l.entrada).toLocaleString("pt-BR"));
     if (l.desconto) setDesconto(Number(l.desconto).toLocaleString("pt-BR"));
     if (l.vendedor) setVendedorNome(l.vendedor);
+    if (l.campanha) setCampanha(l.campanha);
     if (l.taxa_entrega) setTaxaEntrega(Number(l.taxa_entrega).toLocaleString("pt-BR"));
     if (l.cliente_nome || l.cliente_telefone || l.cliente_cpf) {
       setIncluirDadosCliente(true);
@@ -926,6 +934,7 @@ export default function GerarLinkPage() {
     // Link gerado
     setGeneratedLink(""); setCopied(false); setPasteMsg("");
     setVendedorNome("");
+    setCampanha("");
     setEditingLinkId(null); setEditingShortCode(null);
   }
 
@@ -1011,6 +1020,7 @@ export default function GerarLinkPage() {
     if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
     if (descontoNum > 0) shortData.dc = String(descontoNum);
     shortData.s = vendedorNome || "";
+    if (campanha.trim()) shortData.cm = campanha.trim();
     shortData.w = whatsappDestino;
     if (forma) shortData.f = forma;
     if (parcelas) shortData.x = parcelas;
@@ -1090,6 +1100,7 @@ export default function GerarLinkPage() {
               troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
               troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
               vendedor: vendedorNome || null,
+              campanha: campanha.trim() || null,
               simulacao_id: simulacaoId,
               pagamento_pago: pagamentoPago || null,
               taxa_entrega: Number(rawTaxaEntrega) || 0,
@@ -2790,6 +2801,30 @@ export default function GerarLinkPage() {
               <option key={v.nome} value={v.nome}>{v.nome}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className={labelCls}>Campanha / Origem do link <span className="text-[10px] font-normal opacity-60">(opcional)</span></label>
+          <input
+            type="text"
+            value={campanha}
+            onChange={(e) => setCampanha(e.target.value)}
+            placeholder="Ex: Instagram Stories, Anuncio Meta, Indicacao..."
+            className={inputCls}
+          />
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {["Instagram Stories", "Instagram Direct", "Anuncio Meta", "WhatsApp Status", "Indicacao", "Funcionario"].map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setCampanha(p)}
+                className={`px-2 py-1 rounded-full text-[10px] font-semibold transition-colors ${campanha === p ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5EA]"}`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-[#86868B] mt-1">Pra rastrear conversoes por origem nos relatorios.</p>
         </div>
 
         {/* Resumo do valor total */}
