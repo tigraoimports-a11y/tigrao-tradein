@@ -6,7 +6,6 @@
 
 UPDATE vendas
 SET troca_serial = 'J3WPGWRP2H',
-    troca_imei   = '358824780919628',
-    updated_at   = NOW()
+    troca_imei   = '358824780919628'
 WHERE troca_serial = 'FNPMWF7V46'
   AND troca_imei   = '350056836065126';

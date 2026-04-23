@@ -613,7 +613,7 @@ export async function PATCH(req: NextRequest) {
       }
 
       if (vendaAlvo) {
-        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        const patch: Record<string, unknown> = {};
         if (vendaAlvo.slot === 1) {
           if (fields.serial_no !== undefined) patch.troca_serial = novoSerial;
           if (fields.imei !== undefined) patch.troca_imei = novoImei;
@@ -621,7 +621,9 @@ export async function PATCH(req: NextRequest) {
           if (fields.serial_no !== undefined) patch.troca_serial2 = novoSerial;
           if (fields.imei !== undefined) patch.troca_imei2 = novoImei;
         }
-        await supabase.from("vendas").update(patch).eq("id", vendaAlvo.id);
+        if (Object.keys(patch).length > 0) {
+          await supabase.from("vendas").update(patch).eq("id", vendaAlvo.id);
+        }
         await logActivity(usuario, "Sync serial/IMEI pendencia->venda", `Venda ${vendaAlvo.id} (slot ${vendaAlvo.slot}): serial=${novoSerial || "—"}, imei=${novoImei || "—"}`, "vendas", vendaAlvo.id).catch(() => {});
       }
     } catch { /* silent — nao bloqueia o PATCH principal */ }
