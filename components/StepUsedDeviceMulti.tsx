@@ -566,6 +566,26 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
                 )}
               </div>
+              {(deviceType === "ipad" || deviceType === "macbook") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // iPad/MacBook as vezes so mostra "Normal" em vez de numero.
+                    // Cliente clica aqui pra liberar o fluxo assumindo que o aparelho
+                    // esta saudavel: iPad = 100% saude, MacBook = 0 ciclos (sem desconto).
+                    setBattery(deviceType === "macbook" ? 0 : 100);
+                    tq("battery");
+                  }}
+                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                  style={{
+                    backgroundColor: battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                    color: battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success)" : "var(--ti-muted)",
+                    border: `1px solid ${battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                  }}
+                >
+                  Aparece só &quot;Normal&quot; no meu {deviceType === "macbook" ? "Mac" : "iPad"}
+                </button>
+              )}
               {deviceType === "iphone" && (
                 <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
                   <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
