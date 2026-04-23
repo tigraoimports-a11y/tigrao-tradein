@@ -19,17 +19,31 @@ function getPermissoes(req: NextRequest): string[] {
   try { return JSON.parse(req.headers.get("x-admin-permissoes") || "[]"); } catch { return []; }
 }
 
-// GET — lista todos os preços
+// GET — lista preços. Filtros opcionais:
+//   ?tipo=SEMINOVO   → só seminovos
+//   ?tipo=LACRADO    → só lacrados (TRADEIN/CATALOGO/AMBOS/null)
+//   (sem tipo)       → tudo (backwards-compat)
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { supabase } = await import("@/lib/supabase");
 
-  const { data, error } = await supabase
+  const tipoFilter = req.nextUrl.searchParams.get("tipo");
+  let q = supabase
     .from("precos")
     .select("*")
     .order("modelo")
     .order("armazenamento");
+
+  if (tipoFilter === "SEMINOVO") {
+    q = q.eq("tipo", "SEMINOVO");
+  } else if (tipoFilter === "LACRADO") {
+    // Qualquer coisa que não seja SEMINOVO conta como lacrado (inclui rows
+    // antigas com tipo null/undefined).
+    q = q.or("tipo.neq.SEMINOVO,tipo.is.null");
+  }
+
+  const { data, error } = await q;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

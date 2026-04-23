@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
-import { getCategoriasPrecos, addCategoriaPrecos, removeCategoriaPrecos, EMOJI_OPTIONS } from "@/lib/categorias";
+import { getCategoriasPrecos, addCategoriaPrecos, removeCategoriaPrecos, EMOJI_OPTIONS, DEFAULT_CATEGORIAS_SEMINOVOS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
 import { corParaPT } from "@/lib/cor-pt";
 
@@ -66,13 +66,34 @@ function PrecosContent() {
   // Headers editáveis (renomear colunas)
   const [editingHeader, setEditingHeader] = useState<{ catKey: string; colIdx: number } | null>(null);
 
-  // Categorias dinâmicas
+  // Categorias dinâmicas (somente para lacrados — seminovos tem lista fixa)
   const [categorias, setCategorias] = useState<Categoria[]>(() => getCategoriasPrecos());
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCat, setNewCat] = useState({ label: "", emoji: "\u{1F4E6}" });
 
-  const tabKeys = categorias.map((c) => c.key);
-  const [tab, setTab] = useTabParam<string>("IPHONE", tabKeys);
+  // Top-level tab: Lacrados (Trade-In) vs Seminovos. Seminovos tem categorias
+  // fixas (IPHONE_SEMINOVO/IPAD_SEMINOVO/MACBOOK_SEMINOVO/APPLE_WATCH_SEMINOVO)
+  // e rows da tabela `precos` sao distinguidas pelo campo `tipo = "SEMINOVO"`.
+  const [viewTipo, setViewTipo] = useState<"LACRADO" | "SEMINOVO">("LACRADO");
+
+  // Categorias mostradas na aba ativa — muda conforme o top-level tab.
+  const activeCategorias = useMemo<Categoria[]>(
+    () => (viewTipo === "SEMINOVO" ? DEFAULT_CATEGORIAS_SEMINOVOS : categorias),
+    [viewTipo, categorias]
+  );
+
+  const tabKeys = activeCategorias.map((c) => c.key);
+  const [tab, setTab] = useTabParam<string>(
+    viewTipo === "SEMINOVO" ? "IPHONE_SEMINOVO" : "IPHONE",
+    tabKeys
+  );
+
+  // Quando troca Lacrados<->Seminovos, reseta a aba de categoria pra 1a
+  // disponivel no novo view (as keys sao disjuntas: IPHONE vs IPHONE_SEMINOVO).
+  useEffect(() => {
+    if (!tabKeys.includes(tab) && tabKeys.length > 0) setTab(tabKeys[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewTipo]);
   const [showAdd, setShowAdd] = useState(false);
   const [newProd, setNewProd] = useState({ modelo: "", preco_pix: "", tipo: "TRADEIN" });
   // Campos de especificação dinâmicos (label + valor) — combinados com " | " no armazenamento
@@ -171,7 +192,10 @@ function PrecosContent() {
   async function handleSave(row: PrecoProduto) {
     const key = `${row.modelo}|${row.armazenamento}`;
     const newPrice = parseFloat((editing[key] ?? String(row.preco_pix)).replace(",", "."));
-    if (isNaN(newPrice) || newPrice <= 0) return;
+    if (isNaN(newPrice) || newPrice < 0) return;
+    // Lacrado precisa ter preco > 0; seminovo aceita 0 como "sem orcamento
+    // automatico — cliente vai pro WhatsApp".
+    if (row.tipo !== "SEMINOVO" && newPrice <= 0) return;
 
     setSaving(key);
     await fetch("/api/admin/precos", {
@@ -252,11 +276,16 @@ function PrecosContent() {
     // Combinar campos de spec com " | "
     const filledSpecs = specFields.filter((s) => s.value.trim());
     const armazenamentoFinal = filledSpecs.map((s) => s.value.trim()).join(" | ");
-    if (!newProd.modelo || !armazenamentoFinal || isNaN(preco) || preco <= 0) return;
+    if (!newProd.modelo || !armazenamentoFinal || isNaN(preco) || preco < 0) return;
+    // Seminovos aceitam preco 0 (cliente vai pro WhatsApp); lacrados exigem > 0.
+    if (viewTipo !== "SEMINOVO" && preco <= 0) return;
     // Salvar labels dos campos para essa categoria (pra tabela mostrar nomes corretos)
     const currentLabels = specFields.map((s) => s.label || `Spec ${specFields.indexOf(s) + 1}`);
     saveLabels(tab, currentLabels);
     setSaving("new");
+    // Tipo: em Seminovos (view=SEMINOVO) sempre "SEMINOVO"; em Lacrados,
+    // respeita o select do form (default TRADEIN).
+    const tipoFinal = viewTipo === "SEMINOVO" ? "SEMINOVO" : (newProd.tipo || "TRADEIN");
     await fetch("/api/admin/precos", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
@@ -266,7 +295,7 @@ function PrecosContent() {
         preco_pix: preco,
         status: "ativo",
         categoria: tab,
-        tipo: newProd.tipo || "TRADEIN",
+        tipo: tipoFinal,
       }),
     });
     await fetchData(password);
@@ -282,7 +311,9 @@ function PrecosContent() {
     const preco = parseFloat(editingFull.preco_pix.replace(",", "."));
     const filledSpecs = editingFull.specs.filter((s) => s.value.trim());
     const newArm = filledSpecs.map((s) => s.value.trim()).join(" | ");
-    if (!editingFull.modelo.trim() || !newArm || isNaN(preco) || preco <= 0) return;
+    if (!editingFull.modelo.trim() || !newArm || isNaN(preco) || preco < 0) return;
+    // Lacrado precisa > 0; seminovo aceita 0 (WhatsApp manual).
+    if (editingFull.tipo !== "SEMINOVO" && preco <= 0) return;
 
     setSaving("full");
     const headers = { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") };
@@ -323,8 +354,14 @@ function PrecosContent() {
 
   if (!data) return null;
 
-  // Filtrar por categoria da tab e aplicar ordem salva
+  // Match de tipo por view: SEMINOVO so mostra rows com tipo=SEMINOVO; LACRADO
+  // mostra o resto (TRADEIN/CATALOGO/AMBOS/null — compatibilidade com rows antigas).
+  const matchesView = (r: PrecoProduto) =>
+    viewTipo === "SEMINOVO" ? r.tipo === "SEMINOVO" : r.tipo !== "SEMINOVO";
+
+  // Filtrar por categoria da tab + view ativo, depois aplicar ordem salva
   const filteredRaw = data.filter((r) => {
+    if (!matchesView(r)) return false;
     const cat = r.categoria || inferCategoria(r.modelo);
     return cat === tab;
   });
@@ -395,7 +432,7 @@ function PrecosContent() {
     return a.localeCompare(b);
   });
 
-  const catInfo = categorias.find((c) => c.key === tab) || { key: tab, label: tab, emoji: "\u{1F4E6}" };
+  const catInfo = activeCategorias.find((c) => c.key === tab) || { key: tab, label: tab, emoji: "\u{1F4E6}" };
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -405,7 +442,7 @@ function PrecosContent() {
           <p className="text-[#86868B] text-xs">Edite os precos diretamente aqui. Alteracoes notificam via Telegram.</p>
         </div>
         <div className="flex gap-2">
-          {tab === "IPHONE" && (
+          {tab === "IPHONE" && viewTipo === "LACRADO" && (
             <button
               onClick={handleImport}
               disabled={importing}
@@ -423,10 +460,38 @@ function PrecosContent() {
         </div>
       </div>
 
+      {/* Top-level tabs: Lacrados vs Seminovos */}
+      <div className="flex gap-2 flex-wrap items-center border-b border-[#E5E5EA] pb-2">
+        {[
+          { key: "LACRADO" as const, label: "Valores Lacrados" },
+          { key: "SEMINOVO" as const, label: "Valores Seminovos" },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setViewTipo(t.key); setShowAdd(false); setShowNewCat(false); }}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+              viewTipo === t.key
+                ? "bg-[#E8740E] text-white"
+                : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {viewTipo === "SEMINOVO" && (
+        <div className="rounded-xl bg-[#FFF7ED] border border-[#E8740E]/30 px-4 py-2.5 text-xs text-[#86868B] leading-relaxed">
+          <strong className="text-[#1D1D1F]">Seminovos:</strong> preço {'>'} 0 → orçamento automático no cliente.
+          Preço em branco (0) → cliente é direcionado ao WhatsApp pra cotação manual.
+          Status <em>esgotado</em> → variante não aparece.
+        </div>
+      )}
+
       {/* Tabs por categoria */}
       <div className="flex gap-2 flex-wrap items-center">
-        {categorias.map((c) => {
-          const count = data.filter((r) => (r.categoria || inferCategoria(r.modelo)) === c.key).length;
+        {activeCategorias.map((c) => {
+          const count = data.filter((r) => matchesView(r) && (r.categoria || inferCategoria(r.modelo)) === c.key).length;
           return (
             <div key={c.key} className="relative group">
               <button
@@ -439,7 +504,7 @@ function PrecosContent() {
               >
                 {c.emoji} {c.label} {count > 0 ? `(${count})` : ""}
               </button>
-              {c.custom && (
+              {c.custom && viewTipo === "LACRADO" && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleRemoveCategoria(c.key); }}
                   className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -451,13 +516,15 @@ function PrecosContent() {
             </div>
           );
         })}
-        <button
-          onClick={() => setShowNewCat(!showNewCat)}
-          className="px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
-          title="Criar nova categoria"
-        >
-          + Categoria
-        </button>
+        {viewTipo === "LACRADO" && (
+          <button
+            onClick={() => setShowNewCat(!showNewCat)}
+            className="px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+            title="Criar nova categoria"
+          >
+            + Categoria
+          </button>
+        )}
       </div>
 
       {/* Modal criar categoria */}
@@ -575,19 +642,21 @@ function PrecosContent() {
                 className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
               />
             </div>
-            {/* Tipo */}
-            <div className="min-w-[120px]">
-              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tipo</p>
-              <select
-                value={newProd.tipo}
-                onChange={(e) => setNewProd({ ...newProd, tipo: e.target.value })}
-                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-              >
-                <option value="TRADEIN">Trade-In</option>
-                <option value="CATALOGO">Catálogo</option>
-                <option value="AMBOS">Ambos</option>
-              </select>
-            </div>
+            {/* Tipo — escondido em Seminovos (fixo como SEMINOVO) */}
+            {viewTipo === "LACRADO" && (
+              <div className="min-w-[120px]">
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tipo</p>
+                <select
+                  value={newProd.tipo}
+                  onChange={(e) => setNewProd({ ...newProd, tipo: e.target.value })}
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                >
+                  <option value="TRADEIN">Trade-In</option>
+                  <option value="CATALOGO">Catálogo</option>
+                  <option value="AMBOS">Ambos</option>
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -679,18 +748,27 @@ function PrecosContent() {
                   className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:border-[#E8740E] outline-none"
                 />
               </div>
-              <div className="w-36">
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tipo</p>
-                <select
-                  value={editingFull.tipo}
-                  onChange={(e) => setEditingFull({ ...editingFull, tipo: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                >
-                  <option value="TRADEIN">Trade-In</option>
-                  <option value="CATALOGO">Catálogo</option>
-                  <option value="AMBOS">Ambos</option>
-                </select>
-              </div>
+              {editingFull.tipo === "SEMINOVO" ? (
+                <div className="w-36">
+                  <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tipo</p>
+                  <div className="w-full px-3 py-2 rounded-lg text-sm bg-[#FFF7ED] text-[#E8740E] border border-[#E8740E]/30 font-semibold">
+                    Seminovo
+                  </div>
+                </div>
+              ) : (
+                <div className="w-36">
+                  <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tipo</p>
+                  <select
+                    value={editingFull.tipo}
+                    onChange={(e) => setEditingFull({ ...editingFull, tipo: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                  >
+                    <option value="TRADEIN">Trade-In</option>
+                    <option value="CATALOGO">Catálogo</option>
+                    <option value="AMBOS">Ambos</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -860,34 +938,40 @@ function PrecosContent() {
                         </button>
                       </td>
                       <td className="px-5 py-3">
-                        <select
-                          value={row.tipo ?? "TRADEIN"}
-                          onChange={async (e) => {
-                            const newTipo = e.target.value;
-                            setData((prev) => prev?.map((r) =>
-                              r.modelo === row.modelo && r.armazenamento === row.armazenamento
-                                ? { ...r, tipo: newTipo }
-                                : r
-                            ) ?? null);
-                            await fetch("/api/admin/precos", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                              body: JSON.stringify({
-                                modelo: row.modelo,
-                                armazenamento: row.armazenamento,
-                                preco_pix: row.preco_pix,
-                                status: row.status,
-                                categoria: row.categoria || inferCategoria(row.modelo),
-                                tipo: newTipo,
-                              }),
-                            });
-                          }}
-                          className="px-2 py-1 rounded-lg text-xs border border-[#D2D2D7] bg-white text-[#1D1D1F]"
-                        >
-                          <option value="TRADEIN">Trade-In</option>
-                          <option value="CATALOGO">Catálogo</option>
-                          <option value="AMBOS">Ambos</option>
-                        </select>
+                        {row.tipo === "SEMINOVO" ? (
+                          <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-[#FFF7ED] text-[#E8740E] border border-[#E8740E]/30">
+                            Seminovo
+                          </span>
+                        ) : (
+                          <select
+                            value={row.tipo ?? "TRADEIN"}
+                            onChange={async (e) => {
+                              const newTipo = e.target.value;
+                              setData((prev) => prev?.map((r) =>
+                                r.modelo === row.modelo && r.armazenamento === row.armazenamento
+                                  ? { ...r, tipo: newTipo }
+                                  : r
+                              ) ?? null);
+                              await fetch("/api/admin/precos", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                body: JSON.stringify({
+                                  modelo: row.modelo,
+                                  armazenamento: row.armazenamento,
+                                  preco_pix: row.preco_pix,
+                                  status: row.status,
+                                  categoria: row.categoria || inferCategoria(row.modelo),
+                                  tipo: newTipo,
+                                }),
+                              });
+                            }}
+                            className="px-2 py-1 rounded-lg text-xs border border-[#D2D2D7] bg-white text-[#1D1D1F]"
+                          >
+                            <option value="TRADEIN">Trade-In</option>
+                            <option value="CATALOGO">Catálogo</option>
+                            <option value="AMBOS">Ambos</option>
+                          </select>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-right">
                         {isEditing ? (
