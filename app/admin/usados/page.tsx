@@ -228,6 +228,10 @@ export function UsadosContent() {
   // Chave = `${modelo}|${armazenamento_atual}` — o mesmo formato ja usado em
   // editing/editingGarantia. Valor = { armazenamento, tela, conectividade }.
   const [editingSpecs, setEditingSpecs] = useState<Record<string, { armazenamento: string; tela: string; conectividade: string }>>({});
+  // Form inline pra adicionar nova variante direto no header de cada modelo
+  // (sem precisar abrir o form grande no topo e redigitar Linha+Modelo).
+  // Chave = nome do modelo. Valor = { specs por campo, valor_base }.
+  const [addingVariante, setAddingVariante] = useState<Record<string, { specs: Record<string, string>; valor_base: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
@@ -289,6 +293,39 @@ export function UsadosContent() {
     await apiPost({ action: "upsert_valor", modelo: v.modelo, armazenamento: v.armazenamento, valor_base: newVal });
     setValores((prev) => prev.map((r) => r.modelo === v.modelo && r.armazenamento === v.armazenamento ? { ...r, valor_base: newVal } : r));
     const e = { ...editing }; delete e[key]; setEditing(e);
+    setSaving(null);
+  };
+
+  const handleSaveNewVariante = async (modelo: string, cat: string) => {
+    const entry = addingVariante[modelo];
+    if (!entry) return;
+    const specFields = SPEC_FIELDS_BY_CAT[cat] || [];
+    const missing = specFields.find((f) => !entry.specs[f.key]?.trim());
+    if (missing) { setMsg(`Selecione ${missing.label.toLowerCase()}`); return; }
+    if (!entry.valor_base.trim()) { setMsg("Preencha o valor"); return; }
+    const val = parseFloat(entry.valor_base);
+    if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
+    const armazenamento = specFields.map((f) => entry.specs[f.key].trim()).join(" | ");
+    const savingKey = `new-variante-${modelo}`;
+    setSaving(savingKey);
+    const res = await apiPost({ action: "upsert_valor", modelo, armazenamento, valor_base: val });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(`Erro: ${j.error || "falha ao adicionar variante"}`);
+      setSaving(null);
+      return;
+    }
+    setValores((prev) => {
+      const exists = prev.findIndex((v) => v.modelo === modelo && v.armazenamento === armazenamento);
+      if (exists >= 0) {
+        const nv = [...prev];
+        nv[exists] = { ...nv[exists], valor_base: val };
+        return nv;
+      }
+      return [...prev, { id: crypto.randomUUID(), modelo, armazenamento, valor_base: val, ativo: true }];
+    });
+    const e = { ...addingVariante }; delete e[modelo]; setAddingVariante(e);
+    setMsg(`${modelo} ${armazenamento} adicionado!`);
     setSaving(null);
   };
 
@@ -848,6 +885,14 @@ export function UsadosContent() {
                   <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => setAddingVariante((prev) => ({ ...prev, [modelo]: prev[modelo] || { specs: {}, valor_base: "" } }))}
+                      disabled={addingVariante[modelo] !== undefined}
+                      className="px-3 py-1 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] bg-white hover:bg-[#FFF7ED] transition-colors whitespace-nowrap disabled:opacity-40"
+                      title="Adiciona uma nova variante (armaz/tela/conect/valor) para esse modelo sem precisar abrir o form no topo"
+                    >
+                      ➕ Variante
+                    </button>
+                    <button
                       onClick={async () => {
                         const novo = prompt(`Renomear "${modelo}" para:`, modelo);
                         if (novo === null) return; // cancelou
@@ -918,42 +963,69 @@ export function UsadosContent() {
                         <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
                           <td className="px-5 py-3 font-medium">
                             {isEditSpecs ? (
-                              <div className="flex flex-col gap-1.5 min-w-[260px]">
-                                <input
-                                  type="text"
-                                  value={specs.armazenamento}
-                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, armazenamento: e.target.value } })}
-                                  placeholder="Armazenamento (ex: 64GB)"
-                                  className="px-2 py-1 rounded border border-[#E8740E] text-xs"
-                                  autoFocus
-                                />
-                                <input
-                                  type="text"
-                                  value={specs.tela}
-                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, tela: e.target.value } })}
-                                  placeholder='Tela (opcional, ex: 11")'
-                                  className="px-2 py-1 rounded border border-[#D2D2D7] text-xs"
-                                />
-                                <input
-                                  type="text"
-                                  value={specs.conectividade}
-                                  onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, conectividade: e.target.value } })}
-                                  placeholder="Conectividade (opcional, ex: Wifi)"
-                                  className="px-2 py-1 rounded border border-[#D2D2D7] text-xs"
-                                />
-                                <div className="flex gap-2 mt-1">
-                                  <button onClick={() => handleSaveSpecs(v)} disabled={saving === specKey} className="px-2 py-1 rounded text-[11px] font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50">{saving === specKey ? "..." : "Salvar specs"}</button>
-                                  <button onClick={() => { const e = { ...editingSpecs }; delete e[specKey]; setEditingSpecs(e); }} className="px-2 py-1 rounded text-[11px] text-[#86868B]">Cancelar</button>
+                              <div className="flex items-end gap-2 flex-wrap">
+                                <div className="flex flex-col">
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Armaz.</label>
+                                  <input
+                                    type="text"
+                                    value={specs.armazenamento}
+                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, armazenamento: e.target.value } })}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
+                                    placeholder="64GB"
+                                    className="w-20 px-2 py-1 rounded border border-[#E8740E] text-xs"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="flex flex-col">
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Tela</label>
+                                  <input
+                                    type="text"
+                                    value={specs.tela}
+                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, tela: e.target.value } })}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
+                                    placeholder='11"'
+                                    className="w-16 px-2 py-1 rounded border border-[#D2D2D7] text-xs"
+                                  />
+                                </div>
+                                <div className="flex flex-col">
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Conect.</label>
+                                  <input
+                                    type="text"
+                                    value={specs.conectividade}
+                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, conectividade: e.target.value } })}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
+                                    placeholder="Wifi"
+                                    className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-xs"
+                                  />
+                                </div>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleSaveSpecs(v)}
+                                    disabled={saving === specKey}
+                                    title="Salvar (Enter)"
+                                    className="px-2 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
+                                  >
+                                    {saving === specKey ? "..." : "OK"}
+                                  </button>
+                                  <button
+                                    onClick={() => { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); }}
+                                    title="Cancelar (Esc)"
+                                    className="px-2 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]"
+                                  >
+                                    ✕
+                                  </button>
                                 </div>
                               </div>
                             ) : (
-                              <span
-                                className="cursor-pointer hover:text-[#E8740E] transition-colors"
+                              <button
+                                type="button"
                                 title="Clique para editar armazenamento, tela e conectividade"
                                 onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: parseStorageSpec(v.armazenamento) })}
+                                className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors group"
                               >
-                                {v.armazenamento} <span className="text-[#B0B0B0] text-xs">✏️</span>
-                              </span>
+                                {v.armazenamento}
+                                <span className="ml-1.5 text-[#C7C7CC] group-hover:text-[#E8740E] text-xs">✏️</span>
+                              </button>
                             )}
                           </td>
                           <td className="px-5 py-3">
@@ -1000,6 +1072,67 @@ export function UsadosContent() {
                         </tr>
                       );
                     })}
+                    {/* Row inline pra adicionar nova variante — aparece quando o admin
+                        clica no botao "+ Variante" do header. Usa o catFilter atual pra
+                        saber quais specs pedir (armaz/tela/conect pra iPad, etc). */}
+                    {addingVariante[modelo] && (() => {
+                      const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+                      const entry = addingVariante[modelo];
+                      const savingKey = `new-variante-${modelo}`;
+                      const isSavingNew = saving === savingKey;
+                      return (
+                        <tr className="bg-[#FFF7ED] border-t-2 border-[#E8740E]">
+                          <td className="px-5 py-3" colSpan={4}>
+                            <div className="flex items-end gap-2 flex-wrap">
+                              {specFields.map((f) => (
+                                <div key={f.key} className="flex flex-col">
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">{f.label}</label>
+                                  <select
+                                    value={entry.specs[f.key] || ""}
+                                    onChange={(e) => setAddingVariante({ ...addingVariante, [modelo]: { ...entry, specs: { ...entry.specs, [f.key]: e.target.value } } })}
+                                    className="px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                                  >
+                                    <option value="">—</option>
+                                    {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                </div>
+                              ))}
+                              <div className="flex flex-col">
+                                <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Valor (R$)</label>
+                                <input
+                                  type="number"
+                                  value={entry.valor_base}
+                                  onChange={(e) => setAddingVariante({ ...addingVariante, [modelo]: { ...entry, valor_base: e.target.value } })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSaveNewVariante(modelo, catFilter);
+                                    if (e.key === "Escape") { const x = { ...addingVariante }; delete x[modelo]; setAddingVariante(x); }
+                                  }}
+                                  placeholder="Ex: 3500"
+                                  className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                                />
+                              </div>
+                              <div className="flex gap-1 ml-auto">
+                                <button
+                                  onClick={() => handleSaveNewVariante(modelo, catFilter)}
+                                  disabled={isSavingNew}
+                                  title="Adicionar (Enter)"
+                                  className="px-3 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
+                                >
+                                  {isSavingNew ? "..." : "Adicionar"}
+                                </button>
+                                <button
+                                  onClick={() => { const x = { ...addingVariante }; delete x[modelo]; setAddingVariante(x); }}
+                                  title="Cancelar (Esc)"
+                                  className="px-2 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>
