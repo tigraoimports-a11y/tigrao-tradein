@@ -36,6 +36,10 @@ export interface Venda {
   fiado_parcelas: { valor: number; data: string; recebido: boolean }[];
   fiado_recebido?: boolean;
   banco_pix: string | null;
+  // Segundo PIX opcional: permite dividir o recebimento entre dois bancos.
+  // O valor sai do banco principal e entra no banco_pix_2.
+  entrada_pix_2: number;
+  banco_pix_2: string | null;
   banco_2nd: string | null;
   qnt_parcelas: number | null;
   bandeira: Bandeira | null;

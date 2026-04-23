@@ -62,10 +62,22 @@ export async function recalcularSaldoDia(
     .eq("recebimento", "D+0");
 
   const d0 = (vendasD0 ?? []) as Venda[];
-  let pix_itau = d0.filter((v) => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido), 0);
-  let pix_inf = d0.filter((v) => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido), 0);
-  let pix_mp = d0.filter((v) => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido), 0);
-  let pix_esp = d0.filter((v) => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido), 0);
+  // Banco principal recebe preco_vendido menos o que foi direcionado pro 2o PIX.
+  // (entrada_pix_2 é subtraída aqui e somada no loop abaixo, de modo que o total
+  // entre os dois bancos bate com preco_vendido.)
+  const d0MainVal = (v: Venda) => Number(v.preco_vendido) - Number(v.entrada_pix_2 || 0);
+  let pix_itau = d0.filter((v) => v.banco === "ITAU").reduce((s, v) => s + d0MainVal(v), 0);
+  let pix_inf = d0.filter((v) => v.banco === "INFINITE").reduce((s, v) => s + d0MainVal(v), 0);
+  let pix_mp = d0.filter((v) => v.banco === "MERCADO_PAGO").reduce((s, v) => s + d0MainVal(v), 0);
+  let pix_esp = d0.filter((v) => v.banco === "ESPECIE").reduce((s, v) => s + d0MainVal(v), 0);
+  // 2o PIX (D+0): adiciona no banco_pix_2 correspondente
+  for (const v of d0) {
+    const pix2 = Number(v.entrada_pix_2 || 0);
+    if (pix2 <= 0) continue;
+    if (v.banco_pix_2 === "ITAU") pix_itau += pix2;
+    else if (v.banco_pix_2 === "INFINITE") pix_inf += pix2;
+    else if (v.banco_pix_2 === "MERCADO_PAGO") pix_mp += pix2;
+  }
 
   // 2b. Entradas PIX/espécie de vendas D+1 de hoje (PIX entra D+0, cartão D+1)
   const { data: vendasD1Hoje } = await supabase
@@ -76,12 +88,18 @@ export async function recalcularSaldoDia(
 
   for (const v of (vendasD1Hoje ?? []) as Venda[]) {
     const pixVal = Number(v.entrada_pix || 0);
+    const pix2Val = Number(v.entrada_pix_2 || 0);
     const espVal = Number(v.entrada_especie || 0);
     const bancoPix = v.banco_pix || v.banco || "";
     if (pixVal > 0) {
       if (bancoPix === "ITAU") pix_itau += pixVal;
       else if (bancoPix === "INFINITE") pix_inf += pixVal;
       else if (bancoPix === "MERCADO_PAGO") pix_mp += pixVal;
+    }
+    if (pix2Val > 0 && v.banco_pix_2) {
+      if (v.banco_pix_2 === "ITAU") pix_itau += pix2Val;
+      else if (v.banco_pix_2 === "INFINITE") pix_inf += pix2Val;
+      else if (v.banco_pix_2 === "MERCADO_PAGO") pix_mp += pix2Val;
     }
     if (espVal > 0) pix_esp += espVal;
   }
@@ -118,7 +136,7 @@ export async function recalcularSaldoDia(
         else if (v.banco === "INFINITE") d1_inf += val;
         else if (v.banco === "MERCADO_PAGO") d1_mp += val;
       } else {
-        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_pix_2 || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
         if (val > 0) {
           if (v.banco === "ITAU") d1_itau += val;
           else if (v.banco === "INFINITE") d1_inf += val;

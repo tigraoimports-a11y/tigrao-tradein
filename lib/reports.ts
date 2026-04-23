@@ -9,9 +9,18 @@ import { getTaxa, calcularLiquido } from "./taxas";
 import { recalcularSaldoDia } from "./saldos";
 
 function sumByBanco(vendas: Venda[], banco: string): number {
+  // Banco principal recebe preco_vendido - entrada_pix_2; o 2o PIX vai pro
+  // banco_pix_2 via addSegundoPix.
   return vendas
     .filter((v) => v.banco === banco)
-    .reduce((s, v) => s + Number(v.preco_vendido), 0);
+    .reduce((s, v) => s + Number(v.preco_vendido) - Number(v.entrada_pix_2 || 0), 0);
+}
+
+/** Soma entrada_pix_2 nas vendas cujo banco_pix_2 === banco. */
+function sumSegundoPix(vendas: Venda[], banco: string): number {
+  return vendas
+    .filter((v) => v.banco_pix_2 === banco && Number(v.entrada_pix_2 || 0) > 0)
+    .reduce((s, v) => s + Number(v.entrada_pix_2), 0);
 }
 
 function sumByBancoField(rows: { valor: number; banco: string | null }[], banco: string): number {
@@ -120,9 +129,9 @@ export async function gerarNoite(
     .neq("status_pagamento", "PROGRAMADA");
 
   const d0 = (vendasHoje ?? []) as Venda[];
-  let pix_itau = sumByBanco(d0, "ITAU");
-  let pix_inf = sumByBanco(d0, "INFINITE");
-  let pix_mp = sumByBanco(d0, "MERCADO_PAGO");
+  let pix_itau = sumByBanco(d0, "ITAU") + sumSegundoPix(d0, "ITAU");
+  let pix_inf = sumByBanco(d0, "INFINITE") + sumSegundoPix(d0, "INFINITE");
+  let pix_mp = sumByBanco(d0, "MERCADO_PAGO") + sumSegundoPix(d0, "MERCADO_PAGO");
   let pix_esp = sumByBanco(d0, "ESPECIE");
 
   // 2b. Entradas PIX/espécie de vendas D+1 de hoje (PIX entra no D+0, cartão no D+1)
@@ -136,12 +145,18 @@ export async function gerarNoite(
 
   for (const v of (vendasD1Hoje ?? []) as Venda[]) {
     const pixVal = Number(v.entrada_pix || 0);
+    const pix2Val = Number(v.entrada_pix_2 || 0);
     const espVal = Number(v.entrada_especie || 0);
     const bancoPix = v.banco_pix || v.banco || "";
     if (pixVal > 0) {
       if (bancoPix === "ITAU") pix_itau += pixVal;
       else if (bancoPix === "INFINITE") pix_inf += pixVal;
       else if (bancoPix === "MERCADO_PAGO") pix_mp += pixVal;
+    }
+    if (pix2Val > 0 && v.banco_pix_2) {
+      if (v.banco_pix_2 === "ITAU") pix_itau += pix2Val;
+      else if (v.banco_pix_2 === "INFINITE") pix_inf += pix2Val;
+      else if (v.banco_pix_2 === "MERCADO_PAGO") pix_mp += pix2Val;
     }
     if (espVal > 0) pix_esp += espVal;
   }
@@ -185,7 +200,7 @@ export async function gerarNoite(
         else if (v.banco === "MERCADO_PAGO") d1_mp += val;
       } else {
         // Fallback: preco_vendido - partes que já entraram no D+0
-        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_pix_2 || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
         if (val > 0) {
           if (v.banco === "ITAU") d1_itau += val;
           else if (v.banco === "INFINITE") d1_inf += val;
@@ -383,7 +398,7 @@ export async function gerarManha(
         else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
       } else {
         // Fallback: preco_vendido - partes que já entraram no D+0 (PIX, espécie, troca)
-        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_pix_2 || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
         if (val > 0) {
           if (v.banco === "ITAU") creditos_itau += val;
           else if (v.banco === "INFINITE") creditos_inf += val;
