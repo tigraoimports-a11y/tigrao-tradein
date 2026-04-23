@@ -8,6 +8,7 @@ import { corParaPT, corParaEN } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 import { getPublicBaseUrl } from "@/lib/public-url";
+import { formatPedidoMessage, type PedidoData, type PedidoTrocaItem } from "@/lib/formatPedido";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -1700,58 +1701,94 @@ export default function GerarLinkPage() {
                   onClick={async () => {
                     const d = editDados;
                     const l = editLink;
-                    const extras = Array.isArray(editLinkExtras) ? editLinkExtras.filter(Boolean) : [];
-                    // Puxa precos individuais do carrinho (se existirem) pra
-                    // mostrar 'Produto N - R$ X'. Se o carrinho nao foi usado
-                    // (schema antigo ou edicao manual), so tem l.valor (total).
+                    // Monta o PedidoData e reusa formatPedidoMessage (mesma funcao
+                    // que o cliente usa no /compra). Garante que o formato do copy
+                    // bate com o que chega no grupo do WhatsApp (mesmas secoes,
+                    // mesmo calculo de parcelas, taxa de deslocamento etc).
                     const precosCarrinho = carrinhoLink.length > 0 ? carrinhoLink.map(c => c.preco || 0) : [];
                     const valorTotal = Number(l.valor) || 0;
-                    const descontoNum = Number(l.desconto) || 0;
-                    const trocaTotalNum = (Number(l.troca_valor) || 0) + (Number(l.troca_valor2) || 0);
-                    const valorFinal = Math.max(valorTotal - descontoNum - trocaTotalNum, 0);
                     const somaExtras = precosCarrinho.slice(1).reduce((s, p) => s + p, 0);
                     const precoP1 = precosCarrinho[0] ?? (somaExtras > 0 ? valorTotal - somaExtras : valorTotal);
+                    const extrasArr = Array.isArray(editLinkExtras) ? editLinkExtras.filter(Boolean) : [];
+                    // Parser simples de "Entrega - Shopping: X" → {local: "Shopping", shopping: "X"}
+                    // Se d.local vier ja cru ("Entrega"/"Correios"/"Loja"), usa direto.
+                    const parseLocal = (raw: string | undefined): { local: string; tipoEntrega?: "Residencia" | "Comercial"; shopping?: string } => {
+                      if (!raw) return { local: "" };
+                      if (/shopping/i.test(raw)) {
+                        const m = raw.match(/shopping[:\s-]+(.+)/i);
+                        return { local: "Shopping", shopping: m?.[1]?.trim() };
+                      }
+                      if (/correios/i.test(raw)) return { local: "Correios" };
+                      if (/retirad|loja/i.test(raw)) return { local: "Loja" };
+                      if (/comercial/i.test(raw)) return { local: "Entrega", tipoEntrega: "Comercial" };
+                      if (/resid/i.test(raw) || /entrega/i.test(raw)) return { local: "Entrega", tipoEntrega: "Residencia" };
+                      return { local: raw };
+                    };
+                    const locInfo = parseLocal(d.local);
 
-                    const lines: string[] = ["*PEDIDO — TIGRAO IMPORTS*", ""];
-                    const fmtBR = (n: number) => Number(n).toLocaleString("pt-BR");
-                    if (extras.length > 0) {
-                      if (l.produto) lines.push(`*Produto 1:* ${l.produto}${l.cor ? ` — ${l.cor}` : ""}${precoP1 > 0 ? ` — R$ ${fmtBR(precoP1)}` : ""}`);
-                      extras.forEach((pe, i) => {
-                        const pExtra = precosCarrinho[i + 1] || 0;
-                        lines.push(`*Produto ${i + 2}:* ${pe}${pExtra > 0 ? ` — R$ ${fmtBR(pExtra)}` : ""}`);
-                      });
-                      if (valorTotal > 0) lines.push(`*Subtotal:* R$ ${fmtBR(valorTotal)}`);
-                    } else {
-                      if (l.produto) lines.push(`*Produto:* ${l.produto}${l.cor ? ` — ${l.cor}` : ""}${valorTotal > 0 ? ` — R$ ${fmtBR(valorTotal)}` : ""}`);
+                    const trocaAparelhos: PedidoTrocaItem[] = [];
+                    if (Number(l.troca_valor) > 0 || l.troca_produto) {
+                      trocaAparelhos.push({ modelo: l.troca_produto || "Produto na troca", cor: l.troca_cor || undefined, valor: Number(l.troca_valor) || 0 });
                     }
-                    if (descontoNum > 0) lines.push(`*Desconto:* - R$ ${fmtBR(descontoNum)}`);
-                    if (descontoNum > 0 || extras.length > 0 || trocaTotalNum > 0) {
-                      lines.push(`*Total com desconto:* R$ ${fmtBR(valorFinal)}`);
+                    if (Number(l.troca_valor2) > 0 || l.troca_produto2) {
+                      trocaAparelhos.push({ modelo: l.troca_produto2 || "Produto na troca 2", valor: Number(l.troca_valor2) || 0 });
                     }
-                    lines.push("");
-                    const nome = d.nome || l.cliente_nome;
-                    if (nome) lines.push(`*Cliente:* ${nome}`);
-                    const cpf = d.cpf || d.cnpj || l.cliente_cpf;
-                    if (cpf) lines.push(`*${d.pessoa === "PJ" ? "CNPJ" : "CPF"}:* ${cpf}`);
-                    const tel = d.telefone || l.cliente_telefone;
-                    if (tel) lines.push(`*Telefone:* ${tel}`);
-                    if (d.email || l.cliente_email) lines.push(`*Email:* ${d.email || l.cliente_email}`);
-                    if (d.instagram) lines.push(`*Instagram:* ${d.instagram}`);
-                    const endereco = d.endereco_completo || (d.endereco ? `${d.endereco}${d.numero ? `, ${d.numero}` : ""}${d.complemento ? ` - ${d.complemento}` : ""}` : "");
-                    if (endereco) { lines.push(""); lines.push(`*Endereco:* ${endereco}`); }
-                    if (d.bairro) lines.push(`*Bairro:* ${d.bairro}`);
-                    if (d.cep) lines.push(`*CEP:* ${d.cep}`);
-                    lines.push("");
-                    const pgto = d.forma_pagamento || l.forma_pagamento;
-                    if (pgto) lines.push(`*Pagamento:* ${pgto}${d.parcelas ? ` ${d.parcelas}` : (l.parcelas ? ` ${l.parcelas}x` : "")}`);
-                    if (d.entrada_pix || Number(l.entrada) > 0) lines.push(`*Entrada PIX:* R$ ${Number(d.entrada_pix || l.entrada).toLocaleString("pt-BR")}`);
-                    if (viewDataLink.pagamento_pago) lines.push(`*Status:* Pago via ${viewDataLink.pagamento_pago === "link" ? "Link" : "PIX"}`);
-                    if (Number(l.troca_valor) > 0) { lines.push(""); lines.push(`*Troca:* ${l.troca_produto || "Produto na troca"} — R$ ${Number(l.troca_valor).toLocaleString("pt-BR")}`); }
-                    if (Number(l.troca_valor2) > 0) lines.push(`*Troca 2:* ${l.troca_produto2 || "Produto na troca"} — R$ ${Number(l.troca_valor2).toLocaleString("pt-BR")}`);
-                    if (d.data_entrega || d.horario) { lines.push(""); lines.push(`*Entrega:* ${d.data_entrega || ""} ${d.horario || ""}`.trim()); }
-                    if (d.local) lines.push(`*Local:* ${d.local}`);
-                    if (d.origem) lines.push(`*Origem:* ${d.origem}`);
-                    try { await navigator.clipboard.writeText(lines.join("\n")); setPasteMsg("✅ Copiado para WhatsApp!"); } catch { setPasteMsg("❌ Erro ao copiar"); }
+
+                    const pedido: PedidoData = {
+                      cliente: {
+                        nome: d.nome || l.cliente_nome || "",
+                        pessoa: (d.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
+                        cpf: d.cpf || (d.pessoa !== "PJ" ? l.cliente_cpf : undefined) || undefined,
+                        cnpj: d.cnpj || undefined,
+                        email: d.email || l.cliente_email || undefined,
+                        telefone: d.telefone || l.cliente_telefone || undefined,
+                        instagram: d.instagram || undefined,
+                        cep: d.cep || undefined,
+                        endereco: d.endereco || undefined,
+                        numero: d.numero || undefined,
+                        complemento: d.complemento || undefined,
+                        bairro: d.bairro || undefined,
+                      },
+                      produto: (() => {
+                        // l.cor eh salvo em EN ("White") e l.produto ja inclui a cor
+                        // PT no final ("iPhone 17 256GB Branco"). Converte cor pra PT
+                        // e remove do nome pra nao duplicar ("Branco — White").
+                        const corPT = l.cor ? corParaPT(l.cor) : "";
+                        const corFinal = corPT && corPT !== "—" ? corPT : l.cor || "";
+                        let nome = l.produto || "";
+                        if (corFinal) {
+                          const escaped = corFinal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                          nome = nome.replace(new RegExp(`\\s+${escaped}\\s*$`, "i"), "").trim();
+                        }
+                        return {
+                          nome,
+                          cor: corFinal || undefined,
+                          preco: extrasArr.length > 0 ? precoP1 : valorTotal,
+                          extras: extrasArr.length > 0
+                            ? extrasArr.map((n, i) => ({ nome: n, preco: precosCarrinho[i + 1] || 0 }))
+                            : undefined,
+                        };
+                      })(),
+                      pagamento: {
+                        forma: d.forma_pagamento || l.forma_pagamento || undefined,
+                        parcelas: d.parcelas || l.parcelas || undefined,
+                        entrada: Number(d.entrada_pix || l.entrada) || undefined,
+                        desconto: Number(l.desconto) || undefined,
+                        pagamentoPago: (viewDataLink.pagamento_pago as "mp" | "pix" | null) || null,
+                      },
+                      troca: trocaAparelhos.length > 0 ? { aparelhos: trocaAparelhos } : undefined,
+                      entrega: {
+                        local: locInfo.local,
+                        tipoEntrega: locInfo.tipoEntrega,
+                        shopping: locInfo.shopping,
+                        data: d.data_entrega || undefined,
+                        horario: d.horario || undefined,
+                        vendedor: d.vendedor || undefined,
+                        origem: d.origem || undefined,
+                      },
+                    };
+                    const msg = formatPedidoMessage(pedido);
+                    try { await navigator.clipboard.writeText(msg); setPasteMsg("✅ Copiado para WhatsApp!"); } catch { setPasteMsg("❌ Erro ao copiar"); }
                   }}
                   className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"
                 >
