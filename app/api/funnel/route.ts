@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { rateLimitPublic } from "@/lib/rate-limit";
 
-// POST — insert analytics event
+// POST — insert funnel/tracking event
+// Endpoint propositalmente chamado /api/funnel (e nao /api/analytics) porque
+// adblockers (uBlock, Brave, etc) bloqueiam URLs com "analytics" e isso fazia
+// 99% dos eventos serem perdidos silenciosamente em produ
 export async function POST(req: NextRequest) {
   const limited = rateLimitPublic(req);
   if (limited) return limited;
@@ -23,31 +26,28 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
-      console.error("Analytics insert error:", error);
+      console.error("Funnel insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Analytics POST error:", err);
+    console.error("Funnel POST error:", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
 
-// GET — aggregated analytics for admin panel
+// GET — aggregated funnel data for admin panel
 export async function GET(req: NextRequest) {
   try {
     const pw = req.headers.get("x-admin-password") || "";
-    // Auth check — same pattern as other admin endpoints
     const adminPw = process.env.ADMIN_PASSWORD || "";
     if (!adminPw) {
       return NextResponse.json({ error: "ADMIN_PASSWORD not configured" }, { status: 500 });
     }
 
-    // Also accept Supabase service role auth (for users authenticated via /api/auth)
     let authorized = pw === adminPw;
     if (!authorized) {
-      // Try to validate via admin_users table (same as other admin pages)
       const { data: userRow } = await supabase
         .from("admin_users")
         .select("id")
@@ -69,9 +69,7 @@ export async function GET(req: NextRequest) {
     } else if (range === "30d") {
       fromDate = new Date(now.getTime() - 30 * 86400000).toISOString();
     }
-    // "all" => no date filter
 
-    // Fetch all events in range
     let query = supabase
       .from("tradein_analytics")
       .select("*")
@@ -84,23 +82,27 @@ export async function GET(req: NextRequest) {
     const { data: events, error } = await query;
 
     if (error) {
-      console.error("Analytics GET error:", error);
+      console.error("Funnel GET error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const rows = events || [];
 
-    // Aggregate: sessions per step
     const sessions = new Set<string>();
+    const siteViewSessions = new Set<string>();
+    const startedSessions = new Set<string>();
     const stepViews: Record<number, Set<string>> = {};
     const stepCompletes: Record<number, Set<string>> = {};
     const questionAnswers: Record<string, Set<string>> = {};
-    let whatsappCount = 0;
-    let exitCount = 0;
-    let cotarOutroCount = 0;
+    const whatsappSessions = new Set<string>();
+    const exitSessions = new Set<string>();
+    const cotarOutroSessions = new Set<string>();
 
     for (const row of rows) {
       sessions.add(row.session_id);
+
+      if (row.event === "site_view") siteViewSessions.add(row.session_id);
+      if (row.event === "question_answer") startedSessions.add(row.session_id);
 
       if (row.event === "step_view" && row.step != null) {
         if (!stepViews[row.step]) stepViews[row.step] = new Set();
@@ -118,19 +120,26 @@ export async function GET(req: NextRequest) {
         questionAnswers[key].add(row.session_id);
       }
 
-      if (row.event === "quote_whatsapp") whatsappCount++;
-      if (row.event === "quote_exit") exitCount++;
-      if (row.event === "quote_cotar_outro") cotarOutroCount++;
+      if (row.event === "quote_whatsapp") whatsappSessions.add(row.session_id);
+      if (row.event === "quote_exit") exitSessions.add(row.session_id);
+      if (row.event === "quote_cotar_outro") cotarOutroSessions.add(row.session_id);
     }
 
-    // Build funnel
-    const funnel = [1, 2, 3, 4].map((step) => ({
-      step,
-      views: stepViews[step]?.size || 0,
-      completes: stepCompletes[step]?.size || 0,
-    }));
+    // Visitas: prefer site_view, mas se ainda nao tem (deploy recente),
+    // usa o total de sessoes como aproxima
+    const visits = siteViewSessions.size > 0 ? siteViewSessions.size : sessions.size;
 
-    // Build question breakdown for step 1 (most interesting for drop-off)
+    const funnel = [1, 2, 3, 4].map((step) => {
+      const views = stepViews[step]?.size || 0;
+      const completes = stepCompletes[step]?.size || 0;
+      return {
+        step,
+        views,
+        completes,
+        droppedHere: Math.max(views - completes, 0),
+      };
+    });
+
     const questionBreakdown = Object.entries(questionAnswers)
       .map(([key, set]) => {
         const [stepStr, question] = key.split(":");
@@ -138,7 +147,6 @@ export async function GET(req: NextRequest) {
       })
       .sort((a, b) => a.step - b.step || b.sessions - a.sessions);
 
-    // Daily sessions for chart
     const dailySessions: Record<string, Set<string>> = {};
     for (const row of rows) {
       const day = row.created_at.slice(0, 10);
@@ -150,19 +158,21 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     return NextResponse.json({
+      visits,
+      startedCount: startedSessions.size,
       totalSessions: sessions.size,
-      whatsappCount,
-      exitCount,
-      cotarOutroCount,
+      whatsappCount: whatsappSessions.size,
+      exitCount: exitSessions.size,
+      cotarOutroCount: cotarOutroSessions.size,
       funnel,
       questionBreakdown,
       daily,
-      conversionRate: sessions.size > 0
-        ? ((whatsappCount / sessions.size) * 100).toFixed(1)
+      conversionRate: visits > 0
+        ? ((whatsappSessions.size / visits) * 100).toFixed(1)
         : "0",
     });
   } catch (err) {
-    console.error("Analytics GET error:", err);
+    console.error("Funnel GET error:", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
