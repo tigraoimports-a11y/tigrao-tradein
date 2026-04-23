@@ -73,6 +73,21 @@ export default function StepQuote(p: StepQuoteProps) {
 
   const qt: QuoteResult = calculateQuote(tradeInValue, newPrice);
   const dif = qt.pix;
+
+  // Meta Pixel — ViewContent quando cliente VE a cotacao (mesmo sem clicar
+  // em "fechar"). Alimenta audiencia "Viu cotacao" no Meta Ads pra remarketing.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as { fbq?: (...args: unknown[]) => void };
+    if (!w.fbq) return;
+    w.fbq("track", "ViewContent", {
+      content_name: `${newModel} ${newStorage}`,
+      content_category: "trade-in-cotacao",
+      value: dif,
+      currency: "BRL",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const entNum = Math.min(Math.max(parseFloat(entradaStr.replace(",","."))||0,0), dif-1);
   const temEnt = entNum > 0; const rest = dif - entNum;
   const qr: QuoteResult = temEnt ? calculateQuote(0, rest) : qt;
@@ -346,7 +361,32 @@ export default function StepQuote(p: StepQuoteProps) {
             setFechando(true);
             onTrackAction?.("quote_whatsapp");
             salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag });
-            if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).fbq) (window as unknown as Record<string, (a: string, b: string, c: Record<string, unknown>) => void>).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" });
+            // Meta Pixel — Advanced Matching + Purchase pra alimentar Lookalike
+            // Audience de quem fechou pedido (Meta valoriza Purchase muito mais
+            // que CompleteRegistration na otimizacao e na criacao de Lookalikes).
+            if (typeof window !== "undefined") {
+              const w = window as unknown as { fbq?: (...args: unknown[]) => void };
+              const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+              if (w.fbq) {
+                if (pixelId) {
+                  // Re-init com user_data — Meta hasheia automaticamente os
+                  // campos em/ph/fn/ln antes de enviar (matching server-side).
+                  const parts = (clienteNome || "").trim().split(/\s+/);
+                  const fn = (parts[0] || "").toLowerCase();
+                  const ln = parts.slice(1).join(" ").toLowerCase();
+                  const ph = (clienteWhatsApp || "").replace(/\D/g, "");
+                  w.fbq("init", pixelId, { fn, ln, ph, country: "br" });
+                }
+                const eventParams = {
+                  content_name: `${newModel} ${newStorage}`,
+                  content_category: "trade-in-fechou",
+                  value: dif,
+                  currency: "BRL",
+                };
+                w.fbq("track", "Purchase", eventParams);
+                w.fbq("track", "CompleteRegistration", eventParams);
+              }
+            }
             // Criar short_code ANTES de navegar, pra que /compra receba ?short=<code>
             // e consiga salvar o cliente_dados_preenchidos na submissão. window.location.href
             // (diferente de window.open) funciona bem após await no Safari.
