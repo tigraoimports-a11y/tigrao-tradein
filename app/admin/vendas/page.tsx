@@ -829,6 +829,7 @@ export default function VendasPage() {
     if (compAltVal <= 0) return;
     const compVal = parseFloat(form.valor_comprovante_input) || 0;
     const pix = parseFloat(form.entrada_pix) || 0;
+    const pix2 = parseFloat(form.entrada_pix_2) || 0;
     const esp = parseFloat(form.entrada_especie) || 0;
     const trc1 = parseFloat(form.produto_na_troca) || 0;
     const trc2 = parseFloat(form.produto_na_troca2) || 0;
@@ -842,7 +843,7 @@ export default function VendasPage() {
         : form.forma === "DEBITO" ? 0.75 : 0;
       liqPrinc = tx > 0 ? calcularLiquido(compVal, tx) : compVal;
     }
-    const newVendido = String(Math.round(liqPrinc + liqAlt + pix + esp + trc));
+    const newVendido = String(Math.round(liqPrinc + liqAlt + pix + pix2 + esp + trc));
     if (produtosCarrinho.length === 0) {
       setForm(f => f.preco_vendido === newVendido ? f : { ...f, preco_vendido: newVendido });
     } else if (produtosCarrinho.length === 1) {
@@ -850,7 +851,7 @@ export default function VendasPage() {
         ? [{ ...prev[0], preco_vendido: newVendido }]
         : prev);
     }
-  }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt, form.valor_comprovante_input, form.entrada_pix, form.entrada_especie, form.produto_na_troca, form.produto_na_troca2, form.forma, form.banco, form.bandeira, form.qnt_parcelas, produtosCarrinho.length]);
+  }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt, form.valor_comprovante_input, form.entrada_pix, form.entrada_pix_2, form.entrada_especie, form.produto_na_troca, form.produto_na_troca2, form.forma, form.banco, form.bandeira, form.qnt_parcelas, produtosCarrinho.length]);
 
   // Auto-desbloquear para quem tem vendas_andamento mas não vendas_ver (equipe como Bianca)
   useEffect(() => {
@@ -922,8 +923,10 @@ export default function VendasPage() {
   const preco = parseFloat(form.preco_vendido) || 0;
   const valorTroca = (parseFloat(form.produto_na_troca) || 0) + (parseFloat(form.produto_na_troca2) || 0);
   const entradaPix = parseFloat(form.entrada_pix) || 0;
+  const entradaPix2 = parseFloat(form.entrada_pix_2) || 0;
   const entradaEspecie = parseFloat(form.entrada_especie) || 0;
-  const valorCartao = preco - valorTroca - entradaPix - entradaEspecie;
+  // 2o PIX sai do banco principal — entra no calculo como entrada PIX extra.
+  const valorCartao = preco - valorTroca - entradaPix - entradaPix2 - entradaEspecie;
   const parcelas = parseInt(form.qnt_parcelas) || 0;
   const taxa = form.forma === "CARTAO"
     ? getTaxa(form.banco, form.bandeira || null, parcelas, form.forma)
@@ -945,16 +948,17 @@ export default function VendasPage() {
     ? calcularLiquido(valorComprovanteInput > 0 ? valorComprovanteInput : comprovante || parteCartao, taxa)
     : parteCartao;
   const creditoLojaNum = parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0;
-  const totalRealRecebido = valorLiquido + entradaPix + entradaEspecie + valorTroca + creditoLojaNum;
+  const totalRealRecebido = valorLiquido + entradaPix + entradaPix2 + entradaEspecie + valorTroca + creditoLojaNum;
   const lucro = totalRealRecebido - custo;
   const margem = totalRealRecebido > 0 ? (lucro / totalRealRecebido) * 100 : 0;
 
   // Helper: recalcular preco_vendido total quando muda qualquer componente do pagamento
-  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; troca2?: string; comp?: string; credito?: string }) => {
+  const recalcVendido = (overrides: { pix?: string; pix2?: string; especie?: string; troca?: string; troca2?: string; comp?: string; credito?: string }) => {
     const compVal = parseFloat(overrides.comp ?? form.valor_comprovante_input) || 0;
     const curTaxa = taxa;
     const curForma = form.forma;
     const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
+    const pix2 = parseFloat(overrides.pix2 ?? form.entrada_pix_2) || 0;
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
     // Segundo cartão (comp_alt) — sempre incluído quando preenchido
     const compAltVal = parseFloat(form.comp_alt) || 0;
@@ -971,19 +975,22 @@ export default function VendasPage() {
 
     let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {
+      // Forma PIX: compVal ja inclui o 2o PIX (eles fazem parte do total
+      // recebido via PIX, so direcionado a bancos diferentes). Nao somar pix2
+      // aqui pra nao duplicar.
       result = String(Math.round(compVal + esp + trc + liqAlt + credLoja));
     } else if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
-      result = String(Math.round(liqCartao + pix + esp + trc + liqAlt + credLoja));
+      result = String(Math.round(liqCartao + pix + pix2 + esp + trc + liqAlt + credLoja));
     } else if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
-      const total = pix + esp + trc + compVal + liqAlt + credLoja;
+      const total = pix + pix2 + esp + trc + compVal + liqAlt + credLoja;
       if (total > 0) result = String(Math.round(total));
     } else if (credLoja > 0) {
       // Pagamento 100% via crédito de lojista (sem forma de pagamento adicional)
-      result = String(Math.round(pix + esp + trc + liqAlt + credLoja));
+      result = String(Math.round(pix + pix2 + esp + trc + liqAlt + credLoja));
     } else if (liqAlt > 0) {
       // Apenas 2o cartão preenchido
-      result = String(Math.round(pix + esp + trc + liqAlt));
+      result = String(Math.round(pix + pix2 + esp + trc + liqAlt));
     }
 
     // Se tem carrinho com 2+ produtos, distribuir automaticamente
@@ -3671,7 +3678,8 @@ export default function VendasPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div><p className={labelCls}>2º PIX (R$) — opcional</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_pix_2)} onChange={(e) => {
                   const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
-                  setForm(f => ({ ...f, entrada_pix_2: clean, ...(parseFloat(clean) > 0 && !f.banco_pix_2 ? { banco_pix_2: "INFINITE" } : {}) }));
+                  const newVendido = recalcVendido({ pix2: clean });
+                  setForm(f => ({ ...f, entrada_pix_2: clean, ...(newVendido ? { preco_vendido: newVendido } : {}), ...(parseFloat(clean) > 0 && !f.banco_pix_2 ? { banco_pix_2: "INFINITE" } : {}) }));
                 }} placeholder="0" className={inputCls} /></div>
                 {parseFloat(form.entrada_pix_2) > 0 && (
                   <div><p className={labelCls}>Banco do 2º PIX</p><select value={form.banco_pix_2} onChange={(e) => set("banco_pix_2", e.target.value)} className={selectCls}>
@@ -4109,6 +4117,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>2º PIX (R$) — opcional</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_pix_2)} onChange={(e) => {
                     const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                     setForm(f => ({ ...f, entrada_pix_2: clean, ...(parseFloat(clean) > 0 && !f.banco_pix_2 ? { banco_pix_2: "INFINITE" } : {}) }));
+                    recalcVendido({ pix2: clean });
                   }} placeholder="0" className={inputCls} /></div>
                   {parseFloat(form.entrada_pix_2) > 0 && (
                     <div><p className={labelCls}>Banco do 2º PIX</p><select value={form.banco_pix_2} onChange={(e) => set("banco_pix_2", e.target.value)} className={selectCls}>
