@@ -17,8 +17,31 @@ interface StepUsedDeviceMultiProps {
   modelDiscounts?: Record<string, ModelDiscounts>;
   questionsConfig?: TradeInQuestion[] | null;
   deviceType: MultiDeviceType;
-  onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
+  onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType; extraAnswers?: Record<string, unknown> }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
+}
+
+// Slugs que ja sao renderizados pela UI hardcoded. Qualquer pergunta do
+// questionsConfig cujo slug esteja fora dessa lista entra no bloco dinamico
+// "Perguntas adicionais" no final — permite admin adicionar perguntas novas
+// (ex: "Ciclos" pra MacBook, "Pulseira" pra Watch) via /admin/simulacoes sem
+// precisar mexer no componente.
+const HARDCODED_SLUGS = new Set([
+  "battery", "hasDamage", "hasOriginalBox", "hasWarranty", "hasWearMarks",
+  "partsReplaced", "peeling", "screenScratch", "sideScratch",
+  "warrantyMonth", "wearMarks",
+]);
+
+// Formata uma resposta dinamica pra exibir no resumo/WhatsApp.
+function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
+  if (value === undefined || value === null || value === "") return "—";
+  if (Array.isArray(value)) {
+    const labels = value.map((v) => q.opcoes.find((o) => o.value === v)?.label || String(v));
+    return labels.join(", ");
+  }
+  if (typeof value === "boolean") return value ? "Sim" : "Nao";
+  const opt = q.opcoes.find((o) => o.value === value);
+  return opt?.label || String(value);
 }
 
 // Helper to get question config by slug
@@ -154,6 +177,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const [hasOriginalBox, setHasOriginalBox] = useState<boolean|null>(null);
   const [cor, setCor] = useState("");
   const [coresDisponiveis, setCoresDisponiveis] = useState<Record<string, string[]>>({});
+  // Respostas das perguntas dinamicas (slugs fora do HARDCODED_SLUGS). Chave
+  // e o slug, valor depende do `tipo`: string pra selection/yesno,
+  // string[] pra multiselect, number pra numeric.
+  const [extraAnswers, setExtraAnswers] = useState<Record<string, unknown>>({});
 
   // Busca cores do catálogo/estoque quando muda o deviceType
   const fetchCores = useCallback(async () => {
@@ -249,6 +276,24 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, partsReplaced, hasWarranty, warrantyMonth, warrantyYear, md, hasOriginalBox, hasWearMarks, wearMarksDiscount, calcDeviceType]);
 
+  // Perguntas dinamicas ativas: qualquer pergunta do DB com slug fora dos
+  // hardcoded. Ordena por `ordem` pra respeitar a sequencia configurada no admin.
+  const dynamicQuestions = useMemo(() => {
+    if (!qc) return [];
+    return qc
+      .filter((q) => q.ativo !== false && !HARDCODED_SLUGS.has(q.slug))
+      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  }, [qc]);
+
+  // Valida: toda pergunta dinamica precisa ter resposta (exceto multiselect,
+  // que pode ficar vazio). Pra simplificar, considera "nao respondida" se a
+  // chave nao existe em extraAnswers. Multiselect com [] conta como respondida.
+  const dynamicOk = dynamicQuestions.every((q) => {
+    const v = extraAnswers[q.slug];
+    if (q.tipo === "multiselect") return v !== undefined;
+    return v !== undefined && v !== null && v !== "";
+  });
+
   const isExcluded = excludedModels.some((m) => model.toLowerCase().includes(m.toLowerCase()));
   const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= 1 && battery <= 100);
   // New wear marks system: if hasWearMarks is active, skip old screenScratch/sideScratch/peeling checks
@@ -261,7 +306,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
   const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
   const boxOk = !isQActive(qc, "hasOriginalBox") || hasOriginalBox !== null;
-  const canProceed = model && storage && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
+  const canProceed = model && storage && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk && dynamicOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
   function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
@@ -681,8 +726,78 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </>
       )}
 
+      {/* Perguntas adicionais — cadastradas via /admin/simulacoes com slug
+          diferente dos hardcoded. Renderizacao generica por `tipo`. Admin
+          pode adicionar/editar/remover pra qualquer device_type sem precisar
+          mexer no codigo. */}
+      {model && !isExcluded && dynamicQuestions.length > 0 && dynamicQuestions.map((q) => {
+        const val = extraAnswers[q.slug];
+        const setVal = (v: unknown) => setExtraAnswers((prev) => ({ ...prev, [q.slug]: v }));
+        return (
+          <Section key={q.id || q.slug} title={q.titulo}>
+            {q.tipo === "yesno" && (
+              <div className="flex gap-2">
+                {(q.opcoes.length > 0 ? q.opcoes : [{ value: "yes", label: "Sim" }, { value: "no", label: "Nao" }]).map((opt) => (
+                  <Btn key={opt.value} sel={val === opt.value} onClick={() => { setVal(opt.value); tq(q.slug); }} className="flex-1">
+                    {opt.label}
+                  </Btn>
+                ))}
+              </div>
+            )}
+            {q.tipo === "selection" && (
+              <div className={`grid gap-2 ${q.opcoes.length <= 2 ? "grid-cols-2" : q.opcoes.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                {q.opcoes.map((opt) => (
+                  <Btn key={opt.value} sel={val === opt.value} onClick={() => { setVal(opt.value); tq(q.slug); }}>
+                    {opt.label}
+                  </Btn>
+                ))}
+              </div>
+            )}
+            {q.tipo === "multiselect" && (
+              <div className="grid grid-cols-2 gap-2">
+                {q.opcoes.map((opt) => {
+                  const arr = Array.isArray(val) ? (val as string[]) : [];
+                  const sel = arr.includes(opt.value);
+                  return (
+                    <Btn key={opt.value} sel={sel} onClick={() => {
+                      const next = sel ? arr.filter((v) => v !== opt.value) : [...arr, opt.value];
+                      setVal(next); tq(q.slug);
+                    }}>
+                      {sel ? "✓ " : ""}{opt.label}
+                    </Btn>
+                  );
+                })}
+                {/* Inicializa array vazio quando usuario nao marcou nada ainda, pra validacao saber que ja interagiu */}
+                {val === undefined && (
+                  <button onClick={() => setVal([])} className="col-span-2 text-[11px] text-[#86868B] underline py-1">Nenhum</button>
+                )}
+              </div>
+            )}
+            {q.tipo === "numeric" && (
+              <input
+                type="number"
+                inputMode="numeric"
+                value={typeof val === "number" ? String(val) : (typeof val === "string" ? val : "")}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  const num = raw === "" ? undefined : Number(raw);
+                  setVal(Number.isFinite(num as number) ? (num as number) : undefined);
+                  tq(q.slug);
+                }}
+                className="w-full px-4 py-3 rounded-xl text-[15px]"
+                style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }}
+                placeholder="Ex: 500"
+              />
+            )}
+          </Section>
+        );
+      })}
+
       {canProceed && (
-        <button onClick={() => onNext({ usedModel: model, usedStorage: storage, usedColor: cor, condition: cond, tradeInValue, deviceType: calcDeviceType })}
+        <button onClick={() => onNext({
+          usedModel: model, usedStorage: storage, usedColor: cor, condition: cond, tradeInValue, deviceType: calcDeviceType,
+          extraAnswers: dynamicQuestions.length > 0 ? extraAnswers : undefined,
+        })}
           className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
           style={{ backgroundColor: "#22c55e" }}>
           Ver minha avaliacao {"\u2192"}

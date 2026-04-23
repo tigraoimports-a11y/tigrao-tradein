@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getAnyConditionLines, type AnyConditionData, type DeviceType } from "@/lib/calculations";
+import type { TradeInQuestion } from "@/lib/types";
 import { getHoneypotValue } from "@/lib/honeypot-client";
 
 interface StepManualHandoffProps {
@@ -10,12 +11,19 @@ interface StepManualHandoffProps {
   usedColor?: string;
   condition: AnyConditionData;
   deviceType: DeviceType;
+  // Perguntas dinamicas respondidas no Step 1 (cadastradas via /admin/simulacoes
+  // com slug fora dos hardcoded). Usado pra montar a mensagem do WhatsApp e o
+  // resumo visual com TODAS as respostas — operador precisa disso pra avaliar.
+  extraAnswers?: Record<string, unknown>;
+  extraQuestions?: TradeInQuestion[];
   // 2o aparelho opcional
   usedModel2?: string;
   usedStorage2?: string;
   usedColor2?: string;
   condition2?: AnyConditionData;
   deviceType2?: DeviceType;
+  extraAnswers2?: Record<string, unknown>;
+  extraQuestions2?: TradeInQuestion[];
   // Produto novo escolhido
   newModel: string;
   newStorage: string;
@@ -32,6 +40,26 @@ interface StepManualHandoffProps {
   onGoToStep?: (step: number) => void;
 }
 
+// Formata uma resposta dinamica em string human-readable.
+function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
+  if (value === undefined || value === null || value === "") return "—";
+  if (Array.isArray(value)) {
+    const labels = value.map((v) => q.opcoes.find((o) => o.value === v)?.label || String(v));
+    return labels.length > 0 ? labels.join(", ") : "—";
+  }
+  if (typeof value === "boolean") return value ? "Sim" : "Nao";
+  const opt = q.opcoes.find((o) => o.value === value);
+  return opt?.label || String(value);
+}
+
+// Converte respostas dinamicas em pares { label, value } pra renderizar/exibir.
+function formatExtraLines(questions: TradeInQuestion[] | undefined, answers: Record<string, unknown> | undefined): { label: string; value: string }[] {
+  if (!questions || !answers) return [];
+  return questions
+    .map((q) => ({ label: q.titulo || q.slug, value: formatExtraAnswer(q, answers[q.slug]) }))
+    .filter((l) => l.value !== "—");
+}
+
 /**
  * Handoff pra avaliacao manual via WhatsApp. Renderizado em vez do StepQuote
  * quando o modelo usado nao tem preco base cadastrado (ou a categoria esta
@@ -40,7 +68,9 @@ interface StepManualHandoffProps {
 export default function StepManualHandoff(p: StepManualHandoffProps) {
   const {
     usedModel, usedStorage, usedColor, condition, deviceType,
+    extraAnswers, extraQuestions,
     usedModel2, usedStorage2, usedColor2, condition2, deviceType2,
+    extraAnswers2, extraQuestions2,
     newModel, newStorage, newPrice,
     clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem,
     whatsappNumero, vendedor, onReset, onGoToStep,
@@ -50,6 +80,10 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
 
   const hasSecond = !!(usedModel2 && usedStorage2);
   const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+
+  // Linhas das perguntas dinamicas pra resumo UI + mensagem WhatsApp
+  const extraLines1 = formatExtraLines(extraQuestions, extraAnswers);
+  const extraLines2 = formatExtraLines(extraQuestions2, extraAnswers2);
 
   function buildWhatsAppMsg(): string {
     const lines: string[] = [];
@@ -72,6 +106,8 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
     if (usedColor) lines.push(`Cor: ${usedColor}`);
     const condLines = getAnyConditionLines(deviceType, condition);
     if (condLines.length > 0) lines.push(`Condição: ${condLines.join(", ")}`);
+    // Perguntas dinamicas (cadastradas via /admin/simulacoes)
+    for (const l of extraLines1) lines.push(`${l.label}: ${l.value}`);
 
     if (hasSecond && condition2 && deviceType2) {
       lines.push("", `*Aparelho 2:*`);
@@ -79,6 +115,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
       if (usedColor2) lines.push(`Cor: ${usedColor2}`);
       const condLines2 = getAnyConditionLines(deviceType2, condition2);
       if (condLines2.length > 0) lines.push(`Condição: ${condLines2.join(", ")}`);
+      for (const l of extraLines2) lines.push(`${l.label}: ${l.value}`);
     }
 
     lines.push("");
@@ -92,6 +129,10 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
     try {
       const condLines = getAnyConditionLines(deviceType, condition);
       const condLines2 = hasSecond && condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
+      // Respostas dinamicas viram linhas "Label: Valor" e entram em condicaoLinhas
+      // pra chegar no admin junto com as condicoes hardcoded.
+      const extraLinesStr1 = extraLines1.map((l) => `${l.label}: ${l.value}`);
+      const extraLinesStr2 = extraLines2.map((l) => `${l.label}: ${l.value}`);
       await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,7 +151,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
           diferenca: 0,
           status: "AVALIACAO_MANUAL",
           formaPagamento: "WhatsApp Avaliacao Manual",
-          condicaoLinhas: condLines,
+          condicaoLinhas: [...condLines, ...extraLinesStr1],
           whatsappDestino: whatsappNumero,
           vendedor: vendedor || null,
           ...(hasSecond ? {
@@ -118,7 +159,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
             storageUsado2: usedStorage2,
             corUsado2: usedColor2 || "",
             avaliacaoUsado2: 0,
-            condicaoLinhas2: condLines2,
+            condicaoLinhas2: [...condLines2, ...extraLinesStr2],
           } : {}),
           website: getHoneypotValue(),
         }),
@@ -164,11 +205,31 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
             {usedModel} {usedStorage}
             {usedColor ? ` · ${usedColor}` : ""}
           </p>
+          {extraLines1.length > 0 && (
+            <div className="mt-2 space-y-0.5">
+              {extraLines1.map((l, i) => (
+                <p key={i} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
+                  <span className="font-medium">{l.label}:</span> {l.value}
+                </p>
+              ))}
+            </div>
+          )}
           {hasSecond && (
-            <p className="text-[14px] mt-1" style={{ color: "var(--ti-text)" }}>
-              {usedModel2} {usedStorage2}
-              {usedColor2 ? ` · ${usedColor2}` : ""}
-            </p>
+            <>
+              <p className="text-[14px] mt-3" style={{ color: "var(--ti-text)" }}>
+                {usedModel2} {usedStorage2}
+                {usedColor2 ? ` · ${usedColor2}` : ""}
+              </p>
+              {extraLines2.length > 0 && (
+                <div className="mt-2 space-y-0.5">
+                  {extraLines2.map((l, i) => (
+                    <p key={i} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
+                      <span className="font-medium">{l.label}:</span> {l.value}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

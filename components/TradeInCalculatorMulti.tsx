@@ -180,8 +180,11 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     !hasPriceFor(usedModel, usedStorage) ||
     (hasSecondDevice && (catForcesManual(deviceType2) || !hasPriceFor(usedModel2, usedStorage2)));
 
-  // Map MultiDeviceType to API device_type param
-  const apiDeviceType: DeviceType = selectedDeviceType === "watch" ? "iphone" : (selectedDeviceType || "iphone");
+  // Map MultiDeviceType ao device_type da API. A API /api/tradein-perguntas
+  // suporta "watch" nativamente (DEFAULT_QUESTIONS tem bloco proprio), entao
+  // nao coerce pra "iphone" como antes — isso fazia o Watch carregar
+  // perguntas do iPhone e ignorar as especificas cadastradas em /admin/simulacoes.
+  const apiDeviceType: MultiDeviceType = selectedDeviceType || "iphone";
 
   useEffect(() => {
     async function load() {
@@ -253,20 +256,41 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
   const [usedColor, setUsedColor] = useState("");
   const [usedColor2, setUsedColor2] = useState("");
+  // Respostas das perguntas dinamicas (criadas via /admin/simulacoes pra
+  // categorias nao-iPhone). Separado do `condition` hardcoded pra nao mexer
+  // no tipo `AnyConditionData`. Passa adiante pro StepManualHandoff e pro
+  // StepQuote (quando a avaliacao for manual — onde a info realmente importa).
+  const [extraAnswers, setExtraAnswers] = useState<Record<string, unknown> | undefined>(undefined);
+  const [extraAnswers2, setExtraAnswers2] = useState<Record<string, unknown> | undefined>(undefined);
+  // Snapshot das perguntas usadas em cada aparelho (pra formatar depois)
+  const [extraQuestions, setExtraQuestions] = useState<TradeInQuestion[]>([]);
+  const [extraQuestions2, setExtraQuestions2] = useState<TradeInQuestion[]>([]);
 
   function handleStep1Complete(data: {
     usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
+    extraAnswers?: Record<string, unknown>;
   }) {
     trackComplete(1);
     fbq("track", "ViewContent", { content_name: `${data.usedModel} ${data.usedStorage}`, content_category: "trade-in-usado" });
+    // Snapshot das perguntas dinamicas ativas no momento do submit — usa o
+    // questionsConfig atual, filtrado por slugs fora dos hardcoded.
+    const dynamicQs = (questionsConfig ?? []).filter(
+      (q) => q.ativo !== false && !["battery","hasDamage","hasOriginalBox","hasWarranty","hasWearMarks","partsReplaced","peeling","screenScratch","sideScratch","warrantyMonth","wearMarks"].includes(q.slug)
+    );
     if (step === 1) {
       setDeviceType(data.deviceType); setUsedModel(data.usedModel); setUsedStorage(data.usedStorage);
       setUsedColor(data.usedColor || "");
-      setCondition(data.condition); setTradeInValue(data.tradeInValue); setStep(1.5);
+      setCondition(data.condition); setTradeInValue(data.tradeInValue);
+      setExtraAnswers(data.extraAnswers);
+      setExtraQuestions(dynamicQs);
+      setStep(1.5);
     } else {
       setDeviceType2(data.deviceType); setUsedModel2(data.usedModel); setUsedStorage2(data.usedStorage);
       setUsedColor2(data.usedColor || "");
-      setCondition2(data.condition); setTradeInValue2(data.tradeInValue); setHasSecondDevice(true); setStep(2);
+      setCondition2(data.condition); setTradeInValue2(data.tradeInValue); setHasSecondDevice(true);
+      setExtraAnswers2(data.extraAnswers);
+      setExtraQuestions2(dynamicQs);
+      setStep(2);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -593,6 +617,8 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} condition={condition} deviceType={deviceType}
               usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
+              extraAnswers={extraAnswers} extraQuestions={extraQuestions}
+              extraAnswers2={hasSecondDevice ? extraAnswers2 : undefined} extraQuestions2={hasSecondDevice ? extraQuestions2 : undefined}
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
               whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal}
