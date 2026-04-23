@@ -1460,6 +1460,7 @@ export default function VendasPage() {
       if (gCompAlt > 0) {
         const gCompPrinc = Number(payloads[0].valor_comprovante || 0);
         const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+        const gEntradaPix2 = parseFloat(form.entrada_pix_2) || 0;
         const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
         const gTroca = parseFloat(String(payloads[0].produto_na_troca || "0")) || 0;
         const gForma = String(payloads[0].forma || form.forma);
@@ -1480,15 +1481,16 @@ export default function VendasPage() {
         // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa) — fix bug lucro exorbitante
         const liquidoPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
         const liquidoAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
-        payloads[0].preco_vendido = Math.round(liquidoPrinc + liquidoAlt + gEntradaPix + gEntradaEspecie + gTroca);
+        payloads[0].preco_vendido = Math.round(liquidoPrinc + liquidoAlt + gEntradaPix + gEntradaPix2 + gEntradaEspecie + gTroca);
       }
     }
     if (payloads.length > 1) {
       const comprovanteTotal = Number(payloads[0]?.valor_comprovante || 0);
       const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+      const gEntradaPix2 = parseFloat(form.entrada_pix_2) || 0;
       const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
-      // Redistribuir sempre que há algum pagamento global — comprovante, PIX ou espécie
-      if (comprovanteTotal > 0 || gEntradaPix > 0 || gEntradaEspecie > 0) {
+      // Redistribuir sempre que há algum pagamento global — comprovante, PIX (1o ou 2o) ou espécie
+      if (comprovanteTotal > 0 || gEntradaPix > 0 || gEntradaPix2 > 0 || gEntradaEspecie > 0) {
         // Calculate total custo for proportional distribution
         const totalCusto = payloads.reduce((s, p) => s + Number(p.custo || 0), 0);
 
@@ -1519,7 +1521,9 @@ export default function VendasPage() {
           const liquidoCartao = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
           const liquidoCartaoAlt = gCompAlt > 0 && gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
           // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa)
-          const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+          // gEntradaPix2 entra no total; na distribuicao fica inteira na row 0
+          // (ver bloco logo apos buildPayload), entao nao precisa distribuir.
+          const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaPix2 + gEntradaEspecie + totalTrocas;
 
           let vendidoDistribuido = 0;
           let pixDistribuido = 0;
@@ -1546,15 +1550,16 @@ export default function VendasPage() {
               especieDistribuido += especieProporcional;
             }
           }
-          // Passo 2: valor_comprovante por produto = preco - troca_do_produto - pix - especie
+          // Passo 2: valor_comprovante por produto = preco - troca_do_produto - pix - pix2 - especie
           // (troca pertence a UM produto específico, não pode ser distribuída; comprovante fecha a conta)
           // Se forma é cartão com taxa, converte líquido -> bruto
           for (let i = 0; i < payloads.length; i++) {
             const preco = Number(payloads[i].preco_vendido || 0);
             const troca = parseFloat(String(payloads[i].produto_na_troca || "0")) || 0;
             const pix = Number(payloads[i].entrada_pix || 0);
+            const pix2 = Number(payloads[i].entrada_pix_2 || 0);
             const esp = Number(payloads[i].entrada_especie || 0);
-            const compLiquido = preco - troca - pix - esp;
+            const compLiquido = preco - troca - pix - pix2 - esp;
             payloads[i].valor_comprovante = gTaxa > 0 && compLiquido > 0
               ? Math.round(compLiquido / (1 - gTaxa / 100))
               : Math.max(0, Math.round(compLiquido));
@@ -1588,10 +1593,17 @@ export default function VendasPage() {
         if (editandoGrupoIds.length > 1 || (editandoGrupoIds.length >= 1 && allProducts.length > editandoGrupoIds.length)) {
           // Build payloads and redistribute valor_comprovante/preco_vendido proportionally
           const groupPayloads: Record<string, unknown>[] = allProducts.map(p => buildPayload(p));
+          // Multi-produto: entrada_pix_2 fica inteira na primeira row (mesmo
+          // tratamento do fluxo Nova Venda).
+          for (let i = 1; i < groupPayloads.length; i++) {
+            groupPayloads[i].entrada_pix_2 = 0;
+            groupPayloads[i].banco_pix_2 = null;
+          }
           const comprovanteTotal = Number(groupPayloads[0]?.valor_comprovante || 0);
           const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+          const gEntradaPix2 = parseFloat(form.entrada_pix_2) || 0;
           const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
-          if (comprovanteTotal > 0 || gEntradaPix > 0 || gEntradaEspecie > 0) {
+          if (comprovanteTotal > 0 || gEntradaPix > 0 || gEntradaPix2 > 0 || gEntradaEspecie > 0) {
             const totalCusto = groupPayloads.reduce((s, p) => s + Number(p.custo || 0), 0);
             if (totalCusto > 0) {
               const gForma = form.forma;
@@ -1613,8 +1625,9 @@ export default function VendasPage() {
               // Converter BRUTO dos cartões em LIQUIDO — fix bug lucro exorbitante
               const liquidoCartao = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
               const liquidoCartaoAlt = gCompAlt > 0 && gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
-              // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa)
-              const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+              // preco_vendido = valor LIQUIDO (o que entrou no bolso após taxa).
+              // gEntradaPix2 entra no total; na distribuicao fica inteira na row 0.
+              const totalRecebido = liquidoCartao + liquidoCartaoAlt + gEntradaPix + gEntradaPix2 + gEntradaEspecie + totalTrocas;
 
               let vendidoDistribuido = 0;
               let pixDistribuido = 0;
@@ -1639,14 +1652,15 @@ export default function VendasPage() {
                   especieDistribuido += especieProporcional;
                 }
               }
-              // Passo 2: valor_comprovante por produto = preco - troca_do_produto - pix - especie
+              // Passo 2: valor_comprovante por produto = preco - troca_do_produto - pix - pix2 - especie
               // (troca pertence a UM produto; comprovante fecha a conta de cada venda)
               for (let i = 0; i < groupPayloads.length; i++) {
                 const preco = Number(groupPayloads[i].preco_vendido || 0);
                 const troca = parseFloat(String(groupPayloads[i].produto_na_troca || "0")) || 0;
                 const pix = Number(groupPayloads[i].entrada_pix || 0);
+                const pix2 = Number(groupPayloads[i].entrada_pix_2 || 0);
                 const esp = Number(groupPayloads[i].entrada_especie || 0);
-                const compLiquido = preco - troca - pix - esp;
+                const compLiquido = preco - troca - pix - pix2 - esp;
                 groupPayloads[i].valor_comprovante = gTaxa > 0 && compLiquido > 0
                   ? Math.round(compLiquido / (1 - gTaxa / 100))
                   : Math.max(0, Math.round(compLiquido));
