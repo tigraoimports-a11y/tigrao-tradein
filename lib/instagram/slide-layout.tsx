@@ -580,11 +580,16 @@ function LayoutEmanuelPessoa({ slide, config, meta }: { slide: SlideData; config
               alignItems: "center",
               justifyContent: "center",
               width: "100%",
-              height: 560,
+              // flex: 1 deixa a imagem ocupar TODO o espaco restante depois
+              // do texto (em vez de height fixo 560 que sobrava branco em
+              // slides com texto curto). minHeight evita que a imagem vire
+              // tirinha quando o texto for muito longo.
+              flex: 1,
+              minHeight: 360,
               borderRadius: 18,
               overflow: "hidden",
               backgroundColor: "#FFFFFF",
-              marginTop: "auto",
+              marginTop: 24,
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
