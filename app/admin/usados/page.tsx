@@ -783,6 +783,20 @@ export function UsadosContent() {
                     >
                       🚫 Excluir do simulador
                     </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`APAGAR "${modelo}" DE VEZ?\n\nIsso remove todos os armazenamentos, garantias, descontos por modelo e a entrada em "Excluidos" desse modelo. Nao da pra desfazer — so re-cadastrando.\n\nUse quando o modelo foi cadastrado errado ou saiu de catalogo.`)) return;
+                        const res = await apiPost({ action: "delete_modelo_full", modelo });
+                        if (!res.ok) { const j = await res.json().catch(() => ({})); alert(`Erro: ${j.error || "falha ao apagar"}`); return; }
+                        setValores((prev) => prev.filter((v) => v.modelo !== modelo));
+                        setDescontos((prev) => prev.filter((d) => !d.condicao.startsWith(`${modelo} - `)));
+                        setExcluidos((prev) => prev.filter((m) => m !== modelo));
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs font-semibold text-white bg-red-600 border border-red-700 hover:bg-red-700 transition-colors whitespace-nowrap"
+                      title="Apaga o modelo completamente do banco (todos os armazenamentos, garantias e descontos). Diferente de 'Excluir do simulador' — nao da pra desfazer."
+                    >
+                      🗑️ Apagar de vez
+                    </button>
                   </div>
                 </div>
                 <table className="w-full text-sm">

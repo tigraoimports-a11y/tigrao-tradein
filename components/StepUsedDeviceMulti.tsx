@@ -100,16 +100,15 @@ function extractLines(models: string[], deviceType: MultiDeviceType): string[] {
       });
       return [...s].sort();
     case "watch":
-      // Apenas 3 linhas top-level: SE / Series / Ultra. A geracao especifica
-      // (Series 9, SE 3o, Ultra 2) aparece no step seguinte como chipGroup.
+      // Apenas 3 linhas top-level: SE / Series / Ultra. Modelos que nao casam
+      // com nenhum padrao sao ignorados (nao criamos linha "Apple Watch"
+      // generica — antes virava despejo de todos os modelos).
       models.forEach((m) => {
         if (/Apple Watch SE/i.test(m)) { s.add("SE"); return; }
         if (/Apple Watch Ultra/i.test(m)) { s.add("Ultra"); return; }
         if (/Apple Watch (?:Series )?\d+/i.test(m)) { s.add("Series"); return; }
-        s.add("Watch");
       });
-      // Ordem: SE, Series, Ultra (Watch fallback por ultimo)
-      const order = ["SE", "Series", "Ultra", "Watch"];
+      const order = ["SE", "Series", "Ultra"];
       return [...s].sort((a, b) => order.indexOf(a) - order.indexOf(b));
     default:
       return [];
@@ -133,7 +132,7 @@ function getModelsInLine(allModels: string[], line: string, deviceType: MultiDev
       if (line === "SE") return allModels.filter((m) => /Apple Watch SE/i.test(m));
       if (line === "Ultra") return allModels.filter((m) => /Apple Watch Ultra/i.test(m));
       if (line === "Series") return allModels.filter((m) => /Apple Watch (?:Series )?\d+/i.test(m) && !/Apple Watch SE/i.test(m) && !/Apple Watch Ultra/i.test(m));
-      return allModels;
+      return [];
     default:
       return [];
   }
@@ -211,7 +210,13 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   }, [model, coresDisponiveis]);
 
   const filtered = useMemo(() => filterByDeviceType(usedValues, deviceType), [usedValues, deviceType]);
-  const allModels = useMemo(() => getUniqueUsedModels(filtered), [filtered]);
+  // Excluidos pelo admin em /admin/usados — comparacao case-insensitive mas
+  // MATCH EXATO (nao substring). Excluir "iPhone 11" nao pode derrubar "iPhone 11 Pro".
+  const excludedSet = useMemo(() => new Set(excludedModels.map(m => m.toLowerCase())), [excludedModels]);
+  const allModels = useMemo(() => {
+    const all = getUniqueUsedModels(filtered);
+    return all.filter(m => !excludedSet.has(m.toLowerCase()));
+  }, [filtered, excludedSet]);
   const lines = useMemo(() => extractLines(allModels, deviceType), [allModels, deviceType]);
   const modelsInLine = useMemo(() => getModelsInLine(allModels, line, deviceType), [allModels, line, deviceType]);
 
@@ -254,6 +259,9 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     // sem chip M), nao agrupa por chip — renderiza modelos direto pra nao mostrar
     // aba "iPad Outro" desnecessaria. O mesmo vale pra Watch sem geracao definida.
     if (Object.keys(groups).length === 1 && groups["Outro"]) return null;
+    // Se tem outros chips validos + "Outro", descarta o "Outro" pra nao confundir
+    // o cliente com uma aba "SE Outro" fantasma quando existe um modelo mal cadastrado.
+    if (Object.keys(groups).length > 1 && groups["Outro"]) delete groups["Outro"];
     return Object.keys(groups).length > 0 ? groups : null;
   }, [modelsInLine, deviceType]);
 
@@ -330,7 +338,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     return v !== undefined && v !== null && v !== "";
   });
 
-  const isExcluded = excludedModels.some((m) => model.toLowerCase().includes(m.toLowerCase()));
+  const isExcluded = excludedSet.has(model.toLowerCase());
   const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= 1 && battery <= 100);
   // New wear marks system: if hasWearMarks is active, skip old screenScratch/sideScratch/peeling checks
   const wearMarksOk = !isQActive(qc, "hasWearMarks") || hasWearMarks === false || (hasWearMarks === true && (!isQActive(qc, "wearMarks") || wearMarks.length > 0));
@@ -358,6 +366,14 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       setHasDamage(null);
     }
   }, [autoModel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select storage when there's only 1 option (ex: Apple Watch Ultra — sempre GPS+Celular).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (model && storages.length === 1 && storage !== storages[0]) {
+      setStorage(storages[0]);
+    }
+  }, [model, storages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deviceLabel = DEVICE_LABELS[deviceType];
 
@@ -421,7 +437,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </Section>
       ) : null}
 
-      {model && !isExcluded && storages.length > 0 && (
+      {model && !isExcluded && storages.length > 1 && (
         deviceType === "macbook" ? (
           // MacBook: agrupar por RAM e mostrar SSD separado
           (() => {
@@ -530,15 +546,25 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       {model && storage && !isExcluded && hasDamage === false && (
         <>
           {isQActive(qc, "battery") && (
-          <Section title={getQTitle(qc, "battery", "Saude da bateria")}>
+          <Section title={getQTitle(qc, "battery", deviceType === "macbook" ? "Ciclos de bateria" : "Saude da bateria")}>
             <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
               <div className="relative">
-                <input type="tel" inputMode="numeric" pattern="[0-9]*" value={battery ?? ""} placeholder="Ex: 87"
-                  onChange={(e) => { const r = e.target.value.replace(/\D/g, ""); if (r === "") { setBattery(null); return; } setBattery(Math.min(100, Number(r))); tq("battery"); }}
-                  className="w-full px-4 py-3 pr-10 rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors"
+                <input type="tel" inputMode="numeric" pattern="[0-9]*" value={battery ?? ""}
+                  placeholder={deviceType === "macbook" ? "Ex: 150" : "Ex: 87"}
+                  onChange={(e) => {
+                    const r = e.target.value.replace(/\D/g, "");
+                    if (r === "") { setBattery(null); return; }
+                    // MacBook: campo armazena ciclos (0..9999). Demais: saude em % (1..100).
+                    const cap = deviceType === "macbook" ? 9999 : 100;
+                    setBattery(Math.min(cap, Number(r)));
+                    tq("battery");
+                  }}
+                  className={`w-full px-4 py-3 ${deviceType === "macbook" ? "pr-4" : "pr-10"} rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors`}
                   style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
+                {deviceType !== "macbook" && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
+                )}
               </div>
               {deviceType === "iphone" && (
                 <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
@@ -564,11 +590,13 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               )}
               {deviceType === "macbook" && (
                 <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
+                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir os ciclos de bateria?</summary>
                   <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
                     <p>1. Clique no menu <strong style={{ color: "var(--ti-text)" }}>Apple</strong> {">"} <strong style={{ color: "var(--ti-text)" }}>Sobre Este Mac</strong></p>
                     <p>2. Clique em <strong style={{ color: "var(--ti-text)" }}>Mais Informacoes</strong></p>
-                    <p>3. Veja <strong style={{ color: "var(--ti-text)" }}>Bateria</strong> {">"} <strong style={{ color: "var(--ti-text)" }}>Saude</strong></p>
+                    <p>3. Role ate o final e clique em <strong style={{ color: "var(--ti-text)" }}>Relatorio do Sistema</strong></p>
+                    <p>4. Na barra lateral, clique em <strong style={{ color: "var(--ti-text)" }}>Energia</strong></p>
+                    <p>5. Veja <strong style={{ color: "var(--ti-text)" }}>Contagem de Ciclos</strong></p>
                   </div>
                 </details>
               )}
