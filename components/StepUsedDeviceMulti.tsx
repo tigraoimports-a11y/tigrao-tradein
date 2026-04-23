@@ -229,6 +229,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       if (!groups[chip]) groups[chip] = [];
       groups[chip].push(m);
     }
+    // Se TODOS os modelos caem em "Outro" (ex: iPad linha generica com iPad 10/11
+    // sem chip M), nao agrupa por chip — renderiza modelos direto pra nao mostrar
+    // aba "iPad Outro" desnecessaria.
+    if (Object.keys(groups).length === 1 && groups["Outro"]) return null;
     return Object.keys(groups).length > 0 ? groups : null;
   }, [modelsInLine, deviceType]);
 

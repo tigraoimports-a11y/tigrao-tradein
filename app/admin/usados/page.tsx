@@ -321,12 +321,18 @@ export function UsadosContent() {
   // Categoria selecionada
   const catPrefix = DEVICE_CATS.find(c => c.key === catFilter)?.prefix || "iPhone";
 
-  // Agrupar valores por modelo — filtrado pela categoria
+  // Agrupar valores por modelo — filtrado pela categoria e escondendo os que
+  // ja estao na aba "Excluidos" (pra nao editar em dois lugares). Match exato
+  // case-insensitive — diferente do cliente que usa `includes()` fuzzy.
+  const excluidosSet = new Set(excluidos.map((m) => m.toLowerCase()));
   const grouped: Record<string, ValorUsado[]> = {};
-  valores.filter(v => v.modelo.startsWith(catPrefix)).forEach((v) => {
-    if (!grouped[v.modelo]) grouped[v.modelo] = [];
-    grouped[v.modelo].push(v);
-  });
+  valores
+    .filter(v => v.modelo.startsWith(catPrefix))
+    .filter(v => !excluidosSet.has(v.modelo.toLowerCase()))
+    .forEach((v) => {
+      if (!grouped[v.modelo]) grouped[v.modelo] = [];
+      grouped[v.modelo].push(v);
+    });
   // Ordenar variantes dentro de cada modelo por capacidade crescente
   // (64GB → 128GB → 256GB → 512GB → 1TB). Formatos desconhecidos caem no
   // final. Mesma regra da listagem de seminovos em /admin/precos.
@@ -616,8 +622,44 @@ export function UsadosContent() {
           ) : (
             Object.entries(grouped).map(([modelo, rows]) => (
               <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-                <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between gap-3 flex-wrap">
                   <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        const novo = prompt(`Renomear "${modelo}" para:`, modelo);
+                        if (novo === null) return; // cancelou
+                        const trimmed = novo.trim();
+                        if (!trimmed || trimmed === modelo) return;
+                        if (!confirm(`Renomear "${modelo}" para "${trimmed}"?\n\nIsso atualiza TODAS as variantes (armazenamento), descontos ligados ao modelo, registros de excluidos e de garantia.`)) return;
+                        const res = await apiPost({ action: "rename_modelo", modelo_antigo: modelo, modelo_novo: trimmed });
+                        const json = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                          alert(`Erro ao renomear: ${json.error || res.statusText}`);
+                          return;
+                        }
+                        // Atualiza state local: valores, descontos, excluidos
+                        setValores((prev) => prev.map((v) => v.modelo === modelo ? { ...v, modelo: trimmed } : v));
+                        setDescontos((prev) => prev.map((d) => d.condicao.startsWith(`${modelo} - `) ? { ...d, condicao: `${trimmed}${d.condicao.substring(modelo.length)}` } : d));
+                        setExcluidos((prev) => prev.map((m) => m === modelo ? trimmed : m));
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 bg-white hover:bg-blue-50 transition-colors whitespace-nowrap"
+                      title="Muda o nome do modelo (atualiza todas as tabelas relacionadas em cascata)"
+                    >
+                      ✏️ Renomear
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Excluir "${modelo}" do simulador?\n\nCliente nao vera mais esse modelo na lista de troca. Pra reativar, va na aba "Excluidos" e remova da lista.`)) return;
+                        await apiPost({ action: "add_excluido", modelo });
+                        setExcluidos((prev) => prev.includes(modelo) ? prev : [...prev, modelo]);
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs font-semibold text-red-600 border border-red-200 bg-white hover:bg-red-50 transition-colors whitespace-nowrap"
+                      title="Move esse modelo pra aba 'Excluidos' — some do simulador do cliente"
+                    >
+                      🚫 Excluir do simulador
+                    </button>
+                  </div>
                 </div>
                 <table className="w-full text-sm">
                   <thead>
