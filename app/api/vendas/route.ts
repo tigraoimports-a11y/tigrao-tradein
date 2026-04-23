@@ -949,6 +949,21 @@ export async function PATCH(req: NextRequest) {
           updated_at: new Date().toISOString(),
         }).eq("id", primeiro.id);
         await logActivity(usuario, "Venda vinculada + estoque deduzido (auto por serial)", `serial=${serialU}, qnt restante=${novaQnt}`, "vendas", id);
+      } else {
+        // Venda ja ligada, mas o item linkado ainda aparece EM ESTOQUE — legado
+        // do PR #703 (ligou sem deduzir). Deduzir agora pra evitar double-booking.
+        // Como o SELECT filtra por status=EM ESTOQUE, se o item ja foi deduzido
+        // antes ele nao aparece aqui e esse bloco nao roda de novo.
+        const linkado = estoqueItems.find(e => e.id === vendaEstoqueId);
+        if (linkado) {
+          const novaQnt = Math.max(0, Number(linkado.qnt || 0) - 1);
+          await supabase.from("estoque").update({
+            qnt: novaQnt,
+            status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+            updated_at: new Date().toISOString(),
+          }).eq("id", linkado.id);
+          await logActivity(usuario, "Estoque deduzido (venda ja ligada, legado)", `serial=${serialU}, qnt restante=${novaQnt}`, "vendas", id);
+        }
       }
       const idsParaEsgotar = estoqueItems
         .filter(e => e.id !== vendaEstoqueId)
