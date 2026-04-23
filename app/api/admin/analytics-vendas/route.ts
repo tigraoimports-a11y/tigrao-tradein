@@ -49,6 +49,9 @@ export async function GET(req: NextRequest) {
   // Support both "meses" and "range" (frontend sends "range=1m")
   const rangeParam = searchParams.get("range") || searchParams.get("meses") || "3";
   const meses = Math.min(Math.max(parseInt(rangeParam.replace(/[^0-9]/g, "")) || 3, 1), 24);
+  // Filtro opcional por canal/origem (FORMULARIO, INSTAGRAM, INDICACAO, etc.)
+  // Quando vazio = todas as origens.
+  const origemFilter = (searchParams.get("origem") || "").trim();
 
   // Use São Paulo timezone to avoid UTC date mismatches on Vercel
   const spNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
@@ -89,9 +92,15 @@ export async function GET(req: NextRequest) {
       offset += PAGE_SIZE;
     }
 
-    // Excluir brindes dos cálculos financeiros
-    const rows = allRows.filter(v => !v.is_brinde);
-    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length} (excl. brindes)`);
+    // Excluir brindes dos cálculos financeiros + aplicar filtro de origem (se houver)
+    let rows = allRows.filter(v => !v.is_brinde);
+    if (origemFilter) {
+      rows = rows.filter(v => (v.origem || "OUTROS") === origemFilter);
+    }
+    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length} (excl. brindes${origemFilter ? `, origem=${origemFilter}` : ""})`);
+
+    // Lista de origens disponíveis no dataset (pra popular o filtro do front)
+    const origensDisponiveis = Array.from(new Set(allRows.filter(v => !v.is_brinde).map(v => v.origem || "OUTROS"))).sort();
 
     // ---------------------------------------------------------------
     // 1. COMPARATIVO MENSAL
@@ -477,6 +486,8 @@ export async function GET(req: NextRequest) {
       vendasPorRegiao,
       projecao,
       coresPorModelo,
+      origensDisponiveis,
+      origemFiltrada: origemFilter || null,
     });
   } catch (err) {
     console.error("Erro analytics-vendas:", err);
