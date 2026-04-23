@@ -183,6 +183,9 @@ export async function gerarContratoPDF(dados: ContratoData): Promise<Buffer> {
       "4. A TigraoImports garante que o produto novo e lacrado, com garantia Apple de 1 ano e nota fiscal.",
       "5. Este contrato tem validade de 24 horas a partir da data de emissao.",
       "6. Em caso de desistencia apos a troca, taxas de restocking poderao ser aplicadas.",
+      "7. Compras realizadas com entrega de aparelho usado na troca (trade-in) sao DEFINITIVAS e nao admitem arrependimento, desistencia ou cancelamento. O direito previsto no art. 49 do Codigo de Defesa do Consumidor nao se aplica a esta modalidade, pois o aparelho recebido e imediatamente recolocado a venda, tornando impossivel a reversao da operacao.",
+      "8. O cliente declara que o aparelho entregue na troca nao possui vicios ocultos, defeitos de funcionamento, danos internos ou historico de reparos nao informados.",
+      "9. O cliente e integralmente responsavel pela PROCEDENCIA licita do aparelho entregue na troca. Em caso de apreensao, reivindicacao por terceiros ou qualquer prejuizo decorrente de origem ilicita (furto, roubo, receptacao etc.), o cliente se obriga a reembolsar a TigraoImports por todos os valores envolvidos, inclusive o ressarcimento ao comprador do aparelho revendido.",
     ];
 
     doc.fontSize(8.5).font("Helvetica").fillColor(C.textLight);
