@@ -917,26 +917,36 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Se serial_no foi atualizado, marcar estoque correspondente como ESGOTADO
-  // (previne itens vendidos que ficam "EM ESTOQUE" por falta de vínculo)
+  // Se serial_no veio no PATCH, resolver vinculo venda↔estoque.
+  // Antes: quando a venda nao tinha estoque_id, o codigo marcava TODOS os items
+  // do estoque com esse serial como ESGOTADO — isso destruia o estoque real em
+  // edicoes triviais de vendas vindas do formulario (ex: trocar nome do cliente
+  // pelo completo re-enviava serial_no e o bloco nukeava o iPhone correspondente).
+  // Agora: se venda nao tem estoque_id, LIGAR ao primeiro item achado. Esgotar
+  // apenas duplicatas reais (2+ items com mesmo serial, caso raro de dados sujos).
   if (fields.serial_no && data && data.length > 0) {
     const serialU = String(fields.serial_no).toUpperCase();
-    const vendaEstoqueId = data[0].estoque_id;
+    let vendaEstoqueId = data[0].estoque_id;
     const { data: estoqueItems } = await supabase
       .from("estoque")
       .select("id")
       .eq("serial_no", serialU)
       .eq("status", "EM ESTOQUE");
     if (estoqueItems && estoqueItems.length > 0) {
+      if (!vendaEstoqueId) {
+        vendaEstoqueId = estoqueItems[0].id;
+        await supabase.from("vendas").update({ estoque_id: vendaEstoqueId }).eq("id", id);
+        data[0].estoque_id = vendaEstoqueId; // sync pros blocos seguintes (finalizacao)
+        await logActivity(usuario, "Venda vinculada ao estoque (auto por serial)", `serial=${serialU}`, "vendas", id);
+      }
       const idsParaEsgotar = estoqueItems
         .filter(e => e.id !== vendaEstoqueId)
         .map(e => e.id);
-      // Se a venda não tem estoque_id, esgotar TODOS com esse serial
-      const ids = vendaEstoqueId ? idsParaEsgotar : estoqueItems.map(e => e.id);
-      if (ids.length > 0) {
+      if (idsParaEsgotar.length > 0) {
         await supabase.from("estoque")
           .update({ qnt: 0, status: "ESGOTADO", updated_at: new Date().toISOString() })
-          .in("id", ids);
+          .in("id", idsParaEsgotar);
+        await logActivity(usuario, "Duplicidade de serial resolvida (edicao)", `serial=${serialU}: ${idsParaEsgotar.length} item(s) ESGOTADO`, "estoque");
       }
     }
   }
