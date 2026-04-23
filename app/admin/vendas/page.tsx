@@ -5972,6 +5972,67 @@ export default function VendasPage() {
                                               </a>
                                             );
                                           })()}
+                                          {/* Colar link do PDF assinado — caso webhook ZapSign tenha falhado
+                                              (ex: admin reenviou termo e o link assinado ficou orfao). Aparece
+                                              quando nao ha termo ligado ou o termo atual nao esta ASSINADO. */}
+                                          {(() => {
+                                            const termo = termosPorVenda[v.id];
+                                            if (termo?.status === "ASSINADO") return null;
+                                            return (
+                                              <button
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const link = prompt("Cole o link do PDF assinado (copiado do ZapSign ou grupo do WhatsApp):");
+                                                  if (link === null) return;
+                                                  const url = link.trim();
+                                                  if (!url) return;
+                                                  if (!/^https?:\/\//i.test(url)) { setMsg("Link invalido — precisa comecar com http(s)://"); return; }
+                                                  const signedAt = new Date().toISOString();
+                                                  try {
+                                                    let termoId = termo?.id || null;
+                                                    if (!termoId) {
+                                                      // Nao existia termo — cria um minimo, ja como ASSINADO
+                                                      const aparelhos: { modelo: string; cor: string; imei: string; serial: string; condicao: string }[] = [];
+                                                      if (v.troca_produto) aparelhos.push({
+                                                        modelo: v.troca_produto, cor: v.troca_cor || "",
+                                                        imei: v.troca_imei || "", serial: v.troca_serial || "",
+                                                        condicao: v.troca_bateria ? `Bateria ${v.troca_bateria}%` : "",
+                                                      });
+                                                      if (v.troca_produto2) aparelhos.push({
+                                                        modelo: v.troca_produto2, cor: v.troca_cor2 || "",
+                                                        imei: v.troca_imei2 || "", serial: v.troca_serial2 || "",
+                                                        condicao: v.troca_bateria2 ? `Bateria ${v.troca_bateria2}%` : "",
+                                                      });
+                                                      if (aparelhos.length === 0) aparelhos.push({ modelo: "Produto da troca", cor: "", imei: "", serial: "", condicao: "" });
+                                                      const resCreate = await fetch("/api/admin/termo-procedencia", {
+                                                        method: "POST",
+                                                        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                        body: JSON.stringify({ venda_id: v.id, aparelhos, gerar_pdf: false }),
+                                                      });
+                                                      const jsonCreate = await resCreate.json();
+                                                      if (!resCreate.ok || !jsonCreate.data?.id) { setMsg("Erro ao criar termo: " + (jsonCreate.error || "falha")); return; }
+                                                      termoId = jsonCreate.data.id;
+                                                    }
+                                                    const resPatch = await fetch("/api/admin/termo-procedencia", {
+                                                      method: "PATCH",
+                                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                      body: JSON.stringify({ id: termoId, signed_pdf_url: url, status: "ASSINADO", signed_at: signedAt, venda_id: v.id }),
+                                                    });
+                                                    const jsonPatch = await resPatch.json();
+                                                    if (!resPatch.ok) { setMsg("Erro ao salvar: " + (jsonPatch.error || "falha")); return; }
+                                                    setTermosPorVenda(prev => ({ ...prev, [v.id]: { id: termoId!, status: "ASSINADO", zapsign_sign_url: prev[v.id]?.zapsign_sign_url || null, signed_pdf_url: url } }));
+                                                    setMsg("Link do termo assinado vinculado!");
+                                                  } catch {
+                                                    setMsg("Erro ao vincular link");
+                                                  }
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-300 hover:bg-purple-200 transition-colors"
+                                                title="Se o cliente ja assinou mas o link nao ficou na venda (ex: reenvio), cole aqui o PDF assinado"
+                                              >
+                                                🔗 Colar Link Assinado
+                                              </button>
+                                            );
+                                          })()}
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
