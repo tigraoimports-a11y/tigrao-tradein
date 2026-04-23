@@ -145,7 +145,7 @@ export default function VendasPage() {
     cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+    entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
     forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
@@ -1098,6 +1098,8 @@ export default function VendasPage() {
       produto_na_troca: pValorTroca1 > 0 ? String(pValorTroca1) : (prodFields.troca_produto ? "0" : null),
       entrada_pix: gEntradaPix,
       banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
+      entrada_pix_2: parseFloat(form.entrada_pix_2) || 0,
+      banco_pix_2: (parseFloat(form.entrada_pix_2) || 0) > 0 ? (form.banco_pix_2 || "INFINITE") : null,
       entrada_especie: gEntradaEspecie,
       entrada_fiado: gForma === "FIADO" ? (gValorComprovanteInput || pCusto) : (parseFloat(form.entrada_fiado) || 0),
       fiado_parcelas: (() => {
@@ -1438,6 +1440,13 @@ export default function VendasPage() {
     for (const prod of allProducts) {
       payloads.push(buildPayload(prod));
     }
+    // Multi-produto: entrada_pix_2 fica inteira no primeiro payload (nao
+    // distribuimos proporcional como entrada_pix — mantem a logica simples e
+    // os saldos continuam somando ao total correto porque leitura e por row).
+    for (let i = 1; i < payloads.length; i++) {
+      payloads[i].entrada_pix_2 = 0;
+      payloads[i].banco_pix_2 = null;
+    }
     // Single-product: se tem segundo cartão, SEMPRE recalcular preco_vendido como
     // líquido(cartão principal) + líquido(2o cartão) + pix + espécie + troca
     if (payloads.length === 1) {
@@ -1708,7 +1717,7 @@ export default function VendasPage() {
               cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-              entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+              entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
               forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
               entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
               valor_total_venda: "",
@@ -1750,7 +1759,7 @@ export default function VendasPage() {
               cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-              entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+              entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
               forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
               entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
               valor_total_venda: "",
@@ -1828,7 +1837,7 @@ export default function VendasPage() {
         cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
         custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-        entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+        entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
         forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
         entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
         valor_total_venda: "",
@@ -2080,6 +2089,8 @@ export default function VendasPage() {
       produto_na_troca: "",
       entrada_pix: "",
       banco_pix: v.banco_pix || "ITAU",
+      entrada_pix_2: "",
+      banco_pix_2: v.banco_pix_2 || "INFINITE",
       entrada_especie: "",
       entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
       valor_total_venda: "",
@@ -2330,7 +2341,7 @@ export default function VendasPage() {
                     data: hojeBR(), cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
@@ -3196,7 +3207,7 @@ export default function VendasPage() {
                     cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
@@ -3652,6 +3663,22 @@ export default function VendasPage() {
                 )}
               </div>
               )}
+
+              {/* 2o PIX opcional — usa-se quando o cliente divide o pagamento
+                  entre dois bancos. Valor sai do banco principal e entra no
+                  banco_pix_2. Sempre visível pra que o operador lembre que
+                  pode dividir; fica inerte se deixado zerado. */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div><p className={labelCls}>2º PIX (R$) — opcional</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_pix_2)} onChange={(e) => {
+                  const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                  setForm(f => ({ ...f, entrada_pix_2: clean, ...(parseFloat(clean) > 0 && !f.banco_pix_2 ? { banco_pix_2: "INFINITE" } : {}) }));
+                }} placeholder="0" className={inputCls} /></div>
+                {parseFloat(form.entrada_pix_2) > 0 && (
+                  <div><p className={labelCls}>Banco do 2º PIX</p><select value={form.banco_pix_2} onChange={(e) => set("banco_pix_2", e.target.value)} className={selectCls}>
+                    <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                  </select></div>
+                )}
+              </div>
 
               {/* Entrada Especie */}
               {form.forma !== "ESPECIE" && (
@@ -5552,6 +5579,8 @@ export default function VendasPage() {
                                               produto_na_troca: grupoVendas.length > 1 ? "" : String(primaryVenda.produto_na_troca || trocaValorPend || ""),
                                               entrada_pix: String(grupoVendas.reduce((s, gv) => s + (gv.entrada_pix || 0), 0) || ""),
                                               banco_pix: primaryVenda.banco_pix || "ITAU",
+                                              entrada_pix_2: String(grupoVendas.reduce((s, gv) => s + (gv.entrada_pix_2 || 0), 0) || ""),
+                                              banco_pix_2: primaryVenda.banco_pix_2 || "INFINITE",
                                               entrada_especie: String(grupoVendas.reduce((s, gv) => s + (gv.entrada_especie || 0), 0) || ""),
                                               entrada_fiado: String(primaryVenda.entrada_fiado || ""),
                                               fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
@@ -6738,7 +6767,7 @@ export default function VendasPage() {
                     cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
@@ -6774,7 +6803,7 @@ export default function VendasPage() {
                     cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_pix_2: "", banco_pix_2: "INFINITE", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "", forma_sinal: "PIX",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
