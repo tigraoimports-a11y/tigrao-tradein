@@ -100,16 +100,17 @@ function extractLines(models: string[], deviceType: MultiDeviceType): string[] {
       });
       return [...s].sort();
     case "watch":
+      // Apenas 3 linhas top-level: SE / Series / Ultra. A geracao especifica
+      // (Series 9, SE 3o, Ultra 2) aparece no step seguinte como chipGroup.
       models.forEach((m) => {
-        const se = m.match(/Apple Watch SE/i);
-        if (se) { s.add("SE"); return; }
-        const series = m.match(/Apple Watch (?:Series )?(\d+)/i);
-        if (series) { s.add(`Series ${series[1]}`); return; }
-        const ultra = m.match(/Apple Watch Ultra/i);
-        if (ultra) { s.add("Ultra"); return; }
+        if (/Apple Watch SE/i.test(m)) { s.add("SE"); return; }
+        if (/Apple Watch Ultra/i.test(m)) { s.add("Ultra"); return; }
+        if (/Apple Watch (?:Series )?\d+/i.test(m)) { s.add("Series"); return; }
         s.add("Watch");
       });
-      return [...s].sort();
+      // Ordem: SE, Series, Ultra (Watch fallback por ultimo)
+      const order = ["SE", "Series", "Ultra", "Watch"];
+      return [...s].sort((a, b) => order.indexOf(a) - order.indexOf(b));
     default:
       return [];
   }
@@ -131,10 +132,7 @@ function getModelsInLine(allModels: string[], line: string, deviceType: MultiDev
     case "watch":
       if (line === "SE") return allModels.filter((m) => /Apple Watch SE/i.test(m));
       if (line === "Ultra") return allModels.filter((m) => /Apple Watch Ultra/i.test(m));
-      if (line.startsWith("Series ")) {
-        const num = line.replace("Series ", "");
-        return allModels.filter((m) => new RegExp(`Apple Watch (?:Series )?${num}\\b`, "i").test(m));
-      }
+      if (line === "Series") return allModels.filter((m) => /Apple Watch (?:Series )?\d+/i.test(m) && !/Apple Watch SE/i.test(m) && !/Apple Watch Ultra/i.test(m));
       return allModels;
     default:
       return [];
@@ -217,26 +215,60 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const lines = useMemo(() => extractLines(allModels, deviceType), [allModels, deviceType]);
   const modelsInLine = useMemo(() => getModelsInLine(allModels, line, deviceType), [allModels, line, deviceType]);
 
-  // Subgrupo: pra MacBook/iPad, agrupar modelos por chip (M1,M2...) e depois tamanho de tela
+  // Subgrupo: pra MacBook/iPad, agrupa por chip (M1,M2...). Pra Apple Watch,
+  // agrupa por geracao (Series 9/10/11, SE 1o/2o/3o, Ultra 1/2).
   const [subLine, setSubLine] = useState("");
   const chipGroups = useMemo(() => {
-    if (deviceType !== "macbook" && deviceType !== "ipad") return null;
+    if (deviceType !== "macbook" && deviceType !== "ipad" && deviceType !== "watch") return null;
     const groups: Record<string, string[]> = {};
     for (const m of modelsInLine) {
-      // Extrair chip: "MacBook Air M2 15\"" → "M2", "iPad Pro M4 11\"" → "M4"
-      const chipMatch = m.match(/\b(M\d+(?:\s+(?:Pro|Max))?)\b/i);
-      const chip = chipMatch ? chipMatch[1] : "Outro";
+      let chip: string;
+      if (deviceType === "watch") {
+        // Extrai so a geracao (sem o prefixo da linha) pra combinar corretamente
+        // com getLineDisplayName no render. Ex:
+        //   SE + "Apple Watch SE 3º 44mm" → chip="3º" → display "Apple Watch SE 3º"
+        //   Series + "Apple Watch Series 9 45mm" → chip="9" → display "Apple Watch Series 9"
+        //   Ultra + "Apple Watch Ultra 1 49mm" → chip="1" → display "Apple Watch Ultra 1"
+        //   Ultra + "Apple Watch Ultra 49mm" (sem num) → chip="Outro" (unico — vira null no chipGroups)
+        const seGen = m.match(/Apple Watch SE\s*(\d+)[ºo°]?/i);
+        const seriesMatch = m.match(/Apple Watch (?:Series )?(\d+)/i);
+        const ultraGen = m.match(/Apple Watch Ultra\s*(\d+)/i);
+        if (line === "SE") {
+          chip = seGen ? `${seGen[1]}º` : "Outro";
+        } else if (line === "Ultra") {
+          chip = ultraGen ? `${ultraGen[1]}` : "Outro";
+        } else if (line === "Series") {
+          chip = seriesMatch ? `${seriesMatch[1]}` : "Outro";
+        } else {
+          chip = "Outro";
+        }
+      } else {
+        // Extrair chip: "MacBook Air M2 15\"" → "M2", "iPad Pro M4 11\"" → "M4"
+        const chipMatch = m.match(/\b(M\d+(?:\s+(?:Pro|Max))?)\b/i);
+        chip = chipMatch ? chipMatch[1] : "Outro";
+      }
       if (!groups[chip]) groups[chip] = [];
       groups[chip].push(m);
     }
     // Se TODOS os modelos caem em "Outro" (ex: iPad linha generica com iPad 10/11
     // sem chip M), nao agrupa por chip — renderiza modelos direto pra nao mostrar
-    // aba "iPad Outro" desnecessaria.
+    // aba "iPad Outro" desnecessaria. O mesmo vale pra Watch sem geracao definida.
     if (Object.keys(groups).length === 1 && groups["Outro"]) return null;
     return Object.keys(groups).length > 0 ? groups : null;
   }, [modelsInLine, deviceType]);
 
-  const chipList = useMemo(() => chipGroups ? Object.keys(chipGroups).sort() : [], [chipGroups]);
+  // Sort numerico quando os chips sao so numeros/geracoes (SE 3o, Series 10,
+  // Ultra 2). String sort () colocaria "10" antes de "9"; aqui forcamos
+  // ordenacao numerica por primeiro numero que aparecer no chip.
+  const chipList = useMemo(() => {
+    if (!chipGroups) return [];
+    const keys = Object.keys(chipGroups);
+    const extractNum = (s: string) => {
+      const m = s.match(/(\d+)/);
+      return m ? Number(m[1]) : 999;
+    };
+    return keys.sort((a, b) => extractNum(a) - extractNum(b));
+  }, [chipGroups]);
   const modelsForChip = useMemo(() => chipGroups && subLine ? (chipGroups[subLine] || []) : [], [chipGroups, subLine]);
 
   // Se o chip selecionado tem só 1 modelo, auto-selecionar

@@ -147,11 +147,41 @@ const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
 
 // Placeholder do campo "Modelo" conforme a categoria aberta.
 const MODELO_PLACEHOLDER_BY_CAT: Record<string, string> = {
-  iphone: "Ex: iPhone 17 Pro Max",
-  ipad: "Ex: iPad Pro M4",
-  macbook: "Ex: MacBook Air M3",
-  watch: "Ex: Apple Watch Ultra 2",
+  iphone: "Ex: 17 Pro Max (sem 'iPhone')",
+  ipad: "Ex: Air M3 (sem 'iPad')",
+  macbook: "Ex: Air M3 (sem 'MacBook')",
+  watch: "Ex: Series 9 (sem 'Apple Watch')",
 };
+
+// Linhas pre-definidas por categoria pro select "Linha" do form. A linha
+// garante consistencia com o parser do cliente (extractLines) — se o admin
+// digitasse errado, o modelo nao apareceria agrupado corretamente.
+const LINHAS_BY_CAT: Record<string, string[]> = {
+  iphone: ["13", "14", "15", "16", "17"],
+  ipad: ["iPad (Entrada)", "Air", "Pro", "mini"],
+  macbook: ["Air", "Pro"],
+  watch: ["SE", "Series", "Ultra"],
+};
+
+// Prefixo padrao da categoria (usado pra montar o nome final do modelo).
+const CAT_PREFIX: Record<string, string> = {
+  iphone: "iPhone",
+  ipad: "iPad",
+  macbook: "MacBook",
+  watch: "Apple Watch",
+};
+
+// Monta o nome final juntando prefixo + linha + modelo. Caso especial do
+// iPad Entrada: a linha selecionada aparece como "iPad (Entrada)" no select
+// mas no nome final e so "iPad" — evita duplicar "iPad iPad 10o".
+function buildModeloName(cat: string, linha: string, modelo: string): string {
+  const prefix = CAT_PREFIX[cat] || "";
+  const modeloTrim = modelo.trim();
+  // iPad Entrada: linha e o proprio prefixo, nao duplica
+  const linhaFinal = linha === "iPad (Entrada)" ? "" : linha.trim();
+  const parts = [prefix, linhaFinal, modeloTrim].filter(Boolean);
+  return parts.join(" ");
+}
 
 interface CatConfig {
   categoria: string;
@@ -184,8 +214,11 @@ export function UsadosContent() {
   const [novoGarantiaModelo, setNovoGarantiaModelo] = useState<{ modelo: string; detalhe: string; valor: string } | null>(null);
   const [showAddModelo, setShowAddModelo] = useState(false);
   // `specs` guarda o valor de cada campo (key do SPEC_FIELDS_BY_CAT). No save
-  // junta tudo com " | " pra gravar no campo `armazenamento`.
-  const [novoModelo, setNovoModelo] = useState<{ modelo: string; specs: Record<string, string>; valor_base: string }>({
+  // junta tudo com " | " pra gravar no campo `armazenamento`. `linha` e o
+  // pre-seletor de linha (Air/Pro/mini/Series/etc) que ajuda a garantir que
+  // o nome final do modelo case com o parser do cliente.
+  const [novoModelo, setNovoModelo] = useState<{ linha: string; modelo: string; specs: Record<string, string>; valor_base: string }>({
+    linha: "",
     modelo: "",
     specs: {},
     valor_base: "",
@@ -301,14 +334,19 @@ export function UsadosContent() {
   };
 
   const handleAddModelo = async () => {
-    const { modelo, specs, valor_base } = novoModelo;
+    const { linha, modelo, specs, valor_base } = novoModelo;
     const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
-    // Exige todos os campos da categoria preenchidos (selectionados)
+    const linhas = LINHAS_BY_CAT[catFilter] || [];
+    // Exige linha (quando a categoria tem linhas), modelo (variante) e specs
     const missingSpec = specFields.find((f) => !specs[f.key]?.trim());
+    if (linhas.length > 0 && !linha) {
+      setMsg("Selecione a linha");
+      return;
+    }
     if (!modelo.trim() || missingSpec || !valor_base.trim()) {
       setMsg(
         !modelo.trim()
-          ? "Preencha o modelo"
+          ? "Preencha o modelo (variante)"
           : missingSpec
           ? `Selecione ${missingSpec.label.toLowerCase()}`
           : "Preencha o valor base"
@@ -317,23 +355,24 @@ export function UsadosContent() {
     }
     const val = parseFloat(valor_base);
     if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
-    // Monta a string de armazenamento juntando os valores na ordem dos campos
+    // Monta o nome final do modelo e a string de armazenamento
+    const modeloFinal = buildModeloName(catFilter, linha, modelo);
     const armazenamento = specFields.map((f) => specs[f.key].trim()).join(" | ");
     setSaving("add-modelo");
-    await apiPost({ action: "upsert_valor", modelo: modelo.trim(), armazenamento, valor_base: val });
+    await apiPost({ action: "upsert_valor", modelo: modeloFinal, armazenamento, valor_base: val });
     setValores((prev) => {
-      const exists = prev.findIndex((v) => v.modelo === modelo.trim() && v.armazenamento === armazenamento);
+      const exists = prev.findIndex((v) => v.modelo === modeloFinal && v.armazenamento === armazenamento);
       if (exists >= 0) {
         const nv = [...prev];
         nv[exists] = { ...nv[exists], valor_base: val };
         return nv;
       }
-      return [...prev, { id: crypto.randomUUID(), modelo: modelo.trim(), armazenamento, valor_base: val, ativo: true, updated_at: new Date().toISOString() }];
+      return [...prev, { id: crypto.randomUUID(), modelo: modeloFinal, armazenamento, valor_base: val, ativo: true, updated_at: new Date().toISOString() }];
     });
-    setMsg(`${modelo.trim()} ${armazenamento} adicionado com valor R$ ${val.toLocaleString("pt-BR")}!`);
-    // Mantem o modelo preenchido pra facilitar adicionar variantes seguidas do
-    // mesmo modelo; so limpa os specs e o valor.
-    setNovoModelo((prev) => ({ modelo: prev.modelo, specs: {}, valor_base: "" }));
+    setMsg(`${modeloFinal} ${armazenamento} adicionado com valor R$ ${val.toLocaleString("pt-BR")}!`);
+    // Mantem linha + modelo preenchidos pra facilitar adicionar variantes
+    // seguidas do mesmo modelo; so limpa os specs e o valor.
+    setNovoModelo((prev) => ({ linha: prev.linha, modelo: prev.modelo, specs: {}, valor_base: "" }));
     setSaving(null);
   };
 
@@ -539,14 +578,33 @@ export function UsadosContent() {
       {/* Form adicionar modelo — campos variam conforme a categoria aberta */}
       {showAddModelo && (() => {
         const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
-        const placeholder = MODELO_PLACEHOLDER_BY_CAT[catFilter] || "Ex: iPhone 17 Pro Max";
-        // Total de colunas = 1 (modelo) + N (specs) + 1 (valor) + 1 (acoes)
-        const totalCols = 1 + specFields.length + 2;
+        const linhas = LINHAS_BY_CAT[catFilter] || [];
+        const placeholder = MODELO_PLACEHOLDER_BY_CAT[catFilter] || "Ex: 17 Pro Max";
+        // Total de colunas = (1 linha se houver) + 1 (modelo) + N (specs) + 1 (valor) + 1 (acoes)
+        const totalCols = (linhas.length > 0 ? 1 : 0) + 1 + specFields.length + 2;
         const gridClass = totalCols <= 4 ? "md:grid-cols-4" : totalCols <= 5 ? "md:grid-cols-5" : "md:grid-cols-6";
+        // Preview do nome final que vai ser gravado
+        const nomePreview = novoModelo.linha && novoModelo.modelo
+          ? buildModeloName(catFilter, novoModelo.linha, novoModelo.modelo)
+          : "";
         return (
         <div className="bg-white border border-[#E8740E]/30 rounded-2xl p-5 shadow-sm space-y-3">
           <p className="text-sm font-bold text-[#1D1D1F]">Adicionar Modelo Seminovo</p>
           <div className={`grid grid-cols-2 ${gridClass} gap-3`}>
+            {linhas.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Linha</p>
+                <select
+                  value={novoModelo.linha}
+                  onChange={(e) => setNovoModelo({ ...novoModelo, linha: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                  autoFocus
+                >
+                  <option value="">— Selecionar —</option>
+                  {linhas.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Modelo</p>
               <input
@@ -554,7 +612,6 @@ export function UsadosContent() {
                 onChange={(e) => setNovoModelo({ ...novoModelo, modelo: e.target.value })}
                 placeholder={placeholder}
                 className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                autoFocus
               />
             </div>
             {specFields.map((f) => (
@@ -590,8 +647,13 @@ export function UsadosContent() {
               </button>
             </div>
           </div>
+          {nomePreview && (
+            <p className="text-[11px] text-[#86868B]">
+              Sera gravado como: <strong className="text-[#1D1D1F]">{nomePreview}</strong>
+            </p>
+          )}
           <p className="text-[10px] text-[#86868B]">
-            Dica: para adicionar várias variantes do mesmo modelo, adicione uma de cada vez — o campo <strong>Modelo</strong> fica preenchido.
+            Dica: selecione a linha primeiro. O <strong>Modelo</strong> e so a variante (ex: &quot;M3&quot;, &quot;10º Geracao&quot;) — o prefixo e a linha sao adicionados automaticamente. Linha + Modelo ficam preenchidos apos salvar pra facilitar cadastrar multiplas variantes.
           </p>
         </div>
         );
