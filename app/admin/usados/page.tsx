@@ -554,6 +554,20 @@ export function UsadosContent() {
             {currentCatConfig.ativo ? "Aparece no formulário público" : "Escondido do cliente"}
           </span>
         </div>
+        {/* Link pro ambiente de teste — mostra mesmo quando categoria esta
+            desativada pro cliente. Quando ja esta ativa, o admin pode testar
+            no /troca publico; o botao aqui atalha pro ambiente que NAO respeita
+            o filtro de ativo, util pra testar antes de ligar. */}
+        <div className="h-5 w-px bg-[#D2D2D7]" />
+        <a
+          href="/admin/simulador-teste"
+          target="_blank"
+          rel="noreferrer"
+          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#FFF7ED] text-[#E8740E] border border-[#E8740E]/40 hover:bg-[#FFEFE0] transition-colors whitespace-nowrap"
+          title="Abre o simulador em modo teste (admin-only), ignorando o filtro de desativado"
+        >
+          🧪 Testar como cliente
+        </a>
       </div>
 
       {/* Sub-tabs: Valores Base / Descontos / Excluidos */}

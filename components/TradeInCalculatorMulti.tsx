@@ -38,7 +38,7 @@ const DEVICE_OPTIONS: { type: MultiDeviceType; emoji: string; label: string }[] 
   { type: "watch", emoji: "\u{231A}", label: "Apple Watch" },
 ];
 
-export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaParam }: { vendedor?: string | null; temaParam?: string | null }) {
+export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaParam, previewMode = false }: { vendedor?: string | null; temaParam?: string | null; previewMode?: boolean }) {
   const [vendedor] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       const ref = new URLSearchParams(window.location.search).get("ref")?.toLowerCase();
@@ -426,6 +426,10 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {DEVICE_OPTIONS.filter(d => {
+                  // previewMode (route admin /admin/simulador-teste): bypassa o
+                  // filtro de ativo pra admin ver categorias ainda nao ligadas.
+                  // Cliente publico em / continua respeitando cfg.ativo.
+                  if (previewMode) return true;
                   const catMap: Record<string, string> = { iphone: "IPHONE", ipad: "IPAD", macbook: "MACBOOK", watch: "APPLE_WATCH" };
                   const cfg = catConfigs.find(c => c.categoria === catMap[d.type]);
                   return !cfg || cfg.ativo; // se não tem config ou está ativo, mostra
