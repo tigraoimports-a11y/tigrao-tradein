@@ -41,6 +41,23 @@ interface DiaSemanaData {
   receita: number;
 }
 
+interface CampanhaBucket {
+  nome: string;
+  qty: number;
+  receita: number;
+}
+
+interface CampanhaStat {
+  campanha: string;
+  source: string;
+  qty: number;
+  receita: number;
+  lucro: number;
+  ticket: number;
+  topBairros: CampanhaBucket[];
+  topCidades: CampanhaBucket[];
+}
+
 interface MapaData {
   totalVendas: number;
   totalReceita: number;
@@ -51,6 +68,7 @@ interface MapaData {
   estados: GeoData[];
   topClientes: ClienteData[];
   porDiaSemana: DiaSemanaData[];
+  campanhas?: CampanhaStat[];
 }
 
 type RangeOption = "7" | "month" | "30" | "90" | "all" | "custom";
@@ -399,6 +417,121 @@ export default function MapaVendasPage() {
           </div>
         )}
       </div>
+
+      {/* Cruzamento Meta Ads × região (UTM) */}
+      <CampanhasSection campanhas={data.campanhas ?? []} />
+    </div>
+  );
+}
+
+function CampanhasSection({ campanhas }: { campanhas: CampanhaStat[] }) {
+  const [aberta, setAberta] = useState<string | null>(null);
+  const totalComUTM = campanhas.filter(c => c.source !== "direct").reduce((s, c) => s + c.qty, 0);
+  const direct = campanhas.find(c => c.source === "direct");
+  const comUTM = campanhas.filter(c => c.source !== "direct");
+
+  return (
+    <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-base font-semibold text-[#1D1D1F]">🎯 Campanhas × Região</h2>
+        <span className="text-xs text-[#86868B]">{totalComUTM} vendas com UTM</span>
+      </div>
+      <p className="text-xs text-[#86868B] mb-4">
+        Onde cada campanha (Meta Ads, Instagram, etc.) converteu. Clique pra ver os bairros específicos.
+      </p>
+
+      {comUTM.length === 0 ? (
+        <div className="rounded-xl p-4 bg-[#F5F5F7] text-center">
+          <p className="text-sm text-[#86868B]">
+            Nenhuma venda com UTM registrada ainda.
+          </p>
+          <p className="text-xs text-[#B0B0B0] mt-1">
+            Configure <span className="font-semibold">Parâmetros de URL</span> nas campanhas Meta Ads pra começar a rastrear.
+          </p>
+          {direct && direct.qty > 0 && (
+            <p className="text-xs text-[#86868B] mt-3">{direct.qty} vendas sem atribuição (direct)</p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {comUTM.map((c) => {
+            const isOpen = aberta === `${c.source}::${c.campanha}`;
+            const pct = totalComUTM > 0 ? (c.qty / totalComUTM) * 100 : 0;
+            return (
+              <div key={`${c.source}::${c.campanha}`} className="border border-[#E8E8ED] rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setAberta(isOpen ? null : `${c.source}::${c.campanha}`)}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAFAFA] transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FFF5EB] text-[#E8740E]">{c.source}</span>
+                      <span className="text-sm font-semibold text-[#1D1D1F] truncate">{c.campanha}</span>
+                    </div>
+                    <div className="h-1.5 bg-[#F5F5F7] rounded-full overflow-hidden">
+                      <div className="h-full bg-[#E8740E]" style={{ width: `${Math.max(pct, 2)}%` }} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 ml-4 shrink-0 text-right">
+                    <div>
+                      <div className="text-xs text-[#86868B]">vendas</div>
+                      <div className="text-sm font-bold text-[#1D1D1F]">{c.qty}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-[#86868B]">receita</div>
+                      <div className="text-sm font-bold text-[#1D1D1F]">{fmt(c.receita)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-[#86868B]">ticket</div>
+                      <div className="text-sm font-bold text-[#1D1D1F]">{fmt(c.ticket)}</div>
+                    </div>
+                    <span className="text-[#86868B] text-xs">{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E8E8ED] grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[#86868B] mb-2">Top bairros</p>
+                      {c.topBairros.length === 0 ? (
+                        <p className="text-xs text-[#B0B0B0]">Sem bairros informados</p>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {c.topBairros.map(b => (
+                            <li key={b.nome} className="flex items-center justify-between text-sm">
+                              <span className="text-[#1D1D1F] truncate max-w-[60%]">{b.nome}</span>
+                              <span className="text-[#86868B] shrink-0">{b.qty}x · {fmt(b.receita)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[#86868B] mb-2">Top cidades</p>
+                      {c.topCidades.length === 0 ? (
+                        <p className="text-xs text-[#B0B0B0]">Sem cidades informadas</p>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {c.topCidades.map(cid => (
+                            <li key={cid.nome} className="flex items-center justify-between text-sm">
+                              <span className="text-[#1D1D1F] truncate max-w-[60%]">{cid.nome}</span>
+                              <span className="text-[#86868B] shrink-0">{cid.qty}x · {fmt(cid.receita)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {direct && direct.qty > 0 && (
+            <p className="text-xs text-[#86868B] text-center pt-2">
+              + {direct.qty} vendas sem atribuição (direct/orgânico sem UTM)
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

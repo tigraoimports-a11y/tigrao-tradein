@@ -448,6 +448,9 @@ export async function GET(req: NextRequest) {
       bairro: string | null;
       cidade: string | null;
       uf: string | null;
+      utm_source: string | null;
+      utm_campaign: string | null;
+      utm_medium: string | null;
     }[];
 
     // --- Aggregate by bairro (top 20) ---
@@ -616,6 +619,74 @@ export async function GET(req: NextRequest) {
       receita: receitaDia[i],
     }));
 
+    // --- Cruzamento Meta Ads x região (UTM) ---
+    // Agrega vendas com utm_source/utm_campaign preenchidos, mostrando
+    // onde cada campanha converteu. Vendas sem UTM caem no bucket "direct".
+    interface CampanhaStat {
+      campanha: string;      // utm_campaign (ou "(sem campanha)" se null)
+      source: string;        // utm_source
+      qty: number;
+      receita: number;
+      lucro: number;
+      ticket: number;
+      porBairro: Record<string, { qty: number; receita: number }>;
+      porCidade: Record<string, { qty: number; receita: number }>;
+    }
+    const porCampanhaRaw: Record<string, CampanhaStat> = {};
+    for (const v of rows) {
+      const source = (v.utm_source || "").trim() || "direct";
+      const campaign = (v.utm_campaign || "").trim() || "(sem campanha)";
+      const key = `${source}::${campaign}`;
+      if (!porCampanhaRaw[key]) {
+        porCampanhaRaw[key] = {
+          campanha: campaign,
+          source,
+          qty: 0,
+          receita: 0,
+          lucro: 0,
+          ticket: 0,
+          porBairro: {},
+          porCidade: {},
+        };
+      }
+      const entry = porCampanhaRaw[key];
+      entry.qty++;
+      entry.receita += Number(v.preco_vendido || 0);
+      entry.lucro += Number(v.lucro || 0);
+
+      const bairro = (v.bairro || "").trim() || "Nao informado";
+      const cidade = (v.cidade || "").trim() || "Nao informado";
+      const bairroKey = bairro === "Nao informado" ? bairro : `${bairro}, ${cidade}`;
+      if (!entry.porBairro[bairroKey]) entry.porBairro[bairroKey] = { qty: 0, receita: 0 };
+      entry.porBairro[bairroKey].qty++;
+      entry.porBairro[bairroKey].receita += Number(v.preco_vendido || 0);
+
+      if (!entry.porCidade[cidade]) entry.porCidade[cidade] = { qty: 0, receita: 0 };
+      entry.porCidade[cidade].qty++;
+      entry.porCidade[cidade].receita += Number(v.preco_vendido || 0);
+    }
+
+    const campanhas = Object.values(porCampanhaRaw)
+      .map(c => ({
+        ...c,
+        ticket: c.qty > 0 ? Math.round(c.receita / c.qty) : 0,
+        topBairros: Object.entries(c.porBairro)
+          .map(([nome, d]) => ({ nome, qty: d.qty, receita: d.receita }))
+          .sort((a, b) => b.qty - a.qty)
+          .slice(0, 5),
+        topCidades: Object.entries(c.porCidade)
+          .map(([nome, d]) => ({ nome, qty: d.qty, receita: d.receita }))
+          .sort((a, b) => b.qty - a.qty)
+          .slice(0, 5),
+      }))
+      .map(c => {
+        // Remove nested maps do payload final (já temos topBairros/Cidades)
+        const { porBairro: _pb, porCidade: _pc, ...rest } = c;
+        void _pb; void _pc;
+        return rest;
+      })
+      .sort((a, b) => b.qty - a.qty);
+
     // --- Totals ---
     const totalVendas = rows.length;
     const totalReceita = rows.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
@@ -632,6 +703,7 @@ export async function GET(req: NextRequest) {
       estados,
       topClientes,
       porDiaSemana,
+      campanhas,
     });
   } catch (err) {
     console.error("Erro mapa-vendas:", err);
