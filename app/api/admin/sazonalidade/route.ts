@@ -127,6 +127,35 @@ export async function GET(req: NextRequest) {
     porHora.push({ hora: `${h}h`, vendas: horaMap[h] || 0 });
   }
 
+  // ─── 2b. Heatmap Dia da Semana × Hora do Dia ───
+  // Matrix [dow][hour] com qtd de vendas. Util pra ver picos especificos
+  // (ex: "sexta as 19h vende muito mais que segunda as 14h").
+  const diaHoraMap: Record<number, Record<number, number>> = {};
+  for (const dow of [0, 1, 2, 3, 4, 5, 6]) {
+    diaHoraMap[dow] = {};
+    for (let h = 8; h <= 21; h++) diaHoraMap[dow][h] = 0;
+  }
+  for (const v of rows) {
+    if (!v.created_at) continue;
+    const d = new Date(v.created_at);
+    const dow = d.getDay();
+    const h = d.getHours();
+    if (h < 8 || h > 21) continue;
+    diaHoraMap[dow][h] += 1;
+  }
+  const diaHora: { dia: string; diaFull: string; horas: { hora: number; vendas: number }[] }[] = [];
+  for (const dow of diaOrder) {
+    const horas: { hora: number; vendas: number }[] = [];
+    for (let h = 8; h <= 21; h++) {
+      horas.push({ hora: h, vendas: diaHoraMap[dow][h] });
+    }
+    diaHora.push({
+      dia: DIAS_SEMANA_LABELS[dow],
+      diaFull: DIAS_SEMANA_FULL[dow],
+      horas,
+    });
+  }
+
   // ─── 3. Top Produtos por Periodo ───
   const produtoMap: Record<string, { qtd: number; receita: number }> = {};
   for (const v of rows) {
@@ -239,6 +268,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     porDiaSemana,
     porHora,
+    diaHora,
     topProdutos,
     faturamentoSemanal,
     produtosPorMes,

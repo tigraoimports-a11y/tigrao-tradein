@@ -37,7 +37,7 @@ interface Gasto {
   data: string; descricao: string; valor: number; banco: string; usuario: string;
 }
 
-type Periodo = "semana" | "mes";
+type Periodo = "semana" | "mes" | "custom";
 
 export default function RelatoriosPage() {
   const { password, user, darkMode: dm } = useAdmin();
@@ -47,6 +47,11 @@ export default function RelatoriosPage() {
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
+  // Periodo customizado (de/ate) — valores default: ultimo mes
+  const todayISO = new Date().toISOString().split("T")[0];
+  const lastMonthISO = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]; })();
+  const [customFrom, setCustomFrom] = useState(lastMonthISO);
+  const [customTo, setCustomTo] = useState(todayISO);
 
   // Estado para envio de relatórios PDF por email
   const [sendingSemanal, setSendingSemanal] = useState(false);
@@ -74,7 +79,13 @@ export default function RelatoriosPage() {
   const hoje = new Date();
   const range = periodo === "semana"
     ? (() => { const d = new Date(hoje); d.setDate(d.getDate() + weekOffset * 7); return getWeekRange(d); })()
-    : (() => { const d = new Date(hoje.getFullYear(), hoje.getMonth() + monthOffset, 1); return getMonthRange(d.getFullYear(), d.getMonth() + 1); })();
+    : periodo === "mes"
+    ? (() => { const d = new Date(hoje.getFullYear(), hoje.getMonth() + monthOffset, 1); return getMonthRange(d.getFullYear(), d.getMonth() + 1); })()
+    : (() => {
+        // Custom range: usa customFrom e customTo direto
+        const fmtBR = (iso: string) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y.slice(2)}`; };
+        return { start: customFrom, end: customTo, label: `${fmtBR(customFrom)} – ${fmtBR(customTo)}` };
+      })();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -173,18 +184,42 @@ export default function RelatoriosPage() {
         <h1 className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Relatorios</h1>
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl overflow-hidden border border-[#D2D2D7]">
-            {(["semana", "mes"] as const).map(p => (
+            {(["semana", "mes", "custom"] as const).map(p => (
               <button key={p} onClick={() => { setPeriodo(p); setWeekOffset(0); setMonthOffset(0); }}
                 className={`px-4 py-2 text-sm font-semibold ${periodo === p ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#1C1C1E] text-[#98989D]" : "bg-white text-[#86868B]"}`}`}>
-                {p === "semana" ? "Semanal" : "Mensal"}
+                {p === "semana" ? "Semanal" : p === "mes" ? "Mensal" : "Personalizado"}
               </button>
             ))}
           </div>
-          <button onClick={() => periodo === "semana" ? setWeekOffset(o => o - 1) : setMonthOffset(o => o - 1)}
-            className={`px-3 py-2 rounded-lg text-sm ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7]"}`}>◀</button>
-          <span className={`text-sm font-medium min-w-[140px] text-center ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{range.label}</span>
-          <button onClick={() => periodo === "semana" ? setWeekOffset(o => o + 1) : setMonthOffset(o => o + 1)}
-            className={`px-3 py-2 rounded-lg text-sm ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7]"}`}>▶</button>
+          {periodo !== "custom" && (
+            <>
+              <button onClick={() => periodo === "semana" ? setWeekOffset(o => o - 1) : setMonthOffset(o => o - 1)}
+                className={`px-3 py-2 rounded-lg text-sm ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7]"}`}>◀</button>
+              <span className={`text-sm font-medium min-w-[140px] text-center ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{range.label}</span>
+              <button onClick={() => periodo === "semana" ? setWeekOffset(o => o + 1) : setMonthOffset(o => o + 1)}
+                className={`px-3 py-2 rounded-lg text-sm ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7]"}`}>▶</button>
+            </>
+          )}
+          {periodo === "custom" && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                max={customTo}
+                className={`px-2.5 py-1.5 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+              />
+              <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>até</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                min={customFrom}
+                max={todayISO}
+                className={`px-2.5 py-1.5 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+              />
+            </div>
+          )}
         </div>
       </div>
 

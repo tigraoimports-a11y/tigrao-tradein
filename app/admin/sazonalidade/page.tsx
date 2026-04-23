@@ -62,9 +62,20 @@ interface KPIs {
   totalFaturamento: number;
 }
 
+interface DiaHoraCell {
+  hora: number;
+  vendas: number;
+}
+interface DiaHoraRow {
+  dia: string;
+  diaFull: string;
+  horas: DiaHoraCell[];
+}
+
 interface SazonalidadeData {
   porDiaSemana: DiaSemanaData[];
   porHora: HoraData[];
+  diaHora?: DiaHoraRow[];
   topProdutos: TopProduto[];
   faturamentoSemanal: SemanaData[];
   produtosPorMes: ProdutosPorMes[];
@@ -354,6 +365,63 @@ export default function SazonalidadePage() {
               </ResponsiveContainer>
             </Section>
           </div>
+
+          {/* Heatmap dia × hora — cruzamento pra descobrir picos especificos */}
+          {data.diaHora && data.diaHora.length > 0 && (() => {
+            const maxVendas = Math.max(
+              1,
+              ...data.diaHora.flatMap(row => row.horas.map(h => h.vendas)),
+            );
+            const colorFor = (n: number) => {
+              if (n === 0) return darkMode ? "#1F1F22" : "#F5F5F7";
+              const intensity = n / maxVendas; // 0..1
+              const alpha = Math.max(0.2, intensity);
+              return `rgba(232, 116, 14, ${alpha})`;
+            };
+            const horas = data.diaHora[0].horas.map(h => h.hora);
+            return (
+              <Section title="Heatmap Dia × Hora" darkMode={darkMode}>
+                <p className={`text-xs mb-3 ${darkMode ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  Cruzamento de vendas por dia da semana × hora do dia. Quanto mais escuro, mais vendas (max: {maxVendas}).
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="text-[11px] border-collapse" style={{ minWidth: 720 }}>
+                    <thead>
+                      <tr>
+                        <th className={`px-2 py-1 text-left font-semibold ${darkMode ? "text-[#98989D]" : "text-[#86868B]"}`}>Dia / Hora</th>
+                        {horas.map(h => (
+                          <th key={h} className={`px-1.5 py-1 text-center font-semibold ${darkMode ? "text-[#98989D]" : "text-[#86868B]"}`}>{h}h</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.diaHora.map(row => (
+                        <tr key={row.dia}>
+                          <td className={`px-2 py-1 font-semibold ${darkMode ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`} title={row.diaFull}>{row.dia}</td>
+                          {row.horas.map(c => (
+                            <td
+                              key={c.hora}
+                              className="text-center font-mono text-[10px]"
+                              style={{
+                                backgroundColor: colorFor(c.vendas),
+                                color: c.vendas / maxVendas > 0.5 ? "#fff" : (darkMode ? "#86868B" : "#86868B"),
+                                width: 36,
+                                height: 28,
+                                border: darkMode ? "1px solid #1A1A1C" : "1px solid #FAFAFB",
+                              }}
+                              title={`${row.diaFull} ${c.hora}h: ${c.vendas} venda${c.vendas !== 1 ? "s" : ""}`}
+                            >
+                              {c.vendas || ""}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
+            );
+          })()}
 
           {/* Faturamento por Semana */}
           <Section title="Faturamento por Semana" darkMode={darkMode}>

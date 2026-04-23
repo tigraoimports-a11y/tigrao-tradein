@@ -170,6 +170,8 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   const [histLoading, setHistLoading] = useState(false);
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  // Busca pra reimprimir rapido por codigo/produto/serial
+  const [buscaHistorico, setBuscaHistorico] = useState("");
 
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
@@ -1084,11 +1086,18 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                 <option value="EM_ESTOQUE">Em Estoque</option>
                 <option value="SAIU">Saiu</option>
               </select>
+              <input
+                type="text"
+                value={buscaHistorico}
+                onChange={(e) => setBuscaHistorico(e.target.value)}
+                placeholder="🔍 Buscar por código, produto, serial, IMEI..."
+                className="flex-1 min-w-[220px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              />
               <button onClick={carregarHistorico} className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-lg text-sm">Atualizar</button>
               <span className="text-sm text-gray-500">{etiquetas.length} etiquetas</span>
               {selecionadas.size > 0 && (
                 <button onClick={handlePrintBatch} className="ml-auto bg-gray-800 hover:bg-gray-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                  🖨️ Imprimir {selecionadas.size} selecionada{selecionadas.size > 1 ? "s" : ""}
+                  🖨️ Reimprimir {selecionadas.size} selecionada{selecionadas.size > 1 ? "s" : ""}
                 </button>
               )}
             </div>
@@ -1113,7 +1122,14 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {etiquetas.map((et) => {
+                    {etiquetas.filter((et) => {
+                      if (!buscaHistorico.trim()) return true;
+                      const q = buscaHistorico.trim().toLowerCase();
+                      return (et.codigo_barras || "").toLowerCase().includes(q)
+                        || (et.produto || "").toLowerCase().includes(q)
+                        || (et.serial_no || "").toLowerCase().includes(q)
+                        || (et.imei || "").toLowerCase().includes(q);
+                    }).map((et) => {
                       const st = STATUS_ETIQUETA[et.status as keyof typeof STATUS_ETIQUETA];
                       return (
                         <tr key={et.id} className={`hover:bg-gray-50 ${selecionadas.has(et.id) ? "bg-orange-50" : ""}`}>
@@ -1145,7 +1161,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex gap-1.5 justify-center">
-                              <button onClick={() => handlePrint(et)} className="text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded-lg">Imprimir</button>
+                              <button onClick={() => handlePrint(et)} className="text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded-lg" title="Reimprimir mantendo o mesmo código">🖨️ Reimprimir</button>
                               {et.status === "AGUARDANDO_ENTRADA" && (
                                 <button onClick={() => handleExcluir(et)} disabled={excluindoId === et.id} className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg disabled:opacity-50">
                                   {excluindoId === et.id ? "..." : "Excluir"}

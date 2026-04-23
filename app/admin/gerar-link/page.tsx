@@ -376,6 +376,8 @@ export default function GerarLinkPage() {
   const [histArquivado, setHistArquivado] = useState<"0" | "1">("0");
   const [histStatus, setHistStatus] = useState<"" | "ATIVO" | "PREENCHIDO" | "ENCAMINHADO">("");
   const [histOperador, setHistOperador] = useState<string>("");
+  // Vendedor designado no link (separado do operador que criou)
+  const [histVendedor, setHistVendedor] = useState<string>("");
 
   // Lista de operadores unicos extraida dos links carregados. Alimenta o
   // dropdown "Vendedor que criou" na aba Historico. Ordena alfabeticamente,
@@ -385,6 +387,15 @@ export default function GerarLinkPage() {
     const set = new Set<string>();
     for (const l of histLinks) {
       if (l.operador && l.operador.trim()) set.add(l.operador.trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [histLinks]);
+
+  // Lista de vendedores designados extraida dos links carregados.
+  const vendedoresDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of histLinks) {
+      if (l.vendedor && l.vendedor.trim()) set.add(l.vendedor.trim());
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [histLinks]);
@@ -1929,11 +1940,23 @@ export default function GerarLinkPage() {
               onChange={(e) => setHistOperador(e.target.value)}
               className={inputCls}
               style={{ maxWidth: 200 }}
-              title="Filtrar por quem criou o link"
+              title="Quem criou o link no admin"
             >
-              <option value="">👤 Todos vendedores</option>
+              <option value="">🛠️ Todos operadores</option>
               {operadoresDisponiveis.map((op) => (
                 <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+            <select
+              value={histVendedor}
+              onChange={(e) => setHistVendedor(e.target.value)}
+              className={inputCls}
+              style={{ maxWidth: 200 }}
+              title="Vendedor designado no link (campo Vendedor do form)"
+            >
+              <option value="">👤 Todos vendedores</option>
+              {vendedoresDisponiveis.map((v) => (
+                <option key={v} value={v}>{v}</option>
               ))}
             </select>
             <button
@@ -1948,16 +1971,33 @@ export default function GerarLinkPage() {
 
           {histLoading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
           {!histLoading && histLinks.length === 0 && <p className="text-xs text-[#86868B] text-center py-6">Nenhum link encontrado.</p>}
-          {!histLoading && histLinks.length > 0 && histOperador && histLinks.filter((l) => (l.operador || "") === histOperador).length === 0 && (
-            <p className="text-xs text-[#86868B] text-center py-6">Nenhum link de <strong>{histOperador}</strong> nos filtros atuais.</p>
-          )}
+          {!histLoading && histLinks.length > 0 && (() => {
+            const filtrados = histLinks.filter((l) => {
+              if (histOperador && (l.operador || "") !== histOperador) return false;
+              if (histVendedor && (l.vendedor || "") !== histVendedor) return false;
+              return true;
+            });
+            if (filtrados.length === 0 && (histOperador || histVendedor)) {
+              const labels: string[] = [];
+              if (histOperador) labels.push(`operador: ${histOperador}`);
+              if (histVendedor) labels.push(`vendedor: ${histVendedor}`);
+              return (
+                <p className="text-xs text-[#86868B] text-center py-6">
+                  Nenhum link encontrado pra <strong>{labels.join(" + ")}</strong>.
+                </p>
+              );
+            }
+            return null;
+          })()}
 
           {(() => {
             // Mostra TODOS os links (Aguardando, Preenchido, Entrega criada).
-            // Operador filtra via os dropdowns em cima (Status / Vendedor que criou).
-            const visiveis = histOperador
-              ? histLinks.filter((l) => (l.operador || "") === histOperador)
-              : histLinks;
+            // Filtros aplicados: operador (quem criou) + vendedor (designado).
+            const visiveis = histLinks.filter((l) => {
+              if (histOperador && (l.operador || "") !== histOperador) return false;
+              if (histVendedor && (l.vendedor || "") !== histVendedor) return false;
+              return true;
+            });
             return (
           <div className="space-y-2">
             {visiveis.map((l) => (
@@ -2991,6 +3031,26 @@ export default function GerarLinkPage() {
           <div className="bg-[#F5F5F7] rounded-lg p-3 break-all text-xs text-[#1D1D1F] font-mono border border-[#D2D2D7]">
             {generatedLink}
           </div>
+
+          {/* Pre-visualizacao WhatsApp — bubble que simula como cliente vai ver */}
+          <div className="space-y-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#86868B]">📱 Como vai aparecer no WhatsApp:</p>
+            <div className="bg-[#E5DDD5] rounded-lg p-3" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.03) 1px, transparent 0)", backgroundSize: "12px 12px" }}>
+              <div className="ml-auto max-w-[85%] bg-[#DCF8C6] rounded-lg rounded-tr-none p-2 shadow-sm">
+                {/* Card de preview do link (simula rich preview do WhatsApp) */}
+                <div className="bg-white/80 rounded border-l-4 border-[#25D366] p-2 mb-1.5">
+                  <p className="text-[10px] font-bold text-[#075E54]">TigraoImports</p>
+                  <p className="text-[10px] text-[#3B4A54] line-clamp-2">Finalize sua compra com troca em 1 minuto</p>
+                  <p className="text-[9px] text-[#667781] mt-0.5 truncate">{generatedLink.replace(/^https?:\/\//, "")}</p>
+                </div>
+                <p className="text-[11px] text-[#1F2937] break-all">{generatedLink}</p>
+                <p className="text-[9px] text-[#667781] text-right mt-1">
+                  {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ✓✓
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button
               onClick={copiar}

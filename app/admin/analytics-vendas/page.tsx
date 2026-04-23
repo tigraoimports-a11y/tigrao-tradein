@@ -174,12 +174,16 @@ export default function AnalyticsVendasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<"1m" | "3m" | "6m">("1m");
+  // Filtro por canal/origem (FORMULARIO, INSTAGRAM, INDICACAO, OUTROS, etc.)
+  const [origemFiltro, setOrigemFiltro] = useState<string>("");
+  const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/analytics-vendas?range=${range}`, {
+      const url = `/api/admin/analytics-vendas?range=${range}${origemFiltro ? `&origem=${encodeURIComponent(origemFiltro)}` : ""}`;
+      const res = await fetch(url, {
         headers: apiHeaders(),
       });
       if (!res.ok) throw new Error(`Erro ${res.status}`);
@@ -237,11 +241,14 @@ export default function AnalyticsVendasPage() {
         coresPorModelo: json.coresPorModelo || [],
       };
       setData(transformed);
+      if (Array.isArray(json.origensDisponiveis)) {
+        setOrigensDisponiveis(json.origensDisponiveis);
+      }
     } catch (err: any) {
       setError(err.message || "Erro ao carregar dados");
     }
     setLoading(false);
-  }, [range, apiHeaders]);
+  }, [range, origemFiltro, apiHeaders]);
 
   useEffect(() => {
     fetchData();
@@ -283,7 +290,7 @@ export default function AnalyticsVendasPage() {
           <h1 className="text-2xl font-bold text-[#1D1D1F]">Analytics de Vendas</h1>
           <p className="text-sm text-[#86868B]">{rangeLabel()}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex bg-[#E5E5EA] rounded-xl p-1">
             {(["1m", "3m", "6m"] as const).map((r) => (
               <button
@@ -299,6 +306,17 @@ export default function AnalyticsVendasPage() {
               </button>
             ))}
           </div>
+          <select
+            value={origemFiltro}
+            onChange={(e) => setOrigemFiltro(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-[#D2D2D7] text-sm font-medium text-[#1D1D1F] focus:border-[#E8740E] focus:outline-none"
+            title="Filtrar projeção e KPIs por canal/origem"
+          >
+            <option value="">📊 Todos canais</option>
+            {origensDisponiveis.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
           <button
             onClick={fetchData}
             disabled={loading}
