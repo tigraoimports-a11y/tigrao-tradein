@@ -264,6 +264,32 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (action === "delete_modelo_full") {
+    // Apaga um modelo por completo: todas as rows de avaliacao_usados +
+    // cascata em modelos_excluidos, tradein_garantia e descontos_condicao
+    // (linhas com condicao "{modelo} - *"). Usar quando precisa remover um
+    // modelo cadastrado errado ou obsoleto (diferente de "excluir do
+    // simulador", que so marca como invisivel mas mantem os valores).
+    const { modelo } = body;
+    if (!modelo) return NextResponse.json({ error: "modelo required" }, { status: 400 });
+    const nome = String(modelo).trim();
+    if (!nome) return NextResponse.json({ error: "modelo nao pode ser vazio" }, { status: 400 });
+
+    const d1 = await supabase.from("avaliacao_usados").delete().eq("modelo", nome);
+    if (d1.error) return NextResponse.json({ error: `avaliacao_usados: ${d1.error.message}` }, { status: 500 });
+
+    const d2 = await supabase.from("modelos_excluidos").delete().eq("modelo", nome);
+    if (d2.error) return NextResponse.json({ error: `modelos_excluidos: ${d2.error.message}` }, { status: 500 });
+
+    const d3 = await supabase.from("tradein_garantia").delete().eq("modelo", nome);
+    if (d3.error) return NextResponse.json({ error: `tradein_garantia: ${d3.error.message}` }, { status: 500 });
+
+    const d4 = await supabase.from("descontos_condicao").delete().like("condicao", `${nome} - %`);
+    if (d4.error) return NextResponse.json({ error: `descontos_condicao: ${d4.error.message}` }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "import_defaults") {
     // Importar valores padrão do CLAUDE.md/fallback
     const defaults = body.valores as { modelo: string; armazenamento: string; valor_base: number }[];
