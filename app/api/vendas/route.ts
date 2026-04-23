@@ -800,6 +800,11 @@ export async function PATCH(req: NextRequest) {
   const patchCreditoLoja = Number(fields.usar_credito_loja || 0);
   const patchLojistaId = fields._lojista_id || null;
 
+  // Flag do botão "Recriar Pendência": força criação mesmo quando a venda
+  // ja tinha troca antes (caso em que o admin deletou manualmente a pendencia
+  // do estoque pra editar e quer recriar).
+  const forceRecriarPendencia = fields._recriar_pendencia === true;
+
   // Remover campos internos que não existem na tabela vendas
   delete fields._seminovo;
   delete fields._seminovo2;
@@ -807,6 +812,7 @@ export async function PATCH(req: NextRequest) {
   delete fields.forma_sinal;
   delete fields.usar_credito_loja;
   delete fields._lojista_id;
+  delete fields._recriar_pendencia;
 
   // Se tem crédito de lojista, salvar na coluna correta
   if (patchCreditoLoja > 0) {
@@ -1029,8 +1035,10 @@ export async function PATCH(req: NextRequest) {
         // (provavelmente foi movida pra estoque como seminovo), NAO criar uma
         // nova. Antes, toda edicao de venda com troca criava uma pendencia
         // duplicada, obrigando o admin a deletar manualmente.
-        if (!p1 && jaTinhaTroca1Antes) {
+        if (!p1 && jaTinhaTroca1Antes && !forceRecriarPendencia) {
           // no-op: troca ja foi processada numa edicao/criacao anterior
+          // (forceRecriarPendencia=true quando o botao "Recriar Pendencia"
+          // foi clicado — admin deletou a pendencia e quer recria-la)
         } else if (p1) {
           // UPDATE
           const upd1: Record<string, unknown> = {};
@@ -1110,7 +1118,7 @@ export async function PATCH(req: NextRequest) {
           : (hasTroca1 ? undefined : existing[0]);
         // Mesmo tratamento da troca 1: se venda ja tinha troca2 antes e nao
         // achou pendencia, a troca ja foi processada — nao duplicar.
-        if (!p2 && jaTinhaTroca2Antes) {
+        if (!p2 && jaTinhaTroca2Antes && !forceRecriarPendencia) {
           // no-op
         } else if (p2) {
           const upd2: Record<string, unknown> = {};

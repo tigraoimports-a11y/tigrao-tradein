@@ -5979,7 +5979,7 @@ export default function VendasPage() {
                                               fetch("/api/vendas", {
                                                 method: "PATCH",
                                                 headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, troca_produto: v.troca_produto, produto_na_troca: v.produto_na_troca }),
+                                                body: JSON.stringify({ id: v.id, troca_produto: v.troca_produto, produto_na_troca: v.produto_na_troca, _recriar_pendencia: true }),
                                               }).then(r => { if (r.ok) setMsg("Pendência recriada!"); else r.json().then(j => setMsg("Erro: " + (j.error || "falha"))); }).catch(() => setMsg("Erro ao recriar"));
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition-colors"
