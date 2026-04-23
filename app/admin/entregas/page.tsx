@@ -37,6 +37,7 @@ interface Entrega {
   regiao: string | null;
   finalizada?: boolean | null;
   comprovante_lancado?: boolean | null;
+  comprovante_url?: string | null;
 }
 
 type EntregaStatus = Entrega["status"];
@@ -289,6 +290,8 @@ export default function EntregasPage() {
 
   // Seleção em massa para finalizar várias entregas
   const [modoSelecao, setModoSelecao] = useState(false);
+  // Lightbox de imagem do comprovante (foto anexada por venda)
+  const [comprovanteLightbox, setComprovanteLightbox] = useState<string | null>(null);
   const [entregasSelecionadas, setEntregasSelecionadas] = useState<Set<string>>(new Set());
   const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
   const [saving, setSaving] = useState(false);
@@ -2187,9 +2190,10 @@ export default function EntregasPage() {
         ))}
         <button
           onClick={() => { setModoSelecao(!modoSelecao); setEntregasSelecionadas(new Set()); }}
-          className={`ml-auto px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${modoSelecao ? "bg-blue-500 text-white" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-blue-400"}`}
+          className={`ml-auto px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${modoSelecao ? "bg-blue-500 text-white" : "bg-white border-2 border-blue-400 text-blue-700 hover:bg-blue-50"}`}
+          title="Ative pra marcar várias entregas como entregues, atribuir motoboy ou mudar status em lote"
         >
-          {modoSelecao ? "✖️ Sair da seleção" : "☑️ Selecionar várias"}
+          {modoSelecao ? "✖️ Sair da seleção" : "☑️ Marcar várias entregues"}
         </button>
       </div>
 
@@ -2715,6 +2719,42 @@ export default function EntregasPage() {
                     <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>🧾 Comprovante lançado</span>
                   </label>
                 </div>
+                {/* Foto/imagem do comprovante — paste URL */}
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-semibold uppercase tracking-wider ${dm ? "text-[#86868B]" : "text-[#86868B]"}`}>📸 Foto comprovante</span>
+                    {e.comprovante_url && (
+                      <button
+                        onClick={() => quickPatchEntrega(e.id, { comprovante_url: null })}
+                        className="text-[10px] text-red-500 hover:underline"
+                      >Remover</button>
+                    )}
+                  </div>
+                  <input
+                    type="url"
+                    defaultValue={e.comprovante_url || ""}
+                    onBlur={(ev) => {
+                      const v = ev.target.value.trim();
+                      if (v !== (e.comprovante_url || "")) quickPatchEntrega(e.id, { comprovante_url: v || null });
+                    }}
+                    placeholder="Cole link da imagem (Drive, WhatsApp, etc.)"
+                    className={`w-full text-[11px] px-2 py-1.5 rounded border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                  />
+                  {e.comprovante_url && (
+                    <button
+                      onClick={() => setComprovanteLightbox(e.comprovante_url || null)}
+                      className="block w-full"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={e.comprovante_url}
+                        alt="Comprovante"
+                        className="w-full max-h-48 object-contain rounded-lg border border-[#D2D2D7] hover:border-[#E8740E] transition-colors cursor-zoom-in"
+                        onError={(ev) => { (ev.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Detalhes */}
@@ -3106,6 +3146,28 @@ export default function EntregasPage() {
           </div>
         );
       })()}
+
+      {/* Lightbox de comprovante — imagem em tela cheia */}
+      {comprovanteLightbox && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 cursor-zoom-out p-4"
+          onClick={() => setComprovanteLightbox(null)}
+        >
+          <button
+            onClick={(ev) => { ev.stopPropagation(); setComprovanteLightbox(null); }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl font-bold hover:bg-white/20"
+          >
+            ✕
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={comprovanteLightbox}
+            alt="Comprovante (tamanho real)"
+            className="max-w-full max-h-full object-contain"
+            onClick={(ev) => ev.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
