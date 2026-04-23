@@ -18,10 +18,10 @@ export default function ConfiguracoesPage() {
   // Contato do formulário de troca
   const [principal, setPrincipal] = useState("5521972461357"); // Bianca default
   const [formLacrados, setFormLacrados] = useState(""); // WhatsApp formulários lacrados
-  const [formSeminovos, setFormSeminovos] = useState(""); // WhatsApp formulários seminovos (fallback geral)
-  // Override por categoria de seminovo — se setado, sobrepoe o formSeminovos
-  // pra aquela categoria. Ex: iPhone Seminovo pro Nicolas, iPad Seminovo pro
-  // Rodrigo. Vazio = usa o fallback geral.
+  // WhatsApp por categoria de seminovo. Ex: iPhone Seminovo pro Nicolas,
+  // iPad Seminovo pro Rodrigo. Se deixado vazio, cliente cai no WhatsApp
+  // Principal. Campo legado whatsapp_formularios_seminovos e gravado como
+  // espelho do iPhone Seminovo (mantem backwards-compat com codigo antigo).
   const [formSemiIphone, setFormSemiIphone] = useState("");
   const [formSemiIpad, setFormSemiIpad] = useState("");
   const [formSemiMacbook, setFormSemiMacbook] = useState("");
@@ -44,8 +44,14 @@ export default function ConfiguracoesPage() {
         if (!data) return;
         if (data.whatsapp_principal) setPrincipal(String(data.whatsapp_principal));
         if (data.whatsapp_formularios) setFormLacrados(String(data.whatsapp_formularios));
-        if (data.whatsapp_formularios_seminovos) setFormSeminovos(String(data.whatsapp_formularios_seminovos));
-        if (data.whatsapp_seminovo_iphone) setFormSemiIphone(String(data.whatsapp_seminovo_iphone));
+        // iPhone Seminovo: usa valor especifico se tiver, senao cai no campo
+        // legado whatsapp_formularios_seminovos (migracao silenciosa pra quem
+        // ja configurou antes do UI por categoria existir).
+        if (data.whatsapp_seminovo_iphone) {
+          setFormSemiIphone(String(data.whatsapp_seminovo_iphone));
+        } else if (data.whatsapp_formularios_seminovos) {
+          setFormSemiIphone(String(data.whatsapp_formularios_seminovos));
+        }
         if (data.whatsapp_seminovo_ipad) setFormSemiIpad(String(data.whatsapp_seminovo_ipad));
         if (data.whatsapp_seminovo_macbook) setFormSemiMacbook(String(data.whatsapp_seminovo_macbook));
         if (data.whatsapp_seminovo_watch) setFormSemiWatch(String(data.whatsapp_seminovo_watch));
@@ -130,8 +136,10 @@ export default function ConfiguracoesPage() {
         body: JSON.stringify({
           whatsapp_principal: principal,
           whatsapp_formularios: formLacrados || principal,
-          whatsapp_formularios_seminovos: formSeminovos || principal,
-          // Overrides por categoria: vazio = usa fallback (formSeminovos).
+          // Campo legado — espelha iPhone Seminovo pra manter backwards-compat
+          // com codigo antigo que le whatsapp_formularios_seminovos (o UI
+          // unificado agora e so por categoria).
+          whatsapp_formularios_seminovos: formSemiIphone || principal,
           whatsapp_seminovo_iphone: formSemiIphone || "",
           whatsapp_seminovo_ipad: formSemiIpad || "",
           whatsapp_seminovo_macbook: formSemiMacbook || "",
@@ -263,62 +271,13 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
-        {/* WhatsApp Troca — Seminovos */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-3">
+        {/* WhatsApp Seminovos — por categoria */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-4">
           <div>
             <p className="font-bold text-[#1D1D1F]">📱 WhatsApp Troca — Seminovos</p>
             <p className="text-xs text-[#86868B] mt-1">
-              Número que recebe formulários de troca por seminovos (usados). Se vazio, usa o WhatsApp Principal.
-            </p>
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
-            {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
-              <button
-                key={v.nome}
-                type="button"
-                onClick={() => setFormSeminovos(v.numero)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  formSeminovos === v.numero
-                    ? "bg-[#E8740E] text-white shadow-sm"
-                    : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
-                }`}
-              >
-                {v.nome} {formSeminovos === v.numero && "✓"}
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-[#86868B] mb-1">Número seminovos (DDI + DDD + número)</label>
-            <input
-              value={formSeminovos}
-              onChange={e => setFormSeminovos(e.target.value.replace(/\D/g, ""))}
-              placeholder="5521967442665"
-              className={inputCls}
-              inputMode="numeric"
-            />
-          </div>
-
-          {formSeminovos && (
-            <a
-              href={`https://wa.me/${formSeminovos}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-[#E8740E] hover:underline"
-            >
-              🔗 Testar: wa.me/{formSeminovos}
-            </a>
-          )}
-        </div>
-
-        {/* WhatsApp Seminovos — por categoria (override do geral acima) */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-4">
-          <div>
-            <p className="font-bold text-[#1D1D1F]">🎯 WhatsApp Seminovos por Categoria</p>
-            <p className="text-xs text-[#86868B] mt-1">
-              Sobrepõe o número acima quando a avaliação for de um seminovo dessa categoria específica.
-              Deixe <b>vazio</b> pra usar o padrão (WhatsApp Troca — Seminovos).
+              Número que recebe formulários de troca para cada categoria de seminovo.
+              Deixe <b>vazio</b> pra cair no <b>WhatsApp Principal</b> (fallback).
             </p>
           </div>
 
@@ -343,18 +302,6 @@ export default function ConfiguracoesPage() {
                 )}
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => cat.set("")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    cat.value === ""
-                      ? "bg-[#E8740E] text-white shadow-sm"
-                      : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
-                  }`}
-                  title="Usa o WhatsApp Troca — Seminovos (fallback)"
-                >
-                  Usar padrão {cat.value === "" && "✓"}
-                </button>
                 {vendedores.filter(v => v.numero && v.ativo !== false).map(v => (
                   <button
                     key={v.nome}
