@@ -1,4 +1,5 @@
 import { corParaPT, normalizarCoresNoTexto } from "./cor-pt";
+import { parseSku } from "./sku";
 
 const STRUCTURED = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 
@@ -59,6 +60,48 @@ export function limparNomeProduto(raw: string | null | undefined): string {
     }
   }
   return s;
+}
+
+/**
+ * Garante que o nome do produto exibido tem a cor. Usa o SKU como fonte de
+ * verdade pra extrair a cor canonica — se o texto do produto ja tem a cor,
+ * deixa como esta; se nao tem, anexa ao final.
+ *
+ * Casos:
+ *   - produto="IPHONE 17 256GB WHITE", sku="IPHONE-17-256GB-BRANCO"
+ *     → "IPHONE 17 256GB Branco" (normalizarCoresNoTexto traduz White→Branco)
+ *   - produto="IPHONE 17 256GB", sku="IPHONE-17-256GB-PRETO"
+ *     → "IPHONE 17 256GB Preto" (anexa a cor faltante)
+ *   - produto="iPhone 17 256GB" (mixed case, sem cor), sku tem cor
+ *     → "iPhone 17 256GB Preto" (idem)
+ */
+export function produtoComCorGarantida(produto: string | null | undefined, sku: string | null | undefined): string {
+  const texto = normalizarCoresNoTexto(produto || "");
+  if (!sku) return texto;
+  const parsed = parseSku(sku);
+  if (!parsed) return texto;
+  // Extrai cor do SKU: componentes nao classificados no final das specs
+  const isClassificavel = (s: string) =>
+    /^\d+(GB|TB|MM)$/.test(s) ||
+    /^M\d+/.test(s) ||
+    (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+    ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
+  const corSegments = parsed.specs.filter((s) => !isClassificavel(s));
+  if (corSegments.length === 0) return texto;
+  // "BRANCO-NUVEM" → "Branco Nuvem"
+  const corBonita = corSegments
+    .map((p) => p.charAt(0) + p.slice(1).toLowerCase())
+    .join(" ");
+  // Ja tem a cor no texto? (case-insensitive)
+  const textoUpper = texto.toUpperCase();
+  const corUpper = corSegments.join(" ").toUpperCase();
+  // Checa forma exata ou primeiro segmento (ex: "BRANCO" em "BRANCO NUVEM")
+  if (textoUpper.includes(corUpper)) return texto;
+  if (corSegments.length > 1 && textoUpper.includes(corSegments[0])) return texto;
+  // Checa se tem uma cor EN equivalente no texto (ex: "BLACK" quando SKU diz PRETO).
+  // Se sim, nao anexa — normalizarCoresNoTexto deve cuidar.
+  // Nao tem cor visivel → anexa
+  return `${texto} ${corBonita}`;
 }
 
 /** Formata o nome do produto para exibição (PT simplificado). Compartilhado entre estoque, gastos e etc. */
