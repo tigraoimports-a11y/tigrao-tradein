@@ -917,6 +917,35 @@ export default function EntregasPage() {
     // formatProdutoDisplay retorna string vazia ou com leading "\n" se multi.
     // Pra single produto, sai na mesma linha do emoji/label. Pra multi, quebra.
     const produtoFormatado = formatProdutoMotoboy(produtoText);
+
+    // Coleta: titulo COLETA, produto + detalhes do aparelho numa linha so
+    // (bateria, estado, caixa, marcas + observacao livre), sem TIPO/PAGAMENTO.
+    // Motoboy da coleta nao recebe valor, entao nao adianta poluir o texto.
+    const isColeta = modoColeta || form.tipo === "COLETA";
+    if (isColeta) {
+      const detalhesParts: string[] = [];
+      if (coletaBateria) detalhesParts.push(`Saude bateria ${coletaBateria}%`);
+      if (coletaEstado) detalhesParts.push(`Estado: ${coletaEstado}`);
+      if (coletaMarcas) detalhesParts.push(coletaMarcas);
+      if (coletaCaixa === "sim") detalhesParts.push("Tem a caixa original");
+      else if (coletaCaixa === "nao") detalhesParts.push("Sem caixa original");
+      if (form.observacao) detalhesParts.push(form.observacao);
+      const produtoBase = produtoFormatado.startsWith("\n")
+        ? produtoFormatado.replace(/\n\s*•\s*/g, " + ").trim()
+        : produtoFormatado;
+      const produtoColetaLine = `🍎 *PRODUTO DA COLETA:* ${[produtoBase, ...detalhesParts].filter(Boolean).join(" | ")}`;
+      return [
+        `🛵 *COLETA ${(form.bairro || "—").toUpperCase()}* 🛵`,
+        `🛵`,
+        `⏰ *HORÁRIO:* ${form.horario || "—"}`,
+        `📍 *LOCAL:* ${form.endereco || "—"}${form.bairro ? ` - ${form.bairro}` : ""}`,
+        produtoColetaLine,
+        `🧑 *CLIENTE:* ${form.cliente || "—"}`,
+        `📞 *CONTATO:* ${formatTelefoneBR(form.telefone) || "—"}`,
+        `💼 Vendedor: ${form.vendedor || "—"}`,
+      ].join("\n");
+    }
+
     const produtoLine = produtoFormatado.startsWith("\n")
       ? `🍎 *PRODUTO:*${produtoFormatado}`
       : `🍎 *PRODUTO:* ${produtoFormatado}`;
@@ -2984,27 +3013,30 @@ export default function EntregasPage() {
                   <button
                     onClick={() => {
                       if (e.tipo === "COLETA") {
-                        // Formulário de COLETA — sem valores financeiros
+                        // Formulário de COLETA — sem valores financeiros.
+                        // Detalhes do aparelho (bateria, marcas, caixa, pecas) saem
+                        // inline no PRODUTO DA COLETA; observacao livre tambem entra
+                        // na mesma linha. Evita OBS duplicada la embaixo.
                         const detalhesPartes = e.detalhes_upgrade
                           ? e.detalhes_upgrade.split("\n").map(l => l.trim()).filter(l => l && !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao"))
                           : [];
-                        const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
+                        const obsLimpa = (e.observacao || "").split(/\s*\|\s*|\n/)
+                          .map(p => p.trim())
+                          .filter(p => p && !p.startsWith("Endereço cadastro:") && !p.startsWith("Encaminhada do link") && !p.startsWith("Instagram:"));
                         const produtoFmtC = formatProdutoMotoboy(e.produto);
                         const produtoBase = produtoFmtC.startsWith("\n") ? produtoFmtC.replace(/\n\s*•\s*/g, " + ").trim() : produtoFmtC;
-                        const aparelhoLine = `📱 *APARELHO DA COLETA:* ${[produtoBase, ...detalhesPartes].filter(Boolean).join(" | ")}`;
+                        const produtoColetaLine = `🍎 *PRODUTO DA COLETA:* ${[produtoBase, ...detalhesPartes, ...obsLimpa].filter(Boolean).join(" | ")}`;
+                        const regiaoC = (e.regiao || e.bairro || "").toUpperCase();
                         const msg = [
-                          `🛵 *COLETA* 🛵`,
-                          ``,
+                          `🛵 *COLETA${regiaoC ? ` ${regiaoC}` : ""}* 🛵`,
+                          `🛵`,
                           `⏰ *HORÁRIO:* ${e.horario || "Horário a combinar"}`,
-                          `📍 *LOCAL COLETA:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
-                          aparelhoLine,
-                          ``,
+                          `📍 *LOCAL:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
+                          produtoColetaLine,
                           `🧑 *CLIENTE:* ${e.cliente || ""}`,
                           `📞 *CONTATO:* ${formatTelefoneBR(e.telefone) || "—"}`,
-                          obsLimpa ? `\nOBS: ${obsLimpa}` : "",
-                          ``,
                           `💼 Vendedor: ${e.vendedor || ""}`,
-                        ].filter(l => l !== undefined).join("\n");
+                        ].join("\n");
                         navigator.clipboard.writeText(msg);
                         alert("Formulário de coleta copiado! Cole no WhatsApp do motoboy.");
                       } else {
