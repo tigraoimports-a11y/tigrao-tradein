@@ -715,8 +715,33 @@ export function UsadosContent() {
     if (unit === "MB") return num / 1000;
     return num;
   };
+  // Pra MacBook (formato "RAM | SSD"), ordenar por RAM primeiro, depois SSD —
+  // sem isso, variantes com mesma RAM apareciam fora de ordem (ex: 16GB|1TB
+  // vindo antes de 16GB|256GB por causa do parseInt("1TB")=1).
+  const macbookSortKey = (arm: string): [number, number] => {
+    if (arm.includes("|")) {
+      const parts = arm.split("|").map(p => p.trim());
+      // Formato legado "tela | ram | ssd"
+      if (parts[0]?.includes('"')) return [storageToGB(parts[1] || ""), storageToGB(parts[2] || "")];
+      // Formato novo "ram | ssd"
+      return [storageToGB(parts[0] || ""), storageToGB(parts[1] || "")];
+    }
+    if (arm.includes("/")) {
+      const [ssd = "", ram = ""] = arm.split("/").map(p => p.trim());
+      return [storageToGB(ram), storageToGB(ssd)];
+    }
+    return [0, storageToGB(arm)];
+  };
   for (const modelo of Object.keys(grouped)) {
-    grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+    if (catFilter === "macbook") {
+      grouped[modelo].sort((a, b) => {
+        const [ra, sa] = macbookSortKey(a.armazenamento);
+        const [rb, sb] = macbookSortKey(b.armazenamento);
+        return ra !== rb ? ra - rb : sa - sb;
+      });
+    } else {
+      grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+    }
   }
 
   // Agrupa por "base" (tudo exceto conectividade) pros iPad/Watch: 1 linha visual
