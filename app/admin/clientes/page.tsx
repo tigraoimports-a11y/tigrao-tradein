@@ -79,6 +79,34 @@ interface Estorno {
   contato_tipo: string | null;
 }
 
+// Lista memoizada de vendas no modal de detalhes — so re-renderiza quando
+// detailVendas muda. Antes o map inline renderizava 85+ divs a cada keypress
+// em qualquer input do form, travando o digitar.
+const UltimasOperacoesList = React.memo(function UltimasOperacoesList({
+  detailVendas,
+  dm,
+}: { detailVendas: VendaResumo[]; dm: boolean }) {
+  const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+  return (
+    <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+      {detailVendas.map((v) => (
+        <div key={v.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E] hover:bg-[#252525]" : "bg-white hover:bg-[#F5F5F7]"} transition-colors`}>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <span className={`shrink-0 ${mS}`}>{fmtDate(v.data)}</span>
+            <span className={`font-medium truncate ${mP}`}>{v.produto}</span>
+            {v.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {v.serial_no}</span>}
+          </div>
+          <div className="flex items-center gap-3 shrink-0 ml-2">
+            <span className={mS}>{v.forma} · {v.banco}</span>
+            <span className="font-bold text-green-600 w-20 text-right">{fmt(v.preco_vendido)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
+
 function EstornosSection({ contatoNome, apiHeaders, dm }: { contatoNome: string; apiHeaders: () => HeadersInit; dm: boolean }) {
   const [estornos, setEstornos] = useState<Estorno[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1297,21 +1325,7 @@ export default function ClientesPage() {
                 ) : detailVendas.length === 0 ? (
                   <p className={`text-sm text-center py-4 ${mS}`}>Nenhuma operacao encontrada</p>
                 ) : (
-                  <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-                    {detailVendas.map((v) => (
-                      <div key={v.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E] hover:bg-[#252525]" : "bg-white hover:bg-[#F5F5F7]"} transition-colors`}>
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className={`shrink-0 ${mS}`}>{fmtDate(v.data)}</span>
-                          <span className={`font-medium truncate ${mP}`}>{v.produto}</span>
-                          {v.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {v.serial_no}</span>}
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0 ml-2">
-                          <span className={mS}>{v.forma} · {v.banco}</span>
-                          <span className="font-bold text-green-600 w-20 text-right">{fmt(v.preco_vendido)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <UltimasOperacoesList detailVendas={detailVendas} dm={dm} />
                 )}
               </div>
 
