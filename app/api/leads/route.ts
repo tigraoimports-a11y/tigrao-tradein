@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitSubmission } from "@/lib/rate-limit";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 export async function POST(req: NextRequest) {
   const limited = rateLimitSubmission(req);
@@ -47,6 +48,16 @@ export async function POST(req: NextRequest) {
     for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]) {
       if (body[k]) row[k] = String(body[k]).slice(0, 200);
     }
+    // SKU canonico do produto NOVO desejado (foco da simulacao). Permite
+    // dashboards tipo "Top SKUs simulados" e cruzamento com vendas.
+    const skuNovo = gerarSkuSafe({
+      produto: `${body.modeloNovo || ""} ${body.storageNovo || ""}`.trim(),
+      categoria: detectarCategoriaPorTexto(body.modeloNovo),
+      cor: null,
+      observacao: null,
+      tipo: "NOVO",
+    });
+    if (skuNovo) row.sku = skuNovo;
 
     // Checagem de duplicidade real: mesmo whatsapp + produto novo + produto usado nos últimos 2 minutos
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
@@ -79,6 +90,12 @@ export async function POST(req: NextRequest) {
     if (error && /column\s+["']?whatsapp_destino/i.test(error.message || "")) {
       console.warn("[leads] coluna whatsapp_destino ausente, retry sem campo (rodar migration 20260421)");
       delete row.whatsapp_destino;
+      ({ error } = await supabase.from("simulacoes").insert([row]));
+    }
+    // Fallback: se sku ainda nao existe (migration Fase 3 nao rodou), tenta sem ela
+    if (error && /column\s+["']?sku/i.test(error.message || "")) {
+      console.warn("[leads] coluna sku ausente em simulacoes, retry sem campo (rodar migration 20260424c)");
+      delete row.sku;
       ({ error } = await supabase.from("simulacoes").insert([row]));
     }
 

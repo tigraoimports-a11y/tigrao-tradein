@@ -23,21 +23,29 @@ export async function GET(req: NextRequest) {
 
   const [{ data, error }, estoqueRes] = await Promise.all([
     q,
-    supabase.from("estoque").select("id,produto,cor,qnt,status,observacao,categoria").gt("qnt", 0).eq("status", "EM ESTOQUE"),
+    supabase.from("estoque").select("id,produto,cor,qnt,status,observacao,categoria,sku").gt("qnt", 0).eq("status", "EM ESTOQUE"),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCache });
 
   const estoque = (estoqueRes.data || []) as EstoqueLinha[];
   const enriched = (data || []).map(a => {
-    const { matches, disponivel_qnt } = annotateAvisoComEstoque(a.produto_desejado || "", estoque);
+    // a.sku existe a partir da migration Fase 3a (coluna adicionada em avisos_clientes).
+    // Antes disso, fica undefined e o matching cai no fuzzy — funciona igual.
+    const { matches, disponivel_qnt, matchedBySku } = annotateAvisoComEstoque(
+      a.produto_desejado || "",
+      estoque,
+      a.sku as string | null | undefined,
+    );
     return {
       ...a,
       disponivel_qnt,
+      matched_by_sku: !!matchedBySku,
       estoque_matches: matches.slice(0, 5).map(m => ({
         id: m.id,
         produto: m.produto,
         cor: m.cor,
         qnt: m.qnt,
+        sku: m.sku,
       })),
     };
   });

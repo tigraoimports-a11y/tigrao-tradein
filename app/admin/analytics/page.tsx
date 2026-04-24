@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { TopSkusSection } from "@/components/admin/TopSkusSection";
 
 interface FunnelStep {
   step: number;
@@ -339,6 +340,9 @@ export default function AnalyticsPage() {
           </div>
         );
       })()}
+
+      {/* Top SKUs (vendas/simulacoes/encomendas por SKU canonico) */}
+      <TopSkusSection password={password} range={range} />
 
       {/* Daily chart (simple bar chart) */}
       {data.daily.length > 0 && (

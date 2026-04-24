@@ -357,3 +357,31 @@ export function isValidSku(sku: string): boolean {
   if (!sku || !sku.trim()) return false;
   return /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(sku.toUpperCase());
 }
+
+// ─── Helper: detectar categoria a partir do nome do produto ───────
+// Usado quando a row nao tem coluna `categoria` explicita (ex: avaliacao_usados,
+// simulacoes, avisos_clientes — guardam so o nome do modelo).
+// Retorna a categoria canonica do estoque (IPHONES, IPADS, MACBOOK, ...) ou OUTROS.
+export function detectarCategoriaPorTexto(texto: string | null | undefined): string {
+  const up = upper(texto);
+  if (/IPHONE/.test(up)) return "IPHONES";
+  if (/IPAD/.test(up)) return "IPADS";
+  if (/MAC.*MINI/.test(up)) return "MAC_MINI";
+  if (/MACBOOK/.test(up)) return "MACBOOK";
+  if (/WATCH/.test(up)) return "APPLE_WATCH";
+  if (/AIRPODS/.test(up)) return "AIRPODS";
+  return "OUTROS";
+}
+
+// ─── Helper conveniente: gera SKU sem disparar erro ─────────────
+// Wrapper que so retorna a string do SKU (ou null em caso de falha) — pra
+// uso em POSTs onde so queremos popular a coluna. Toda a lógica detalhada
+// (confianca, componentes) fica disponivel via gerarSku() pra UIs que queiram.
+export function gerarSkuSafe(produto: ProdutoInput): string | null {
+  try {
+    const r = gerarSku(produto);
+    return r.sku || null;
+  } catch {
+    return null;
+  }
+}

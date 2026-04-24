@@ -1,6 +1,7 @@
 import { hojeBR } from "@/lib/date-utils";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 import { sendPaymentNotification, sendSaleNotification, sendCancelNotification } from "@/lib/telegram";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
@@ -182,11 +183,12 @@ export async function POST(req: NextRequest) {
   let estoqueId = body._estoque_id;
   delete body._estoque_id;
 
-  // Se tem estoque_id, verificar se produto ainda está disponível e copiar IMEI/Serial
+  // Se tem estoque_id, verificar se produto ainda está disponível e copiar IMEI/Serial/SKU
   let imeiFromEstoque: string | null = null;
   let serialFromEstoque: string | null = null;
+  let skuFromEstoque: string | null = null;
   if (estoqueId) {
-    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo").eq("id", estoqueId).single();
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo, sku").eq("id", estoqueId).single();
     if (!estoqueItem) return NextResponse.json({ error: "Produto não encontrado no estoque" }, { status: 404 });
     if (estoqueItem.status === "ESGOTADO" || estoqueItem.qnt <= 0) {
       return NextResponse.json({ error: "Produto já foi vendido (ESGOTADO). Não é possível registrar outra venda." }, { status: 409 });
@@ -199,6 +201,7 @@ export async function POST(req: NextRequest) {
     }
     if (estoqueItem.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
     if (estoqueItem.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
+    if (estoqueItem.sku) skuFromEstoque = estoqueItem.sku;
   }
 
   // Garantir nome do cliente em caixa alta
@@ -266,11 +269,23 @@ export async function POST(req: NextRequest) {
   // Remover campo virtual forma_sinal (não existe na tabela vendas)
   delete body.forma_sinal;
 
+  // SKU: prefere copiar do estoque vinculado (ja passou pelo gerador validado).
+  // Fallback: gera do texto livre produto+cor+categoria da venda. Sempre tipo
+  // NOVO (seminovo tem fluxo separado via campo produto_na_troca).
+  const skuVenda = skuFromEstoque || gerarSkuSafe({
+    produto: String(body.produto || ""),
+    categoria: String(body.categoria || detectarCategoriaPorTexto(body.produto)),
+    cor: body.cor ?? null,
+    observacao: null,
+    tipo: "NOVO",
+  });
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
     ...(imeiFromEstoque ? { imei: imeiFromEstoque } : {}),
     ...(serialFromEstoque ? { serial_no: serialFromEstoque } : {}),
+    ...(skuVenda ? { sku: skuVenda } : {}),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

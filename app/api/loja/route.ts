@@ -3,7 +3,9 @@ import { rateLimitPublic } from "@/lib/rate-limit";
 import {
   buildEstoqueIndex,
   buildEstoqueKeysPresentes,
+  buildEstoqueIndexBySku,
   checkVariacaoEsgotada,
+  checkVariacaoEsgotadaBySku,
   type EstoqueRow,
 } from "@/lib/loja-estoque-match";
 
@@ -21,6 +23,7 @@ interface VariacaoRow {
   imagem_url: string | null;
   visivel: boolean;
   ordem: number;
+  sku: string | null;
 }
 
 interface ProdutoRow {
@@ -82,7 +85,7 @@ export async function GET(req: NextRequest) {
         .single(),
       supabase
         .from("estoque")
-        .select("produto,categoria,qnt,status,cor,observacao"),
+        .select("produto,categoria,qnt,status,cor,observacao,sku"),
     ]);
 
     const categorias = (categoriasRes.data ?? []) as CategoriaRow[];
@@ -90,6 +93,8 @@ export async function GET(req: NextRequest) {
     const variacoes = (variacoesRes.data ?? []) as VariacaoRow[];
     const estoqueRows = (estoqueRes.data ?? []) as EstoqueRow[];
 
+    // Index por SKU (preferencial, 100% preciso) + index fuzzy (fallback)
+    const { disponivel: skuDisponivel, presentes: skuPresentes } = buildEstoqueIndexBySku(estoqueRows);
     const estoqueIndex = buildEstoqueIndex(estoqueRows);
     const estoqueKeysPresentes = buildEstoqueKeysPresentes(estoqueRows);
 
@@ -120,6 +125,11 @@ export async function GET(req: NextRequest) {
 
         const variacoesDisponiveis = prodVariacoes.filter((v) => {
           const attrs = v.atributos ?? {};
+          // Path 1: lookup exato por SKU (se variacao tem SKU). Retorna null
+          // quando nao pode decidir — ai cai no fuzzy.
+          const bySku = checkVariacaoEsgotadaBySku(v.sku, skuDisponivel, skuPresentes);
+          if (bySku) return !bySku.esgotado;
+          // Path 2: fallback fuzzy (pra variacoes ainda sem SKU populado)
           const { esgotado } = checkVariacaoEsgotada(
             {
               produtoNome: p.nome,

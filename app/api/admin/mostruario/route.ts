@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity-log";
+import { gerarSkuSafe } from "@/lib/sku";
+import { lojaCatToEstoqueCat } from "@/lib/loja-estoque-match";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -12,6 +15,36 @@ function slugify(text: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+// Gera SKU canonico pra uma variacao do mostruario. Faz JOIN com loja_produtos
+// pra pegar o nome do produto pai + categoria via slug. Retorna null se nao
+// conseguir gerar (input invalido). Mostruario sempre conta como NOVO/lacrado.
+async function gerarSkuVariacao(
+  supabase: SupabaseClient,
+  produtoId: string,
+  varNome: string,
+  atributos: Record<string, unknown> | null,
+): Promise<string | null> {
+  const { data: prod } = await supabase
+    .from("loja_produtos")
+    .select("nome, loja_categorias:categoria_id(slug)")
+    .eq("id", produtoId)
+    .single();
+  if (!prod) return null;
+  // categoria_id vem como objeto unico (FK 1-1), nao array
+  const cat = (prod as { loja_categorias?: { slug?: string } | null }).loja_categorias;
+  const slug = cat?.slug || "";
+  const categoria = lojaCatToEstoqueCat(slug);
+  const produtoNome = `${(prod as { nome?: string }).nome || ""} ${varNome || ""}`.trim();
+  const cor = (atributos?.cor as string | null) ?? null;
+  return gerarSkuSafe({
+    produto: produtoNome,
+    categoria,
+    cor,
+    observacao: null,
+    tipo: "NOVO",
+  });
 }
 
 // GET — list all data: categorias, produtos (with variacoes), config
@@ -203,6 +236,10 @@ export async function POST(req: NextRequest) {
     if (preco_parcelado !== undefined) row.preco_parcelado = preco_parcelado;
     if (imagem_url) row.imagem_url = imagem_url;
 
+    // Auto-popular SKU canonico
+    const sku = await gerarSkuVariacao(supabase, produto_id, nome, atributos ?? {});
+    if (sku) row.sku = sku;
+
     const { data, error } = await supabase
       .from("loja_variacoes")
       .insert(row)
@@ -286,6 +323,24 @@ export async function PATCH(req: NextRequest) {
     if (update.preco !== undefined) update.preco = Number(update.preco);
 
     if (Object.keys(update).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+
+    // Regerar SKU se mudou nome ou atributos (cor). Busca produto_id atual da
+    // variacao pra resolver o pai. Se algo falhar, mantem o SKU antigo.
+    if ("nome" in update || "atributos" in update) {
+      try {
+        const { data: varAtual } = await supabase
+          .from("loja_variacoes")
+          .select("produto_id, nome, atributos")
+          .eq("id", id)
+          .single();
+        if (varAtual?.produto_id) {
+          const nomeFinal = (update.nome as string | undefined) ?? varAtual.nome;
+          const attrsFinal = (update.atributos as Record<string, unknown> | undefined) ?? varAtual.atributos ?? {};
+          const novoSku = await gerarSkuVariacao(supabase, varAtual.produto_id, nomeFinal, attrsFinal);
+          if (novoSku) update.sku = novoSku;
+        }
+      } catch { /* mantem SKU antigo */ }
+    }
 
     const { error } = await supabase.from("loja_variacoes").update(update).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
