@@ -228,6 +228,11 @@ export default function GerarLinkPage() {
   const [dataEntrega, setDataEntrega] = useState("");
   const [desconto, setDesconto] = useState("");
   const [temTroca, setTemTroca] = useState(false);
+  // Encomenda: cliente paga sinal antecipado (default 50%) e produto tem
+  // prazo de chegada. So operador marca (cliente nao escolhe).
+  const [encomenda, setEncomenda] = useState(false);
+  const [previsaoChegada, setPrevisaoChegada] = useState("");
+  const [sinalPct, setSinalPct] = useState("50");
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
   const [temSegundaTroca, setTemSegundaTroca] = useState(false);
@@ -721,6 +726,13 @@ export default function GerarLinkPage() {
         if (pagamentoPago) shortData.pp = pagamentoPago;
         // pm=1 → formulário primeiro, depois cliente paga MP direto do /compra
         if (pagarMp) shortData.pm = "1";
+        // Encomenda: flag + prazo + % do sinal. Cliente nao pode desativar isso
+        // pelo URL (backend ignora quando o link_compras.tipo for diferente).
+        if (encomenda) {
+          shortData.enc = "1";
+          if (previsaoChegada.trim()) shortData.prev = previsaoChegada.trim();
+          if (sinalPct) shortData.sinal = String(sinalPct);
+        }
         if (incluirDadosCliente) {
           if (cliNome.trim()) shortData.cn = cliNome.trim();
           if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
@@ -810,6 +822,13 @@ export default function GerarLinkPage() {
       if (l.troca_valor) setTrocaValor(Number(l.troca_valor).toLocaleString("pt-BR"));
       if (l.troca_condicao) setTrocaCondicao(l.troca_condicao);
       if (l.troca_cor) setTrocaCor(l.troca_cor);
+    }
+    // Encomenda: restaura se o link original era tipo ENCOMENDA
+    const lAny = l as unknown as { tipo?: string; previsao_chegada?: string | null; sinal_pct?: number | null };
+    if (lAny.tipo === "ENCOMENDA") {
+      setEncomenda(true);
+      if (lAny.previsao_chegada) setPrevisaoChegada(lAny.previsao_chegada);
+      if (lAny.sinal_pct != null) setSinalPct(String(lAny.sinal_pct));
     }
     setAba("novo");
   }
@@ -941,6 +960,8 @@ export default function GerarLinkPage() {
     // Troca
     setTemTroca(false); setTrocaProduto(""); setTrocaValor(""); setTrocaCondicao(""); setTrocaCor("");
     setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); setTrocaCondicao2(""); setTrocaCor2("");
+    // Encomenda
+    setEncomenda(false); setPrevisaoChegada(""); setSinalPct("50");
     // Cliente
     setIncluirDadosCliente(false); limparDadosCliente();
     // Link gerado
@@ -1090,7 +1111,11 @@ export default function GerarLinkPage() {
             body: JSON.stringify({
               short_code: json.code,
               url_curta: urlCurta,
-              tipo: trocaProduto ? "TROCA" : "COMPRA",
+              // Encomenda tem precedencia sobre troca: pode ter encomenda COM troca,
+              // mas o tipo do link conta pra fluxo do /compra (banner de prazo/sinal).
+              tipo: encomenda ? "ENCOMENDA" : (trocaProduto ? "TROCA" : "COMPRA"),
+              previsao_chegada: encomenda ? (previsaoChegada.trim() || null) : null,
+              sinal_pct: encomenda ? (Number(sinalPct) || 50) : null,
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -1232,6 +1257,13 @@ export default function GerarLinkPage() {
     const rawTroca2Mp = trocaValor2.replace(/\./g, "").replace(",", ".");
     if (temSegundaTroca && rawTroca2Mp && rawTroca2Mp !== "0") shortData.tv2 = rawTroca2Mp;
 
+    // Encomenda (so operador marca — cliente nao altera pelo URL)
+    if (encomenda) {
+      shortData.enc = "1";
+      if (previsaoChegada.trim()) shortData.prev = previsaoChegada.trim();
+      if (sinalPct) shortData.sinal = String(sinalPct);
+    }
+
     // Dados do cliente pré-preenchidos (quando o vendedor incluir)
     if (incluirDadosCliente) {
       if (cliNome.trim()) shortData.cn = cliNome.trim();
@@ -1295,8 +1327,9 @@ export default function GerarLinkPage() {
             body: JSON.stringify({
               short_code: shortCode,
               url_curta: urlCurta,
-              // Se tem troca ou entrada PIX, é um fluxo misto (COMPRA + PIX pendente)
-              tipo: trocaProduto ? "TROCA" : "COMPRA",
+              tipo: encomenda ? "ENCOMENDA" : (trocaProduto ? "TROCA" : "COMPRA"),
+              previsao_chegada: encomenda ? (previsaoChegada.trim() || null) : null,
+              sinal_pct: encomenda ? (Number(sinalPct) || 50) : null,
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -2546,6 +2579,42 @@ export default function GerarLinkPage() {
             placeholder="Ex: 200 (opcional)"
             className={inputCls}
           />
+        </div>
+
+        {/* Encomenda — so operador marca, cliente nao ve. Combinavel com troca. */}
+        <div className={`p-3 rounded-xl border ${encomenda ? "border-blue-400 bg-blue-50" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={encomenda}
+              onChange={(e) => { setEncomenda(e.target.checked); if (!e.target.checked) { setPrevisaoChegada(""); setSinalPct("50"); } }}
+              className="w-4 h-4 rounded accent-blue-500"
+            />
+            <span className="text-sm font-semibold text-[#1D1D1F]">📦 Encomenda (sinal antecipado)</span>
+          </label>
+          {encomenda && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className={labelCls}>Previsão de chegada</label>
+                <input
+                  value={previsaoChegada}
+                  onChange={(e) => setPrevisaoChegada(e.target.value)}
+                  placeholder="Ex: 15 a 30 dias"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>% do sinal</label>
+                <input
+                  value={sinalPct}
+                  onChange={(e) => setSinalPct(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                  placeholder="50"
+                  inputMode="numeric"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Troca / Trade-in */}

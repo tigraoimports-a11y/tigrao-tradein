@@ -75,6 +75,13 @@ function CompraForm() {
   const whatsapp = searchParams.get("whatsapp") || "";
   const shortCode = searchParams.get("short") || "";
 
+  // Encomenda (sinal antecipado) — parametros controlados pelo operador no
+  // gerar-link. Cliente NAO deve conseguir desligar isso pelo URL, mas o
+  // submit confere com o link_compras.tipo antes de criar `encomendas`.
+  const encomendaParam = searchParams.get("encomenda") === "1";
+  const previsaoChegadaParam = searchParams.get("previsao_chegada") || "";
+  const sinalPctParam = Math.max(0, Math.min(100, Number(searchParams.get("sinal_pct") || "50") || 50));
+
   // Trade-in params (vindos do StepQuote)
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
   const trocaValorParam = searchParams.get("troca_valor") || "";
@@ -978,6 +985,11 @@ function CompraForm() {
         trocaImei2: temTroca && temSegundoAparelho ? trocaImei2.trim() : undefined,
         localEntrega: localStr, dataEntrega, horarioEntrega: horario,
         vendedor, origem,
+        // Encomenda: backend confere o tipo do link_compras antes de criar
+        // em `encomendas` em vez de `vendas`. URL param sozinho nao confia.
+        encomenda: encomendaParam,
+        previsaoChegada: encomendaParam ? previsaoChegadaParam : undefined,
+        sinalPct: encomendaParam ? sinalPctParam : undefined,
         website: honeypot,
       }));
       const vendaUrl = "/api/vendas/from-formulario";
@@ -1226,8 +1238,40 @@ function CompraForm() {
       {/* Header */}
       <div className="bg-[#E8740E] text-white px-4 py-4 text-center">
         <p className="text-lg font-bold">&#x1F42F; TigraoImports</p>
-        <p className="text-sm opacity-90">Formulario de Compra</p>
+        <p className="text-sm opacity-90">{encomendaParam ? "Encomenda — Sinal Antecipado" : "Formulario de Compra"}</p>
       </div>
+
+      {/* Banner de encomenda — aparece no topo se o link tiver sido criado
+          como ENCOMENDA. Mostra prazo + valor do sinal que o cliente vai pagar.
+          Restante e pago no ato da entrega (combinado por WhatsApp). */}
+      {encomendaParam && (() => {
+        const valorTotal = preco > 0 ? preco : precoAuto;
+        const sinalValor = valorTotal > 0 ? Math.round((valorTotal * sinalPctParam) / 100) : 0;
+        const restante = Math.max(valorTotal - sinalValor, 0);
+        return (
+          <div className="mx-4 mt-4 rounded-xl p-4 border-2 border-blue-300 bg-blue-50">
+            <p className="text-sm font-bold text-blue-900 mb-2">📦 Este pedido é uma encomenda</p>
+            {previsaoChegadaParam && (
+              <p className="text-xs text-blue-800 mb-1">
+                <span className="font-semibold">Prazo:</span> {previsaoChegadaParam}
+              </p>
+            )}
+            {valorTotal > 0 && (
+              <>
+                <p className="text-xs text-blue-800 mb-1">
+                  <span className="font-semibold">Sinal ({sinalPctParam}%) agora:</span> R$ {fmt(sinalValor)}
+                </p>
+                <p className="text-xs text-blue-800">
+                  <span className="font-semibold">Restante na entrega:</span> R$ {fmt(restante)}
+                </p>
+              </>
+            )}
+            <p className="text-[11px] text-blue-700 mt-2 leading-snug">
+              Ao enviar o formulário, você confirma a encomenda. Combinamos o pagamento do sinal pelo WhatsApp.
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Product info */}
       <div className="mx-4 mt-4 bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED]">
