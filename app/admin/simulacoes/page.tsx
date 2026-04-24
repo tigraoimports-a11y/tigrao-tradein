@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import TradeInQuestionsAdmin from "@/components/admin/TradeInQuestionsAdmin";
 import { corParaPT } from "@/lib/cor-pt";
@@ -142,8 +143,13 @@ const fmtDate = (iso: string) => {
 
 export default function AdminPage() {
   const { password, user } = useAdmin();
+  const skuFilter = useSkuFilter();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<SimulacaoRow[] | null>(null);
+  const [dataRaw, setData] = useState<SimulacaoRow[] | null>(null);
+  // Aplica filtro por SKU (?sku=X) transparentemente
+  const data = skuFilter && dataRaw
+    ? dataRaw.filter((r) => ((r as unknown as { sku?: string | null }).sku || "").toUpperCase() === skuFilter)
+    : dataRaw;
   const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR" | "INVALIDO" | "PENDENTE">("todos");
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -621,6 +627,7 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
+      <SkuFilterBanner total={data?.length} />
       {/* Main tabs: Simulações / Funil */}
       <div className="flex gap-2 items-center flex-wrap">
         {(["simulacoes", "historico", "simulador", "followup", "funil", "perguntas"] as const).map((t) => (

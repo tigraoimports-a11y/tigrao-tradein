@@ -78,6 +78,13 @@ interface Info {
   similares?: SkuSimilar[];
 }
 
+interface CrossSellItem {
+  sku: string;
+  nome_canonico: string | null;
+  vendas_juntas: number;
+  pct: number;
+}
+
 export function SkuInfoModal({ sku: initialSku, onClose }: { sku: string; onClose: () => void }) {
   const { password, darkMode: dm } = useAdmin();
   // currentSku permite "trocar" o SKU foco sem fechar o modal — ao clicar
@@ -85,6 +92,7 @@ export function SkuInfoModal({ sku: initialSku, onClose }: { sku: string; onClos
   const [currentSku, setCurrentSku] = useState(initialSku);
   const [history, setHistory] = useState<string[]>([]);
   const [info, setInfo] = useState<Info | null>(null);
+  const [crossSell, setCrossSell] = useState<CrossSellItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sku = currentSku;
   // loading = "o info atual nao corresponde ao SKU pedido" — derivado, sem
@@ -104,18 +112,28 @@ export function SkuInfoModal({ sku: initialSku, onClose }: { sku: string; onClos
   useEffect(() => {
     if (!sku || !password) return;
     let cancelled = false;
-    fetch(`/api/admin/sku/info?sku=${encodeURIComponent(sku)}`, {
-      headers: { "x-admin-password": password },
-    })
-      .then((r) => r.json())
-      .then((json) => {
+    // Busca info agregada + cross-sell em paralelo. Cross-sell tem seu proprio
+    // endpoint porque envolve query mais pesada (JOIN cruzado de vendas) —
+    // deixa separado pra nao travar o modal se demorar mais.
+    Promise.all([
+      fetch(`/api/admin/sku/info?sku=${encodeURIComponent(sku)}`, {
+        headers: { "x-admin-password": password },
+      }).then((r) => r.json()),
+      fetch(`/api/admin/sku/cross-sell?sku=${encodeURIComponent(sku)}`, {
+        headers: { "x-admin-password": password },
+      })
+        .then((r) => r.json())
+        .catch(() => ({ ok: false, cross_sell: [] })),
+    ])
+      .then(([infoJson, crossJson]) => {
         if (cancelled) return;
-        if (json.ok) {
-          setInfo(json.data);
+        if (infoJson.ok) {
+          setInfo(infoJson.data);
           setError(null);
         } else {
-          setError(json.error || "Erro ao buscar info");
+          setError(infoJson.error || "Erro ao buscar info");
         }
+        setCrossSell(crossJson.ok ? crossJson.cross_sell : []);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -367,6 +385,39 @@ export function SkuInfoModal({ sku: initialSku, onClose }: { sku: string; onClos
                         </p>
                       </div>
                       <span className={`text-sm font-bold text-green-600 shrink-0`}>{s.em_estoque}un</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cross-sell: SKUs frequentemente vendidos junto desse */}
+            {crossSell && crossSell.length > 0 && (
+              <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSection}`}>
+                <p className={`text-xs font-bold ${textPrimary} mb-2`}>
+                  🎯 Frequentemente comprados juntos
+                </p>
+                <div className="space-y-1.5">
+                  {crossSell.map((c) => (
+                    <button
+                      key={c.sku}
+                      onClick={() => navigateToSku(c.sku)}
+                      className={`w-full text-left flex items-center gap-3 p-2 rounded-lg transition-colors ${
+                        dm ? "hover:bg-[#3A3A3C]" : "hover:bg-white"
+                      }`}
+                    >
+                      <span className="text-lg">🤝</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${textPrimary} truncate`}>
+                          {c.nome_canonico || c.sku}
+                        </p>
+                        <p className={`text-[11px] ${textSecondary}`}>
+                          {c.pct}% dos clientes que compraram esse também levaram
+                        </p>
+                      </div>
+                      <span className={`text-sm font-bold text-[#E8740E] shrink-0`}>
+                        {c.vendas_juntas}×
+                      </span>
                     </button>
                   ))}
                 </div>
