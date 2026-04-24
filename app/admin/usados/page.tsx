@@ -4,7 +4,6 @@ import { hojeBR } from "@/lib/date-utils";
 import { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { parseStorageSpec, formatStorageSpec } from "@/lib/storage-spec";
 
 interface ValorUsado {
   id: string;
@@ -229,6 +228,14 @@ export function UsadosContent() {
   // (armazenamento/tela/conectividade pra iPad, tamanho/conectividade pra Watch,
   // tela/ram/ssd pra MacBook). Ao salvar, junta valores na ORDEM dos fields.
   const [editingSpecs, setEditingSpecs] = useState<Record<string, Record<string, string>>>({});
+  // Edicao dos specs "base" (tudo EXCETO conectividade) pra iPad/Watch na view
+  // agrupada. Chave = `${modelo}|${baseKey}`. Ao salvar, aplica rename_storage
+  // em TODAS as variantes (Wifi e Wifi+Cel) que compartilham essa base.
+  const [editingBaseSpecs, setEditingBaseSpecs] = useState<Record<string, Record<string, string>>>({});
+  // Input inline pra adicionar uma variante de conectividade que ainda nao existe
+  // (ex: ja tem 64GB Wifi e o admin clica "+ Adicionar" no Wifi+Cel).
+  // Chave = `${modelo}|${baseKey}|${conect}`, valor = valor digitado (string).
+  const [addingConectVariant, setAddingConectVariant] = useState<Record<string, string>>({});
   // Form inline pra adicionar nova variante direto no header de cada modelo
   // (sem precisar abrir o form grande no topo e redigitar Linha+Modelo).
   // Chave = nome do modelo. Valor = { specs por campo, valor_base }.
@@ -359,6 +366,90 @@ export function UsadosContent() {
     }
     setValores((prev) => prev.map((r) => r.modelo === v.modelo && r.armazenamento === v.armazenamento ? { ...r, armazenamento: novoArmaz } : r));
     const e = { ...editingSpecs }; delete e[key]; setEditingSpecs(e);
+    setSaving(null);
+  };
+
+  // Salva edicao dos specs "base" (armaz/tela pro iPad; tamanho pro Watch) pra
+  // TODAS as variantes de conectividade ja existentes nesse grupo. Cada variante
+  // preserva sua conectividade original — so mudam os specs base.
+  const handleSaveBaseSpecs = async (modelo: string, oldBaseKey: string, variants: Record<string, ValorUsado>, cat: string) => {
+    const bsKey = `${modelo}|${oldBaseKey}`;
+    const spec = editingBaseSpecs[bsKey];
+    if (!spec) return;
+    const specFields = SPEC_FIELDS_BY_CAT[cat] || [];
+    const conectIdx = specFields.findIndex((f) => f.key === "conectividade");
+    const baseSpecFields = specFields.filter((_, i) => i !== conectIdx);
+    const newBaseParts = baseSpecFields.map((f) => (spec[f.key] || "").trim());
+    const newBaseKey = newBaseParts.filter(Boolean).join(" | ");
+    if (!newBaseKey) { alert("Preencha pelo menos um campo."); return; }
+    if (newBaseKey === oldBaseKey) {
+      const e = { ...editingBaseSpecs }; delete e[bsKey]; setEditingBaseSpecs(e);
+      return;
+    }
+    setSaving(bsKey);
+    for (const [conect, v] of Object.entries(variants)) {
+      const fullParts = specFields.map((_, i) => {
+        if (i === conectIdx) return conect === "_sem_conect_" ? "" : conect;
+        const baseIdx = i < conectIdx ? i : i - 1;
+        return newBaseParts[baseIdx] || "";
+      });
+      const newArmaz = fullParts.filter(Boolean).join(" | ");
+      if (newArmaz === v.armazenamento) continue;
+      const res = await apiPost({
+        action: "rename_storage",
+        modelo,
+        armazenamento_antigo: v.armazenamento,
+        armazenamento_novo: newArmaz,
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(`Erro ao renomear ${v.armazenamento}: ${j.error || "falha"}`);
+        setSaving(null);
+        return;
+      }
+      setValores((prev) => prev.map((r) => r.id === v.id ? { ...r, armazenamento: newArmaz } : r));
+    }
+    const e = { ...editingBaseSpecs }; delete e[bsKey]; setEditingBaseSpecs(e);
+    setSaving(null);
+  };
+
+  // Adiciona inline uma variante de conectividade especifica (ex: cria o Wifi+Cel
+  // quando ja existe so o Wifi pro mesmo armaz/tela). Reusa upsert_valor.
+  const handleAddConectVariantInline = async (modelo: string, baseParts: string[], conect: string, cat: string) => {
+    const acKey = `${modelo}|${baseParts.join(" | ")}|${conect}`;
+    const valRaw = addingConectVariant[acKey];
+    if (valRaw === undefined || !valRaw.trim()) { setMsg("Preencha o valor (0 = sem preco fixo)"); return; }
+    const val = parseFloat(valRaw);
+    if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
+    const specFields = SPEC_FIELDS_BY_CAT[cat] || [];
+    const conectIdx = specFields.findIndex((f) => f.key === "conectividade");
+    const fullParts = specFields.map((_, i) => {
+      if (i === conectIdx) return conect;
+      const baseIdx = i < conectIdx ? i : i - 1;
+      return baseParts[baseIdx] || "";
+    });
+    const armazenamento = fullParts.filter(Boolean).join(" | ");
+    setSaving(acKey);
+    const res = await apiPost({ action: "upsert_valor", modelo, armazenamento, valor_base: val });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); alert(`Erro: ${j.error || "falha"}`); setSaving(null); return; }
+    setValores((prev) => {
+      const exists = prev.findIndex((v) => v.modelo === modelo && v.armazenamento === armazenamento);
+      if (exists >= 0) { const nv = [...prev]; nv[exists] = { ...nv[exists], valor_base: val }; return nv; }
+      return [...prev, { id: crypto.randomUUID(), modelo, armazenamento, valor_base: val, ativo: true }];
+    });
+    const e = { ...addingConectVariant }; delete e[acKey]; setAddingConectVariant(e);
+    setSaving(null);
+  };
+
+  // Remove uma variante especifica (1 linha no banco). Usado pelo botao "×" em
+  // cada celula de conectividade.
+  const handleDeleteVariant = async (v: ValorUsado) => {
+    if (!confirm(`Remover "${v.modelo} — ${v.armazenamento}" do banco?\n\nSo apaga essa variante especifica; as outras conectividades do mesmo armaz/tela continuam intactas.`)) return;
+    const k = `del-${v.id}`;
+    setSaving(k);
+    const res = await apiPost({ action: "delete_valor", id: v.id });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); alert(`Erro: ${j.error || "falha"}`); setSaving(null); return; }
+    setValores((prev) => prev.filter((x) => x.id !== v.id));
     setSaving(null);
   };
 
@@ -540,6 +631,7 @@ export function UsadosContent() {
   // Pra cada modelo, extrai conectividades unicas presentes (usado como tags)
   const conectividadesByModel: Record<string, string[]> = {};
   const hasConectField = (SPEC_FIELDS_BY_CAT[catFilter] || []).some((f) => f.key === "conectividade");
+  const conectOptions = (SPEC_FIELDS_BY_CAT[catFilter] || []).find((f) => f.key === "conectividade")?.options || [];
   if (hasConectField) {
     for (const modelo of Object.keys(grouped)) {
       const set = new Set<string>();
@@ -564,6 +656,32 @@ export function UsadosContent() {
   };
   for (const modelo of Object.keys(grouped)) {
     grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+  }
+
+  // Agrupa por "base" (tudo exceto conectividade) pros iPad/Watch: 1 linha visual
+  // contendo ate N variantes (uma por conect option). Chave = baseKey (ex: "64GB | 11\"").
+  type BaseGroup = { baseKey: string; baseParts: string[]; variants: Record<string, ValorUsado> };
+  const baseGroupsByModel: Record<string, BaseGroup[]> = {};
+  if (hasConectField) {
+    const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+    const conectIdx = specFields.findIndex((f) => f.key === "conectividade");
+    for (const modelo of Object.keys(grouped)) {
+      const bases: Record<string, BaseGroup> = {};
+      for (const r of grouped[modelo]) {
+        const parts = r.armazenamento.split("|").map((p) => p.trim());
+        const conect = parts[conectIdx] || "_sem_conect_";
+        const basePartsArr = specFields.map((_, i) => parts[i] || "").filter((_, i) => i !== conectIdx);
+        const baseKey = basePartsArr.join(" | ");
+        if (!bases[baseKey]) bases[baseKey] = { baseKey, baseParts: basePartsArr, variants: {} };
+        bases[baseKey].variants[conect] = r;
+      }
+      baseGroupsByModel[modelo] = Object.values(bases).sort((a, b) => {
+        const aGb = storageToGB(a.baseParts[0] || "");
+        const bGb = storageToGB(b.baseParts[0] || "");
+        if (aGb !== bGb) return aGb - bGb;
+        return a.baseKey.localeCompare(b.baseKey);
+      });
+    }
   }
 
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
@@ -980,15 +1098,182 @@ export function UsadosContent() {
                 </div>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[#F5F5F7]">
-                      <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
-                      <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Valor Base</th>
-                      <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Garantia (+R$)</th>
-                      <th className="px-5 py-2"></th>
-                    </tr>
+                    {hasConectField ? (
+                      <tr className="border-b border-[#F5F5F7]">
+                        <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
+                        {conectOptions.map((c) => (
+                          <th key={c} className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">{c}</th>
+                        ))}
+                      </tr>
+                    ) : (
+                      <tr className="border-b border-[#F5F5F7]">
+                        <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
+                        <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Valor Base</th>
+                        <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Garantia (+R$)</th>
+                        <th className="px-5 py-2"></th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody>
-                    {rows.map((v) => {
+                    {hasConectField ? (baseGroupsByModel[modelo] || []).map((group) => {
+                      const bsKey = `${modelo}|${group.baseKey}`;
+                      const isEditBase = editingBaseSpecs[bsKey] !== undefined;
+                      const specFieldsBase = SPEC_FIELDS_BY_CAT[catFilter] || [];
+                      const conectIdxBase = specFieldsBase.findIndex((f) => f.key === "conectividade");
+                      const baseSpecFields = specFieldsBase.filter((_, i) => i !== conectIdxBase);
+                      const initBaseSpecs = (): Record<string, string> => {
+                        const out: Record<string, string> = {};
+                        baseSpecFields.forEach((f, idx) => { out[f.key] = group.baseParts[idx] || ""; });
+                        return out;
+                      };
+                      const currentBaseSpecs = editingBaseSpecs[bsKey] || initBaseSpecs();
+                      return (
+                        <tr key={group.baseKey} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors align-top">
+                          <td className="px-5 py-3 font-medium">
+                            {isEditBase ? (
+                              <div className="flex items-end gap-2 flex-wrap">
+                                {baseSpecFields.map((f, idx) => {
+                                  const curVal = currentBaseSpecs[f.key] || "";
+                                  const hasInOptions = f.options.includes(curVal);
+                                  return (
+                                    <div key={f.key} className="flex flex-col">
+                                      <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">{f.label}</label>
+                                      <select
+                                        value={curVal}
+                                        onChange={(e) => setEditingBaseSpecs({ ...editingBaseSpecs, [bsKey]: { ...currentBaseSpecs, [f.key]: e.target.value } })}
+                                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveBaseSpecs(modelo, group.baseKey, group.variants, catFilter); if (e.key === "Escape") { const x = { ...editingBaseSpecs }; delete x[bsKey]; setEditingBaseSpecs(x); } }}
+                                        autoFocus={idx === 0}
+                                        className={`px-2 py-1 rounded border text-xs focus:outline-none ${idx === 0 ? "border-[#E8740E]" : "border-[#D2D2D7]"}`}
+                                      >
+                                        <option value="">—</option>
+                                        {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                                        {curVal && !hasInOptions && <option value={curVal}>{curVal}</option>}
+                                      </select>
+                                    </div>
+                                  );
+                                })}
+                                <div className="flex gap-1">
+                                  <button onClick={() => handleSaveBaseSpecs(modelo, group.baseKey, group.variants, catFilter)} disabled={saving === bsKey} title="Salvar (Enter)" className="px-2 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50">{saving === bsKey ? "..." : "OK"}</button>
+                                  <button onClick={() => { const x = { ...editingBaseSpecs }; delete x[bsKey]; setEditingBaseSpecs(x); }} title="Cancelar (Esc)" className="px-2 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]">✕</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                title="Clique pra editar (atualiza todas as conectividades desse armazenamento)"
+                                onClick={() => setEditingBaseSpecs({ ...editingBaseSpecs, [bsKey]: initBaseSpecs() })}
+                                className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors"
+                              >
+                                {group.baseKey || "—"}
+                              </button>
+                            )}
+                          </td>
+                          {conectOptions.map((conect) => {
+                            const v = group.variants[conect];
+                            const acKey = `${modelo}|${group.baseKey}|${conect}`;
+                            const isAdding = addingConectVariant[acKey] !== undefined;
+                            if (!v) {
+                              if (isAdding) {
+                                return (
+                                  <td key={conect} className="px-5 py-3">
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      <span className="text-[#86868B] text-xs">R$</span>
+                                      <input
+                                        type="number"
+                                        value={addingConectVariant[acKey]}
+                                        onChange={(e) => setAddingConectVariant({ ...addingConectVariant, [acKey]: e.target.value })}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") handleAddConectVariantInline(modelo, group.baseParts, conect, catFilter);
+                                          if (e.key === "Escape") { const x = { ...addingConectVariant }; delete x[acKey]; setAddingConectVariant(x); }
+                                        }}
+                                        placeholder="0 = sem preco"
+                                        className="w-24 px-2 py-0.5 rounded border border-[#E8740E] text-xs"
+                                        autoFocus
+                                      />
+                                      <button onClick={() => handleAddConectVariantInline(modelo, group.baseParts, conect, catFilter)} disabled={saving === acKey} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                      <button onClick={() => { const x = { ...addingConectVariant }; delete x[acKey]; setAddingConectVariant(x); }} className="text-[10px] text-[#86868B]">✕</button>
+                                    </div>
+                                  </td>
+                                );
+                              }
+                              return (
+                                <td key={conect} className="px-5 py-3">
+                                  <button
+                                    onClick={() => setAddingConectVariant({ ...addingConectVariant, [acKey]: "" })}
+                                    className="text-xs text-[#E8740E] hover:underline font-medium"
+                                    title={`Adicionar variante ${conect}`}
+                                  >
+                                    + Adicionar
+                                  </button>
+                                </td>
+                              );
+                            }
+                            const pKey = `${v.modelo}|${v.armazenamento}`;
+                            const isEditP = editing[pKey] !== undefined;
+                            const gKey = pKey;
+                            const isEditG = editingGarantia[gKey] !== undefined;
+                            const garVal = getGarantia(v.modelo, v.armazenamento);
+                            return (
+                              <td key={conect} className="px-5 py-3">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {isEditP ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[#86868B] text-xs">R$</span>
+                                      <input
+                                        type="number"
+                                        value={editing[pKey]}
+                                        onChange={(e) => setEditing({ ...editing, [pKey]: e.target.value })}
+                                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveValor(v); if (e.key === "Escape") { const x = { ...editing }; delete x[pKey]; setEditing(x); } }}
+                                        placeholder="0 = sem preco"
+                                        className={inputCls}
+                                        autoFocus
+                                      />
+                                      <button onClick={() => handleSaveValor(v)} disabled={saving === pKey} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                      <button onClick={() => { const x = { ...editing }; delete x[pKey]; setEditing(x); }} className="text-[10px] text-[#86868B]">✕</button>
+                                    </div>
+                                  ) : v.valor_base === 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditing({ ...editing, [pKey]: "0" })}
+                                      title="Sem preco fixo — cliente vai pro WhatsApp manual. Clique pra definir."
+                                      className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 text-xs font-medium border border-orange-200 hover:bg-orange-100 transition-colors"
+                                    >
+                                      Sem preco fixo
+                                    </button>
+                                  ) : (
+                                    <span className="cursor-pointer hover:text-[#E8740E] font-medium text-sm" onClick={() => setEditing({ ...editing, [pKey]: String(v.valor_base) })}>{fmt(v.valor_base)}</span>
+                                  )}
+                                  {isEditG ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[#86868B] text-[10px]">+R$</span>
+                                      <input type="number" value={editingGarantia[gKey]} onChange={(e) => setEditingGarantia({ ...editingGarantia, [gKey]: e.target.value })} onKeyDown={(e) => e.key === "Enter" && handleSaveGarantia(v.modelo, v.armazenamento)} className="w-14 px-1 py-0.5 rounded border border-[#E8740E] text-xs text-right" autoFocus />
+                                      <button onClick={() => handleSaveGarantia(v.modelo, v.armazenamento)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                      <button onClick={() => { const e2 = { ...editingGarantia }; delete e2[gKey]; setEditingGarantia(e2); }} className="text-[10px] text-[#86868B]">✕</button>
+                                    </div>
+                                  ) : (
+                                    <span
+                                      className={`text-[11px] cursor-pointer hover:text-[#E8740E] ${garVal > 0 ? "text-green-600 font-medium" : "text-[#B0B0B0]"}`}
+                                      onClick={() => setEditingGarantia({ ...editingGarantia, [gKey]: String(garVal) })}
+                                      title="Garantia (clique pra editar)"
+                                    >
+                                      {garVal > 0 ? `+${fmt(garVal)}` : "Gar —"}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteVariant(v)}
+                                    disabled={saving === `del-${v.id}`}
+                                    title="Remover essa variante"
+                                    className="ml-auto text-red-300 hover:text-red-600 text-xs"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    }) : rows.map((v) => {
                       const key = `${v.modelo}|${v.armazenamento}`;
                       const isEditing = editing[key] !== undefined;
                       const isSaving = saving === key;
@@ -1053,10 +1338,9 @@ export function UsadosContent() {
                                 type="button"
                                 title="Clique para editar"
                                 onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: initSpecsEdit() })}
-                                className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors group"
+                                className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors"
                               >
                                 {v.armazenamento}
-                                <span className="ml-1.5 text-[#C7C7CC] group-hover:text-[#E8740E] text-xs">✏️</span>
                               </button>
                             )}
                           </td>
@@ -1131,7 +1415,7 @@ export function UsadosContent() {
                       const isSavingNew = saving === savingKey;
                       return (
                         <tr className="bg-[#FFF7ED] border-t-2 border-[#E8740E]">
-                          <td className="px-5 py-3" colSpan={4}>
+                          <td className="px-5 py-3" colSpan={hasConectField ? 1 + conectOptions.length : 4}>
                             <div className="flex items-end gap-2 flex-wrap">
                               {specFields.map((f) => (
                                 <div key={f.key} className="flex flex-col">
