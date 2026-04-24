@@ -214,8 +214,14 @@ export async function POST(req: NextRequest) {
   let imeiFromEstoque: string | null = null;
   let serialFromEstoque: string | null = null;
   let skuFromEstoque: string | null = null;
+  // Cor / categoria / observacao: copiar do estoque pra venda poder derivar
+  // display completo (ex: "iPhone 17 PRO MAX 512GB Laranja") sem depender de
+  // enriquecimento no GET. Persiste a fonte de verdade na venda.
+  let corFromEstoque: string | null = null;
+  let categoriaFromEstoque: string | null = null;
+  let observacaoFromEstoque: string | null = null;
   if (estoqueId) {
-    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo, sku, produto").eq("id", estoqueId).single();
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo, sku, produto, cor, categoria, observacao").eq("id", estoqueId).single();
     if (!estoqueItem) return NextResponse.json({ error: "Produto não encontrado no estoque" }, { status: 404 });
     if (estoqueItem.status === "ESGOTADO" || estoqueItem.qnt <= 0) {
       return NextResponse.json({ error: "Produto já foi vendido (ESGOTADO). Não é possível registrar outra venda." }, { status: 409 });
@@ -255,6 +261,13 @@ export async function POST(req: NextRequest) {
     if (estoqueItem.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
     if (estoqueItem.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
     if (estoqueItem.sku) skuFromEstoque = estoqueItem.sku;
+    // Copia cor/categoria/observacao se nao foram passadas explicitamente
+    // pelo frontend. Importante pro display — o buildPayload do frontend nao
+    // envia cor, entao sem isso a venda ficava com cor=null e o display
+    // nao conseguia mostrar.
+    if (estoqueItem.cor && !body.cor) corFromEstoque = estoqueItem.cor;
+    if (estoqueItem.categoria && !body.categoria) categoriaFromEstoque = estoqueItem.categoria;
+    if (estoqueItem.observacao && !body.observacao) observacaoFromEstoque = estoqueItem.observacao;
   }
 
   // Garantir nome do cliente em caixa alta
@@ -339,6 +352,11 @@ export async function POST(req: NextRequest) {
     ...(imeiFromEstoque ? { imei: imeiFromEstoque } : {}),
     ...(serialFromEstoque ? { serial_no: serialFromEstoque } : {}),
     ...(skuVenda ? { sku: skuVenda } : {}),
+    // Persiste cor/categoria/observacao herdadas do estoque — display usa isso
+    // pra montar nome completo sem precisar de join/enrichment no GET.
+    ...(corFromEstoque ? { cor: corFromEstoque } : {}),
+    ...(categoriaFromEstoque ? { categoria: categoriaFromEstoque } : {}),
+    ...(observacaoFromEstoque ? { observacao: observacaoFromEstoque } : {}),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -935,7 +953,7 @@ export async function PATCH(req: NextRequest) {
   if (estoqueIdFoiEnviado && novoEstoqueId && novoEstoqueId !== estoqueIdAnterior && !fields._sku_override) {
     const { data: estoqueNovo } = await supabase
       .from("estoque")
-      .select("sku, produto, cor")
+      .select("sku, produto, cor, categoria, observacao")
       .eq("id", novoEstoqueId)
       .single();
     const vendaAtualSku = (vendaAnterior as unknown as { sku?: string | null } | null)?.sku || null;
@@ -960,11 +978,15 @@ export async function PATCH(req: NextRequest) {
         produto_venda: (vendaAnterior as unknown as { produto?: string } | null)?.produto,
       }, { status: 409 });
     }
-    // Ao vincular, copia SKU do estoque pra venda (garante consistencia
-    // daqui pra frente — venda vira "oficialmente" o SKU do item vendido).
+    // Ao vincular, copia SKU + cor/categoria/observacao do estoque pra venda
+    // (garante consistencia daqui pra frente — venda vira "oficialmente" o SKU
+    // e os atributos do item vendido; display mostra cor correta imediatamente).
     if (estoqueNovo?.sku) {
       fields.sku = estoqueNovo.sku;
     }
+    if (estoqueNovo?.cor && !fields.cor) fields.cor = estoqueNovo.cor;
+    if (estoqueNovo?.categoria && !fields.categoria) fields.categoria = estoqueNovo.categoria;
+    if (estoqueNovo?.observacao && !fields.observacao) fields.observacao = estoqueNovo.observacao;
   }
   // Limpa flag de override pra nao gravar no banco
   delete fields._sku_override;
