@@ -196,64 +196,6 @@ export async function POST(req: NextRequest) {
   const extras = Array.isArray(body.produtosExtras) ? body.produtosExtras.filter(p => p?.nome) : [];
   const temExtras = extras.length > 0;
 
-  // ── ENCOMENDA: cria linha em `encomendas` em vez de `vendas`. Dispara
-  // notificacao WhatsApp pro vendedor responsavel. Nao retorna pra fluxo
-  // de venda normal (early-return).
-  if (ehEncomenda) {
-    const valorSinal = Math.round((precoNum * sinalPctLink) / 100);
-    const obsFinanceira = `Sinal ${sinalPctLink}% = R$ ${valorSinal.toLocaleString("pt-BR")} (pendente pagamento PIX). Restante R$ ${(precoNum - valorSinal).toLocaleString("pt-BR")} na entrega.`;
-    const payloadEncomenda: Record<string, unknown> = {
-      short_code: body.shortCode,
-      cliente: body.nome,
-      whatsapp: telefoneFmt || null,
-      cpf: body.pessoa === "PJ" ? null : (cpfFmt || null),
-      email: body.email || null,
-      data: hojeStr,
-      produto: body.cor ? `${body.produto} ${String(body.cor).toUpperCase()}`.trim() : body.produto,
-      cor: body.cor || null,
-      valor_venda: precoNum,
-      sinal_recebido: 0, // ainda nao pago — admin marca quando receber PIX
-      previsao_chegada: previsaoChegadaLink,
-      status: "PENDENTE",
-      observacao: null,
-      obs_financeira: obsFinanceira,
-      forma_pagamento: body.formaPagamento || null,
-      vendedor: vendedorLink || body.vendedor || null,
-      // Troca (opcional — encomenda pode ter troca)
-      troca_produto: body.trocaProduto || null,
-      troca_cor: body.trocaCor || null,
-      troca_valor: trocaValorNum || 0,
-      troca_bateria: trocaBateria,
-      troca_obs: body.trocaCondicao || null,
-      troca_caixa: body.trocaCaixa === true ? "SIM" : (body.trocaCaixa === false ? "NAO" : null),
-      troca_serial: body.trocaSerial || null,
-      troca_imei: body.trocaImei || null,
-      troca_produto2: body.trocaProduto2 || null,
-      troca_cor2: body.trocaCor2 || null,
-      troca_valor2: trocaValor2Num || 0,
-      troca_bateria2: trocaBateria2,
-      troca_obs2: body.trocaCondicao2 || null,
-      troca_caixa2: body.trocaCaixa2 === true ? "SIM" : (body.trocaCaixa2 === false ? "NAO" : null),
-      troca_serial2: body.trocaSerial2 || null,
-      troca_imei2: body.trocaImei2 || null,
-      updated_at: new Date().toISOString(),
-    };
-    // Dedup por short_code: se ja existe (cliente reenviou form), atualiza.
-    const { data: encExistente } = await supabase
-      .from("encomendas")
-      .select("id")
-      .eq("short_code", body.shortCode)
-      .maybeSingle();
-    if (encExistente?.id) {
-      await supabase.from("encomendas").update(payloadEncomenda).eq("id", encExistente.id);
-    } else {
-      await supabase.from("encomendas").insert(payloadEncomenda);
-    }
-    // Sem notificacao Z-API — operador ve a encomenda no /admin/encomendas igual
-    // a compra normal. Alinhamento combinado pelo WhatsApp padrao do link.
-    return NextResponse.json({ ok: true, encomenda: true });
-  }
-
   // Dados compartilhados por todas as vendas do grupo (cliente/pagamento/entrega)
   const dadosComuns: Record<string, unknown> = {
     short_code: body.shortCode,
@@ -281,6 +223,12 @@ export async function POST(req: NextRequest) {
     utm_campaign: body.utm_campaign ? String(body.utm_campaign).slice(0, 200) : null,
     utm_content: body.utm_content ? String(body.utm_content).slice(0, 200) : null,
     utm_term: body.utm_term ? String(body.utm_term).slice(0, 200) : null,
+    // Encomenda — flag organizacional. O link_compras.tipo === ENCOMENDA
+    // e validado em `ehEncomenda` acima (cliente nao forca via URL).
+    ...(ehEncomenda ? {
+      encomenda: true,
+      previsao_chegada: previsaoChegadaLink,
+    } : {}),
   };
 
   // SKU canonico do produto principal. Importante: gerar AQUI (mesmo que
