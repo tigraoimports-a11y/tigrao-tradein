@@ -80,12 +80,18 @@ export interface PedidoEntrega {
   origem?: string; // indicação (Instagram, Google, etc)
 }
 
+export interface PedidoEncomenda {
+  previsaoChegada?: string; // texto livre tipo "15 dias", "2 semanas"
+  sinalPct?: number; // 0 ou ausente = integral; 1..99 = sinal %
+}
+
 export interface PedidoData {
   cliente: PedidoCliente;
   produto: PedidoProduto;
   pagamento: PedidoPagamento;
   troca?: PedidoTroca;
   entrega: PedidoEntrega;
+  encomenda?: PedidoEncomenda; // pedido sob encomenda — flag organizacional
   isFromTradeIn?: boolean; // muda o header "fiz avaliação" vs "vim pelo formulário"
 }
 
@@ -132,7 +138,7 @@ export function formatPedidoMessage(
   opts: { header?: boolean; prefix?: string[] } = {}
 ): string {
   const { header = true, prefix } = opts;
-  const { cliente, produto, pagamento, troca, entrega, isFromTradeIn } = data;
+  const { cliente, produto, pagamento, troca, entrega, encomenda, isFromTradeIn } = data;
 
   const preco = Number(produto.preco) || 0;
   const extrasTotal = (produto.extras || []).reduce((s, e) => s + (Number(e.preco) || 0), 0);
@@ -161,6 +167,28 @@ export function formatPedidoMessage(
       ? `Olá, me chamo ${cliente.nome}. Fiz a avaliação de troca no site e preenchi o formulário de compra.`
       : `Olá, me chamo ${cliente.nome}. Vim pelo formulário de compra!`;
     lines.push(saudacao, "");
+  }
+
+  // Bloco encomenda — vai antes do header da compra pra equipe identificar
+  // logo na primeira linha que e pedido sob encomenda. Inclui prazo, valor
+  // pago agora (sinal ou integral) e restante na entrega.
+  if (encomenda) {
+    const sinalPctEnc = Math.max(0, Math.min(100, Number(encomenda.sinalPct) || 0));
+    const temSinalEnc = sinalPctEnc > 0 && sinalPctEnc < 100;
+    const valorSinalEnc = temSinalEnc ? Math.round((valorBase * sinalPctEnc) / 100) : valorBase;
+    const valorRestanteEnc = temSinalEnc ? Math.max(valorBase - valorSinalEnc, 0) : 0;
+    lines.push(`*━━━ 📦 PEDIDO SOB ENCOMENDA ━━━*`);
+    if (encomenda.previsaoChegada) lines.push(`*Prazo de entrega:* ${encomenda.previsaoChegada} após pagamento`);
+    if (temSinalEnc) {
+      lines.push(`*Pagamento agora:* Sinal ${sinalPctEnc}% — R$ ${fmt(valorSinalEnc)}`);
+      if (valorRestanteEnc > 0) lines.push(`*Restante na entrega:* R$ ${fmt(valorRestanteEnc)}`);
+    } else {
+      lines.push(`*Pagamento agora:* Integral — R$ ${fmt(valorBase)}`);
+    }
+    if ((troca?.aparelhos?.length || 0) > 0) {
+      lines.push(`*Aparelho na troca:* avaliação e coleta no dia da retirada`);
+    }
+    lines.push("");
   }
 
   lines.push(`*━━━ DADOS DA COMPRA — Tigrão Imports ━━━*`, "");

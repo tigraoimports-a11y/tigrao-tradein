@@ -839,9 +839,30 @@ function CompraForm() {
     const enderecoFull = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
     const pagEntrega = pagamentoPagoParam ? "" : local === "Correios" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" ? "PAGAR NA ENTREGA" : "";
 
+    // Bloco encomenda — vai logo no topo da mensagem pra equipe ver na
+    // primeira linha que e pedido sob encomenda. Inclui prazo, valor pago
+    // agora (sinal ou integral) e restante na entrega quando aplicavel.
+    const encomendaLines: string[] = [];
+    if (encomendaParam) {
+      const temSinalEnc = sinalPctParam > 0 && sinalPctParam < 100;
+      const valorSinalEnc = temSinalEnc ? Math.round((valorBaseFinal * sinalPctParam) / 100) : valorBaseFinal;
+      const valorRestanteEnc = temSinalEnc ? Math.max(valorBaseFinal - valorSinalEnc, 0) : 0;
+      encomendaLines.push(`*━━━ 📦 PEDIDO SOB ENCOMENDA ━━━*`);
+      if (previsaoChegadaParam) encomendaLines.push(`*Prazo de entrega:* ${previsaoChegadaParam} após pagamento`);
+      if (temSinalEnc) {
+        encomendaLines.push(`*Pagamento agora:* Sinal ${sinalPctParam}% — R$ ${fmt(valorSinalEnc)}`);
+        if (valorRestanteEnc > 0) encomendaLines.push(`*Restante na entrega:* R$ ${fmt(valorRestanteEnc)}`);
+      } else {
+        encomendaLines.push(`*Pagamento agora:* Integral — R$ ${fmt(valorBaseFinal)}`);
+      }
+      if (temTroca) encomendaLines.push(`*Aparelho na troca:* avaliação e coleta no dia da retirada`);
+      encomendaLines.push("");
+    }
+
     const lines = [
       `Olá, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliação de troca no site e preenchi o formulário de compra." : "Vim pelo formulário de compra!"}`,
       "",
+      ...encomendaLines,
       `*━━━ DADOS DA COMPRA — Tigrão Imports ━━━*`,
       "",
       `*▸ DADOS PESSOAIS*`,
