@@ -375,10 +375,17 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // Valida: toda pergunta dinamica precisa ter resposta (exceto multiselect,
   // que pode ficar vazio). Pra simplificar, considera "nao respondida" se a
   // chave nao existe em extraAnswers. Multiselect com [] conta como respondida.
+  // Perguntas numericas com config.rejectBelow bloqueiam o avanco quando o valor
+  // e menor que o threshold (ex: bateria < 80%).
   const dynamicOk = dynamicQuestions.every((q) => {
     const v = extraAnswers[q.slug];
     if (q.tipo === "multiselect") return v !== undefined;
-    return v !== undefined && v !== null && v !== "";
+    if (v === undefined || v === null || v === "") return false;
+    if (q.tipo === "numeric" && typeof v === "number") {
+      const rb = (q.config as Record<string, unknown>)?.rejectBelow;
+      if (typeof rb === "number" && v < rb) return false;
+    }
+    return true;
   });
 
   const isExcluded = excludedSet.has(model.toLowerCase());
@@ -388,6 +395,22 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const batteryMax = deviceType === "macbook" ? 9999 : 100;
   const batteryMin = deviceType === "macbook" ? 0 : 1;
   const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= batteryMin && battery <= batteryMax);
+  // Pergunta hardcoded "battery" tambem suporta rejeicao por valor minimo:
+  // admin cadastra config.rejectBelow (ex: 80) + config.rejectMessage. Quando
+  // bateria < rejectBelow, bloqueia canProceed e esconde perguntas seguintes.
+  // Pra MacBook, como o campo e ciclos (quanto maior, pior), o admin nao deve
+  // usar rejectBelow ali — deve criar dynamic question de saude % separada.
+  const batteryRejectBelow = (() => {
+    const cfg = getQ(qc, "battery")?.config as Record<string, unknown> | undefined;
+    const rb = cfg?.rejectBelow;
+    return typeof rb === "number" ? rb : undefined;
+  })();
+  const batteryRejectMessage = (() => {
+    const cfg = getQ(qc, "battery")?.config as Record<string, unknown> | undefined;
+    const rm = cfg?.rejectMessage;
+    return typeof rm === "string" ? rm : "";
+  })();
+  const batteryRejected = batteryRejectBelow !== undefined && battery !== null && battery < batteryRejectBelow;
 
   // Reveal progressivo: mostra pergunta N so quando todas as anteriores (na ordem
   // configurada pelo admin) estao respondidas. Sem isso, perguntas apareciam em
@@ -454,13 +477,19 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // Verifica se alguma pergunta anterior (na ordem do admin) tem resposta com
   // `reject: true` selecionada. Se sim, perguntas posteriores nao renderizam —
   // substitui o wrap generico `hasDamage === false` que fixava a ordem no JSX.
+  // Suporta tambem perguntas numericas com config.rejectBelow (ex: bateria < 80%).
   const isPriorRejecting = (slug: string): boolean => {
     const myOrd = getOrdem(slug);
     if (myOrd === undefined) return false;
     return qcSorted.filter(p => (p.ordem ?? 0) < myOrd).some(prev => {
       if (prev.slug === "hasDamage" && hasDamage === true) return true;
       if (prev.slug === "partsReplaced" && partsReplaced === "thirdParty") return true;
+      if (prev.slug === "battery" && batteryRejected) return true;
       const v = extraAnswers[prev.slug];
+      if (prev.tipo === "numeric" && typeof v === "number") {
+        const rb = (prev.config as Record<string, unknown>)?.rejectBelow;
+        if (typeof rb === "number" && v < rb) return true;
+      }
       const opt = v !== undefined ? prev.opcoes.find(o => o.value === v) : undefined;
       return opt?.reject === true;
     });
@@ -475,7 +504,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
   const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
   const boxOk = !isQActive(qc, "hasOriginalBox") || hasOriginalBox !== null;
-  const canProceed = model && storageCompleto && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk && dynamicOk;
+  const canProceed = model && storageCompleto && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && !batteryRejected && warrantyFilled && boxOk && dynamicOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
   function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
@@ -754,24 +783,23 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
                 )}
               </div>
-              {(deviceType === "ipad" || deviceType === "macbook") && (
+              {deviceType === "ipad" && (
                 <button
                   type="button"
                   onClick={() => {
-                    // iPad/MacBook as vezes so mostra "Normal" em vez de numero.
-                    // Cliente clica aqui pra liberar o fluxo assumindo que o aparelho
-                    // esta saudavel: iPad = 100% saude, MacBook = 0 ciclos (sem desconto).
-                    setBattery(deviceType === "macbook" ? 0 : 100);
+                    // iPad as vezes so mostra "Normal" em vez de numero — cliente
+                    // clica pra liberar assumindo aparelho saudavel (100%).
+                    setBattery(100);
                     tq("battery");
                   }}
                   className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
                   style={{
-                    backgroundColor: battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success-light)" : "var(--ti-input-bg)",
-                    color: battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success)" : "var(--ti-muted)",
-                    border: `1px solid ${battery === (deviceType === "macbook" ? 0 : 100) ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                    backgroundColor: battery === 100 ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                    color: battery === 100 ? "var(--ti-success)" : "var(--ti-muted)",
+                    border: `1px solid ${battery === 100 ? "var(--ti-success)" : "var(--ti-card-border)"}`,
                   }}
                 >
-                  Aparece só &quot;Normal&quot; no meu {deviceType === "macbook" ? "Mac" : "iPad"}
+                  Aparece só &quot;Normal&quot; no meu iPad
                 </button>
               )}
               {deviceType === "iphone" && (
@@ -818,6 +846,11 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                     <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Maxima</strong></p>
                   </div>
                 </details>
+              )}
+              {batteryRejected && batteryRejectMessage && (
+                <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
+                  <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{batteryRejectMessage}</p>
+                </div>
               )}
             </div>
           </Section>
@@ -1045,22 +1078,43 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                 )}
               </div>
             )}
-            {q.tipo === "numeric" && (
-              <input
-                type="number"
-                inputMode="numeric"
-                value={typeof val === "number" ? String(val) : (typeof val === "string" ? val : "")}
-                onChange={(e) => {
-                  const raw = e.target.value.trim();
-                  const num = raw === "" ? undefined : Number(raw);
-                  setVal(Number.isFinite(num as number) ? (num as number) : undefined);
-                  tq(q.slug);
-                }}
-                className="w-full px-4 py-3 rounded-xl text-[15px]"
-                style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }}
-                placeholder="Ex: 500"
-              />
-            )}
+            {q.tipo === "numeric" && (() => {
+              const cfg = (q.config || {}) as Record<string, unknown>;
+              const ph = typeof cfg.placeholder === "string" ? cfg.placeholder : "Ex: 500";
+              const help = typeof cfg.helpText === "string" ? cfg.helpText : "";
+              const rb = typeof cfg.rejectBelow === "number" ? cfg.rejectBelow : undefined;
+              const rm = typeof cfg.rejectMessage === "string" ? cfg.rejectMessage : "";
+              const isRejected = typeof val === "number" && rb !== undefined && val < rb;
+              return (
+                <div className="space-y-3">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={typeof val === "number" ? String(val) : (typeof val === "string" ? val : "")}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      const num = raw === "" ? undefined : Number(raw);
+                      setVal(Number.isFinite(num as number) ? (num as number) : undefined);
+                      tq(q.slug);
+                    }}
+                    className="w-full px-4 py-3 rounded-xl text-[20px] font-bold text-center"
+                    style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }}
+                    placeholder={ph}
+                  />
+                  {help && (
+                    <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+                      <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir?</summary>
+                      <p className="text-[11px] mt-2 whitespace-pre-line" style={{ color: "var(--ti-muted)" }}>{help}</p>
+                    </details>
+                  )}
+                  {isRejected && rm && (
+                    <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
+                      <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{rm}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </Section>
         );
       })}
