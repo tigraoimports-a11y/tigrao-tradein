@@ -205,30 +205,44 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
             {usedModel} {usedStorage}
             {usedColor ? ` · ${usedColor}` : ""}
           </p>
-          {extraLines1.length > 0 && (
-            <div className="mt-2 space-y-0.5">
-              {extraLines1.map((l, i) => (
-                <p key={i} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
-                  <span className="font-medium">{l.label}:</span> {l.value}
-                </p>
-              ))}
-            </div>
-          )}
+          {(() => {
+            const condLines1 = getAnyConditionLines(deviceType, condition);
+            const hasLines = condLines1.length > 0 || extraLines1.length > 0;
+            return hasLines ? (
+              <div className="mt-2 space-y-0.5">
+                {condLines1.map((l, i) => (
+                  <p key={`c-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>{l}</p>
+                ))}
+                {extraLines1.map((l, i) => (
+                  <p key={`e-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
+                    <span className="font-medium">{l.label}:</span> {l.value}
+                  </p>
+                ))}
+              </div>
+            ) : null;
+          })()}
           {hasSecond && (
             <>
               <p className="text-[14px] mt-3" style={{ color: "var(--ti-text)" }}>
                 {usedModel2} {usedStorage2}
                 {usedColor2 ? ` · ${usedColor2}` : ""}
               </p>
-              {extraLines2.length > 0 && (
-                <div className="mt-2 space-y-0.5">
-                  {extraLines2.map((l, i) => (
-                    <p key={i} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
-                      <span className="font-medium">{l.label}:</span> {l.value}
-                    </p>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const condLines2 = condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
+                const hasLines = condLines2.length > 0 || extraLines2.length > 0;
+                return hasLines ? (
+                  <div className="mt-2 space-y-0.5">
+                    {condLines2.map((l, i) => (
+                      <p key={`c2-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>{l}</p>
+                    ))}
+                    {extraLines2.map((l, i) => (
+                      <p key={`e2-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
+                        <span className="font-medium">{l.label}:</span> {l.value}
+                      </p>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
             </>
           )}
         </div>
