@@ -23,7 +23,7 @@ const VENDAS_PASSWORD = "tigrao$vendas";
 // Formata a resposta de erro do backend quando SKU do estoque selecionado
 // nao bate com o SKU esperado pela venda (cliente pediu produto diferente).
 // Retorna string multilinha pronta pra setMsg.
-function formatSkuDivergenciaMsg(json: {
+interface SkuDivergencia {
   codigo?: string;
   error?: string;
   produto_venda?: string;
@@ -31,7 +31,9 @@ function formatSkuDivergenciaMsg(json: {
   diferencas?: Array<{ campo: string; esperado: string; selecionado: string }>;
   esperado?: string;
   selecionado?: string;
-}): string {
+}
+
+function formatSkuDivergenciaMsg(json: SkuDivergencia): string {
   if (json?.codigo !== "SKU_DIVERGENTE") {
     return json?.error || "erro desconhecido";
   }
@@ -52,6 +54,32 @@ function formatSkuDivergenciaMsg(json: {
     "",
     "Revise a seleção. Se realmente é o produto certo, clique em “Registrar mesmo assim”.",
   ].join("\n");
+}
+
+// Formata N divergencias de uma vez quando o carrinho tem multiplos produtos e
+// mais de um diverge. Evita que o admin precise salvar 3x pra ver 3 alertas —
+// lista tudo junto pra ele revisar de uma vez so.
+function formatSkuDivergenciasMultiplas(erros: SkuDivergencia[]): string {
+  if (erros.length === 0) return "";
+  if (erros.length === 1) return formatSkuDivergenciaMsg(erros[0]);
+
+  const linhas = [
+    `⚠️ ALERTA — ${erros.length} produtos não batem 100%`,
+    "",
+  ];
+  erros.forEach((e, idx) => {
+    const diffs = (e.diferencas || [])
+      .map((d) => `   • ${d.campo}: ${d.esperado} → ${d.selecionado}`)
+      .join("\n");
+    linhas.push(
+      `${idx + 1}) ${e.produto_venda || "?"}`,
+      `   → Você vinculou: ${e.produto_estoque || "?"}`,
+      diffs || `   • SKU diferente`,
+      "",
+    );
+  });
+  linhas.push("Revise cada um. Se estiver tudo certo, clique em “Registrar mesmo assim”.");
+  return linhas.join("\n");
 }
 
 export default function VendasPage() {
@@ -1746,6 +1774,11 @@ export default function VendasPage() {
             || (precisaCriarGrupo ? crypto.randomUUID() : editandoGrupoIds[0]);
 
           let allOk = true;
+          // Acumula divergencias de SKU (nao quebra o loop) — assim o admin
+          // ve TODAS as linhas problematicas de uma vez em vez de salvar
+          // varias vezes descobrindo 1 por vez.
+          const skuDivergencias: SkuDivergencia[] = [];
+          let primeiroErroNaoSku = "";
 
           // 1. PATCH nos produtos que casam com vendas existentes.
           // Se estamos criando grupo novo (venda unica virando multi), propaga grupo_id
@@ -1762,18 +1795,22 @@ export default function VendasPage() {
             });
             const json = await res.json();
             if (!json.ok && !json.data) {
-              allOk = false;
-              setMsg(
-                json.codigo === "SKU_DIVERGENTE"
-                  ? formatSkuDivergenciaMsg(json)
-                  : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
-              );
-              if (json.codigo === "SKU_DIVERGENTE") setSkuAlertaAtivo(true);
-              break;
+              if (json.codigo === "SKU_DIVERGENTE") {
+                // Coleta e continua — vai reportar tudo no final.
+                skuDivergencias.push(json);
+                allOk = false;
+              } else if (!primeiroErroNaoSku) {
+                // Outros erros (nao SKU): guarda o primeiro e quebra o loop.
+                primeiroErroNaoSku = "Erro ao atualizar: " + (json.error || "erro desconhecido");
+                allOk = false;
+                break;
+              }
             }
           }
 
           // 2. POST novos produtos (se allProducts.length > editandoGrupoIds.length)
+          // So roda se fase 1 passou 100% — divergencias de SKU em PATCH
+          // existentes impedem avancar pra criar itens novos sem admin revisar.
           if (allOk && allProducts.length > editandoGrupoIds.length) {
             for (let i = editandoGrupoIds.length; i < allProducts.length; i++) {
               const payload: Record<string, unknown> = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
@@ -1785,16 +1822,24 @@ export default function VendasPage() {
               });
               const json = await res.json();
               if (!json.ok && !json.data) {
-                allOk = false;
-                setMsg(
-                  json.codigo === "SKU_DIVERGENTE"
-                    ? formatSkuDivergenciaMsg(json)
-                    : "Erro ao criar novo item: " + (json.error || "erro desconhecido"),
-                );
-                if (json.codigo === "SKU_DIVERGENTE") setSkuAlertaAtivo(true);
-                break;
+                if (json.codigo === "SKU_DIVERGENTE") {
+                  skuDivergencias.push(json);
+                  allOk = false;
+                } else if (!primeiroErroNaoSku) {
+                  primeiroErroNaoSku = "Erro ao criar novo item: " + (json.error || "erro desconhecido");
+                  allOk = false;
+                  break;
+                }
               }
             }
+          }
+
+          // Se teve divergencia de SKU em qualquer fase, mostra alerta agregado
+          if (skuDivergencias.length > 0) {
+            setMsg(formatSkuDivergenciasMultiplas(skuDivergencias));
+            setSkuAlertaAtivo(true);
+          } else if (primeiroErroNaoSku) {
+            setMsg(primeiroErroNaoSku);
           }
 
           // 3. DELETE vendas removidas (se allProducts.length < editandoGrupoIds.length)
@@ -1926,6 +1971,9 @@ export default function VendasPage() {
     let successCount = 0;
     const errors: string[] = [];
     const savedVendaIds: string[] = [];
+    // Acumula divergencias de SKU pra mostrar tudo de uma vez no final
+    // (multi-produto com varios erros SKU = 1 alerta consolidado).
+    const skuDivergenciasPost: SkuDivergencia[] = [];
 
     for (let i = 0; i < payloads.length; i++) {
       const payload = payloads[i];
@@ -1948,10 +1996,9 @@ export default function VendasPage() {
             errors.push(`⚠️ Crédito lojista: ${json.creditoDebitError}`);
           }
         } else if (json.codigo === "SKU_DIVERGENTE") {
-          // Alerta: produto nao bate com o pedido. Admin pode confirmar via
-          // botao "Registrar mesmo assim" que refaz o submit com _sku_override.
-          errors.push(`${prod.produto}: ${formatSkuDivergenciaMsg(json)}`);
-          setSkuAlertaAtivo(true);
+          // Alerta: coleta e continua o loop pra reportar TODOS os SKUs
+          // divergentes de uma vez (evita admin salvar varias vezes).
+          skuDivergenciasPost.push(json);
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
@@ -1961,6 +2008,11 @@ export default function VendasPage() {
         setOfflineCount(getQueueCount());
         errors.push(`${prod.produto}: salva offline (erro de rede)`);
       }
+    }
+
+    // Se teve divergencias SKU, ativa o alerta agregado (setMsg vem depois)
+    if (skuDivergenciasPost.length > 0) {
+      setSkuAlertaAtivo(true);
     }
 
     if (successCount > 0) {
@@ -2000,12 +2052,16 @@ export default function VendasPage() {
       localStorage.removeItem("tigrao_venda_draft");
       const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
+      const totalFalhas = errors.length + skuDivergenciasPost.length;
+      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${totalFalhas > 0 ? ` (${totalFalhas} erro${totalFalhas > 1 ? "s" : ""})` : ""}`);
       fetchVendas();
       fetchEstoque();
       // NF é adicionada depois nas vendas pendentes, não no momento do registro
 
       // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
+    } else if (skuDivergenciasPost.length > 0) {
+      // Nenhuma venda registrada + todas bateram SKU_DIVERGENTE → alerta consolidado
+      setMsg(formatSkuDivergenciasMultiplas(skuDivergenciasPost));
     } else {
       setMsg("Erro: " + errors.join("; "));
     }
