@@ -106,6 +106,12 @@ export interface Venda {
   entrega_id: string | null;
   // Vendedor responsavel pela venda
   vendedor: string | null;
+  // Cor, observacao e categoria — copiados do estoque quando venda e criada.
+  // Usados pelo display pra montar nome completo (ex: acessorio com tela na
+  // observacao + cor separada).
+  cor?: string | null;
+  observacao?: string | null;
+  categoria?: string | null;
 }
 
 export interface Reajuste {
