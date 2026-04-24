@@ -65,8 +65,21 @@ export function compararSkus(
     };
   }
 
-  // Caso 3: divergem — bloqueia com diff detalhado
+  // Caso 3: divergem — analisa componentes pra decidir se e divergencia real
+  // ou so informacao parcial (SKU legado sem cor vs estoque com cor, etc).
   const diferencas = identificarDiferencas(esperado, selecionado);
+
+  // Se identificarDiferencas tolerou todas as diferencas (componentes
+  // ausentes em um lado), retorna ok=true — SKUs sao compativeis.
+  if (diferencas.length === 0) {
+    return {
+      ok: true,
+      podeValidar: true,
+      skuEsperado: esperado,
+      skuSelecionado: selecionado,
+    };
+  }
+
   const camposMsg = diferencas.map((d) => d.campo).join(", ");
   return {
     ok: false,
@@ -106,33 +119,27 @@ function identificarDiferencas(esperado: string, selecionado: string): Array<{ c
   // Specs: comparar por tipo conhecido (GB/TB = storage, mm = tamanho, MM = memoria, etc)
   const specE = extrairComponentes(pE.specs);
   const specS = extrairComponentes(pS.specs);
-  if (specE.storage !== specS.storage && (specE.storage || specS.storage)) {
-    diffs.push({
-      campo: "storage",
-      esperado: specE.storage || "—",
-      selecionado: specS.storage || "—",
-    });
+
+  // Regra de tolerancia: se um lado tem o componente e o outro nao (null),
+  // considera "SKU parcial" compativel. Ex: venda antiga gravada sem cor
+  // deve bater com estoque que tem cor (desde que modelo/storage batam).
+  // So marca divergencia quando AMBOS os lados tem valor e sao diferentes.
+  const difere = (a: string | null, b: string | null): boolean => !!(a && b && a !== b);
+
+  if (difere(specE.storage, specS.storage)) {
+    diffs.push({ campo: "storage", esperado: specE.storage!, selecionado: specS.storage! });
   }
-  if (specE.cor !== specS.cor && (specE.cor || specS.cor)) {
-    diffs.push({
-      campo: "cor",
-      esperado: specE.cor || "—",
-      selecionado: specS.cor || "—",
-    });
+  if (difere(specE.cor, specS.cor)) {
+    diffs.push({ campo: "cor", esperado: specE.cor!, selecionado: specS.cor! });
   }
-  if (specE.tamanhoWatch !== specS.tamanhoWatch && (specE.tamanhoWatch || specS.tamanhoWatch)) {
-    diffs.push({
-      campo: "tamanho",
-      esperado: specE.tamanhoWatch || "—",
-      selecionado: specS.tamanhoWatch || "—",
-    });
+  if (difere(specE.tamanhoWatch, specS.tamanhoWatch)) {
+    diffs.push({ campo: "tamanho", esperado: specE.tamanhoWatch!, selecionado: specS.tamanhoWatch! });
   }
-  if (specE.chip !== specS.chip && (specE.chip || specS.chip)) {
-    diffs.push({
-      campo: "chip",
-      esperado: specE.chip || "—",
-      selecionado: specS.chip || "—",
-    });
+  if (difere(specE.chip, specS.chip)) {
+    diffs.push({ campo: "chip", esperado: specE.chip!, selecionado: specS.chip! });
+  }
+  if (difere(specE.tela, specS.tela)) {
+    diffs.push({ campo: "tela", esperado: specE.tela!, selecionado: specS.tela! });
   }
 
   // Seminovo vs novo
@@ -144,11 +151,9 @@ function identificarDiferencas(esperado: string, selecionado: string): Array<{ c
     });
   }
 
-  // Fallback: se nao conseguiu identificar por componente conhecido mas SKUs
-  // diferem, pelo menos avisa que "outros campos" divergem.
-  if (diffs.length === 0) {
-    diffs.push({ campo: "specs", esperado: pE.specs.join("-"), selecionado: pS.specs.join("-") });
-  }
+  // Nao usa fallback "specs diferentes" quando nao acha heuristica — aqui
+  // os SKUs podem divergir string-wise mas serem compativeis (ex: um tem cor,
+  // outro nao). Preferimos tolerar do que bloquear venda legitima.
 
   return diffs;
 }
@@ -160,24 +165,29 @@ function extrairComponentes(specs: string[]): {
   cor: string | null;
   tamanhoWatch: string | null;
   chip: string | null;
+  tela: string | null;
 } {
   let storage: string | null = null;
   let tamanhoWatch: string | null = null;
   let chip: string | null = null;
+  let tela: string | null = null;
   const naoClassificados: string[] = [];
 
   for (const s of specs) {
     if (/^\d+(GB|TB)$/.test(s)) { storage = s; continue; }
     if (/^\d+MM$/.test(s)) { tamanhoWatch = s; continue; }
     if (/^M\d+(-PRO|-MAX|-ULTRA|-PROMAX)?$/.test(s)) { chip = s; continue; }
-    if (s === "GPS" || s === "GPSCEL" || s === "WIFI" || s === "CELL" || s === "SEMINOVO") continue;
+    // Tela de MacBook/iPad: numero sozinho entre 10-17 (ex: 11, 13, 14, 15, 16).
+    // Sem isso, "13" (tela do MacBook Air) era tratado como cor.
+    if (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) { tela = s; continue; }
+    if (s === "GPS" || s === "GPSCEL" || s === "WIFI" || s === "CELL" || s === "SEMINOVO" || s === "ANC") continue;
     naoClassificados.push(s);
   }
 
   // Cor = o que sobrou, normalmente 1 ou 2 segmentos no final (ex TITANIO-PRETO).
   const cor = naoClassificados.length > 0 ? naoClassificados.join("-") : null;
 
-  return { storage, cor, tamanhoWatch, chip };
+  return { storage, cor, tamanhoWatch, chip, tela };
 }
 
 // ─── Nome canonico pra exibicao humana ────────────────────────────
