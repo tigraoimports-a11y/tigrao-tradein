@@ -166,7 +166,22 @@ function toCalcDeviceType(dt: MultiDeviceType): DeviceType {
 }
 
 export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelDiscounts, questionsConfig, deviceType, onNext, onTrackQuestion }: StepUsedDeviceMultiProps) {
-  const qc = questionsConfig;
+  // Normaliza slugs: alguns cadastros no admin foram criados com sufixo de
+  // device_type (ex: `hasDamage_ipad`, `battery_macbook`). O codigo usa os
+  // slugs puros (`hasDamage`, `battery`), entao strip do sufixo `_${deviceType}`
+  // pra reconhecer como hardcoded e evitar renderizar 2x a mesma pergunta
+  // (uma pelo bloco hardcoded com titulo fallback + uma pelo loop dinamico).
+  const qc = useMemo(() => {
+    if (!questionsConfig) return questionsConfig;
+    const suffixes = ["_iphone", "_ipad", "_macbook", "_watch"];
+    return questionsConfig.map((q) => {
+      let s = q.slug;
+      for (const suf of suffixes) {
+        if (s.endsWith(suf)) { s = s.slice(0, -suf.length); break; }
+      }
+      return s === q.slug ? q : { ...q, slug: s };
+    });
+  }, [questionsConfig]);
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
