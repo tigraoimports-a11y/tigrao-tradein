@@ -3629,6 +3629,44 @@ export default function VendasPage() {
                         if (alvo.startsWith(skuEstoqueFinal + "-")) return true;
                       }
                     }
+                    // Match D (componentes essenciais): quando SKUs diferem em
+                    // chip/variante mas batem em modelo base + storage + cor,
+                    // considera compativel. Cobre caso reportado:
+                    //   venda: MACBOOK-NEO-13-8GB-512GB-PRATA (formulario simples)
+                    //   estoque: MACBOOK-NEO-A18-PRO-13-8GB-512GB-PRATA (completo)
+                    // Match C nao cobre pq "A18-PRO" ta no meio, nao no fim.
+                    if (skuEstoqueFinal) {
+                      const parsedEst = parseSku(skuEstoqueFinal);
+                      if (parsedEst) {
+                        const isSpecForCor = (s: string) =>
+                          /^\d+(GB|TB|MM)$/.test(s) ||
+                          /^M\d+/.test(s) ||
+                          (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+                          ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
+                        const getStorage = (specs: string[]) => specs.find(s => /^\d+(GB|TB)$/.test(s)) || null;
+                        const getCor = (specs: string[]) => specs.filter(s => !isSpecForCor(s)).join("-") || null;
+                        const estStorage = getStorage(parsedEst.specs);
+                        const estCor = getCor(parsedEst.specs);
+                        for (const alvo of skusAlvo) {
+                          const parsedAlv = parseSku(alvo);
+                          if (!parsedAlv) continue;
+                          // Categoria tem que bater
+                          if (parsedAlv.categoria !== parsedEst.categoria) continue;
+                          // Modelo base compativel: um e subset do outro (ex:
+                          // MACBOOK-NEO ⊂ MACBOOK-NEO-A18-PRO)
+                          const modeloCompat = parsedAlv.modelo === parsedEst.modelo
+                            || parsedEst.modelo.startsWith(parsedAlv.modelo + "-")
+                            || parsedAlv.modelo.startsWith(parsedEst.modelo + "-");
+                          if (!modeloCompat) continue;
+                          // Storage bate (ou um dos lados nao tem)
+                          const alvStorage = getStorage(parsedAlv.specs);
+                          const alvCor = getCor(parsedAlv.specs);
+                          const storageOk = !alvStorage || !estStorage || alvStorage === estStorage;
+                          const corOk = !alvCor || !estCor || alvCor === estCor;
+                          if (storageOk && corOk) return true;
+                        }
+                      }
+                    }
                     return false;
                   });
 
