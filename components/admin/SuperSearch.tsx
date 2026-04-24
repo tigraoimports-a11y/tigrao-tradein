@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { corParaPT } from "@/lib/cor-pt";
+import { SkuInfoModal } from "@/components/admin/SkuInfoModal";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SearchResult = Record<string, any>;
@@ -306,6 +307,14 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
                   const cor = item.cor ? corParaPT(item.cor) : "";
                   const serial = item.serial_no || "";
                   const imei = item.imei || "";
+                  const sku = item.sku || "";
+                  // QR payload: JSON com sku + codigo identificador individual
+                  // (serial ou imei). Scanner do estoque le os dois — identifica
+                  // exatamente qual produto (SKU) E qual unidade (serial) em
+                  // uma unica leitura.
+                  const qrPayload = sku
+                    ? JSON.stringify({ sku, c: codigo })
+                    : codigo;
                   win.document.write(`<!DOCTYPE html><html><head>
 <title>Etiqueta ${codigo}</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
@@ -317,6 +326,7 @@ body{font-family:Arial,Helvetica,sans-serif}
 .produto{font-size:11pt;font-weight:bold;line-height:1.2}
 .cor{font-size:8pt;color:#333;margin-top:1mm}
 .extra{font-size:6pt;color:#444;margin-top:1mm}
+.sku{font-size:6.5pt;color:#E8740E;font-weight:bold;margin-top:1mm;word-break:break-all;line-height:1.1}
 .qr{margin:2mm auto 1mm;display:flex;justify-content:center}
 .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
 @page{size:62mm 45mm;margin:0}
@@ -326,12 +336,13 @@ body{font-family:Arial,Helvetica,sans-serif}
 ${cor ? `<div class="cor">${cor}</div>` : ""}
 ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
 ${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
+${sku ? `<div class="sku">SKU: ${sku}</div>` : ""}
 <div class="qr"><canvas id="qr"></canvas></div>
 <div class="cod">${codigo}</div>
 </div>
 <script>
 var qr = qrcode(0, 'M');
-qr.addData('${codigo}');
+qr.addData(${JSON.stringify(qrPayload)});
 qr.make();
 var canvas = document.getElementById('qr');
 var size = 150;
@@ -720,9 +731,21 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
   const [detailItem, setDetailItem] = useState<SearchResult | null>(null);
   const [selectedOp, setSelectedOp] = useState<SearchResult | null>(null);
   const [selectedContato, setSelectedContato] = useState<SearchResult | null>(null);
+  const [skuInfo, setSkuInfo] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hasResults = results.operacoes.length + results.contatos.length + results.estoque.length + results.vendas.length > 0;
+
+  // SKU unico compartilhado pelos resultados: quando estoque + vendas convergem
+  // no mesmo SKU, mostra um banner de "resumo desse SKU" no topo — 1 clique pra
+  // ver o agregador completo em vez de clicar item por item.
+  const skuComum = (() => {
+    const skus = new Set<string>();
+    for (const r of [...results.estoque, ...results.vendas]) {
+      if (r.sku) skus.add(r.sku);
+    }
+    return skus.size === 1 ? [...skus][0] : null;
+  })();
 
   useEffect(() => {
     if (open) {
@@ -848,6 +871,22 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
               </div>
             ) : (
               <div>
+                {/* ── BANNER SKU (quando todos os resultados compartilham o mesmo SKU) ── */}
+                {skuComum && (
+                  <button
+                    onClick={() => setSkuInfo(skuComum)}
+                    className={`w-full text-left px-5 py-3 border-b ${dm ? "border-[#2C2C2E] bg-[#FFF5EB]/5" : "border-[#F0F0F5] bg-[#FFF5EB]"} hover:bg-[#E8740E]/10 transition-colors`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">📊</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-bold text-[#E8740E]`}>Resumo completo do SKU</p>
+                        <p className={`text-[11px] font-mono ${textSecondary} truncate`}>{skuComum}</p>
+                      </div>
+                      <span className={`text-xs ${textSecondary}`}>clique para ver tudo →</span>
+                    </div>
+                  </button>
+                )}
                 {/* ── OPERAÇÕES ── */}
                 {results.operacoes.length > 0 && (
                   <>
@@ -933,6 +972,16 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                               {r.data_entrada && <span>{r.data_entrada}</span>}
                             </div>
                           </div>
+                          {/* Botao SKU (resumo 360°) quando item tem sku e nao e o skuComum do banner */}
+                          {r.sku && r.sku !== skuComum && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSkuInfo(r.sku); }}
+                              title={`Ver resumo do SKU: ${r.sku}`}
+                              className={`text-xs px-2 py-1 rounded border shrink-0 ${dm ? "border-[#3A3A3C] text-[#E8740E] hover:bg-[#3A3A3C]" : "border-[#E8740E]/30 text-[#E8740E] hover:bg-[#FFF5EB]"}`}
+                            >
+                              📊
+                            </button>
+                          )}
                           {r.custo ? <p className={`text-sm font-semibold ${textSecondary} shrink-0`}>{fmt(r.custo)}</p> : null}
                         </div>
                       </div>
@@ -975,6 +1024,16 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                               {r.serial_no && <span className="font-mono text-purple-500">SN: {r.serial_no}</span>}
                             </div>
                           </div>
+                          {/* Botao SKU (resumo 360°) */}
+                          {r.sku && r.sku !== skuComum && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSkuInfo(r.sku); }}
+                              title={`Ver resumo do SKU: ${r.sku}`}
+                              className={`text-xs px-2 py-1 rounded border shrink-0 ${dm ? "border-[#3A3A3C] text-[#E8740E] hover:bg-[#3A3A3C]" : "border-[#E8740E]/30 text-[#E8740E] hover:bg-[#FFF5EB]"}`}
+                            >
+                              📊
+                            </button>
+                          )}
                           <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
                             {r.is_entrada ? (
                               /* Trade-in: mostrar valor recebido (custo) */
@@ -1036,6 +1095,9 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
           dm={dm}
         />
       )}
+
+      {/* SKU Info Modal — visao 360° agregada de um SKU canonico */}
+      {skuInfo && <SkuInfoModal sku={skuInfo} onClose={() => setSkuInfo(null)} />}
     </>
   );
 }
