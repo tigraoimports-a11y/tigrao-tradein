@@ -340,7 +340,7 @@ export default function GerarLinkPage() {
     id: string;
     short_code: string;
     url_curta: string | null;
-    tipo: "COMPRA" | "TROCA";
+    tipo: "COMPRA" | "TROCA" | "ENCOMENDA";
     cliente_nome: string | null;
     cliente_telefone: string | null;
     cliente_cpf: string | null;
@@ -2087,13 +2087,26 @@ export default function GerarLinkPage() {
             });
             return (
           <div className="space-y-2">
-            {visiveis.map((l) => (
-              <div key={l.id} className={`border rounded-xl p-3 ${l.tipo === "TROCA" ? "border-purple-200 bg-purple-50/30" : "border-[#E5E5EA] bg-[#F9F9FB]"}`}>
+            {visiveis.map((l) => {
+              // Encomenda pode ter troca junto. Badge fica "ENCOMENDA + TROCA"
+              // quando tem ambos, senao so o tipo principal.
+              const temTrocaLink = !!(l.troca_produto || l.troca_produto2);
+              const badge = l.tipo === "ENCOMENDA"
+                ? (temTrocaLink ? { icone: "📦", label: "ENCOMENDA + TROCA", cor: "bg-blue-200 text-blue-800" }
+                                : { icone: "📦", label: "ENCOMENDA", cor: "bg-blue-200 text-blue-800" })
+                : l.tipo === "TROCA"
+                  ? { icone: "🔄", label: "COMPRA + TROCA", cor: "bg-purple-200 text-purple-800" }
+                  : { icone: "🛒", label: "SÓ COMPRA", cor: "bg-orange-200 text-orange-800" };
+              const borderCor = l.tipo === "ENCOMENDA" ? "border-blue-200 bg-blue-50/30"
+                : l.tipo === "TROCA" ? "border-purple-200 bg-purple-50/30"
+                : "border-[#E5E5EA] bg-[#F9F9FB]";
+              return (
+              <div key={l.id} className={`border rounded-xl p-3 ${borderCor}`}>
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div className="flex-1 min-w-[200px]">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${l.tipo === "TROCA" ? "bg-purple-200 text-purple-800" : "bg-orange-200 text-orange-800"}`}>
-                        {l.tipo === "TROCA" ? "🔄 COMPRA + TROCA" : "🛒 SÓ COMPRA"}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${badge.cor}`}>
+                        {badge.icone} {badge.label}
                       </span>
                       <span className="text-[10px] text-[#86868B]">
                         {new Date(l.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -2270,7 +2283,8 @@ export default function GerarLinkPage() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
             );
           })()}
