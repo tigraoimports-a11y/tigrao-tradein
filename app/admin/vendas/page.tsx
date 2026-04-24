@@ -15,6 +15,7 @@ import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -3450,13 +3451,43 @@ export default function VendasPage() {
                     unidade fisica sai (em vez de digitar/bipar manualmente). */}
                 {statusPagamentoOriginal === "FORMULARIO_PREENCHIDO" && editandoVendaId && (() => {
                   const vendaEdicao = vendas.find(v => v.id === editandoVendaId);
-                  const skuVenda = (vendaEdicao as unknown as { sku?: string | null } | undefined)?.sku;
-                  if (!skuVenda) return null;
-                  const unidades = estoque.filter(
-                    (p) => (p.sku || "").toUpperCase() === skuVenda.toUpperCase()
-                      && p.qnt > 0
-                      && p.status === "EM ESTOQUE"
-                  );
+                  const skuVendaPersistido = (vendaEdicao as unknown as { sku?: string | null } | undefined)?.sku || null;
+                  // Gera SKU do texto da venda AGORA (pode diferir do persistido
+                  // quando venda e antiga ou quando texto foi editado manualmente).
+                  // Isso garante que o match use o SKU mais atualizado.
+                  const produtoTexto = vendaEdicao?.produto || "";
+                  const skuVendaInferido = gerarSkuSafe({
+                    produto: produtoTexto,
+                    categoria: detectarCategoriaPorTexto(produtoTexto),
+                    cor: null,
+                    observacao: null,
+                    tipo: "NOVO",
+                  });
+                  // Lista de SKUs a tentar (ordenados por confiabilidade)
+                  const skusAlvo = [skuVendaPersistido, skuVendaInferido]
+                    .filter(Boolean)
+                    .map(s => s!.toUpperCase());
+                  if (skusAlvo.length === 0) return null;
+
+                  const unidades = estoque.filter((p) => {
+                    if (p.qnt <= 0 || p.status !== "EM ESTOQUE") return false;
+                    // Match A: SKU persistido do estoque (backfill)
+                    const skuEstoquePersistido = (p.sku || "").toUpperCase();
+                    if (skuEstoquePersistido && skusAlvo.includes(skuEstoquePersistido)) return true;
+                    // Match B: gera SKU do texto do estoque e compara — cobre itens
+                    // sem SKU persistido (ex: unidade nova cadastrada depois do
+                    // backfill) ou backfill que falhou pra aquela row.
+                    const skuEstoqueInferido = gerarSkuSafe({
+                      produto: p.produto || "",
+                      categoria: p.categoria || "",
+                      cor: p.cor ?? null,
+                      observacao: null,
+                      tipo: p.tipo === "SEMINOVO" ? "SEMINOVO" : "NOVO",
+                    });
+                    if (skuEstoqueInferido && skusAlvo.includes(skuEstoqueInferido.toUpperCase())) return true;
+                    return false;
+                  });
+
                   if (unidades.length === 0) {
                     return (
                       <div className={`mt-2 px-3 py-2 rounded-xl text-xs ${dm ? "bg-red-900/20 text-red-300 border border-red-900/40" : "bg-red-50 text-red-700 border border-red-200"}`}>
