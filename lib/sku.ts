@@ -398,6 +398,14 @@ function isSpecSegment(s: string): boolean {
   return false;
 }
 
+// Variantes que sao parte do nome do modelo (nao sao specs). Sempre ficam no
+// modelo quando aparecem depois da categoria+gen. Ex:
+//   IPHONE-17-PRO-MAX → modelo "IPHONE-17-PRO-MAX" (PRO e MAX sao variantes)
+//   IPAD-AIR, MACBOOK-PRO, WATCH-ULTRA, IPAD-MINI, etc.
+const VARIANTES_MODELO = new Set([
+  "PRO", "MAX", "PLUS", "AIR", "MINI", "ULTRA", "NEO",
+]);
+
 export function parseSku(sku: string): SkuComponents | null {
   if (!sku || !sku.trim()) return null;
   const partes = sku.toUpperCase().trim().split("-");
@@ -407,14 +415,20 @@ export function parseSku(sku: string): SkuComponents | null {
   const partesLimpas = seminovo ? partes.slice(0, -1) : partes;
   const categoria = partesLimpas[0];
 
-  // Modelo = do primeiro segmento ate ANTES da primeira "spec" conhecida.
-  // Cobre variantes com N segmentos: IPHONE-17-PRO-MAX, IPHONE-17-AIR,
-  // MACBOOK-AIR-M5, IPAD-PRO-M4, WATCH-ULTRA-2, AIRPODS-PRO-2, etc.
-  // Antes: slice(0, 2) fixo quebrava pra todos esses e mandava a variante
-  // pro bucket de specs/cor.
+  // Modelo = do primeiro segmento ate ANTES da primeira spec "real".
+  // Regras especiais pra evitar colisao de numeros 10-17 (tela vs geracao):
+  //   - IPHONE pos 1 ("17" em IPHONE-17) e a geracao, NAO tela. Continua.
+  //   - VARIANTES_MODELO (PRO, MAX, AIR, etc) sempre ficam no modelo.
+  // Outras categorias (IPAD, MACBOOK) tem tela apos o chip (M4), entao
+  // o fluxo padrao funciona — para no M\d+ e chip/tela/storage vao pra specs.
   let modeloFim = partesLimpas.length;
   for (let i = 1; i < partesLimpas.length; i++) {
-    if (isSpecSegment(partesLimpas[i])) {
+    const seg = partesLimpas[i];
+    // iPhone geracao: "17" em IPHONE-17 nao e tela, e gen.
+    if (categoria === "IPHONE" && i === 1 && /^\d+E?$/.test(seg)) continue;
+    // Variantes sempre ficam no modelo.
+    if (VARIANTES_MODELO.has(seg)) continue;
+    if (isSpecSegment(seg)) {
       modeloFim = i;
       break;
     }
@@ -444,6 +458,18 @@ export function isValidSku(sku: string): boolean {
 // Retorna a categoria canonica do estoque (IPHONES, IPADS, MACBOOK, ...) ou OUTROS.
 export function detectarCategoriaPorTexto(texto: string | null | undefined): string {
   const up = upper(texto);
+  // ACESSORIOS PRIMEIRO — senao "Magic Keyboard iPad Pro" cai em IPADS
+  // (porque tem "IPAD" no nome) e gera SKU como se fosse um iPad.
+  // Lista cobre os acessorios Apple comuns:
+  //   Magic Mouse/Keyboard/Trackpad, Apple Pencil, Smart Folio,
+  //   Carregadores (fonte/cabo), Capas, Peliculas, Adaptadores, HUB, Pulseiras
+  if (/\bMAGIC\s*(KEYBOARD|MOUSE|TRACKPAD)\b/.test(up)) return "ACESSORIOS";
+  if (/\bAPPLE\s*PENCIL\b/.test(up)) return "ACESSORIOS";
+  if (/\bSMART\s*FOLIO\b|\bSMART\s*COVER\b/.test(up)) return "ACESSORIOS";
+  if (/\bCARREGADOR\b|\bFONTE\s*(APPLE|USB)\b|\bCABO\s*(USB|LIGHTNING|TIPO)/.test(up)) return "ACESSORIOS";
+  if (/\bCAPA\b|\bCASE\b|\bP[EÉ]LICULA\b|\bPELICULA\b/.test(up)) return "ACESSORIOS";
+  if (/\bADAPTADOR\b|\bHUB\b|\bDOCK\b/.test(up)) return "ACESSORIOS";
+  if (/\bPULSEIRA\b(?!\s*ESPORTIVA.*WATCH)/.test(up)) return "ACESSORIOS";
   if (/IPHONE/.test(up)) return "IPHONES";
   if (/IPAD/.test(up)) return "IPADS";
   if (/MAC.*MINI/.test(up)) return "MAC_MINI";

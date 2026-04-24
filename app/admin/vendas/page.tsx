@@ -17,7 +17,7 @@ import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
-import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
+import { gerarSkuSafe, detectarCategoriaPorTexto, parseSku } from "@/lib/sku";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -3331,11 +3331,42 @@ export default function VendasPage() {
                     <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{serialBusca.trim() ? "Nenhum produto com esse serial" : "Nenhum produto disponivel nesta categoria"}</div>
                   );
 
-                  // Extrair cor do nome do produto
+                  // Extrair cor do nome do produto.
+                  // Pega o que vem APOS o ULTIMO storage (GB/TB) — em produtos
+                  // com RAM+SSD (MacBook: "8GB 512GB Azul"), o ultimo e o SSD
+                  // que fica imediatamente antes da cor.
+                  // Bug fixado: regex antiga /\d+GB\s+/ exigia espaco depois, entao
+                  // em "MacBook Neo 13 8GB 512GB" (sem cor no nome), split pegava
+                  // so "8GB " como separador e retornava "512GB" como cor.
                   const extractCor = (nome: string) => {
-                    const after = nome.split(/\d+GB\s+/)[1];
+                    const matches = [...nome.matchAll(/\d+(GB|TB)\b/gi)];
+                    if (matches.length === 0) return null;
+                    const last = matches[matches.length - 1];
+                    const after = nome.slice(last.index! + last[0].length).trim();
                     if (!after) return null;
-                    return after.split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]?.trim() || null;
+                    const candidato = after
+                      .split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]
+                      ?.trim() || null;
+                    // Rejeita se o "candidato" ainda parece storage — nome do
+                    // produto nao tem cor cadastrada. Admin deve usar p.cor.
+                    if (candidato && /^\d+(GB|TB)$/i.test(candidato)) return null;
+                    return candidato;
+                  };
+
+                  // Fallback final quando nem p.cor nem nome do produto tem cor:
+                  // extrai dos segmentos nao-classificaveis do SKU canonico.
+                  // Ex: MACBOOK-NEO-13-8GB-512GB-AZUL → cor "AZUL" (Pt: "Azul")
+                  const extractCorSku = (sku: string | null | undefined) => {
+                    if (!sku) return null;
+                    const parsed = parseSku(sku);
+                    if (!parsed) return null;
+                    const isSpec = (s: string) =>
+                      /^\d+(GB|TB|MM)$/.test(s) ||
+                      /^M\d+/.test(s) ||
+                      (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+                      ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
+                    const corSegs = parsed.specs.filter((s) => !isSpec(s));
+                    return corSegs.length > 0 ? corSegs.join("-") : null;
                   };
 
                   // Extrair modelo base (sem cor) pra agrupar cores num card só.
@@ -3352,7 +3383,11 @@ export default function VendasPage() {
                     const itens = grupos[key];
                     for (const p of itens) {
                       const base = extractModeloBase(stripOrigemVendas(p.produto), p.categoria || "", p.observacao);
-                      const cor = p.cor || extractCor(p.produto) || "—";
+                      // Cor: ordem de confiabilidade — p.cor > nome > SKU > "—"
+                      const cor = p.cor
+                        || extractCor(p.produto)
+                        || extractCorSku(p.sku)
+                        || "—";
                       if (!porModelo[base]) porModelo[base] = {};
                       if (!porModelo[base][cor]) porModelo[base][cor] = [];
                       porModelo[base][cor].push(p);
@@ -3592,6 +3627,44 @@ export default function VendasPage() {
                         if (skuEstoqueFinal === alvo) return true;
                         if (skuEstoqueFinal.startsWith(alvo + "-")) return true;
                         if (alvo.startsWith(skuEstoqueFinal + "-")) return true;
+                      }
+                    }
+                    // Match D (componentes essenciais): quando SKUs diferem em
+                    // chip/variante mas batem em modelo base + storage + cor,
+                    // considera compativel. Cobre caso reportado:
+                    //   venda: MACBOOK-NEO-13-8GB-512GB-PRATA (formulario simples)
+                    //   estoque: MACBOOK-NEO-A18-PRO-13-8GB-512GB-PRATA (completo)
+                    // Match C nao cobre pq "A18-PRO" ta no meio, nao no fim.
+                    if (skuEstoqueFinal) {
+                      const parsedEst = parseSku(skuEstoqueFinal);
+                      if (parsedEst) {
+                        const isSpecForCor = (s: string) =>
+                          /^\d+(GB|TB|MM)$/.test(s) ||
+                          /^M\d+/.test(s) ||
+                          (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+                          ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
+                        const getStorage = (specs: string[]) => specs.find(s => /^\d+(GB|TB)$/.test(s)) || null;
+                        const getCor = (specs: string[]) => specs.filter(s => !isSpecForCor(s)).join("-") || null;
+                        const estStorage = getStorage(parsedEst.specs);
+                        const estCor = getCor(parsedEst.specs);
+                        for (const alvo of skusAlvo) {
+                          const parsedAlv = parseSku(alvo);
+                          if (!parsedAlv) continue;
+                          // Categoria tem que bater
+                          if (parsedAlv.categoria !== parsedEst.categoria) continue;
+                          // Modelo base compativel: um e subset do outro (ex:
+                          // MACBOOK-NEO ⊂ MACBOOK-NEO-A18-PRO)
+                          const modeloCompat = parsedAlv.modelo === parsedEst.modelo
+                            || parsedEst.modelo.startsWith(parsedAlv.modelo + "-")
+                            || parsedAlv.modelo.startsWith(parsedEst.modelo + "-");
+                          if (!modeloCompat) continue;
+                          // Storage bate (ou um dos lados nao tem)
+                          const alvStorage = getStorage(parsedAlv.specs);
+                          const alvCor = getCor(parsedAlv.specs);
+                          const storageOk = !alvStorage || !estStorage || alvStorage === estStorage;
+                          const corOk = !alvCor || !estCor || alvCor === estCor;
+                          if (storageOk && corOk) return true;
+                        }
                       }
                     }
                     return false;
