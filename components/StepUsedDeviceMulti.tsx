@@ -358,6 +358,39 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
 
   const isExcluded = excludedSet.has(model.toLowerCase());
   const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= 1 && battery <= 100);
+
+  // Reveal progressivo: mostra pergunta N so quando todas as anteriores (na ordem
+  // configurada pelo admin) estao respondidas. Sem isso, perguntas apareciam em
+  // cascata (todas de uma vez) e a ordem do admin nao era respeitada.
+  const isSlugAnswered = (slug: string): boolean => {
+    if (!isQActive(qc, slug)) return true; // pergunta inativa = nao bloqueia
+    switch (slug) {
+      case "hasDamage": return hasDamage !== null;
+      case "battery": return batteryFilled;
+      case "hasWearMarks": return hasWearMarks !== null;
+      case "wearMarks": return hasWearMarks === false || (hasWearMarks === true && wearMarks.length > 0);
+      case "screenScratch": return screenScratch !== null;
+      case "sideScratch": return sideScratch !== null;
+      case "peeling": return peeling !== null;
+      case "partsReplaced": return partsReplaced === "no" || partsReplaced === "apple" || partsReplaced === "thirdParty";
+      case "hasWarranty": return hasWarranty !== null;
+      case "warrantyMonth": return hasWarranty === false || warrantyMonth !== null;
+      case "hasOriginalBox": return hasOriginalBox !== null;
+      default: {
+        // Pergunta dinamica: considera respondida quando tem valor em extraAnswers.
+        const v = extraAnswers[slug];
+        const q = getQ(qc, slug);
+        if (q?.tipo === "multiselect") return v !== undefined;
+        return v !== undefined && v !== null && v !== "";
+      }
+    }
+  };
+  const qcSorted = (qc || []).filter(q => q.ativo !== false).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  const allPriorAnswered = (slug: string): boolean => {
+    const idx = qcSorted.findIndex(q => q.slug === slug);
+    if (idx === -1) return true; // nao ordenado = sem bloqueio
+    return qcSorted.slice(0, idx).every(q => isSlugAnswered(q.slug));
+  };
   // New wear marks system: if hasWearMarks is active, skip old screenScratch/sideScratch/peeling checks
   const wearMarksOk = !isQActive(qc, "hasWearMarks") || hasWearMarks === false || (hasWearMarks === true && (!isQActive(qc, "wearMarks") || wearMarks.length > 0));
   const screenOk = useNewWearMarks || !isQActive(qc, "screenScratch") || screenScratch !== null;
@@ -603,7 +636,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </Section>
       )}
 
-      {model && storageCompleto && !isExcluded && cor.trim() && isQActive(qc, "hasDamage") && (
+      {model && storageCompleto && !isExcluded && cor.trim() && isQActive(qc, "hasDamage") && allPriorAnswered("hasDamage") && (
         <Section title={getQTitle(qc, "hasDamage", "O aparelho esta trincado, quebrado ou com defeito?")}>
           <div className="flex gap-2">
             {(() => {
@@ -624,9 +657,9 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </Section>
       )}
 
-      {model && storageCompleto && !isExcluded && hasDamage === false && (
+      {model && storageCompleto && !isExcluded && cor.trim() && (hasDamage === false || !isQActive(qc, "hasDamage")) && (
         <>
-          {isQActive(qc, "battery") && (
+          {isQActive(qc, "battery") && allPriorAnswered("battery") && (
           <Section title={getQTitle(qc, "battery", deviceType === "macbook" ? "Ciclos de bateria" : "Saude da bateria")}>
             <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
               <div className="relative">
@@ -717,7 +750,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
           )}
 
           {/* === NEW: Wear marks 2-step flow === */}
-          {batteryFilled && isQActive(qc, "hasWearMarks") && (
+          {batteryFilled && isQActive(qc, "hasWearMarks") && allPriorAnswered("hasWearMarks") && (
             <Section title={getQTitle(qc, "hasWearMarks", "Seu aparelho possui marcas de uso?")}>
               <div className="flex gap-2">
                 {(() => {
@@ -733,7 +766,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             </Section>
           )}
 
-          {batteryFilled && isQActive(qc, "hasWearMarks") && hasWearMarks === true && isQActive(qc, "wearMarks") && (
+          {batteryFilled && isQActive(qc, "hasWearMarks") && hasWearMarks === true && isQActive(qc, "wearMarks") && allPriorAnswered("wearMarks") && (
             <Section title={getQTitle(qc, "wearMarks", "Selecione as marcas de uso:")}>
               <div className="grid grid-cols-1 gap-2">
                 {(() => {
@@ -783,7 +816,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
           )}
 
           {/* === LEGACY: Old individual scratch/peeling questions (only if hasWearMarks is NOT active) === */}
-          {batteryFilled && !useNewWearMarks && isQActive(qc, "screenScratch") && <Section title={getQTitle(qc, "screenScratch", "Riscos na tela")}><div className="flex gap-2">
+          {batteryFilled && !useNewWearMarks && isQActive(qc, "screenScratch") && allPriorAnswered("screenScratch") && <Section title={getQTitle(qc, "screenScratch", "Riscos na tela")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "screenScratch");
               const items: [string, string][] = opts.length > 0
@@ -793,7 +826,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             })()}
           </div></Section>}
 
-          {screenScratch !== null && !useNewWearMarks && isQActive(qc, "sideScratch") && <Section title={getQTitle(qc, "sideScratch", "Riscos laterais")}><div className="flex gap-2">
+          {screenScratch !== null && !useNewWearMarks && isQActive(qc, "sideScratch") && allPriorAnswered("sideScratch") && <Section title={getQTitle(qc, "sideScratch", "Riscos laterais")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "sideScratch");
               const items: [string, string][] = opts.length > 0
@@ -803,7 +836,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             })()}
           </div></Section>}
 
-          {sideScratch !== null && !useNewWearMarks && isQActive(qc, "peeling") && <Section title={getQTitle(qc, "peeling", "Descascado / Amassado")}><div className="flex gap-2">
+          {sideScratch !== null && !useNewWearMarks && isQActive(qc, "peeling") && allPriorAnswered("peeling") && <Section title={getQTitle(qc, "peeling", "Descascado / Amassado")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "peeling");
               const items: [string, string][] = opts.length > 0
@@ -814,8 +847,8 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
           </div></Section>}
 
           {/* Parts replaced — 2-step flow: first Sim/Nao, then where */}
-          {((useNewWearMarks && (hasWearMarks === false || (hasWearMarks === true && wearMarks.length > 0))) || (!useNewWearMarks && peeling !== null)) && isQActive(qc, "partsReplaced") && (
-          <Section title="O aparelho ja teve alguma peca trocada?">
+          {((useNewWearMarks && (hasWearMarks === false || (hasWearMarks === true && wearMarks.length > 0))) || (!useNewWearMarks && peeling !== null)) && isQActive(qc, "partsReplaced") && allPriorAnswered("partsReplaced") && (
+          <Section title={getQTitle(qc, "partsReplaced", "O aparelho ja teve alguma peca trocada?")}>
             {(() => {
               const tpOpt = getQOptions(qc, "partsReplaced").find(o => o.value === "thirdParty");
               const partsConfig = getQ(qc, "partsReplaced")?.config || {};
@@ -852,7 +885,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             })()}
           </Section>)}
 
-          {partsOk && isQActive(qc, "hasWarranty") && (
+          {partsOk && isQActive(qc, "hasWarranty") && allPriorAnswered("hasWarranty") && (
           <Section title={getQTitle(qc, "hasWarranty", "Ainda esta na garantia Apple de 12 meses?")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "hasWarranty");
@@ -865,7 +898,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             })()}
           </div></Section>)}
 
-          {hasWarranty === true && isQActive(qc, "warrantyMonth") && (
+          {hasWarranty === true && isQActive(qc, "warrantyMonth") && allPriorAnswered("warrantyMonth") && (
             <Section title={getQTitle(qc, "warrantyMonth", "Ate qual mes vai a garantia do seu aparelho?")}>
               <div className="flex gap-2 mb-3">
                 {[new Date().getFullYear(), new Date().getFullYear()+1].map((y) => <Btn key={y} sel={warrantyYear===y} onClick={() => setWarrantyYear(y)} className="flex-1" variant="success">{y}</Btn>)}
@@ -876,7 +909,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             </Section>
           )}
 
-          {warrantyFilled && isQActive(qc, "hasOriginalBox") && (
+          {warrantyFilled && isQActive(qc, "hasOriginalBox") && allPriorAnswered("hasOriginalBox") && (
           <Section title={getQTitle(qc, "hasOriginalBox", "Ainda tem a caixa original do aparelho?")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "hasOriginalBox");
@@ -895,7 +928,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
           diferente dos hardcoded. Renderizacao generica por `tipo`. Admin
           pode adicionar/editar/remover pra qualquer device_type sem precisar
           mexer no codigo. */}
-      {model && !isExcluded && dynamicQuestions.length > 0 && dynamicQuestions.map((q) => {
+      {model && !isExcluded && dynamicQuestions.length > 0 && dynamicQuestions.filter(q => allPriorAnswered(q.slug)).map((q) => {
         const val = extraAnswers[q.slug];
         const setVal = (v: unknown) => setExtraAnswers((prev) => ({ ...prev, [q.slug]: v }));
         return (
