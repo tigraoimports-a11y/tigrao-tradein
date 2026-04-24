@@ -3411,23 +3411,36 @@ export default function VendasPage() {
                     venda sem nome. Agora: sempre que form.produto OU estoqueId OU
                     editandoVendaId, mostra um INPUT editavel pra ver e ajustar o nome
                     manualmente (recuperacao de corrupcao e input manual). */}
-                {(estoqueId || form.produto || editandoVendaId) && (
+                {(estoqueId || form.produto || editandoVendaId) && (() => {
+                  // Se a venda em edicao veio de formulario preenchido, trava o
+                  // produto (cliente ja escolheu o que quer) — admin so deve
+                  // vincular qual UNIDADE FISICA sai, nao trocar o modelo.
+                  const travarProduto = statusPagamentoOriginal === "FORMULARIO_PREENCHIDO";
+                  return (
                   <div className="px-4 py-2.5 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl flex items-center gap-3">
                     <input
                       type="text"
                       value={form.produto}
                       onChange={(e) => {
+                        if (travarProduto) return; // produto do formulario nao edita
                         set("produto", e.target.value);
                         // Se admin edita o nome manualmente, desvincula do estoque
                         // (estoque_id anterior sera devolvido no PATCH via estoqueIdOriginal).
                         if (estoqueId) setEstoqueId("");
                         setProdutoManual(true);
                       }}
+                      readOnly={travarProduto}
                       placeholder="Nome do produto (ou use Buscar Serial acima)"
-                      className="flex-1 bg-transparent text-white text-sm font-medium placeholder-white/30 outline-none border-b border-white/10 focus:border-[#F5A623] pb-0.5"
+                      title={travarProduto ? "Produto escolhido pelo cliente no formulário — só dá pra vincular unidade do estoque" : undefined}
+                      className={`flex-1 bg-transparent text-white text-sm font-medium placeholder-white/30 outline-none border-b pb-0.5 ${
+                        travarProduto ? "border-white/20 cursor-not-allowed" : "border-white/10 focus:border-[#F5A623]"
+                      }`}
                     />
+                    {travarProduto && (
+                      <span title="Travado — produto do formulário do cliente" className="text-[10px] text-white/60 shrink-0">🔒</span>
+                    )}
                     <span className="text-[#F5A623] text-sm font-bold shrink-0">{fmt(parseFloat(form.custo) || 0)}</span>
-                    {form.produto && (
+                    {form.produto && !travarProduto && (
                       <button
                         type="button"
                         onClick={() => {
@@ -3442,7 +3455,85 @@ export default function VendasPage() {
                       </button>
                     )}
                   </div>
-                )}
+                  );
+                })()}
+
+                {/* Unidades disponiveis no estoque com mesmo SKU da venda em
+                    edicao — aparece quando admin esta convertendo formulario
+                    preenchido em venda. Permite clicar pra escolher qual
+                    unidade fisica sai (em vez de digitar/bipar manualmente). */}
+                {statusPagamentoOriginal === "FORMULARIO_PREENCHIDO" && editandoVendaId && (() => {
+                  const vendaEdicao = vendas.find(v => v.id === editandoVendaId);
+                  const skuVenda = (vendaEdicao as unknown as { sku?: string | null } | undefined)?.sku;
+                  if (!skuVenda) return null;
+                  const unidades = estoque.filter(
+                    (p) => (p.sku || "").toUpperCase() === skuVenda.toUpperCase()
+                      && p.qnt > 0
+                      && p.status === "EM ESTOQUE"
+                  );
+                  if (unidades.length === 0) {
+                    return (
+                      <div className={`mt-2 px-3 py-2 rounded-xl text-xs ${dm ? "bg-red-900/20 text-red-300 border border-red-900/40" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                        ⚠️ Nenhuma unidade desse produto em estoque ainda.
+                        Encomende antes de registrar a venda.
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className={`mt-2 p-3 rounded-xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-[#FFF8F0] border border-[#E8740E]/30"}`}>
+                      <p className={`text-xs font-bold mb-2 ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>
+                        📦 {unidades.length} {unidades.length === 1 ? "unidade disponível" : "unidades disponíveis"} — clique pra selecionar
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {unidades.map((p) => {
+                          const isSelected = estoqueId === p.id;
+                          const codigo = p.serial_no || p.imei || p.id.slice(0, 8);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                // Vincula essa unidade especifica — preenche estoque_id,
+                                // custo, fornecedor, serial/imei. Nao mexe no produto
+                                // (ta travado em FORMULARIO_PREENCHIDO).
+                                setEstoqueId(p.id);
+                                set("custo", String(Math.round(p.custo_unitario || 0)));
+                                if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                if (p.serial_no) { set("serial_no", p.serial_no); setSerialBusca(p.serial_no); }
+                                if (p.imei) { set("imei", p.imei); if (!p.serial_no) setSerialBusca(p.imei); }
+                              }}
+                              className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                isSelected
+                                  ? "bg-[#E8740E] text-white"
+                                  : dm
+                                    ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:bg-[#3A3A3C]"
+                                    : "bg-white text-[#1D1D1F] border border-[#D2D2D7] hover:border-[#E8740E]"
+                              }`}
+                              title={`Custo: ${fmt(p.custo_unitario || 0)}${p.fornecedor ? ` · Forn: ${p.fornecedor}` : ""}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{isSelected ? "✓" : "📱"}</span>
+                                <div className="flex flex-col items-start gap-0.5">
+                                  <span className="font-mono text-[11px]">{codigo}</span>
+                                  {p.fornecedor && (
+                                    <span className={`text-[9px] ${isSelected ? "text-white/80" : (dm ? "text-[#98989D]" : "text-[#86868B]")}`}>
+                                      {p.fornecedor}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {estoqueId && (
+                        <p className={`text-[10px] mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                          ✓ Unidade vinculada. Pode registrar a venda.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
             {/* Serial No. e IMEI movidos para seção de troca */}

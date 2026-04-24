@@ -18,6 +18,7 @@ export interface Venda {
   origem: Origem;
   tipo: TipoVenda;
   produto: string;
+  sku?: string | null;
   fornecedor: string | null;
   custo: number;
   preco_vendido: number;
