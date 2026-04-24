@@ -943,34 +943,39 @@ function PrecosContent() {
                             Seminovo
                           </span>
                         ) : (
-                          <select
-                            value={row.tipo ?? "TRADEIN"}
-                            onChange={async (e) => {
-                              const newTipo = e.target.value;
-                              setData((prev) => prev?.map((r) =>
-                                r.modelo === row.modelo && r.armazenamento === row.armazenamento
-                                  ? { ...r, tipo: newTipo }
-                                  : r
-                              ) ?? null);
-                              await fetch("/api/admin/precos", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                body: JSON.stringify({
-                                  modelo: row.modelo,
-                                  armazenamento: row.armazenamento,
-                                  preco_pix: row.preco_pix,
-                                  status: row.status,
-                                  categoria: row.categoria || inferCategoria(row.modelo),
-                                  tipo: newTipo,
-                                }),
-                              });
-                            }}
-                            className="px-2 py-1 rounded-lg text-xs border border-[#D2D2D7] bg-white text-[#1D1D1F]"
-                          >
-                            <option value="TRADEIN">Trade-In</option>
-                            <option value="CATALOGO">Catálogo</option>
-                            <option value="AMBOS">Ambos</option>
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-[#EFF6FF] text-[#1D4ED8] border border-[#1D4ED8]/30">
+                              Lacrado
+                            </span>
+                            <select
+                              value={row.tipo ?? "TRADEIN"}
+                              onChange={async (e) => {
+                                const newTipo = e.target.value;
+                                setData((prev) => prev?.map((r) =>
+                                  r.modelo === row.modelo && r.armazenamento === row.armazenamento && (r.tipo ?? "TRADEIN") === (row.tipo ?? "TRADEIN")
+                                    ? { ...r, tipo: newTipo }
+                                    : r
+                                ) ?? null);
+                                await fetch("/api/admin/precos", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                  body: JSON.stringify({
+                                    modelo: row.modelo,
+                                    armazenamento: row.armazenamento,
+                                    preco_pix: row.preco_pix,
+                                    status: row.status,
+                                    categoria: row.categoria || inferCategoria(row.modelo),
+                                    tipo: newTipo,
+                                  }),
+                                });
+                              }}
+                              className="px-2 py-1 rounded-lg text-xs border border-[#D2D2D7] bg-white text-[#1D1D1F]"
+                            >
+                              <option value="TRADEIN">Trade-In</option>
+                              <option value="CATALOGO">Catálogo</option>
+                              <option value="AMBOS">Ambos</option>
+                            </select>
+                          </div>
                         )}
                       </td>
                       <td className="px-5 py-3 text-right">
