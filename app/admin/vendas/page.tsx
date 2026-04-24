@@ -10,7 +10,7 @@ import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
 import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
-import { getModeloBase } from "@/lib/produto-display";
+import { getModeloBase, produtoComCorGarantida } from "@/lib/produto-display";
 import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
@@ -24,15 +24,14 @@ const VENDAS_PASSWORD = "tigrao$vendas";
 // Display do produto da venda: pega a chave "base" do getModeloBase (que inclui
 // storage/tela/RAM+SSD conforme categoria) e anexa a cor PT. Para acessorios
 // resolve o caso "MAGIC KEYBOARD IPAD PRO M4" vindo puro no v.produto e
-// aparecendo sem tela/cor — aqui enriquece com v.observacao ([TELA:X"]) e v.cor.
+// aparecendo sem tela/cor — aqui enriquece com v.observacao ([TELA:X"]) e cor
+// derivada do SKU canonico (vendas nao tem coluna cor propria).
 function buildProdutoDisplay(v: Venda): string {
   const base = getModeloBase(v.produto || "", v.categoria || "", v.observacao);
-  const cor = v.cor ? corParaPT(v.cor) : "";
-  const corValida = cor && cor !== "—" ? cor : "";
-  if (corValida && !base.toUpperCase().includes(corValida.toUpperCase())) {
-    return `${base} ${corValida}`;
-  }
-  return base;
+  // Vendas nao tem coluna 'cor' — deriva do SKU. produtoComCorGarantida faz
+  // isso: se base ja tem cor no texto, retorna base; senao, anexa do SKU.
+  const sku = (v as unknown as { sku?: string | null }).sku;
+  return produtoComCorGarantida(base, sku);
 }
 
 // Formata a resposta de erro do backend quando SKU do estoque selecionado
