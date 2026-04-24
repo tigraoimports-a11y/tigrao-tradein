@@ -2682,12 +2682,40 @@ export default function GerarLinkPage() {
             <div className="space-y-3 mt-3">
               <div>
                 <label className={labelCls}>Prazo de entrega (após pagamento)</label>
-                <input
-                  value={previsaoChegada}
-                  onChange={(e) => setPrevisaoChegada(e.target.value)}
-                  placeholder="Ex: 15 dias"
-                  className={inputCls}
-                />
+                {(() => {
+                  // Estrutura input em numero + unidade pra evitar texto livre
+                  // tipo "duas semanas" que renderiza estranho pro cliente.
+                  // Parse tolera valores antigos no formato "N dias|semanas|meses".
+                  const m = previsaoChegada.trim().match(/^(\d+)\s*(dia|semana|m[eê]s)/i);
+                  const num = m ? m[1] : "";
+                  const unidadeRaw = m ? m[2].toLowerCase() : "dias";
+                  const unidade = unidadeRaw.startsWith("dia") ? "dias" : unidadeRaw.startsWith("semana") ? "semanas" : "meses";
+                  const fmtPrazo = (n: string, u: string) => n ? `${n} ${u}` : "";
+                  return (
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={num}
+                        onChange={(e) => {
+                          const n = e.target.value.replace(/\D/g, "").slice(0, 3);
+                          setPrevisaoChegada(fmtPrazo(n, unidade));
+                        }}
+                        placeholder="15"
+                        className={inputCls}
+                      />
+                      <select
+                        value={unidade}
+                        onChange={(e) => setPrevisaoChegada(fmtPrazo(num, e.target.value))}
+                        className={inputCls}
+                      >
+                        <option value="dias">dias</option>
+                        <option value="semanas">semanas</option>
+                        <option value="meses">meses</option>
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <label className={labelCls}>Pagamento</label>
