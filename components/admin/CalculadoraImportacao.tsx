@@ -68,6 +68,18 @@ export default function CalculadoraImportacao() {
   const [peso, setPeso] = useState("");
   const [cotacao, setCotacao] = useState("");
   const [result, setResult] = useState<CalcResult | null>(null);
+  // Cotação automática do dólar (AwesomeAPI, cacheada 10min)
+  interface CotacaoInfo {
+    cotacao: number;
+    cotacaoVenda: number;
+    cotacaoCompra: number;
+    variacao: number;
+    atualizadoEm: string;
+    fonte: string;
+  }
+  const [cotacaoInfo, setCotacaoInfo] = useState<CotacaoInfo | null>(null);
+  const [cotacaoLoading, setCotacaoLoading] = useState(false);
+  const [cotacaoManual, setCotacaoManual] = useState(false);
   const [showProdutos, setShowProdutos] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
   // produtoBaseNome = nome do row do catalogo (sem config/cor) que foi
@@ -109,6 +121,30 @@ export default function CalculadoraImportacao() {
   useEffect(() => {
     carregarProdutos();
   }, [carregarProdutos]);
+
+  // Busca cotacao do dolar ao carregar. Usuario pode sobrescrever digitando
+  // manualmente — se fizer isso, nao mexemos mais no valor automatico.
+  const buscarCotacao = useCallback(async () => {
+    setCotacaoLoading(true);
+    try {
+      const res = await fetch("/api/cotacao-dolar");
+      if (res.ok) {
+        const j = (await res.json()) as CotacaoInfo;
+        if (j.cotacao) {
+          setCotacaoInfo(j);
+          if (!cotacaoManual) {
+            setCotacao(String(j.cotacao).replace(".", ","));
+          }
+        }
+      }
+    } catch { /* ignora — usuario preenche manualmente */ }
+    setCotacaoLoading(false);
+  }, [cotacaoManual]);
+
+  useEffect(() => {
+    buscarCotacao();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (preco && peso && cotacao) {
@@ -310,13 +346,48 @@ export default function CalculadoraImportacao() {
           }}
           placeholder="3.0"
         />
-        <InputField
-          label="Cotação do dólar"
-          prefix="R$"
-          value={cotacao}
-          onChange={setCotacao}
-          placeholder="5.75"
-        />
+        <div>
+          <InputField
+            label="Cotação do dólar"
+            prefix="R$"
+            value={cotacao}
+            onChange={(v) => { setCotacao(v); setCotacaoManual(true); }}
+            placeholder="5.75"
+          />
+          {cotacaoInfo && (
+            <div className="mt-1.5 flex items-center justify-between text-[10px]">
+              <span className="text-[#86868B]">
+                Cotação do dia:{" "}
+                <strong className="text-[#1D1D1F]">
+                  R$ {cotacaoInfo.cotacao.toFixed(2).replace(".", ",")}
+                </strong>
+                {typeof cotacaoInfo.variacao === "number" && (
+                  <span className={cotacaoInfo.variacao >= 0 ? "text-red-500 ml-1" : "text-green-600 ml-1"}>
+                    {cotacaoInfo.variacao >= 0 ? "▲" : "▼"} {Math.abs(cotacaoInfo.variacao).toFixed(2)}%
+                  </span>
+                )}
+                {" · "}{cotacaoInfo.fonte}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCotacao(String(cotacaoInfo.cotacao).replace(".", ","));
+                  setCotacaoManual(false);
+                  buscarCotacao();
+                }}
+                className="text-[#E8740E] hover:underline"
+                title="Atualizar cotação e preencher o campo"
+              >
+                {cotacaoLoading ? "..." : "↻ usar do dia"}
+              </button>
+            </div>
+          )}
+          {!cotacaoInfo && !cotacaoLoading && (
+            <p className="mt-1 text-[10px] text-[#86868B]">
+              💡 Não foi possível buscar cotação automática — digite manualmente.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Results */}
