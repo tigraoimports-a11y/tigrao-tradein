@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
       const cliente_telefone = formData.get("cliente_telefone") as string | null;
       const troca_produto = formData.get("troca_produto") as string | null;
       const troca_valor = formData.get("troca_valor") as string | null;
+      const troca_cor = formData.get("troca_cor") as string | null;
+      const troca_condicao = formData.get("troca_condicao") as string | null;
 
       const insertPayload = {
         short_code: shortCode,
@@ -72,6 +74,11 @@ export async function POST(req: NextRequest) {
         produto: produto || "(produto será preenchido no submit)",
         troca_produto: troca_produto || null,
         troca_valor: troca_valor ? Number(troca_valor) || 0 : null,
+        // Cor e condicao vem do simulador (StepQuote). Sem isso a entrega
+        // encaminhada desse placeholder sai sem as infos do aparelho da
+        // troca (perdeu a cor, bateria, marcas, pecas trocadas, caixa).
+        troca_cor: troca_cor || null,
+        troca_condicao: troca_condicao || null,
         status: "PENDENTE",
         arquivado: false,
       };

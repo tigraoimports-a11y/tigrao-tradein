@@ -95,14 +95,41 @@ export async function POST(request: Request) {
   const restanteComTaxa = taxaPct > 0 ? Math.ceil(restante * (1 + taxaPct / 100)) : restante;
   const valorFinal = entradaVal + restanteComTaxa;
 
+  // Fallback pra cor/condicao da troca: se o link esta incompleto (ex: foi criado
+  // como placeholder via upload-print com dados parciais), puxa da venda com
+  // mesmo short_code que foi salva pelo from-formulario — la o cliente submeteu
+  // os dados completos. Evita entregas saindo sem "Saude bateria X% | Sem marcas
+  // | ... | Tem a caixa original" quando o link original perdeu.
+  let trocaCorFb: string | null = link.troca_cor || null;
+  let trocaCondFb: string | null = link.troca_condicao || null;
+  let trocaCor2Fb: string | null = link.troca_cor2 || null;
+  let trocaCond2Fb: string | null = link.troca_condicao2 || null;
+  const precisaFallback = link.troca_produto && (!trocaCorFb || !trocaCondFb)
+    || link.troca_produto2 && (!trocaCor2Fb || !trocaCond2Fb);
+  if (precisaFallback && link.short_code) {
+    const { data: vendaSc } = await supabase
+      .from("vendas")
+      .select("troca_cor, troca_obs, troca_cor2, troca_obs2")
+      .eq("short_code", link.short_code)
+      .not("troca_produto", "is", null)
+      .limit(1)
+      .maybeSingle();
+    if (vendaSc) {
+      trocaCorFb = trocaCorFb || vendaSc.troca_cor || null;
+      trocaCondFb = trocaCondFb || vendaSc.troca_obs || null;
+      trocaCor2Fb = trocaCor2Fb || vendaSc.troca_cor2 || null;
+      trocaCond2Fb = trocaCond2Fb || vendaSc.troca_obs2 || null;
+    }
+  }
+
   // Campo detalhes_upgrade é usado pela aba de entregas pra listar trocas do pedido
   // (o texto do motoboy tem uma seção "PRODUTO NA TROCA" própria que lê desse campo).
   const trocaLinhas: string[] = [];
   if (link.troca_produto) {
     const t1 = [
       link.troca_produto,
-      link.troca_cor ? `cor ${link.troca_cor}` : null,
-      link.troca_condicao ? link.troca_condicao : null,
+      trocaCorFb ? `cor ${trocaCorFb}` : null,
+      trocaCondFb || null,
       Number(link.troca_valor) ? `R$ ${Number(link.troca_valor).toLocaleString("pt-BR")}` : null,
     ].filter(Boolean).join(" • ");
     trocaLinhas.push(t1);
@@ -110,8 +137,8 @@ export async function POST(request: Request) {
   if (link.troca_produto2) {
     const t2 = [
       link.troca_produto2,
-      link.troca_cor2 ? `cor ${link.troca_cor2}` : null,
-      link.troca_condicao2 ? link.troca_condicao2 : null,
+      trocaCor2Fb ? `cor ${trocaCor2Fb}` : null,
+      trocaCond2Fb || null,
       Number(link.troca_valor2) ? `R$ ${Number(link.troca_valor2).toLocaleString("pt-BR")}` : null,
     ].filter(Boolean).join(" • ");
     trocaLinhas.push(t2);
