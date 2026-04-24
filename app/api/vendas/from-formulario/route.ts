@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimitSubmission, checkHoneypot } from "@/lib/rate-limit";
 import { dispararContratoAuto } from "@/lib/contrato-auto";
+import { maskCpf, maskCnpj, maskCep, maskTelefone } from "@/lib/mask";
 import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 // ============================================================
@@ -137,12 +138,13 @@ export async function POST(req: NextRequest) {
   const parcelasNum = body.parcelas ? Number(body.parcelas) || 1 : 1;
   const { forma, banco, recebimento } = mapForma(body.formaPagamento);
 
-  // Telefone normalizado
-  const telefoneDigits = (body.telefone || "").replace(/\D/g, "");
-
-  // CPF/CNPJ — usa o que vier
-  const cpfDigits = (body.cpf || "").replace(/\D/g, "");
-  const cnpjDigits = (body.cnpj || "").replace(/\D/g, "");
+  // Telefone / CPF / CNPJ / CEP formatados — admin le e cadastro tem mascara
+  // no form, entao banco guarda o mesmo formato pra consistencia. Se vier
+  // cru do /compra (cliente preencheu), a mask helper normaliza.
+  const telefoneFmt = maskTelefone(body.telefone || "");
+  const cpfFmt = maskCpf(body.cpf || "");
+  const cnpjFmt = maskCnpj(body.cnpj || "");
+  const cepFmt = maskCep(body.cep || "");
 
   // Endereço completo pra coluna de display
   const enderecoFull = [body.endereco, body.numero, body.complemento, body.bairro]
@@ -174,12 +176,12 @@ export async function POST(req: NextRequest) {
     data: hojeStr,
     data_programada: body.dataEntrega || null,
     cliente: body.nome,
-    cpf: body.pessoa === "PJ" ? null : (cpfDigits || null),
-    cnpj: body.pessoa === "PJ" ? (cnpjDigits || null) : null,
-    telefone: telefoneDigits || null,
+    cpf: body.pessoa === "PJ" ? null : (cpfFmt || null),
+    cnpj: body.pessoa === "PJ" ? (cnpjFmt || null) : null,
+    telefone: telefoneFmt || null,
     email: body.email || null,
     endereco: enderecoFull || null,
-    cep: body.cep || null,
+    cep: cepFmt || null,
     forma,
     banco,
     recebimento,
