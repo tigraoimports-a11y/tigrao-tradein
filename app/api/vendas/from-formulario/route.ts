@@ -249,17 +249,8 @@ export async function POST(req: NextRequest) {
     } else {
       await supabase.from("encomendas").insert(payloadEncomenda);
     }
-    // Dispara notificacao ao vendedor (fire-and-forget — nao bloqueia resposta)
-    notificarVendedorEncomenda({
-      vendedor: vendedorLink || body.vendedor || null,
-      cliente: body.nome,
-      telefone: telefoneFmt || null,
-      produto: body.produto,
-      valorTotal: precoNum,
-      valorSinal,
-      previsao: previsaoChegadaLink,
-      shortCode: body.shortCode,
-    }).catch(() => { /* silencioso */ });
+    // Sem notificacao Z-API — operador ve a encomenda no /admin/encomendas igual
+    // a compra normal. Alinhamento combinado pelo WhatsApp padrao do link.
     return NextResponse.json({ ok: true, encomenda: true });
   }
 
@@ -404,50 +395,6 @@ export async function POST(req: NextRequest) {
     action: idsAntigos.length > 0 ? "replaced" : "created",
     contrato,
   });
-}
-
-// Notifica o vendedor responsavel pela encomenda via Z-API WhatsApp. Fire-and-
-// forget — erro nao bloqueia a resposta ao cliente. Numero do vendedor eh
-// resolvido via mapa hard-coded em lib/whatsapp-config (Bianca, Andre, Nicolas,
-// Nicole). Se vendedor nao bater, cai no fallback WHATSAPP_DEFAULT.
-async function notificarVendedorEncomenda(params: {
-  vendedor: string | null;
-  cliente: string;
-  telefone: string | null;
-  produto: string;
-  valorTotal: number;
-  valorSinal: number;
-  previsao: string | null;
-  shortCode: string;
-}): Promise<void> {
-  const { WHATSAPP_NUMBERS, WHATSAPP_DEFAULT } = await import("@/lib/whatsapp-config");
-  const instanceId = process.env.ZAPI_FOLLOWUP_INSTANCE_ID;
-  const token = process.env.ZAPI_FOLLOWUP_TOKEN;
-  const clientToken = process.env.ZAPI_CLIENT_TOKEN ?? "";
-  if (!instanceId || !token) return;
-  const key = (params.vendedor || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") as keyof typeof WHATSAPP_NUMBERS;
-  const destino = WHATSAPP_NUMBERS[key] || WHATSAPP_DEFAULT;
-  const fmt = (n: number) => `R$ ${Math.round(n).toLocaleString("pt-BR")}`;
-  const msg = [
-    `📦 *NOVA ENCOMENDA*`,
-    ``,
-    `🧑 Cliente: ${params.cliente}`,
-    params.telefone ? `📞 ${params.telefone}` : "",
-    `🍎 Produto: ${params.produto}`,
-    `💰 Total: ${fmt(params.valorTotal)}`,
-    `💸 Sinal pendente: ${fmt(params.valorSinal)} (confirmar PIX)`,
-    `💵 Restante na entrega: ${fmt(params.valorTotal - params.valorSinal)}`,
-    params.previsao ? `⏳ Prazo: ${params.previsao}` : "",
-    ``,
-    `🔗 Link: ${params.shortCode}`,
-  ].filter(Boolean).join("\n");
-  try {
-    await fetch(`https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Client-Token": clientToken },
-      body: JSON.stringify({ phone: destino, message: msg }),
-    });
-  } catch { /* silencioso */ }
 }
 
 // Helper: dispara termo de procedência só se a venda tem troca. Erros são
