@@ -619,7 +619,16 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             };
             const specs = storages.map(parseMac);
             const current = storage ? parseMac(storage) : { raw: "", tela: "", ram: "", ssd: "" };
-            const sortCapacidade = (a: string, b: string) => (parseInt(a) || 0) - (parseInt(b) || 0);
+            // Normaliza "256GB" e "1TB" pra mesma unidade (GB) antes de ordenar.
+            // Sem isso, parseInt("1TB")=1 vinha antes de 256GB/512GB.
+            const toGB = (s: string): number => {
+              const m = s.match(/([\d.]+)\s*(TB|GB)?/i);
+              if (!m) return 0;
+              const n = parseFloat(m[1]) || 0;
+              const unit = (m[2] || "GB").toUpperCase();
+              return unit === "TB" ? n * 1024 : n;
+            };
+            const sortCapacidade = (a: string, b: string) => toGB(a) - toGB(b);
             const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
 
             const telaOpts = uniq(specs.map(s => s.tela));
