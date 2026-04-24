@@ -14,6 +14,16 @@ const fmt = (v: number | null | undefined) =>
 
 type Severidade = "alta" | "media" | "baixa";
 type TipoInc = "SKU_DIVERGENTE_PERSISTIDO" | "ESGOTADO_SEM_VENDA" | "VENDA_SEM_ESTOQUE";
+type TipoHipotese = "serial_match" | "atacado_proximo" | "venda_nao_vinculada" | "brinde_proximo" | "nenhuma";
+
+interface Hipotese {
+  tipo: TipoHipotese;
+  confianca: "alta" | "media" | "baixa";
+  descricao: string;
+  venda_id?: string;
+  cliente?: string;
+  data_venda?: string;
+}
 
 interface Inconsistencia {
   tipo: TipoInc;
@@ -22,6 +32,7 @@ interface Inconsistencia {
   produto: string;
   detalhes: Record<string, string | number | null>;
   ids: { venda_id?: string; estoque_id?: string };
+  hipotese?: Hipotese;
 }
 
 interface Resumo {
@@ -30,6 +41,40 @@ interface Resumo {
   por_severidade: Record<Severidade, number>;
   periodo: { from: string; until: string };
 }
+
+// Visualizacao das hipoteses — badge colorido + dica contextual.
+const HIPOTESE_LABEL: Record<TipoHipotese, { titulo: string; cor: string; bg: string; border: string }> = {
+  serial_match: {
+    titulo: "Venda encontrada (serial bate)",
+    cor: "text-green-800",
+    bg: "bg-green-50",
+    border: "border-green-300",
+  },
+  venda_nao_vinculada: {
+    titulo: "Venda do mesmo SKU + data",
+    cor: "text-blue-800",
+    bg: "bg-blue-50",
+    border: "border-blue-300",
+  },
+  atacado_proximo: {
+    titulo: "Atacado (lote)",
+    cor: "text-purple-800",
+    bg: "bg-purple-50",
+    border: "border-purple-300",
+  },
+  brinde_proximo: {
+    titulo: "Brinde",
+    cor: "text-pink-800",
+    bg: "bg-pink-50",
+    border: "border-pink-300",
+  },
+  nenhuma: {
+    titulo: "Sem pista — investigar",
+    cor: "text-red-800",
+    bg: "bg-red-50",
+    border: "border-red-300",
+  },
+};
 
 const TIPO_LABEL: Record<TipoInc, { titulo: string; icone: string; explicacao: string }> = {
   SKU_DIVERGENTE_PERSISTIDO: {
@@ -63,6 +108,7 @@ export default function ReconciliacaoSkuPage() {
   const [syncingSku, setSyncingSku] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [backfillingCor, setBackfillingCor] = useState(false);
+  const [vinculandoAuto, setVinculandoAuto] = useState(false);
   // Set de ids (venda_id ou estoque_id) que o admin marcou como "ignorar".
   // Persiste em localStorage — util pra casos legitimos como atacado em lote,
   // brindes internos, ou vendas fora do sistema que nao queremos ver de novo.
@@ -133,6 +179,88 @@ export default function ReconciliacaoSkuPage() {
     try {
       localStorage.setItem("tigrao_reconciliacao_ignorados", JSON.stringify([...novo]));
     } catch {}
+  };
+
+  // Vincula venda-estoque baseado na hipotese. Usa quando a hipotese tem
+  // venda_id e o admin confirma. Seta venda.estoque_id = estoque_id, o que
+  // resolve o sumi\u00e7o (venda fica com baixa, estoque deixa de estar orfao).
+  const vincularVendaEstoque = async (inc: Inconsistencia) => {
+    if (!password || !inc.hipotese?.venda_id || !inc.ids.estoque_id) return;
+    const h = inc.hipotese;
+    const msg = `Vincular esta venda de ${h.cliente || "?"} (${h.data_venda || "?"}) ao item de estoque?\n\nIsso resolve o sumi\u00e7o — a venda passa a ter baixa no estoque.`;
+    if (!confirm(msg)) return;
+    setVinculandoAuto(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/admin/sku/reconciliacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({
+          action: "vincular_venda_estoque",
+          pares: [{ venda_id: h.venda_id, estoque_id: inc.ids.estoque_id }],
+        }),
+      });
+      const json = await res.json();
+      if (json.ok && json.vinculadas > 0) {
+        setSyncMsg(`\u2705 Vinculo feito — venda agora esta vinculada ao item do estoque.`);
+        fetchData();
+      } else {
+        const motivo = json.falhas?.[0]?.motivo || json.error || "desconhecido";
+        setSyncMsg(`Erro: ${motivo}`);
+      }
+    } catch (err) {
+      setSyncMsg(`Erro de rede: ${err}`);
+    } finally {
+      setVinculandoAuto(false);
+    }
+  };
+
+  // Vincula automaticamente TODOS os sumicos que tem hipotese de alta ou media
+  // confianca (serial_match / venda_nao_vinculada). Acao em massa — util pra
+  // resolver muitos sumicos de uma vez depois do auto-classify.
+  const vincularTodosAuto = async () => {
+    if (!password) return;
+    const alvos = (inconsistencias || []).filter(
+      (i) => i.tipo === "ESGOTADO_SEM_VENDA"
+        && !ignorados.has(keyIgnorar(i))
+        && i.hipotese?.venda_id
+        && (i.hipotese.tipo === "serial_match" || i.hipotese.tipo === "venda_nao_vinculada"),
+    );
+    if (alvos.length === 0) {
+      setSyncMsg("Nenhum sumi\u00e7o com hipotese de alta/media confianca pra vincular");
+      return;
+    }
+    const msg = `Vincular ${alvos.length} sumicos de uma vez?\n\n`
+      + `Cada um tem uma venda identificada por serial/IMEI ou SKU+data. `
+      + `Vincula todos — casos duvidosos (atacado, brinde, sem pista) ficam de fora.`;
+    if (!confirm(msg)) return;
+    setVinculandoAuto(true);
+    setSyncMsg(null);
+    try {
+      const pares = alvos.map((i) => ({
+        venda_id: i.hipotese!.venda_id!,
+        estoque_id: i.ids.estoque_id!,
+      }));
+      const res = await fetch("/api/admin/sku/reconciliacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ action: "vincular_venda_estoque", pares }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setSyncMsg(
+          `\u2705 ${json.vinculadas} vinculos feitos` +
+          (json.falhas?.length ? ` (${json.falhas.length} falhas)` : ""),
+        );
+        fetchData();
+      } else {
+        setSyncMsg(`Erro: ${json.error || "desconhecido"}`);
+      }
+    } catch (err) {
+      setSyncMsg(`Erro de rede: ${err}`);
+    } finally {
+      setVinculandoAuto(false);
+    }
   };
 
   // Ignora todas as inconsistencias com MESMO SKU do item clicado. Util pra
@@ -298,6 +426,25 @@ export default function ReconciliacaoSkuPage() {
           >
             {backfillingCor ? "Preenchendo…" : "🎨 Backfill cor das vendas"}
           </button>
+          {(() => {
+            const autoVinc = (inconsistencias || []).filter(
+              (i) => i.tipo === "ESGOTADO_SEM_VENDA"
+                && !ignorados.has(keyIgnorar(i))
+                && i.hipotese?.venda_id
+                && (i.hipotese.tipo === "serial_match" || i.hipotese.tipo === "venda_nao_vinculada"),
+            );
+            if (autoVinc.length === 0) return null;
+            return (
+              <button
+                onClick={vincularTodosAuto}
+                disabled={vinculandoAuto}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={`Vincula automaticamente ${autoVinc.length} sumi\u00e7os onde achei venda correspondente por serial/IMEI ou SKU+data. Nao toca em casos duvidosos.`}
+              >
+                {vinculandoAuto ? "Vinculando…" : `\u2705 Auto-vincular ${autoVinc.length} sumi\u00e7os`}
+              </button>
+            );
+          })()}
         </div>
       </div>
       {syncMsg && (
@@ -430,6 +577,23 @@ export default function ReconciliacaoSkuPage() {
                     <p className="text-sm font-medium text-[#1D1D1F] mt-1">{inc.produto}</p>
                     <p className="text-xs text-[#86868B] mt-0.5">{inc.descricao}</p>
 
+                    {/* Hipotese — auto-classificacao do sumi\u00e7o */}
+                    {inc.hipotese && (
+                      <div className={`mt-2 p-2 rounded-md border ${HIPOTESE_LABEL[inc.hipotese.tipo].bg} ${HIPOTESE_LABEL[inc.hipotese.tipo].border}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[10px] font-bold uppercase tracking-wide ${HIPOTESE_LABEL[inc.hipotese.tipo].cor}`}>
+                            Hip\u00f3tese: {HIPOTESE_LABEL[inc.hipotese.tipo].titulo}
+                          </span>
+                          <span className="text-[10px] text-[#86868B]">
+                            (conf. {inc.hipotese.confianca})
+                          </span>
+                        </div>
+                        <p className={`text-xs ${HIPOTESE_LABEL[inc.hipotese.tipo].cor}`}>
+                          {inc.hipotese.descricao}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Detalhes */}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-[#6E6E73]">
                       {Object.entries(inc.detalhes).map(([k, v]) => {
@@ -461,6 +625,23 @@ export default function ReconciliacaoSkuPage() {
                       >
                         Ver venda
                       </a>
+                    )}
+                    {/* Botao de vincular — so aparece pra sumicos com hipotese
+                         de alta/media confianca (serial_match ou venda_nao_vinculada)
+                         que teem venda_id identificada */}
+                    {inc.tipo === "ESGOTADO_SEM_VENDA"
+                      && inc.hipotese?.venda_id
+                      && inc.ids.estoque_id
+                      && (inc.hipotese.tipo === "serial_match" || inc.hipotese.tipo === "venda_nao_vinculada")
+                      && !mostrarIgnorados && (
+                      <button
+                        onClick={() => vincularVendaEstoque(inc)}
+                        disabled={vinculandoAuto}
+                        className="text-xs px-2 py-1 rounded border border-green-400 bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
+                        title={`Vincula a venda ao item — resolve o sumi\u00e7o de uma vez`}
+                      >
+                        \u2705 Vincular
+                      </button>
                     )}
                     {inc.ids.estoque_id && (
                       <a
