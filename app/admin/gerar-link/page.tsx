@@ -245,6 +245,9 @@ export default function GerarLinkPage() {
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
+  // Cobranca extra opcional (capa, pelicula, brinde, etc). Soma no total do link.
+  const [extraDescricao, setExtraDescricao] = useState("");
+  const [extraValor, setExtraValor] = useState("");
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
   // Fluxo invertido: habilita botão "Pagar com Mercado Pago" no /compra.
   const [pagarMp, setPagarMp] = useState(false);
@@ -700,11 +703,15 @@ export default function GerarLinkPage() {
         for (let i = 1; i < prodsFilled.length; i++) {
           shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
         }
-        // Encomenda com sinal — o link exibe/cobra o valor do sinal, nao o total
-        const valorExibir = encomenda && sinalPct
-          ? String(Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100))
-          : rawPreco;
+        // Valor cobrado no link = produto (sinal se encomenda) + extra cobranca
+        const extraNumBase = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+        const baseCobrado = encomenda && sinalPct
+          ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+          : Number(rawPreco) || 0;
+        const valorExibir = String(baseCobrado + extraNumBase);
         if (valorExibir && valorExibir !== "0") shortData.v = valorExibir;
+        if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
+        if (extraNumBase > 0) shortData.ex_v = String(extraNumBase);
         if (descontoNum > 0) shortData.dc = String(descontoNum);
         shortData.s = vendedorNome || "";
         if (campanha.trim()) shortData.cm = campanha.trim();
@@ -828,12 +835,15 @@ export default function GerarLinkPage() {
       if (l.troca_cor) setTrocaCor(l.troca_cor);
     }
     // Encomenda: restaura se o link original era tipo ENCOMENDA
-    const lAny = l as unknown as { tipo?: string; previsao_chegada?: string | null; sinal_pct?: number | null };
+    const lAny = l as unknown as { tipo?: string; previsao_chegada?: string | null; sinal_pct?: number | null; extra_descricao?: string | null; extra_valor?: number | null };
     if (lAny.tipo === "ENCOMENDA") {
       setEncomenda(true);
       if (lAny.previsao_chegada) setPrevisaoChegada(lAny.previsao_chegada);
       if (lAny.sinal_pct != null) setSinalPct(String(lAny.sinal_pct));
     }
+    // Cobranca extra: restaura independente do tipo
+    if (lAny.extra_descricao) setExtraDescricao(lAny.extra_descricao);
+    if (lAny.extra_valor != null) setExtraValor(Number(lAny.extra_valor).toLocaleString("pt-BR"));
     setAba("novo");
   }
 
@@ -966,6 +976,7 @@ export default function GerarLinkPage() {
     setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); setTrocaCondicao2(""); setTrocaCor2("");
     // Encomenda
     setEncomenda(false); setPrevisaoChegada(""); setSinalPct("50");
+    setExtraDescricao(""); setExtraValor("");
     // Cliente
     setIncluirDadosCliente(false); limparDadosCliente();
     // Link gerado
@@ -1055,10 +1066,14 @@ export default function GerarLinkPage() {
       if (precoExtra > 0) shortData[`v${i + 1}`] = String(precoExtra);
     }
     // Encomenda com sinal — cobra sinal no link em vez do total
-    const valorExibirMp = encomenda && sinalPct
-      ? String(Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100))
-      : rawPreco;
+    const extraNumMp = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+    const baseCobradoMp = encomenda && sinalPct
+      ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+      : Number(rawPreco) || 0;
+    const valorExibirMp = String(baseCobradoMp + extraNumMp);
     if (valorExibirMp && valorExibirMp !== "0") shortData.v = valorExibirMp;
+    if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
+    if (extraNumMp > 0) shortData.ex_v = String(extraNumMp);
     if (descontoNum > 0) shortData.dc = String(descontoNum);
     shortData.s = vendedorNome || "";
     if (campanha.trim()) shortData.cm = campanha.trim();
@@ -1126,6 +1141,8 @@ export default function GerarLinkPage() {
               tipo: encomenda ? "ENCOMENDA" : (trocaProduto ? "TROCA" : "COMPRA"),
               previsao_chegada: encomenda ? (previsaoChegada.trim() || null) : null,
               sinal_pct: encomenda && sinalPct ? Number(sinalPct) : null,
+              extra_descricao: extraDescricao.trim() || null,
+              extra_valor: extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || null : null,
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -1133,10 +1150,14 @@ export default function GerarLinkPage() {
               produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
               cor: corENCanon || null,
-              // Quando encomenda com sinal, cobra o sinal no link em vez do total
-              valor: encomenda && sinalPct
-                ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
-                : Number(rawPreco) || 0,
+              // valor cobrado no link = produto (ou sinal se encomenda) + extra
+              valor: (() => {
+                const base = encomenda && sinalPct
+                  ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+                  : Number(rawPreco) || 0;
+                const extra = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+                return base + extra;
+              })(),
               desconto: descontoNum || 0,
               forma_pagamento: forma || null,
               parcelas: parcelas || null,
@@ -1244,10 +1265,14 @@ export default function GerarLinkPage() {
     // Se passássemos valorComTaxa (que já desconta troca), o form subtrairia
     // troca de novo e daria valor errado.
     // Encomenda com sinal — cobra sinal no link em vez do total
-    const valorExibirMp2 = encomenda && sinalPct
-      ? String(Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100))
-      : rawPreco;
+    const extraNumMp2 = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+    const baseCobradoMp2 = encomenda && sinalPct
+      ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+      : Number(rawPreco) || 0;
+    const valorExibirMp2 = String(baseCobradoMp2 + extraNumMp2);
     if (valorExibirMp2 && valorExibirMp2 !== "0") shortData.v = valorExibirMp2;
+    if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
+    if (extraNumMp2 > 0) shortData.ex_v = String(extraNumMp2);
     if (descontoNum > 0) shortData.dc = String(descontoNum);
     // Forma + parcelas + entrada PIX — pra /compra montar "Pagamento 1/2"
     // quando há entrada PIX pendente (valor parcelado no link MP + PIX separado).
@@ -1347,6 +1372,8 @@ export default function GerarLinkPage() {
               tipo: encomenda ? "ENCOMENDA" : (trocaProduto ? "TROCA" : "COMPRA"),
               previsao_chegada: encomenda ? (previsaoChegada.trim() || null) : null,
               sinal_pct: encomenda ? (Number(sinalPct) || 50) : null,
+              extra_descricao: extraDescricao.trim() || null,
+              extra_valor: extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || null : null,
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -2610,6 +2637,31 @@ export default function GerarLinkPage() {
             placeholder="Ex: 200 (opcional)"
             className={inputCls}
           />
+        </div>
+
+        {/* Cobranca extra (capa, pelicula, brinde, etc). Soma no total do
+            link e fica visivel pra operadora no historico e pro cliente no
+            /compra junto com o produto. */}
+        <div className={`p-3 rounded-xl border ${extraValor ? "border-amber-400 bg-amber-50" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold text-[#1D1D1F]">➕ Cobrança extra</span>
+            <span className="text-[10px] text-[#86868B]">(opcional — capa, película, brinde, etc)</span>
+          </div>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <input
+              value={extraDescricao}
+              onChange={(e) => setExtraDescricao(e.target.value)}
+              placeholder="Ex: Capa + película"
+              className={inputCls}
+            />
+            <input
+              value={extraValor}
+              onChange={(e) => setExtraValor(formatPreco(e.target.value))}
+              placeholder="R$ 60"
+              inputMode="numeric"
+              className={`${inputCls} max-w-[120px]`}
+            />
+          </div>
         </div>
 
         {/* Encomenda — so operador marca, cliente nao ve o toggle. Combinavel

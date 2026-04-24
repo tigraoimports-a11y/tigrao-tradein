@@ -82,6 +82,10 @@ function CompraForm() {
   const encomendaParam = searchParams.get("encomenda") === "1";
   const previsaoChegadaParam = searchParams.get("previsao_chegada") || "";
   const sinalPctParam = Math.max(0, Math.min(100, Number(searchParams.get("sinal_pct") || "0") || 0));
+  // Cobranca extra opcional — capa, pelicula, brinde, etc. Ja esta somada no
+  // valor cobrado (preco param). Aqui so pra mostrar breakdown ao cliente.
+  const extraDescricaoParam = searchParams.get("extra_descricao") || "";
+  const extraValorParam = Number(searchParams.get("extra_valor") || "0") || 0;
 
   // Trade-in params (vindos do StepQuote)
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
@@ -1267,6 +1271,16 @@ function CompraForm() {
           </div>
         );
       })()}
+
+      {/* Cobranca extra — capa, pelicula, brinde, etc. Ja esta somada no total
+          cobrado, aqui so avisa ao cliente que esta incluido. */}
+      {extraDescricaoParam && extraValorParam > 0 && (
+        <div className="mx-4 mt-4 rounded-xl p-3 border border-amber-300 bg-amber-50">
+          <p className="text-xs text-amber-900">
+            <span className="font-semibold">➕ Inclui:</span> {extraDescricaoParam} — R$ {fmt(extraValorParam)}
+          </p>
+        </div>
+      )}
 
       {/* Product info */}
       <div className="mx-4 mt-4 bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED]">

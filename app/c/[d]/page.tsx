@@ -18,6 +18,8 @@ const KEY_MAP: Record<string, string> = {
   short: "short",
   // Encomenda (sinal antecipado)
   enc: "encomenda", prev: "previsao_chegada", sinal: "sinal_pct",
+  // Cobranca extra (capa, pelicula, brinde, etc)
+  ex_d: "extra_descricao", ex_v: "extra_valor",
   // Dados do cliente pré-preenchidos pelo vendedor no gerar-link
   cn: "nome", ccpf: "cpf", cem: "email", cte: "telefone",
   ccep: "cep", cen: "endereco", cnu: "numero", cco: "complemento", cba: "bairro",
