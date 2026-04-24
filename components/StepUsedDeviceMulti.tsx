@@ -600,9 +600,14 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
           (() => {
             const parseMac = (raw: string): { raw: string; tela: string; ram: string; ssd: string } => {
               if (raw.includes("|")) {
-                // Formato novo do admin: "tela | ram | ssd"
-                const [tela = "", ram = "", ssd = ""] = raw.split("|").map(p => p.trim());
-                return { raw, tela, ram, ssd };
+                const parts = raw.split("|").map(p => p.trim());
+                // Se primeira parte tem aspas (tela como 13"), e formato antigo
+                // "tela | ram | ssd". Senao (parts[0] nao tem '"'), admin novo
+                // ja coloca tela no nome do modelo e armazenamento e "ram | ssd".
+                if (parts[0]?.includes('"')) {
+                  return { raw, tela: parts[0] || "", ram: parts[1] || "", ssd: parts[2] || "" };
+                }
+                return { raw, tela: "", ram: parts[0] || "", ssd: parts[1] || "" };
               }
               if (raw.includes("/")) {
                 // Formato antigo: "ssd/ram" (ordem invertida, legado)
