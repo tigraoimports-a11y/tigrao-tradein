@@ -119,6 +119,46 @@ export default function ReconciliacaoSkuPage() {
     } catch {}
   };
 
+  // Ignora todas as inconsistencias atualmente filtradas (visiveis na lista).
+  // Util pra limpar em massa quando o admin sabe que todos sao casos legitimos
+  // (ex: 73 sumicos vindos de vendas atacado em lote, brindes, vendas fora do
+  // sistema). Evita ter que clicar um por um.
+  const ignorarTodosFiltrados = () => {
+    const alvo = filtradas.filter((i) => !ignorados.has(keyIgnorar(i)));
+    if (alvo.length === 0) return;
+    if (!confirm(`Ignorar ${alvo.length} alertas de uma vez? Voce ainda pode restaurar depois clicando em "🙈 Ignorados".`)) return;
+    const novo = new Set(ignorados);
+    for (const i of alvo) novo.add(keyIgnorar(i));
+    setIgnorados(novo);
+    try {
+      localStorage.setItem("tigrao_reconciliacao_ignorados", JSON.stringify([...novo]));
+    } catch {}
+  };
+
+  // Ignora todas as inconsistencias com MESMO SKU do item clicado. Util pra
+  // agrupar atacados em lote — ex: se ha 4 unidades do mesmo iPhone sumidas
+  // e sabemos que foi 1 venda atacado, um clique ignora as 4.
+  const ignorarTodosDoMesmoSku = (inc: Inconsistencia) => {
+    const skuAlvo = typeof inc.detalhes.sku === "string" ? inc.detalhes.sku
+      : typeof inc.detalhes.estoque_sku === "string" ? inc.detalhes.estoque_sku
+      : null;
+    if (!skuAlvo) return;
+    const todos = (inconsistencias || []).filter((i) => {
+      const sku = typeof i.detalhes.sku === "string" ? i.detalhes.sku
+        : typeof i.detalhes.estoque_sku === "string" ? i.detalhes.estoque_sku
+        : null;
+      return sku === skuAlvo && !ignorados.has(keyIgnorar(i));
+    });
+    if (todos.length === 0) return;
+    if (!confirm(`Ignorar ${todos.length} alertas com SKU ${skuAlvo}?`)) return;
+    const novo = new Set(ignorados);
+    for (const i of todos) novo.add(keyIgnorar(i));
+    setIgnorados(novo);
+    try {
+      localStorage.setItem("tigrao_reconciliacao_ignorados", JSON.stringify([...novo]));
+    } catch {}
+  };
+
   // Backfill de cor: copia estoque.cor → venda.cor pra vendas historicas com
   // estoque_id vinculado mas sem cor salva. Elimina a raiz do problema de
   // "cor nao aparece em algumas vendas" — faz persistir a cor na venda em vez
@@ -348,6 +388,16 @@ export default function ReconciliacaoSkuPage() {
             )}
           </>
         )}
+        {/* Bulk ignore — facilita limpar muitos alertas legitimos de uma vez */}
+        {!mostrarIgnorados && filtradas.length > 0 && (
+          <button
+            onClick={ignorarTodosFiltrados}
+            className="ml-auto px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-[#D2D2D7] text-[#86868B] hover:border-red-300 hover:text-red-600 transition-colors"
+            title="Ignora TODOS os alertas atualmente visiveis (respeitando o filtro de tipo). Util quando voce sabe que todos sao casos legitimos."
+          >
+            🙈 Ignorar todos ({filtradas.length})
+          </button>
+        )}
       </div>
 
       {/* Lista de inconsistências */}
@@ -435,6 +485,30 @@ export default function ReconciliacaoSkuPage() {
                     >
                       {mostrarIgnorados ? "↩ Restaurar" : "🙈 Ignorar"}
                     </button>
+                    {/* Botao de conveniencia: ignora TODOS do mesmo SKU de uma vez.
+                         Util pra atacados em lote — 1 venda, N unidades esgotadas */}
+                    {!mostrarIgnorados && (() => {
+                      const skuAlvo = typeof inc.detalhes.sku === "string" ? inc.detalhes.sku
+                        : typeof inc.detalhes.estoque_sku === "string" ? inc.detalhes.estoque_sku
+                        : null;
+                      if (!skuAlvo) return null;
+                      const iguais = (inconsistencias || []).filter((i) => {
+                        const sku = typeof i.detalhes.sku === "string" ? i.detalhes.sku
+                          : typeof i.detalhes.estoque_sku === "string" ? i.detalhes.estoque_sku
+                          : null;
+                        return sku === skuAlvo && !ignorados.has(keyIgnorar(i));
+                      });
+                      if (iguais.length <= 1) return null;
+                      return (
+                        <button
+                          onClick={() => ignorarTodosDoMesmoSku(inc)}
+                          className="text-xs px-2 py-1 rounded border border-[#D2D2D7] text-[#86868B] hover:border-red-300 hover:text-red-600 text-center transition-colors"
+                          title={`Ignora todos os ${iguais.length} alertas com mesmo SKU (${skuAlvo}) — util pra atacados em lote`}
+                        >
+                          🙈×{iguais.length}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
