@@ -34,20 +34,27 @@ function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
 }
 
-// Hipotese automatica — cruzamento heuristico pra classificar sumicos
-// segundo a causa mais provavel. Permite o admin agir rapido sem abrir cada
-// caso pra investigar manualmente.
+// Hipotese automatica — cruzamento heuristico pra classificar sumicos e
+// vendas sem baixa segundo a causa mais provavel. Permite o admin agir rapido
+// sem abrir cada caso pra investigar manualmente.
 interface Hipotese {
   // Tipo da hipotese:
-  //   serial_match    — achou venda com mesmo serial/imei (match certeiro)
-  //   atacado_proximo — achou venda atacado com mesmo SKU em data proxima
-  //   venda_nao_vinculada — venda com mesmo SKU, proxima, mas sem estoque_id
-  //   brinde_proximo  — venda brinde com mesmo SKU em data proxima
-  //   nenhuma         — nada encontrado, investigar
-  tipo: "serial_match" | "atacado_proximo" | "venda_nao_vinculada" | "brinde_proximo" | "nenhuma";
+  //   serial_match           — achou contraparte com mesmo serial/imei (match certeiro)
+  //   atacado_proximo        — achou venda atacado com mesmo SKU em data proxima
+  //   venda_nao_vinculada    — venda com mesmo SKU, proxima, mas sem estoque_id
+  //   brinde_proximo         — venda brinde com mesmo SKU em data proxima
+  //   lote_presumido         — 3+ sumicos iguais (mesmo SKU, data proxima) = atacado provavel
+  //   estoque_disponivel     — (VENDA_SEM_ESTOQUE) item com mesmo SKU existe EM ESTOQUE
+  //   estoque_esgotado       — (VENDA_SEM_ESTOQUE) item com mesmo SKU existe ESGOTADO
+  //   nenhuma                — nada encontrado, investigar
+  tipo: "serial_match" | "atacado_proximo" | "venda_nao_vinculada"
+    | "brinde_proximo" | "lote_presumido"
+    | "estoque_disponivel" | "estoque_esgotado"
+    | "nenhuma";
   confianca: "alta" | "media" | "baixa";
   descricao: string;
   venda_id?: string;
+  estoque_id?: string;    // usado em VENDA_SEM_ESTOQUE pra sugerir vinculo reverso
   cliente?: string;
   data_venda?: string;
 }
@@ -141,6 +148,30 @@ export async function GET(req: NextRequest) {
       const vinculados = new Set((vendasVinculadas || []).map((v) => v.estoque_id));
 
       const sumicos = esgotados.filter((e) => !vinculados.has(e.id));
+
+      // Heuristica "lote presumido": 3+ sumicos do mesmo SKU em ate 7 dias entre
+      // si = provavel atacado em lote. Muito provavelmente e uma venda que o
+      // admin registrou uma vez mas o estoque tem varias unidades marcadas
+      // ESGOTADO (ou 1 venda pro lojista com multiplas unidades).
+      const sumicosPorSku = new Map<string, typeof sumicos>();
+      for (const s of sumicos) {
+        if (!s.sku) continue;
+        const lista = sumicosPorSku.get(s.sku) || [];
+        lista.push(s);
+        sumicosPorSku.set(s.sku, lista);
+      }
+      const lotePresumido = new Set<string>(); // ids de estoque que entram em lote
+      for (const [, lista] of sumicosPorSku) {
+        if (lista.length < 3) continue;
+        // Checa se estao em uma janela de 7 dias
+        const datas = lista.map((s) => s.updated_at?.slice(0, 10)).filter(Boolean).sort();
+        if (datas.length < 3) continue;
+        const primeiro = new Date(datas[0]!).getTime();
+        const ultimo = new Date(datas[datas.length - 1]!).getTime();
+        if ((ultimo - primeiro) / 86400000 <= 7) {
+          for (const s of lista) lotePresumido.add(s.id);
+        }
+      }
 
       // Cruzamento heuristico: pra cada sumico, tenta achar uma venda que
       // explique a saida. 3 estrategias em ordem de confianca decrescente:
@@ -261,7 +292,18 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // 4. Nada achado — possivel problema real
+        // 4. Lote presumido (3+ iguais em 7 dias, sem venda atacado explicita
+        // achada). Menos certeza que atacado_proximo, mas forte indicio.
+        if (!hipotese && lotePresumido.has(e.id)) {
+          const totalLote = sumicosPorSku.get(e.sku!)?.length || 0;
+          hipotese = {
+            tipo: "lote_presumido",
+            confianca: "media",
+            descricao: `${totalLote} unidades do mesmo SKU marcadas ESGOTADO em datas proximas — padrao classico de venda atacado em lote. Provavelmente pode ignorar.`,
+          };
+        }
+
+        // 5. Nada achado — possivel problema real
         if (!hipotese) {
           hipotese = {
             tipo: "nenhuma",
@@ -271,10 +313,10 @@ export async function GET(req: NextRequest) {
         }
 
         // Severidade: se achou venda pra vincular, e media (acao simples).
-        // Se atacado/brinde, e baixa (legitimo). Se nao achou nada, alta.
+        // Se atacado/brinde/lote, e baixa (legitimo). Se nao achou nada, alta.
         const severidadeHipotese = hipotese.tipo === "serial_match" || hipotese.tipo === "venda_nao_vinculada"
           ? "media"
-          : hipotese.tipo === "atacado_proximo" || hipotese.tipo === "brinde_proximo"
+          : hipotese.tipo === "atacado_proximo" || hipotese.tipo === "brinde_proximo" || hipotese.tipo === "lote_presumido"
           ? "baixa"
           : "alta";
 
@@ -310,13 +352,108 @@ export async function GET(req: NextRequest) {
       .neq("status_pagamento", "FORMULARIO_PREENCHIDO"); // formulario preenchido ainda nao foi processado
 
     if (vendasSemEstoque && vendasSemEstoque.length > 0) {
-      for (const v of vendasSemEstoque) {
-        // Se tem serial ou imei, provavelmente e aparelho rastreavel que deveria
-        // estar vinculado. Sem serial/imei (ex: AirPods unitarios), nao alerta.
-        if (!v.serial_no && !v.imei) continue;
+      const vendasAlvo = vendasSemEstoque.filter((v) => v.serial_no || v.imei);
+
+      // Cruzamento heuristico pra auto-classificar vendas sem baixa:
+      //   1. Serial/IMEI bate com algum item de estoque → basta vincular
+      //   2. SKU bate com item em estoque (EM ESTOQUE) → pode ser este item
+      //   3. SKU bate com item ESGOTADO → pode ser que ja foi dado baixa
+      //      em outra venda (nao vincular, alertar dupla contagem)
+      //
+      // Carrega estoque candidato em 1 query — filtra por SKU/serial/imei.
+      const skusVendas = [...new Set(vendasAlvo.map((v) => v.sku).filter(Boolean) as string[])];
+      const seriaisVendas = [...new Set(vendasAlvo.map((v) => v.serial_no).filter(Boolean) as string[])];
+      const imeisVendas = [...new Set(vendasAlvo.map((v) => v.imei).filter(Boolean) as string[])];
+
+      let estoqueCandidato: Array<{
+        id: string; produto: string; sku: string | null;
+        serial_no: string | null; imei: string | null; status: string | null;
+      }> = [];
+      if (skusVendas.length > 0 || seriaisVendas.length > 0 || imeisVendas.length > 0) {
+        const filtros: string[] = [];
+        if (skusVendas.length > 0) filtros.push(`sku.in.(${skusVendas.map((s) => `"${s}"`).join(",")})`);
+        if (seriaisVendas.length > 0) filtros.push(`serial_no.in.(${seriaisVendas.map((s) => `"${s}"`).join(",")})`);
+        if (imeisVendas.length > 0) filtros.push(`imei.in.(${imeisVendas.map((i) => `"${i}"`).join(",")})`);
+
+        const { data } = await supabase
+          .from("estoque")
+          .select("id, produto, sku, serial_no, imei, status")
+          .or(filtros.join(","));
+        estoqueCandidato = data || [];
+      }
+
+      for (const v of vendasAlvo) {
+        let hipotese: Hipotese | undefined;
+
+        // 1. Serial/IMEI match — confianca alta
+        const matchSerial = estoqueCandidato.find((e) => {
+          if (v.serial_no && e.serial_no && v.serial_no.toUpperCase() === e.serial_no.toUpperCase()) return true;
+          if (v.imei && e.imei && v.imei === e.imei) return true;
+          return false;
+        });
+        if (matchSerial) {
+          // Se item ta em estoque — vincula pra marcar saida
+          if (matchSerial.status === "EM ESTOQUE" || matchSerial.status === "PENDENTE") {
+            hipotese = {
+              tipo: "serial_match",
+              confianca: "alta",
+              descricao: `Item com mesmo ${v.serial_no ? "serial" : "IMEI"} existe no estoque (status: ${matchSerial.status}). Vincular da baixa automaticamente.`,
+              estoque_id: matchSerial.id,
+            };
+          } else if (matchSerial.status === "ESGOTADO") {
+            // Item ja esta esgotado — serial bate, provavelmente e a mesma unidade
+            // mas o vinculo ficou solto. Vincular corrige.
+            hipotese = {
+              tipo: "serial_match",
+              confianca: "alta",
+              descricao: `Item com mesmo ${v.serial_no ? "serial" : "IMEI"} existe no estoque (ja ESGOTADO). Vincular fecha o circuito.`,
+              estoque_id: matchSerial.id,
+            };
+          }
+        }
+
+        // 2. SKU match — confianca media
+        if (!hipotese && v.sku) {
+          // Prefere item EM ESTOQUE (disponivel); se nao achar, considera ESGOTADO
+          const emEstoque = estoqueCandidato.find((e) => e.sku === v.sku && e.status === "EM ESTOQUE");
+          const esgotado = estoqueCandidato.find((e) => e.sku === v.sku && e.status === "ESGOTADO");
+          if (emEstoque) {
+            hipotese = {
+              tipo: "estoque_disponivel",
+              confianca: "media",
+              descricao: `Ha item com mesmo SKU no estoque (disponivel). Pode ser este — verifica serial/IMEI antes de vincular.`,
+              estoque_id: emEstoque.id,
+            };
+          } else if (esgotado) {
+            hipotese = {
+              tipo: "estoque_esgotado",
+              confianca: "baixa",
+              descricao: `Ha item com mesmo SKU ja ESGOTADO. Pode ser dupla contagem (outra venda ja deu baixa) — investigar antes de vincular.`,
+              estoque_id: esgotado.id,
+            };
+          }
+        }
+
+        // 3. Nada encontrado
+        if (!hipotese) {
+          hipotese = {
+            tipo: "nenhuma",
+            confianca: "baixa",
+            descricao: "Nao achei item correspondente no estoque. Item pode ter sido importado direto, nao cadastrado, ou deletado.",
+          };
+        }
+
+        const severidadeV = hipotese.tipo === "serial_match"
+          ? "media"
+          : hipotese.tipo === "estoque_disponivel"
+          ? "media"
+          : hipotese.tipo === "estoque_esgotado"
+          ? "alta" // dupla contagem = perigoso
+          : "media";
+
         resultados.push({
           tipo: "VENDA_SEM_ESTOQUE",
-          severidade: "media",
+          severidade: severidadeV,
           descricao: "Venda registrada sem vincular item do estoque",
           produto: v.produto,
           detalhes: {
@@ -327,7 +464,8 @@ export async function GET(req: NextRequest) {
             imei: v.imei,
             preco: Number(v.preco_vendido || 0),
           },
-          ids: { venda_id: v.id },
+          ids: { venda_id: v.id, ...(hipotese.estoque_id ? { estoque_id: hipotese.estoque_id } : {}) },
+          hipotese,
         });
       }
     }

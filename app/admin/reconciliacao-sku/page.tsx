@@ -14,13 +14,18 @@ const fmt = (v: number | null | undefined) =>
 
 type Severidade = "alta" | "media" | "baixa";
 type TipoInc = "SKU_DIVERGENTE_PERSISTIDO" | "ESGOTADO_SEM_VENDA" | "VENDA_SEM_ESTOQUE";
-type TipoHipotese = "serial_match" | "atacado_proximo" | "venda_nao_vinculada" | "brinde_proximo" | "nenhuma";
+type TipoHipotese =
+  | "serial_match" | "atacado_proximo" | "venda_nao_vinculada"
+  | "brinde_proximo" | "lote_presumido"
+  | "estoque_disponivel" | "estoque_esgotado"
+  | "nenhuma";
 
 interface Hipotese {
   tipo: TipoHipotese;
   confianca: "alta" | "media" | "baixa";
   descricao: string;
   venda_id?: string;
+  estoque_id?: string;
   cliente?: string;
   data_venda?: string;
 }
@@ -45,7 +50,7 @@ interface Resumo {
 // Visualizacao das hipoteses — badge colorido + dica contextual.
 const HIPOTESE_LABEL: Record<TipoHipotese, { titulo: string; cor: string; bg: string; border: string }> = {
   serial_match: {
-    titulo: "Venda encontrada (serial bate)",
+    titulo: "Serial/IMEI bate — basta vincular",
     cor: "text-green-800",
     bg: "bg-green-50",
     border: "border-green-300",
@@ -56,8 +61,26 @@ const HIPOTESE_LABEL: Record<TipoHipotese, { titulo: string; cor: string; bg: st
     bg: "bg-blue-50",
     border: "border-blue-300",
   },
+  estoque_disponivel: {
+    titulo: "Item disponivel no estoque",
+    cor: "text-blue-800",
+    bg: "bg-blue-50",
+    border: "border-blue-300",
+  },
+  estoque_esgotado: {
+    titulo: "Item ja ESGOTADO — possivel dupla contagem",
+    cor: "text-orange-800",
+    bg: "bg-orange-50",
+    border: "border-orange-300",
+  },
   atacado_proximo: {
-    titulo: "Atacado (lote)",
+    titulo: "Atacado (venda achada)",
+    cor: "text-purple-800",
+    bg: "bg-purple-50",
+    border: "border-purple-300",
+  },
+  lote_presumido: {
+    titulo: "Lote atacado presumido",
     cor: "text-purple-800",
     bg: "bg-purple-50",
     border: "border-purple-300",
@@ -181,14 +204,29 @@ export default function ReconciliacaoSkuPage() {
     } catch {}
   };
 
-  // Vincula venda-estoque baseado na hipotese. Usa quando a hipotese tem
-  // venda_id e o admin confirma. Seta venda.estoque_id = estoque_id, o que
-  // resolve o sumi\u00e7o (venda fica com baixa, estoque deixa de estar orfao).
+  // Helpers pra extrair venda_id/estoque_id de uma inconsistencia com hipotese.
+  // Funciona pros 2 casos:
+  //   ESGOTADO_SEM_VENDA: ids.estoque_id fixo + hipotese.venda_id sugerido
+  //   VENDA_SEM_ESTOQUE: ids.venda_id fixo + hipotese.estoque_id sugerido
+  const getParVincular = (inc: Inconsistencia): { venda_id: string; estoque_id: string } | null => {
+    if (!inc.hipotese) return null;
+    const venda_id = inc.ids.venda_id || inc.hipotese.venda_id;
+    const estoque_id = inc.ids.estoque_id || inc.hipotese.estoque_id;
+    if (!venda_id || !estoque_id) return null;
+    return { venda_id, estoque_id };
+  };
+
+  // Vincula venda-estoque baseado na hipotese. Seta venda.estoque_id=estoque_id
+  // o que resolve tanto o sumi\u00e7o (ESGOTADO sem venda) quanto a venda sem baixa.
   const vincularVendaEstoque = async (inc: Inconsistencia) => {
-    if (!password || !inc.hipotese?.venda_id || !inc.ids.estoque_id) return;
-    const h = inc.hipotese;
-    const msg = `Vincular esta venda de ${h.cliente || "?"} (${h.data_venda || "?"}) ao item de estoque?\n\nIsso resolve o sumi\u00e7o — a venda passa a ter baixa no estoque.`;
-    if (!confirm(msg)) return;
+    if (!password) return;
+    const par = getParVincular(inc);
+    if (!par) return;
+    const h = inc.hipotese!;
+    const contexto = inc.tipo === "ESGOTADO_SEM_VENDA"
+      ? `Vincular venda de ${h.cliente || "?"} (${h.data_venda || "?"}) ao item de estoque?\n\nResolve o sumi\u00e7o — a venda passa a ter baixa.`
+      : `Vincular esta venda ao item do estoque (${HIPOTESE_LABEL[h.tipo].titulo})?\n\nResolve a venda sem baixa — estoque vai marcar o item como esgotado.`;
+    if (!confirm(contexto)) return;
     setVinculandoAuto(true);
     setSyncMsg(null);
     try {
@@ -197,7 +235,7 @@ export default function ReconciliacaoSkuPage() {
         headers: { "Content-Type": "application/json", "x-admin-password": password },
         body: JSON.stringify({
           action: "vincular_venda_estoque",
-          pares: [{ venda_id: h.venda_id, estoque_id: inc.ids.estoque_id }],
+          pares: [par],
         }),
       });
       const json = await res.json();
@@ -215,32 +253,36 @@ export default function ReconciliacaoSkuPage() {
     }
   };
 
-  // Vincula automaticamente TODOS os sumicos que tem hipotese de alta ou media
-  // confianca (serial_match / venda_nao_vinculada). Acao em massa — util pra
-  // resolver muitos sumicos de uma vez depois do auto-classify.
+  // Tipos de hipotese que representam "alta/media certeza de vinculo" — usado
+  // pros botoes de auto-vincular (evita vincular casos duvidosos).
+  const hipotesesVinculaveis = new Set<TipoHipotese>([
+    "serial_match",
+    "venda_nao_vinculada",
+    "estoque_disponivel",
+  ]);
+
+  // Vincula automaticamente TODOS os alertas (sumicos + vendas sem baixa)
+  // com hipotese vinculavel. Acao em massa — um clique resolve varios casos.
   const vincularTodosAuto = async () => {
     if (!password) return;
     const alvos = (inconsistencias || []).filter(
-      (i) => i.tipo === "ESGOTADO_SEM_VENDA"
-        && !ignorados.has(keyIgnorar(i))
-        && i.hipotese?.venda_id
-        && (i.hipotese.tipo === "serial_match" || i.hipotese.tipo === "venda_nao_vinculada"),
+      (i) => !ignorados.has(keyIgnorar(i))
+        && i.hipotese
+        && hipotesesVinculaveis.has(i.hipotese.tipo)
+        && getParVincular(i),
     );
     if (alvos.length === 0) {
-      setSyncMsg("Nenhum sumi\u00e7o com hipotese de alta/media confianca pra vincular");
+      setSyncMsg("Nenhum alerta com hipotese vinculavel");
       return;
     }
-    const msg = `Vincular ${alvos.length} sumicos de uma vez?\n\n`
-      + `Cada um tem uma venda identificada por serial/IMEI ou SKU+data. `
-      + `Vincula todos — casos duvidosos (atacado, brinde, sem pista) ficam de fora.`;
+    const msg = `Vincular ${alvos.length} alertas de uma vez?\n\n`
+      + `Cada um tem contraparte identificada (serial/IMEI match ou SKU disponivel no estoque). `
+      + `Vincula todos — casos duvidosos (atacado, brinde, dupla contagem, sem pista) ficam de fora.`;
     if (!confirm(msg)) return;
     setVinculandoAuto(true);
     setSyncMsg(null);
     try {
-      const pares = alvos.map((i) => ({
-        venda_id: i.hipotese!.venda_id!,
-        estoque_id: i.ids.estoque_id!,
-      }));
+      const pares = alvos.map((i) => getParVincular(i)!).filter(Boolean);
       const res = await fetch("/api/admin/sku/reconciliacao", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": password },
@@ -428,10 +470,10 @@ export default function ReconciliacaoSkuPage() {
           </button>
           {(() => {
             const autoVinc = (inconsistencias || []).filter(
-              (i) => i.tipo === "ESGOTADO_SEM_VENDA"
-                && !ignorados.has(keyIgnorar(i))
-                && i.hipotese?.venda_id
-                && (i.hipotese.tipo === "serial_match" || i.hipotese.tipo === "venda_nao_vinculada"),
+              (i) => !ignorados.has(keyIgnorar(i))
+                && i.hipotese
+                && hipotesesVinculaveis.has(i.hipotese.tipo)
+                && getParVincular(i),
             );
             if (autoVinc.length === 0) return null;
             return (
@@ -439,9 +481,9 @@ export default function ReconciliacaoSkuPage() {
                 onClick={vincularTodosAuto}
                 disabled={vinculandoAuto}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title={`Vincula automaticamente ${autoVinc.length} sumi\u00e7os onde achei venda correspondente por serial/IMEI ou SKU+data. Nao toca em casos duvidosos.`}
+                title={`Vincula automaticamente ${autoVinc.length} alertas (sumi\u00e7os + vendas sem baixa) onde achei contraparte por serial/IMEI ou SKU. Nao toca em casos duvidosos.`}
               >
-                {vinculandoAuto ? "Vinculando…" : `\u2705 Auto-vincular ${autoVinc.length} sumi\u00e7os`}
+                {vinculandoAuto ? "Vinculando…" : `\u2705 Auto-vincular ${autoVinc.length} alertas`}
               </button>
             );
           })()}
@@ -626,19 +668,20 @@ export default function ReconciliacaoSkuPage() {
                         Ver venda
                       </a>
                     )}
-                    {/* Botao de vincular — so aparece pra sumicos com hipotese
-                         de alta/media confianca (serial_match ou venda_nao_vinculada)
-                         que teem venda_id identificada */}
-                    {inc.tipo === "ESGOTADO_SEM_VENDA"
-                      && inc.hipotese?.venda_id
-                      && inc.ids.estoque_id
-                      && (inc.hipotese.tipo === "serial_match" || inc.hipotese.tipo === "venda_nao_vinculada")
+                    {/* Botao de vincular — aparece em sumi\u00e7os E vendas sem baixa
+                         quando a hipotese indica contraparte vinculavel (serial match
+                         ou SKU disponivel no estoque). Um clique resolve ambos os casos. */}
+                    {inc.hipotese
+                      && hipotesesVinculaveis.has(inc.hipotese.tipo)
+                      && getParVincular(inc)
                       && !mostrarIgnorados && (
                       <button
                         onClick={() => vincularVendaEstoque(inc)}
                         disabled={vinculandoAuto}
                         className="text-xs px-2 py-1 rounded border border-green-400 bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
-                        title={`Vincula a venda ao item — resolve o sumi\u00e7o de uma vez`}
+                        title={inc.tipo === "ESGOTADO_SEM_VENDA"
+                          ? "Vincula a venda ao item — resolve o sumi\u00e7o"
+                          : "Vincula esta venda ao item do estoque — resolve a venda sem baixa"}
                       >
                         \u2705 Vincular
                       </button>
