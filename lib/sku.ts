@@ -107,6 +107,47 @@ function corParaSku(cor: string | null | undefined): string | null {
   return slugify(ptRaw);
 }
 
+// Quando o input.cor vem vazio mas o texto do produto contem uma cor
+// conhecida (ex: "APPLE WATCH SERIES 11 GPS 46MM PRATA"), tenta extrair.
+// Isso cobre casos onde o frontend envia o nome do produto ja com a cor
+// concatenada mas nao populou o campo cor separadamente — comum no fluxo
+// de formularios preenchidos pelo cliente.
+//
+// Estrategia conservadora: so retorna uma cor se encontrar match exato
+// (ignorando case/acento) com alguma cor conhecida no final do texto.
+// Evita falsos positivos como "BLACK" dentro de "BLACKBIRD" etc.
+const CORES_CONHECIDAS_PT = [
+  "TITANIO PRETO", "TITANIO NATURAL", "TITANIO AZUL", "TITANIO BRANCO",
+  "TITANIO DESERTO", "TITANIO PRATA",
+  "AZUL CEU", "AZUL NEVOA", "AZUL PROFUNDO", "AZUL PACIFICO", "AZUL SIERRA",
+  "PRETO ESPACIAL", "PRETO ONYX",
+  "VERDE ALPINO", "VERDE MEIANOITE",
+  "ROXO PROFUNDO",
+  "LARANJA COSMICO",
+  "DOURADO CLARO",
+  "MEIANOITE", "ESTELAR", "GRAFITE", "ARDOSIA",
+  "PRETO", "BRANCO", "AZUL", "VERDE", "ROXO", "ROSA", "AMARELO",
+  "VERMELHO", "LARANJA", "DOURADO", "CINZA",
+  "PRATA", "PRATEADO", "PRATEADA",
+  "LAVANDA", "TEAL", "SAGE", "INDIGO", "ULTRAMARINO", "BLUSH", "CITRUS",
+  "NATURAL",
+];
+
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function inferirCorDoTexto(texto: string): string | null {
+  const normalizado = stripAccents(upper(texto)).replace(/-/g, " ");
+  // Ordena por tamanho desc pra casar "TITANIO PRETO" antes de "PRETO"
+  const ordenadas = [...CORES_CONHECIDAS_PT].sort((a, b) => b.length - a.length);
+  for (const cor of ordenadas) {
+    const reWord = new RegExp(`\\b${cor.replace(/\s/g, "\\s+")}\\b`);
+    if (reWord.test(normalizado)) return cor;
+  }
+  return null;
+}
+
 // ─── Detectar variante de modelo (iPhone Pro / Plus / Max / Air / e) ──
 
 function extrairModeloIphone(texto: string): string | null {
@@ -203,7 +244,13 @@ export interface SkuResult {
 export function gerarSku(produto: ProdutoInput): SkuResult {
   const texto = [produto.produto, produto.observacao].filter(Boolean).join(" ");
   const cat = upper(produto.categoria);
-  const corSku = corParaSku(produto.cor);
+  // Cor: usa a explicitamente passada; senao tenta inferir do texto livre
+  // (cobre caso onde frontend envia cor concatenada no nome do produto).
+  let corSku = corParaSku(produto.cor);
+  if (!corSku) {
+    const corInferida = inferirCorDoTexto(texto);
+    if (corInferida) corSku = corParaSku(corInferida);
+  }
   const isSeminovo = upper(produto.tipo) === "SEMINOVO";
   const sfx = isSeminovo ? "-SEMINOVO" : "";
 
