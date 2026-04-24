@@ -226,7 +226,11 @@ export function getModeloBase(produto: string, categoria: string, observacao?: s
   const p = (produto || "").toUpperCase().trim();
   let baseCat = getBaseCat(categoria || "");
   if (!baseCat || !["IPHONES","IPADS","MACBOOK","MAC_MINI","APPLE_WATCH","AIRPODS","ACESSORIOS"].includes(baseCat)) {
-    if (/\bIPHONE\b/.test(p)) baseCat = "IPHONES";
+    // ACESSORIOS ANTES de IPAD/IPHONE/etc — senao "Magic Keyboard iPad Pro M4"
+    // cai em IPADS (porque tem "IPAD" no nome) e vira "iPad Pro M4" no display,
+    // escondendo que e um acessorio. Lista cobre os acessorios Apple comuns.
+    if (/\bMAGIC\s*(KEYBOARD|MOUSE|TRACKPAD)\b|\bAPPLE\s*PENCIL\b|\bCARREGADOR\b|\bCAPA\b|\bCASE\b|\bCABO\b|\bFONTE\b|\bPELICULA\b|\bP[EÉ]LICULA\b|\bADAPTADOR\b|\bHUB\b|\bPULSEIRA\b|\bSMART\s*FOLIO\b/.test(p)) baseCat = "ACESSORIOS";
+    else if (/\bIPHONE\b/.test(p)) baseCat = "IPHONES";
     else if (/\bIPAD\b/.test(p)) baseCat = "IPADS";
     else if (/\bMACBOOK\b/.test(p)) baseCat = "MACBOOK";
     else if (/\bMAC\s*MINI\b/.test(p)) baseCat = "MAC_MINI";
