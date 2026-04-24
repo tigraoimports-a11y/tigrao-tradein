@@ -593,47 +593,81 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
 
       {model && !isExcluded && storages.length > 1 && (
         deviceType === "macbook" ? (
-          // MacBook: agrupar por RAM e mostrar SSD separado
+          // MacBook: aceitar tanto o formato antigo "256GB/8GB" (ssd/ram) quanto
+          // o novo "13\" | 8GB | 256GB" (tela | ram | ssd, vindo de /admin/usados).
+          // Renderiza steps sequenciais: tela (se tiver) → RAM → SSD — o cliente
+          // escolhe cada dimensao separadamente em vez de um botao por combinacao.
           (() => {
-            // storages são tipo "256GB/8GB", "512GB/8GB", "256GB/16GB" etc.
-            const parsed = storages.map(s => {
-              const parts = s.split("/");
-              const ssd = parts[0] || s;
-              const ram = parts[1] || "";
-              return { raw: s, ssd, ram };
-            });
-            // Agrupar por RAM
-            const byRam: Record<string, typeof parsed> = {};
-            for (const p of parsed) {
-              const key = p.ram || "default";
-              if (!byRam[key]) byRam[key] = [];
-              byRam[key].push(p);
-            }
-            const ramGroups = Object.entries(byRam).sort(([a], [b]) => {
-              const na = parseInt(a) || 0;
-              const nb = parseInt(b) || 0;
-              return na - nb;
-            });
+            const parseMac = (raw: string): { raw: string; tela: string; ram: string; ssd: string } => {
+              if (raw.includes("|")) {
+                // Formato novo do admin: "tela | ram | ssd"
+                const [tela = "", ram = "", ssd = ""] = raw.split("|").map(p => p.trim());
+                return { raw, tela, ram, ssd };
+              }
+              if (raw.includes("/")) {
+                // Formato antigo: "ssd/ram" (ordem invertida, legado)
+                const [ssd = "", ram = ""] = raw.split("/").map(p => p.trim());
+                return { raw, tela: "", ram, ssd };
+              }
+              // Sem separador: storage unico (pode ser so ssd)
+              return { raw, tela: "", ram: "", ssd: raw };
+            };
+            const specs = storages.map(parseMac);
+            const current = storage ? parseMac(storage) : { raw: "", tela: "", ram: "", ssd: "" };
+            const sortCapacidade = (a: string, b: string) => (parseInt(a) || 0) - (parseInt(b) || 0);
+            const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
+
+            const telaOpts = uniq(specs.map(s => s.tela));
+            const afterTela = specs.filter(s => !current.tela || s.tela === current.tela);
+            const ramOpts = uniq(afterTela.map(s => s.ram)).sort(sortCapacidade);
+            const afterRam = afterTela.filter(s => !current.ram || s.ram === current.ram);
+            const ssdOpts = uniq(afterRam.map(s => s.ssd)).sort(sortCapacidade);
+
+            const pickMac = (tela: string, ram: string, ssd: string) => {
+              const match = specs.find(s =>
+                (!tela || s.tela === tela) &&
+                (!ram || s.ram === ram) &&
+                (!ssd || s.ssd === ssd)
+              );
+              if (match) { setStorage(match.raw); tq("storage"); }
+            };
+
             return (
-              <Section title="Qual a configuracao do seu MacBook?">
-                <div className="space-y-4">
-                  {ramGroups.map(([ram, items]) => (
-                    <div key={ram}>
-                      {ram && ram !== "default" && ramGroups.length > 1 && (
-                        <p className="text-[13px] font-semibold mb-2 text-center" style={{ color: "var(--ti-text)" }}>{ram} RAM</p>
-                      )}
-                      <div className={`grid gap-2 ${items.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
-                        {items.map(({ raw, ssd, ram: r }) => (
-                          <Btn key={raw} sel={storage === raw} onClick={() => { setStorage(raw); tq("storage"); }}
-                            className="w-full text-center">
-                            {r ? <><span className="block font-bold">{r} RAM</span><span className="block text-[12px] opacity-80">{ssd} SSD</span></> : ssd}
-                          </Btn>
-                        ))}
-                      </div>
+              <>
+                {telaOpts.length > 1 && (
+                  <Section title="Tamanho da tela">
+                    <div className={`grid gap-2 ${telaOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {telaOpts.map(t => (
+                        <Btn key={t} sel={current.tela === t}
+                          onClick={() => pickMac(t, "", "")}
+                          className="w-full text-center">{t}</Btn>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </Section>
+                  </Section>
+                )}
+                {(telaOpts.length <= 1 || current.tela) && ramOpts.length > 0 && (
+                  <Section title="Memoria RAM">
+                    <div className={`grid gap-2 ${ramOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {ramOpts.map(r => (
+                        <Btn key={r} sel={current.ram === r}
+                          onClick={() => pickMac(current.tela, r, "")}
+                          className="w-full text-center">{r}</Btn>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+                {(ramOpts.length === 0 || current.ram) && ssdOpts.length > 0 && (
+                  <Section title="Armazenamento SSD">
+                    <div className={`grid gap-2 ${ssdOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {ssdOpts.map(s => (
+                        <Btn key={s} sel={current.ssd === s}
+                          onClick={() => pickMac(current.tela, current.ram, s)}
+                          className="w-full text-center">{s}</Btn>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+              </>
             );
           })()
         ) : storages.some(hasStructuredStorage) ? (
