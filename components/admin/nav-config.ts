@@ -40,6 +40,7 @@ export const NAV: NavEntry[] = [
       { href: "/admin/recebiveis", label: "Recebiveis", icon: "\u{1F4B3}", pageKey: "recebiveis" },
       { href: "/admin/conciliacao", label: "Conciliacao", icon: "\u{1F50D}", pageKey: "conciliacao" },
       { href: "/admin/auditoria", label: "Auditoria", icon: "📋", pageKey: "saldos" },
+      { href: "/admin/reconciliacao-sku", label: "Reconciliação SKU", icon: "\u{1F501}", pageKey: "saldos" },
       { href: "/admin/trocas", label: "Trocas", icon: "\u{1F504}", pageKey: "trocas" },
     ],
   },
@@ -49,6 +50,7 @@ export const NAV: NavEntry[] = [
     label: "Produtos", icon: "\u{1F4E6}",
     items: [
       { href: "/admin/estoque", label: "Estoque", icon: "\u{1F4E6}", pageKey: "estoque" },
+      { href: "/admin/comprar-urgente", label: "Comprar Urgente", icon: "\u{1F6A8}", pageKey: "estoque" },
       { href: "/admin/produtos-funcionarios", label: "Produtos c/ Funcionários", icon: "\u{1F465}", pageKey: "produtos_funcionarios" },
       { href: "/admin/etiquetas", label: "Etiquetas", icon: "\u{1F3F7}\uFE0F", pageKey: "etiquetas" },
       { href: "/admin/etiquetas-preco", label: "Etiquetas de Preco", icon: "\u{1F4B0}", pageKey: "etiquetas_preco" },
