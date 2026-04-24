@@ -380,6 +380,24 @@ export interface SkuComponents {
   seminovo: boolean;
 }
 
+// Detecta se um segmento e uma "spec" (storage, chip, tela, tamanho watch,
+// conectividade). Modelo do SKU termina quando encontra a primeira spec.
+// Cobre:
+//   - Storage: 64GB, 128GB, 256GB, 512GB, 1TB, 2TB
+//   - Chip Apple: M1, M2, M3, M4, M5, M4-PRO, M4-MAX, M5-ULTRA
+//   - Tamanho watch: 40MM, 42MM, 44MM, 45MM, 46MM, 49MM
+//   - Tela MacBook/iPad: 11, 13, 14, 15, 16 (sozinho, 10-17)
+//   - Conectividade: GPS, GPSCEL, WIFI, CELL
+//   - Recurso: ANC (airpods)
+function isSpecSegment(s: string): boolean {
+  if (/^\d+(GB|TB)$/.test(s)) return true;
+  if (/^\d+MM$/.test(s)) return true;
+  if (/^M\d+(-PRO|-MAX|-ULTRA|-PROMAX)?$/.test(s)) return true;
+  if (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) return true;
+  if (s === "GPS" || s === "GPSCEL" || s === "WIFI" || s === "CELL" || s === "ANC") return true;
+  return false;
+}
+
 export function parseSku(sku: string): SkuComponents | null {
   if (!sku || !sku.trim()) return null;
   const partes = sku.toUpperCase().trim().split("-");
@@ -389,11 +407,26 @@ export function parseSku(sku: string): SkuComponents | null {
   const partesLimpas = seminovo ? partes.slice(0, -1) : partes;
   const categoria = partesLimpas[0];
 
+  // Modelo = do primeiro segmento ate ANTES da primeira "spec" conhecida.
+  // Cobre variantes com N segmentos: IPHONE-17-PRO-MAX, IPHONE-17-AIR,
+  // MACBOOK-AIR-M5, IPAD-PRO-M4, WATCH-ULTRA-2, AIRPODS-PRO-2, etc.
+  // Antes: slice(0, 2) fixo quebrava pra todos esses e mandava a variante
+  // pro bucket de specs/cor.
+  let modeloFim = partesLimpas.length;
+  for (let i = 1; i < partesLimpas.length; i++) {
+    if (isSpecSegment(partesLimpas[i])) {
+      modeloFim = i;
+      break;
+    }
+  }
+  // Minimo 2 segmentos no modelo (categoria + 1 qualquer) pra nao colapsar.
+  if (modeloFim < 2) modeloFim = Math.min(2, partesLimpas.length);
+
   return {
     sku: sku.toUpperCase(),
     categoria,
-    modelo: partesLimpas.slice(0, 2).join("-"),
-    specs: partesLimpas.slice(2),
+    modelo: partesLimpas.slice(0, modeloFim).join("-"),
+    specs: partesLimpas.slice(modeloFim),
     cor: null, // simplificado — a extração reversa é heurística e nem sempre clara
     seminovo,
   };
