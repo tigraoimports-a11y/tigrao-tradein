@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { corParaPT } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
@@ -95,6 +95,37 @@ export default function OrcamentoPage() {
   const [parcelasSel, setParcelasSel] = useState<number[]>([12]);
   const [textoGerado, setTextoGerado] = useState("");
   const [copiado, setCopiado] = useState(false);
+  // Cliente — opcionais, usados pra (a) botao "Enviar WhatsApp" direto pro
+  // numero do cliente e (b) salvar no historico de orcamentos
+  const [clienteNome, setClienteNome] = useState("");
+  const [clienteTelefone, setClienteTelefone] = useState("");
+  // Aba do orcamento (Novo vs Historico)
+  const [aba, setAba] = useState<"novo" | "historico">("novo");
+  // Historico carregado do backend
+  interface OrcamentoHistorico {
+    id: string;
+    created_at: string;
+    vendedor: string | null;
+    tipo: "lacrado" | "seminovo";
+    cliente_nome: string | null;
+    cliente_telefone: string | null;
+    itens: Array<{ nome: string; preco: number; qnt?: number; categoria?: string }>;
+    trocas: Array<{ produto: string; valor: string }>;
+    valor_total: number;
+    desconto: number;
+    entrada: number;
+    parcelas_selecionadas: number[];
+    texto_gerado: string;
+    status: "ATIVO" | "VIROU_VENDA" | "PERDIDO" | "ARQUIVADO";
+    venda_id: string | null;
+    marcado_em: string | null;
+    observacao: string | null;
+  }
+  const [historico, setHistorico] = useState<OrcamentoHistorico[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histFiltroStatus, setHistFiltroStatus] = useState<"ATIVO" | "VIROU_VENDA" | "PERDIDO" | "ARQUIVADO" | "">("");
+  const [histFiltroVendedor, setHistFiltroVendedor] = useState("");
+  const [histBusca, setHistBusca] = useState("");
   const [carrinho, setCarrinho] = useState<{ key: string; id: string; nome: string; preco: number; categoria: string; qnt: number }[]>([]);
   // Array dinamico de produtos na troca — sem limite de quantidade.
   // Primeiro item sempre visivel (vazio se nao preenchido). Novos itens
@@ -418,11 +449,107 @@ export default function OrcamentoPage() {
     setCopiado(false);
   };
 
-  const copiar = () => {
+  // Helper: persiste o orcamento atual no historico (usado em copiar/enviar)
+  const salvarNoHistorico = async () => {
+    if (!password || !textoGerado) return;
+    try {
+      const totalVenda = carrinho.reduce((s, c) => s + c.preco * c.qnt, 0);
+      const semiPrecoNum = parseFloat(semiPreco) || 0;
+      const valorBase = carrinho.length > 0 ? totalVenda : semiPrecoNum;
+      const trocaTotal = trocas.reduce((s, t) => s + (parseFloat(t.valor) || 0), 0);
+      const descontoVal = parseFloat(desconto) || 0;
+      const valorTotal = Math.max(valorBase - trocaTotal - descontoVal, 0);
+
+      await fetch("/api/admin/orcamentos", {
+        method: "POST",
+        headers: {
+          "x-admin-password": password,
+          "x-admin-user": encodeURIComponent(user?.nome || "admin"),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tipo: tipoOrc,
+          cliente_nome: clienteNome.trim() || null,
+          cliente_telefone: clienteTelefone.replace(/\D/g, "") || null,
+          itens: carrinho.length > 0
+            ? carrinho.map(c => ({ nome: c.nome, preco: c.preco, qnt: c.qnt, categoria: c.categoria }))
+            : (semiSel ? [{ nome: semiSel.produto, preco: semiPrecoNum, qnt: 1, categoria: "SEMINOVO" }] : []),
+          trocas: trocas.filter(t => t.produto.trim() && parseFloat(t.valor) > 0),
+          desconto: descontoVal,
+          entrada: parseFloat(entrada) || 0,
+          parcelas_selecionadas: parcelasSel,
+          valor_total: valorTotal,
+          texto_gerado: textoGerado,
+        }),
+      });
+    } catch { /* nao bloqueia o copiar/enviar */ }
+  };
+
+  const copiar = async () => {
     navigator.clipboard.writeText(textoGerado);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 3000);
+    await salvarNoHistorico();
   };
+
+  // #14 — Envia direto pelo WhatsApp do cliente (se telefone preenchido)
+  // ou abre wa.me sem destinatario pra escolher contato
+  const enviarWhatsApp = async () => {
+    if (!textoGerado) return;
+    const telDigits = clienteTelefone.replace(/\D/g, "");
+    const target = telDigits.length >= 10
+      ? (telDigits.startsWith("55") ? telDigits : `55${telDigits}`)
+      : "";
+    const url = `https://wa.me/${target}?text=${encodeURIComponent(textoGerado)}`;
+    window.open(url, "_blank");
+    await salvarNoHistorico();
+  };
+
+  // Busca o historico (com filtros)
+  const fetchHistorico = useCallback(async () => {
+    if (!password) return;
+    setHistLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (histFiltroStatus) params.set("status", histFiltroStatus);
+      if (histFiltroVendedor) params.set("vendedor", histFiltroVendedor);
+      if (histBusca.trim()) params.set("q", histBusca.trim());
+      const res = await fetch(`/api/admin/orcamentos?${params}`, {
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "admin") },
+      });
+      if (res.ok) {
+        const j = await res.json();
+        setHistorico(j.data || []);
+      }
+    } catch { /* ignore */ }
+    setHistLoading(false);
+  }, [password, user, histFiltroStatus, histFiltroVendedor, histBusca]);
+
+  useEffect(() => {
+    if (aba === "historico") fetchHistorico();
+  }, [aba, fetchHistorico]);
+
+  // Helper pra atualizar status do orcamento (Virou venda / Perdido / Arquivar)
+  const updateOrcamentoStatus = async (id: string, status: OrcamentoHistorico["status"]) => {
+    if (!password) return;
+    await fetch("/api/admin/orcamentos", {
+      method: "PATCH",
+      headers: {
+        "x-admin-password": password,
+        "x-admin-user": encodeURIComponent(user?.nome || "admin"),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id, status }),
+    });
+    fetchHistorico();
+  };
+
+  // Lista unica de vendedores no historico (pro filtro)
+  const vendedoresNoHistorico = useMemo(() => {
+    const set = new Set<string>();
+    historico.forEach(h => { if (h.vendedor) set.add(h.vendedor); });
+    return Array.from(set).sort();
+  }, [historico]);
 
   // Auto gerar quando muda qualquer campo — cálculo reativo
   useEffect(() => {
@@ -440,6 +567,23 @@ export default function OrcamentoPage() {
       <h1 className={`text-xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Calculadora de Orçamento</h1>
       <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Gera texto pronto pra enviar pro cliente no WhatsApp</p>
 
+      {/* Abas — Novo orçamento / Histórico */}
+      <div className="flex gap-1 border-b border-[#D2D2D7]">
+        <button
+          onClick={() => setAba("novo")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${aba === "novo" ? "text-[#E8740E] border-b-2 border-[#E8740E]" : dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+        >
+          ➕ Novo orçamento
+        </button>
+        <button
+          onClick={() => setAba("historico")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${aba === "historico" ? "text-[#E8740E] border-b-2 border-[#E8740E]" : dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+        >
+          📚 Histórico
+        </button>
+      </div>
+
+      {aba === "novo" && (<>
       <div className={cardCls}>
         <div className="space-y-4">
           {/* Tipo: Lacrado / Seminovo */}
@@ -770,13 +914,51 @@ export default function OrcamentoPage() {
         <div className={cardCls}>
           <div className="flex items-center justify-between mb-3">
             <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Texto pronto:</p>
-            <button onClick={copiar} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${copiado ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}>
-              {copiado ? "✅ Copiado!" : "📋 Copiar"}
-            </button>
           </div>
+
+          {/* Cliente — opcional, usado pra WhatsApp direto + historico */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <input
+              type="text"
+              value={clienteNome}
+              onChange={e => setClienteNome(e.target.value)}
+              placeholder="Nome do cliente (opcional)"
+              className={inputCls}
+            />
+            <input
+              type="tel"
+              value={clienteTelefone}
+              onChange={e => setClienteTelefone(e.target.value)}
+              placeholder="(21) 99999-9999"
+              className={inputCls}
+            />
+          </div>
+
           <pre className={`whitespace-pre-wrap text-sm leading-relaxed p-4 rounded-xl ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"}`}>
             {textoGerado}
           </pre>
+
+          {/* Acoes — Copiar + Enviar WhatsApp */}
+          <div className="flex gap-2 mt-3">
+            <button onClick={copiar} className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${copiado ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}>
+              {copiado ? "✅ Copiado!" : "📋 Copiar texto"}
+            </button>
+            <button
+              onClick={enviarWhatsApp}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#25D366] text-white hover:bg-[#20BD5A] transition-colors flex items-center justify-center gap-1.5"
+              title={clienteTelefone ? `Abre WhatsApp do cliente (${clienteTelefone})` : "Abre WhatsApp pra escolher contato"}
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+              </svg>
+              Enviar WhatsApp
+            </button>
+          </div>
+          {!clienteTelefone && (
+            <p className="text-[10px] text-[#86868B] mt-2 text-center">
+              💡 Preencha o telefone pra enviar direto pro cliente. Sem telefone, abre o WhatsApp pra escolher.
+            </p>
+          )}
         </div>
       )}
 
@@ -800,6 +982,177 @@ export default function OrcamentoPage() {
                   <p className="text-xs font-bold">{n}x</p>
                   <p className="text-sm font-semibold">R$ {valorParcela.toLocaleString("pt-BR")}</p>
                 </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      </>)}
+
+      {/* ═══════ Aba Histórico ═══════ */}
+      {aba === "historico" && (
+        <div className={cardCls}>
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            <input
+              type="text"
+              value={histBusca}
+              onChange={e => setHistBusca(e.target.value)}
+              placeholder="🔍 Nome, telefone, produto..."
+              className={`${inputCls} flex-1 min-w-[200px]`}
+            />
+            <select
+              value={histFiltroStatus}
+              onChange={e => setHistFiltroStatus(e.target.value as "" | "ATIVO" | "VIROU_VENDA" | "PERDIDO" | "ARQUIVADO")}
+              className={inputCls}
+              style={{ maxWidth: 180 }}
+            >
+              <option value="">Todos status</option>
+              <option value="ATIVO">⏳ Ativo</option>
+              <option value="VIROU_VENDA">✅ Virou venda</option>
+              <option value="PERDIDO">❌ Perdido</option>
+              <option value="ARQUIVADO">📦 Arquivado</option>
+            </select>
+            <select
+              value={histFiltroVendedor}
+              onChange={e => setHistFiltroVendedor(e.target.value)}
+              className={inputCls}
+              style={{ maxWidth: 180 }}
+            >
+              <option value="">Todos vendedores</option>
+              {vendedoresNoHistorico.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <button
+              onClick={fetchHistorico}
+              className="px-3 py-2 rounded-xl text-sm bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20"
+            >🔄</button>
+          </div>
+
+          {/* KPIs rapidas */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            {(() => {
+              const total = historico.length;
+              const virouVenda = historico.filter(h => h.status === "VIROU_VENDA").length;
+              const perdido = historico.filter(h => h.status === "PERDIDO").length;
+              const taxa = total > 0 ? (virouVenda / total) * 100 : 0;
+              return (
+                <>
+                  <div className={`rounded-xl p-3 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                    <p className="text-[10px] uppercase tracking-wider text-[#86868B]">Total</p>
+                    <p className={`text-xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{total}</p>
+                  </div>
+                  <div className={`rounded-xl p-3 ${dm ? "bg-green-900/30" : "bg-green-50"}`}>
+                    <p className="text-[10px] uppercase tracking-wider text-green-600">Virou venda</p>
+                    <p className="text-xl font-bold text-green-600">{virouVenda}</p>
+                  </div>
+                  <div className={`rounded-xl p-3 ${dm ? "bg-red-900/30" : "bg-red-50"}`}>
+                    <p className="text-[10px] uppercase tracking-wider text-red-500">Perdido</p>
+                    <p className="text-xl font-bold text-red-500">{perdido}</p>
+                  </div>
+                  <div className={`rounded-xl p-3 ${dm ? "bg-[#2C2C2E]" : "bg-[#FFF5EB]"}`}>
+                    <p className="text-[10px] uppercase tracking-wider text-[#E8740E]">Conversão</p>
+                    <p className="text-xl font-bold text-[#E8740E]">{taxa.toFixed(1)}%</p>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Lista */}
+          {histLoading && <p className="text-xs text-center py-6 text-[#86868B]">Carregando...</p>}
+          {!histLoading && historico.length === 0 && (
+            <p className="text-xs text-center py-8 text-[#86868B]">
+              Nenhum orçamento ainda. Gere um na aba &ldquo;Novo orçamento&rdquo;.
+            </p>
+          )}
+
+          <div className="space-y-2">
+            {historico.map(o => {
+              const statusBg = o.status === "VIROU_VENDA" ? "bg-green-50 border-green-300" :
+                o.status === "PERDIDO" ? "bg-red-50 border-red-300" :
+                o.status === "ARQUIVADO" ? "bg-gray-50 border-gray-300" :
+                "bg-white border-[#E5E5EA]";
+              const telefoneLink = (o.cliente_telefone || "").replace(/\D/g, "");
+              const waHref = telefoneLink.length >= 10
+                ? `https://wa.me/${telefoneLink.startsWith("55") ? telefoneLink : "55" + telefoneLink}?text=${encodeURIComponent(o.texto_gerado || "")}`
+                : null;
+              return (
+                <div key={o.id} className={`border rounded-xl p-3 ${statusBg} ${dm ? "!bg-[#2C2C2E] !border-[#3A3A3C]" : ""}`}>
+                  <div className="flex items-start justify-between gap-2 flex-wrap mb-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                        o.status === "VIROU_VENDA" ? "bg-green-200 text-green-800" :
+                        o.status === "PERDIDO" ? "bg-red-200 text-red-800" :
+                        o.status === "ARQUIVADO" ? "bg-gray-200 text-gray-700" :
+                        "bg-[#FFF5EB] text-[#E8740E]"
+                      }`}>
+                        {o.status === "VIROU_VENDA" ? "✅ VIROU VENDA" :
+                         o.status === "PERDIDO" ? "❌ PERDIDO" :
+                         o.status === "ARQUIVADO" ? "📦 ARQUIVADO" :
+                         "⏳ ATIVO"}
+                      </span>
+                      <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                        {o.cliente_nome || <span className="text-[#86868B] italic">(sem cliente)</span>}
+                      </span>
+                      {o.cliente_telefone && (
+                        <span className="text-[10px] text-[#86868B]">· {o.cliente_telefone}</span>
+                      )}
+                      <span className="text-[10px] text-[#86868B]">
+                        · {new Date(o.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold text-[#E8740E]">R$ {Number(o.valor_total).toLocaleString("pt-BR")}</span>
+                  </div>
+
+                  <p className="text-xs text-[#86868B] mb-2">
+                    {o.vendedor && <>Por <strong>{o.vendedor}</strong> · </>}
+                    {(o.itens || []).map(i => i.nome).join(" + ") || "(sem itens)"}
+                    {o.trocas && o.trocas.length > 0 && <> · troca: {o.trocas.length}</>}
+                  </p>
+
+                  <details>
+                    <summary className="text-[10px] font-semibold text-[#86868B] cursor-pointer hover:text-[#1D1D1F]">ver texto do orçamento</summary>
+                    <pre className={`whitespace-pre-wrap text-[11px] mt-2 p-2 rounded-lg max-h-48 overflow-auto ${dm ? "bg-[#1C1C1E] text-[#98989D]" : "bg-white text-[#1D1D1F]"}`}>
+                      {o.texto_gerado}
+                    </pre>
+                  </details>
+
+                  <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-[#E5E5EA]">
+                    {waHref && (
+                      <a href={waHref} target="_blank" rel="noopener noreferrer" className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-[#25D366] text-white hover:bg-[#20BD5A]">
+                        💬 Reenviar WhatsApp
+                      </a>
+                    )}
+                    <button
+                      onClick={() => navigator.clipboard.writeText(o.texto_gerado || "")}
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-[#F5F5F7] text-[#86868B] hover:text-[#1D1D1F]"
+                    >📋 Copiar texto</button>
+                    {o.status !== "VIROU_VENDA" && (
+                      <button onClick={() => updateOrcamentoStatus(o.id, "VIROU_VENDA")}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600">
+                        ✅ Virou venda
+                      </button>
+                    )}
+                    {o.status !== "PERDIDO" && (
+                      <button onClick={() => updateOrcamentoStatus(o.id, "PERDIDO")}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-red-500 text-white hover:bg-red-600">
+                        ❌ Perdido
+                      </button>
+                    )}
+                    {o.status !== "ARQUIVADO" && (
+                      <button onClick={() => updateOrcamentoStatus(o.id, "ARQUIVADO")}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-gray-400 text-white hover:bg-gray-500">
+                        📦 Arquivar
+                      </button>
+                    )}
+                    {o.status !== "ATIVO" && (
+                      <button onClick={() => updateOrcamentoStatus(o.id, "ATIVO")}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-[#E8740E]/20 text-[#E8740E] hover:bg-[#E8740E]/30">
+                        ⏳ Reabrir
+                      </button>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
