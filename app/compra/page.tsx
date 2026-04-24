@@ -1077,13 +1077,22 @@ function CompraForm() {
 
     // Calcula valor a cobrar no MP. Se há entrada PIX (pagamento dividido),
     // o MP cobra só o valor parcelar (o PIX fica pendente pra retirada).
+    // IMPORTANTE: aplica a taxa do cartao/link nas parcelas — o operador
+    // define "Link 12x" esperando cobrar R$ com taxa repassada (ex: 5497
+    // base + 13% = 6212 em 12x de 517,67). Antes o MP cobrava so R$ 5497
+    // (sem taxa), ficava 12x de 458,08 e a loja nao recebia o repasse.
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
     // `precoFinal` ja e o total somado — gerar-link envia `v = total`. Nao
     // somar extras aqui (double count).
     const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
-    const valorMpCobrado =
+    const valorSemTaxa =
       entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
+    const nParcelasMp = parseInt(parcelas || "1") || 1;
+    const taxaParcelasMp = nParcelasMp > 1 ? (TAXAS[nParcelasMp] ?? 0) : 0;
+    const valorMpCobrado = taxaParcelasMp > 0
+      ? Math.round(valorSemTaxa * (1 + taxaParcelasMp / 100))
+      : valorSemTaxa;
 
     if (valorMpCobrado <= 0) {
       setErroMp("Valor a pagar via Mercado Pago inválido (R$ 0).");
