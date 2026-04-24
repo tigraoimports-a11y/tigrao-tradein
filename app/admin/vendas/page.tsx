@@ -5059,8 +5059,9 @@ export default function VendasPage() {
             );
           })()}
 
-          {/* Toggle Programar Venda */}
-          {!editandoVendaId && (
+          {/* Toggle Programar Venda — visivel tambem em edicao pra
+              admin remover/mudar agendamento de venda ja finalizada */}
+          {(
             <div className={`p-3 rounded-xl border space-y-3 ${vendaProgramada ? (dm ? "border-purple-500 bg-purple-900/20" : "border-purple-400 bg-purple-50") : dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
