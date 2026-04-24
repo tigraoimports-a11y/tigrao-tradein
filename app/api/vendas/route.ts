@@ -132,6 +132,32 @@ export async function GET(req: NextRequest) {
         }
       }
     }
+
+    // Enriquecer com cor/categoria/observacao do estoque quando venda tem
+    // estoque_id. O campo vendas.cor pode estar NULL (nao e populado na criacao
+    // da venda), entao buscamos no estoque pra ter fonte confiavel pro display.
+    // So preenche se a venda ja nao tem valor — nao sobrescreve dados existentes.
+    const estoqueIds = data
+      .filter((v: Record<string, unknown>) => v.estoque_id && (!v.cor || !v.categoria))
+      .map((v: Record<string, unknown>) => v.estoque_id as string);
+    if (estoqueIds.length > 0) {
+      const { data: estoqueRows } = await supabase
+        .from("estoque")
+        .select("id, cor, categoria, observacao")
+        .in("id", estoqueIds);
+      if (estoqueRows && estoqueRows.length > 0) {
+        const porEstoque = new Map(estoqueRows.map((e: { id: string }) => [e.id, e]));
+        for (const v of data as Record<string, unknown>[]) {
+          const eid = v.estoque_id as string | null;
+          if (!eid) continue;
+          const est = porEstoque.get(eid) as { cor?: string | null; categoria?: string | null; observacao?: string | null } | undefined;
+          if (!est) continue;
+          if (!v.cor && est.cor) v.cor = est.cor;
+          if (!v.categoria && est.categoria) v.categoria = est.categoria;
+          if (!v.observacao && est.observacao) v.observacao = est.observacao;
+        }
+      }
+    }
   }
 
   return NextResponse.json({ data });
