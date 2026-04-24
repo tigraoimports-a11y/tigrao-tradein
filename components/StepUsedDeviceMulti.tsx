@@ -1120,7 +1120,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               const rm = typeof cfg.rejectMessage === "string" ? cfg.rejectMessage : "";
               const isRejected = typeof val === "number" && rb !== undefined && val < rb;
               return (
-                <div className="space-y-3">
+                <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -1131,8 +1131,8 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                       setVal(Number.isFinite(num as number) ? (num as number) : undefined);
                       tq(q.slug);
                     }}
-                    className="w-full px-4 py-3 rounded-xl text-[20px] font-bold text-center"
-                    style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }}
+                    className="w-full px-4 py-3 rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors"
+                    style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-card-border)" }}
                     placeholder={ph}
                   />
                   {help && (
