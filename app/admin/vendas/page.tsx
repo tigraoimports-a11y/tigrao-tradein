@@ -11,6 +11,7 @@ import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offl
 import type { Venda } from "@/lib/admin-types";
 import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
 import { getModeloBase } from "@/lib/produto-display";
+import { maskCpf, maskCnpj, maskTelefone, maskCep } from "@/lib/mask";
 import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
@@ -2100,12 +2101,12 @@ export default function VendasPage() {
       // CNPJ
       else if (lower.includes("cnpj")) {
         const m = line.match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2}/);
-        if (m) r.cnpj = m[0];
+        if (m) r.cnpj = maskCnpj(m[0]);
       }
       // CPF
       else if (lower.includes("cpf")) {
         const m = line.match(/\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2}/);
-        if (m) r.cpf = m[0];
+        if (m) r.cpf = maskCpf(m[0]);
       }
       // Email
       else if (lower.includes("e-mail") || lower.includes("email")) {
@@ -2115,12 +2116,12 @@ export default function VendasPage() {
       // Telefone
       else if (lower.includes("telefone") || lower.includes("celular") || lower.includes("whatsapp") || lower.includes("contato")) {
         const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/);
-        if (m) r.telefone = m[0];
+        if (m) r.telefone = maskTelefone(m[0]);
       }
       // CEP
       else if (lower.includes("cep")) {
         const m = line.match(/\d{5}[-.\s]?\d{3}/);
-        if (m) r.cep = m[0];
+        if (m) r.cep = maskCep(m[0]);
       }
       // Bairro
       else if (lower.includes("bairro")) {
@@ -2782,8 +2783,8 @@ export default function VendasPage() {
                           onMouseDown={(e) => {
                             e.preventDefault();
                             set("cliente", (l.nome || "").toUpperCase());
-                            if (l.cpf) set("cpf", l.cpf);
-                            if (l.cnpj) set("cnpj", l.cnpj);
+                            if (l.cpf) set("cpf", maskCpf(l.cpf));
+                            if (l.cnpj) set("cnpj", maskCnpj(l.cnpj));
                             setShowLojistaSuggestions(false);
                           }}
                           className="w-full px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors border-b border-[#F5F5F7] last:border-0"
@@ -2916,11 +2917,11 @@ export default function VendasPage() {
                               set("forma", c.forma);
                               set("banco", c.banco);
                               if (c.pessoa) set("pessoa", c.pessoa);
-                              if (c.cpf) set("cpf", c.cpf);
-                              if (c.cnpj) set("cnpj", c.cnpj);
+                              if (c.cpf) set("cpf", maskCpf(c.cpf));
+                              if (c.cnpj) set("cnpj", maskCnpj(c.cnpj));
                               if (c.email) set("email", c.email);
                               if (c.endereco) set("endereco", c.endereco);
-                              if (c.cep) set("cep", c.cep);
+                              if (c.cep) set("cep", maskCep(c.cep));
                               if (c.bairro) set("bairro", c.bairro);
                               if (c.cidade) set("cidade", c.cidade);
                               if (c.uf) set("uf", c.uf);
@@ -2966,12 +2967,12 @@ export default function VendasPage() {
                   )}
                 </div>
                 {form.pessoa === "PJ" ? (
-                  <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputCls} /></div>
+                  <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", maskCnpj(e.target.value))} placeholder="00.000.000/0000-00" className={inputCls} /></div>
                 ) : (
-                  <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
+                  <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", maskCpf(e.target.value))} placeholder="000.000.000-00" className={inputCls} /></div>
                 )}
                 <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
-                <div><p className={labelCls}>WhatsApp</p><input type="tel" value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(21) 99999-9999" className={inputCls} /></div>
+                <div><p className={labelCls}>WhatsApp</p><input type="tel" value={form.telefone} onChange={(e) => set("telefone", maskTelefone(e.target.value))} placeholder="(21) 99999-9999" className={inputCls} /></div>
               </div>
 
               {/* Historico do Cliente */}
@@ -3584,8 +3585,8 @@ export default function VendasPage() {
               <button
                 onClick={() => {
                   set("cliente", lastClienteData.cliente);
-                  set("cpf", lastClienteData.cpf);
-                  set("cnpj", lastClienteData.cnpj);
+                  set("cpf", maskCpf(lastClienteData.cpf));
+                  set("cnpj", maskCnpj(lastClienteData.cnpj));
                   set("email", lastClienteData.email);
                   set("endereco", lastClienteData.endereco);
                   set("pessoa", lastClienteData.pessoa);
