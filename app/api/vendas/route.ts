@@ -2,6 +2,7 @@ import { hojeBR } from "@/lib/date-utils";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
+import { compararSkus } from "@/lib/sku-validator";
 import { sendPaymentNotification, sendSaleNotification, sendCancelNotification } from "@/lib/telegram";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
@@ -188,7 +189,7 @@ export async function POST(req: NextRequest) {
   let serialFromEstoque: string | null = null;
   let skuFromEstoque: string | null = null;
   if (estoqueId) {
-    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo, sku").eq("id", estoqueId).single();
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo, sku, produto").eq("id", estoqueId).single();
     if (!estoqueItem) return NextResponse.json({ error: "Produto não encontrado no estoque" }, { status: 404 });
     if (estoqueItem.status === "ESGOTADO" || estoqueItem.qnt <= 0) {
       return NextResponse.json({ error: "Produto já foi vendido (ESGOTADO). Não é possível registrar outra venda." }, { status: 409 });
@@ -199,6 +200,32 @@ export async function POST(req: NextRequest) {
         error: "Item está em PENDÊNCIAS. Mova pra estoque (Recalc Balanços ou botão de confirmar recebimento) antes de vender.",
       }, { status: 409 });
     }
+    // Validar SKU: bloqueia venda quando item do estoque difere do produto
+    // informado no body. Importante pro caminho "Nova venda" quando admin
+    // digita produto livre + escolhe item do estoque de outro SKU por engano.
+    if (!body._sku_override) {
+      const skuBodyBaseline = body.sku || gerarSkuSafe({
+        produto: String(body.produto || ""),
+        categoria: String(body.categoria || detectarCategoriaPorTexto(String(body.produto || ""))),
+        cor: body.cor ?? null,
+        observacao: null,
+        tipo: "NOVO",
+      });
+      const comp = compararSkus(skuBodyBaseline, estoqueItem.sku || null);
+      if (!comp.ok) {
+        return NextResponse.json({
+          error: "Produto selecionado nao bate com o produto digitado",
+          codigo: "SKU_DIVERGENTE",
+          esperado: comp.skuEsperado,
+          selecionado: comp.skuSelecionado,
+          diferencas: comp.diferencas,
+          detalhes: comp.detalhes,
+          produto_estoque: estoqueItem.produto,
+          produto_venda: body.produto,
+        }, { status: 409 });
+      }
+    }
+    delete body._sku_override;
     if (estoqueItem.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
     if (estoqueItem.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
     if (estoqueItem.sku) skuFromEstoque = estoqueItem.sku;
@@ -869,6 +896,52 @@ export async function PATCH(req: NextRequest) {
       }, { status: 400 });
     }
   }
+
+  // VALIDACAO DE SKU (regra definida com Andre): ao vincular um NOVO item
+  // do estoque, o SKU do item tem que bater EXATAMENTE com o SKU da venda
+  // (derivado do formulario do cliente). Qualquer divergencia (cor, storage,
+  // modelo, chip) bloqueia — impede separar produto errado.
+  //
+  // Excecoes: se a venda nao tem SKU (antiga) ou se o estoque nao tem SKU
+  // (acessorio sem classificacao), permite e avisa no response.
+  //
+  // override=true no body pula a validacao (admin ciente da divergencia).
+  if (estoqueIdFoiEnviado && novoEstoqueId && novoEstoqueId !== estoqueIdAnterior && !fields._sku_override) {
+    const { data: estoqueNovo } = await supabase
+      .from("estoque")
+      .select("sku, produto, cor")
+      .eq("id", novoEstoqueId)
+      .single();
+    const vendaAtualSku = (vendaAnterior as unknown as { sku?: string | null } | null)?.sku || null;
+    // Fallback: se venda nao tinha SKU salvo, tenta gerar na hora pra ter baseline.
+    const vendaSkuBaseline = vendaAtualSku || gerarSkuSafe({
+      produto: String((vendaAnterior as unknown as { produto?: string })?.produto || ""),
+      categoria: detectarCategoriaPorTexto(String((vendaAnterior as unknown as { produto?: string })?.produto || "")),
+      cor: null,
+      observacao: null,
+      tipo: "NOVO",
+    });
+    const comp = compararSkus(vendaSkuBaseline, estoqueNovo?.sku || null);
+    if (!comp.ok) {
+      return NextResponse.json({
+        error: "Produto selecionado nao bate com o pedido do cliente",
+        codigo: "SKU_DIVERGENTE",
+        esperado: comp.skuEsperado,
+        selecionado: comp.skuSelecionado,
+        diferencas: comp.diferencas,
+        detalhes: comp.detalhes,
+        produto_estoque: estoqueNovo?.produto,
+        produto_venda: (vendaAnterior as unknown as { produto?: string } | null)?.produto,
+      }, { status: 409 });
+    }
+    // Ao vincular, copia SKU do estoque pra venda (garante consistencia
+    // daqui pra frente — venda vira "oficialmente" o SKU do item vendido).
+    if (estoqueNovo?.sku) {
+      fields.sku = estoqueNovo.sku;
+    }
+  }
+  // Limpa flag de override pra nao gravar no banco
+  delete fields._sku_override;
 
   // Se o admin enviou _estoque_id (mesmo null), atualizar o vinculo na venda
   if (estoqueIdFoiEnviado) {

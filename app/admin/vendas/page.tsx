@@ -19,6 +19,37 @@ const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 const VENDAS_PASSWORD = "tigrao$vendas";
 
+// Formata a resposta de erro do backend quando SKU do estoque selecionado
+// nao bate com o SKU esperado pela venda (cliente pediu produto diferente).
+// Retorna string multilinha pronta pra setMsg.
+function formatSkuDivergenciaMsg(json: {
+  codigo?: string;
+  error?: string;
+  produto_venda?: string;
+  produto_estoque?: string;
+  diferencas?: Array<{ campo: string; esperado: string; selecionado: string }>;
+  esperado?: string;
+  selecionado?: string;
+}): string {
+  if (json?.codigo !== "SKU_DIVERGENTE") {
+    return json?.error || "erro desconhecido";
+  }
+  const diffs = (json.diferencas || [])
+    .map((d) => `• ${d.campo}: ${d.esperado} → ${d.selecionado}`)
+    .join("\n");
+  return [
+    "🚫 PRODUTO ERRADO — venda bloqueada",
+    "",
+    `Cliente pediu:    ${json.produto_venda || "?"}`,
+    `Você selecionou:  ${json.produto_estoque || "?"}`,
+    "",
+    "Diverge em:",
+    diffs || `• SKU diferente (${json.esperado} ≠ ${json.selecionado})`,
+    "",
+    "Corrija a seleção antes de registrar.",
+  ].join("\n");
+}
+
 export default function VendasPage() {
   const { password, user, darkMode } = useAdmin();
   const vendedoresList = useVendedores(password);
@@ -1692,7 +1723,15 @@ export default function VendasPage() {
               body: JSON.stringify(patchBody),
             });
             const json = await res.json();
-            if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido")); break; }
+            if (!json.ok && !json.data) {
+              allOk = false;
+              setMsg(
+                json.codigo === "SKU_DIVERGENTE"
+                  ? formatSkuDivergenciaMsg(json)
+                  : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
+              );
+              break;
+            }
           }
 
           // 2. POST novos produtos (se allProducts.length > editandoGrupoIds.length)
@@ -1705,7 +1744,15 @@ export default function VendasPage() {
                 body: JSON.stringify(payload),
               });
               const json = await res.json();
-              if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao criar novo item: " + (json.error || "erro desconhecido")); break; }
+              if (!json.ok && !json.data) {
+                allOk = false;
+                setMsg(
+                  json.codigo === "SKU_DIVERGENTE"
+                    ? formatSkuDivergenciaMsg(json)
+                    : "Erro ao criar novo item: " + (json.error || "erro desconhecido"),
+                );
+                break;
+              }
             }
           }
 
@@ -1799,7 +1846,13 @@ export default function VendasPage() {
             fetchVendas();
             fetchEstoque();
           } else {
-            setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido"));
+            // Se backend retornou SKU_DIVERGENTE, mostra mensagem detalhada.
+            // Senao, erro generico.
+            setMsg(
+              json.codigo === "SKU_DIVERGENTE"
+                ? formatSkuDivergenciaMsg(json)
+                : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
+            );
           }
         }
       } catch {
@@ -1836,10 +1889,14 @@ export default function VendasPage() {
           if (json.creditoDebitError) {
             errors.push(`⚠️ Crédito lojista: ${json.creditoDebitError}`);
           }
+        } else if (json.codigo === "SKU_DIVERGENTE") {
+          // Erro critico: produto nao bate com o pedido. Mensagem detalhada
+          // em vez de concatenar no erros[] generico.
+          errors.push(`${prod.produto}: ${formatSkuDivergenciaMsg(json)}`);
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
-      } catch (err) {
+      } catch {
         // Network error during online attempt — save to offline queue
         addToQueue(payload);
         setOfflineCount(getQueueCount());
@@ -2493,7 +2550,7 @@ export default function VendasPage() {
             </div>
           )}
 
-          {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+          {msg && <div className={`px-4 py-3 rounded-xl text-sm whitespace-pre-line ${msg.includes("Erro") || msg.includes("🚫") || msg.includes("bloqueada") ? "bg-red-50 text-red-700 border border-red-200" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
           {/* Row 1: Data + Brinde */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
