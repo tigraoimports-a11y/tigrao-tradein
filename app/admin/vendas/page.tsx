@@ -798,10 +798,12 @@ export default function VendasPage() {
     return () => { if (clienteHistoricoTimer.current) clearTimeout(clienteHistoricoTimer.current); };
   }, [form.cliente, fetchClienteHistorico]);
 
-  // Carregar lista de lojistas cadastrados pra autocomplete no modo ATACADO.
-  // Busca uma vez ao entrar em ATACADO e reusa — a lista e pequena (< 100 em geral).
+  // Carregar lista de lojistas cadastrados pra autocomplete. Antes so buscava
+  // quando form.tipo === "ATACADO" — mas o operador pode digitar o nome do
+  // lojista antes de marcar origem=ATACADO. Agora carrega ao montar pra que o
+  // autocomplete responda em qualquer ordem de preenchimento.
   useEffect(() => {
-    if (form.tipo !== "ATACADO" || !password || lojistas.length > 0) return;
+    if (!password || lojistas.length > 0) return;
     fetch("/api/admin/lojistas", {
       headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
     })
@@ -2778,10 +2780,70 @@ export default function VendasPage() {
                 />
                 {showLojistaSuggestions && (() => {
                   const term = form.cliente.trim().toLowerCase();
-                  const lista = (term.length === 0
-                    ? lojistas
-                    : lojistas.filter(l => (l.nome || "").toLowerCase().includes(term))
-                  ).slice(0, 8);
+                  type LojistaItem = {
+                    id: string; nome: string;
+                    cpf: string | null; cnpj: string | null;
+                    email: string | null; telefone: string | null;
+                    endereco: string | null; cep: string | null;
+                    bairro: string | null; cidade: string | null; uf: string | null;
+                    saldo_credito: number;
+                    fonte: "lojistas" | "vendas";
+                  };
+                  // Fonte A: tabela `lojistas` (cadastro formal)
+                  const porLojistas: LojistaItem[] = lojistas.map(l => ({
+                    id: l.id,
+                    nome: l.nome,
+                    cpf: l.cpf || null,
+                    cnpj: l.cnpj || null,
+                    email: l.email || null,
+                    telefone: l.telefone || null,
+                    endereco: l.endereco || null,
+                    cep: l.cep || null,
+                    bairro: l.bairro || null,
+                    cidade: l.cidade || null,
+                    uf: l.uf || null,
+                    saldo_credito: l.saldo_credito || 0,
+                    fonte: "lojistas",
+                  }));
+                  // Fonte B: vendas com tipo/origem ATACADO — clientes que compraram
+                  // no atacado mas nao tem cadastro em `lojistas`. Sem isso, nomes
+                  // como JMS IMPORTS (so em vendas) nao apareciam no autocomplete.
+                  const nomesLojistas = new Set(porLojistas.map(p => (p.nome || "").toLowerCase().trim()));
+                  const porVendas = new Map<string, LojistaItem>();
+                  for (const v of vendas) {
+                    const ehAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
+                    if (!ehAtacado || !v.cliente) continue;
+                    const key = v.cliente.toLowerCase().trim();
+                    if (nomesLojistas.has(key) || porVendas.has(key)) continue;
+                    porVendas.set(key, {
+                      id: `venda-${key}`,
+                      nome: v.cliente,
+                      cpf: v.cpf || null,
+                      cnpj: v.cnpj || null,
+                      email: v.email || null,
+                      telefone: v.telefone || null,
+                      endereco: v.endereco || null,
+                      cep: v.cep || null,
+                      bairro: v.bairro || null,
+                      cidade: null,
+                      uf: null,
+                      saldo_credito: 0,
+                      fonte: "vendas",
+                    });
+                  }
+                  const todos = [...porLojistas, ...Array.from(porVendas.values())];
+                  // Filtra + ordena: match startsWith primeiro, depois includes
+                  const filtrados = term.length === 0
+                    ? todos
+                    : todos.filter(l => (l.nome || "").toLowerCase().includes(term));
+                  const ordenados = filtrados.sort((a, b) => {
+                    const aStarts = (a.nome || "").toLowerCase().startsWith(term);
+                    const bStarts = (b.nome || "").toLowerCase().startsWith(term);
+                    if (aStarts && !bStarts) return -1;
+                    if (!aStarts && bStarts) return 1;
+                    return (a.nome || "").localeCompare(b.nome || "");
+                  });
+                  const lista = ordenados.slice(0, 15);
                   if (lista.length === 0) return null;
                   return (
                     <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[220px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
