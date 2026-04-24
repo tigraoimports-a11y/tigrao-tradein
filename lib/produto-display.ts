@@ -1,5 +1,5 @@
 import { corParaPT, normalizarCoresNoTexto } from "./cor-pt";
-import { parseSku } from "./sku";
+import { parseSku, inferirCorDoTexto } from "./sku";
 
 const STRUCTURED = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 
@@ -63,44 +63,64 @@ export function limparNomeProduto(raw: string | null | undefined): string {
 }
 
 /**
- * Garante que o nome do produto exibido tem a cor. Usa o SKU como fonte de
- * verdade pra extrair a cor canonica — se o texto do produto ja tem a cor,
- * deixa como esta; se nao tem, anexa ao final.
+ * Garante que o nome do produto exibido tem a cor.
  *
- * Casos:
- *   - produto="IPHONE 17 256GB WHITE", sku="IPHONE-17-256GB-BRANCO"
- *     → "IPHONE 17 256GB Branco" (normalizarCoresNoTexto traduz White→Branco)
- *   - produto="IPHONE 17 256GB", sku="IPHONE-17-256GB-PRETO"
- *     → "IPHONE 17 256GB Preto" (anexa a cor faltante)
- *   - produto="iPhone 17 256GB" (mixed case, sem cor), sku tem cor
- *     → "iPhone 17 256GB Preto" (idem)
+ * Estrategia em cascata:
+ *   1. Extrai cor do SKU canonico (mais confiavel quando o SKU tem cor)
+ *   2. Se SKU nao tem cor (legado / grupo multi-produto com SKU cruzado),
+ *      tenta inferir do texto ORIGINAL do produto via inferirCorDoTexto
+ *   3. Se achar cor em qualquer uma, anexa ao display (se nao estiver ja visivel)
+ *
+ * Args:
+ *   display — texto ja processado (ex: saida de getModeloBase, sem cor)
+ *   sku — SKU canonico da venda/estoque
+ *   textoOriginal — texto bruto do produto (pode ter cor embutida), usado como
+ *                   fallback de inferencia quando sku nao tem cor.
  */
-export function produtoComCorGarantida(produto: string | null | undefined, sku: string | null | undefined): string {
-  const texto = normalizarCoresNoTexto(produto || "");
-  if (!sku) return texto;
-  const parsed = parseSku(sku);
-  if (!parsed) return texto;
-  // Extrai cor do SKU: componentes nao classificados no final das specs
+export function produtoComCorGarantida(
+  display: string | null | undefined,
+  sku: string | null | undefined,
+  textoOriginal?: string | null,
+): string {
+  const texto = normalizarCoresNoTexto(display || "");
   const isClassificavel = (s: string) =>
     /^\d+(GB|TB|MM)$/.test(s) ||
     /^M\d+/.test(s) ||
     (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
     ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
-  const corSegments = parsed.specs.filter((s) => !isClassificavel(s));
+
+  // Tenta extrair cor do SKU
+  let corSegments: string[] = [];
+  if (sku) {
+    const parsed = parseSku(sku);
+    if (parsed) {
+      corSegments = parsed.specs.filter((s) => !isClassificavel(s));
+    }
+  }
+
+  // Fallback: se SKU nao tem cor, tenta inferir do texto original
+  // (cobre vendas legadas com SKU sem cor ou grupos com SKU cruzado)
+  if (corSegments.length === 0) {
+    const textoFonte = textoOriginal || display || "";
+    // Normaliza primeiro (SPACE BLACK → Preto, Silver → Prata, etc)
+    const textoNormalizado = normalizarCoresNoTexto(textoFonte);
+    const corInferida = inferirCorDoTexto(textoNormalizado);
+    if (corInferida) corSegments = corInferida.split(/\s+/);
+  }
+
   if (corSegments.length === 0) return texto;
+
   // "BRANCO-NUVEM" → "Branco Nuvem"
   const corBonita = corSegments
     .map((p) => p.charAt(0) + p.slice(1).toLowerCase())
     .join(" ");
-  // Ja tem a cor no texto? (case-insensitive)
+
+  // Ja tem a cor no display? (case-insensitive)
   const textoUpper = texto.toUpperCase();
   const corUpper = corSegments.join(" ").toUpperCase();
-  // Checa forma exata ou primeiro segmento (ex: "BRANCO" em "BRANCO NUVEM")
   if (textoUpper.includes(corUpper)) return texto;
   if (corSegments.length > 1 && textoUpper.includes(corSegments[0])) return texto;
-  // Checa se tem uma cor EN equivalente no texto (ex: "BLACK" quando SKU diz PRETO).
-  // Se sim, nao anexa — normalizarCoresNoTexto deve cuidar.
-  // Nao tem cor visivel → anexa
+  // Anexa
   return `${texto} ${corBonita}`;
 }
 

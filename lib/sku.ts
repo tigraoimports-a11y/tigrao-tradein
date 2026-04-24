@@ -137,7 +137,7 @@ function stripAccents(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-function inferirCorDoTexto(texto: string): string | null {
+export function inferirCorDoTexto(texto: string): string | null {
   const normalizado = stripAccents(upper(texto)).replace(/-/g, " ");
   // Ordena por tamanho desc pra casar "TITANIO PRETO" antes de "PRETO"
   const ordenadas = [...CORES_CONHECIDAS_PT].sort((a, b) => b.length - a.length);
