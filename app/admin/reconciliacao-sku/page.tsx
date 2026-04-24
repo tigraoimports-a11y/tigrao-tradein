@@ -62,6 +62,7 @@ export default function ReconciliacaoSkuPage() {
   const [periodoDias, setPeriodoDias] = useState(30);
   const [syncingSku, setSyncingSku] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [backfillingCor, setBackfillingCor] = useState(false);
   // Set de ids (venda_id ou estoque_id) que o admin marcou como "ignorar".
   // Persiste em localStorage — util pra casos legitimos como atacado em lote,
   // brindes internos, ou vendas fora do sistema que nao queremos ver de novo.
@@ -116,6 +117,39 @@ export default function ReconciliacaoSkuPage() {
     try {
       localStorage.setItem("tigrao_reconciliacao_ignorados", JSON.stringify([...novo]));
     } catch {}
+  };
+
+  // Backfill de cor: copia estoque.cor → venda.cor pra vendas historicas com
+  // estoque_id vinculado mas sem cor salva. Elimina a raiz do problema de
+  // "cor nao aparece em algumas vendas" — faz persistir a cor na venda em vez
+  // de depender de enrichment em runtime ou inferencia de texto.
+  const backfillCor = async () => {
+    if (!password) return;
+    if (!confirm("Rodar backfill de cor/categoria/observacao? Vai copiar os valores do estoque pra todas as vendas que tem estoque_id mas estao sem esses campos. E idempotente — seguro rodar de novo.")) return;
+    setBackfillingCor(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/admin/vendas/backfill-cor", {
+        method: "POST",
+        headers: { "x-admin-password": password },
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setSyncMsg(
+          `✅ Backfill concluido: ${json.atualizadas} vendas preenchidas ` +
+          `(de ${json.total} candidatas). ` +
+          `${json.sem_cor_no_estoque > 0 ? `${json.sem_cor_no_estoque} estoques nao tinham cor. ` : ""}` +
+          `${json.sem_estoque > 0 ? `${json.sem_estoque} com estoque_id invalido.` : ""}`,
+        );
+        fetchData();
+      } else {
+        setSyncMsg(`Erro: ${json.error || "desconhecido"}`);
+      }
+    } catch (err) {
+      setSyncMsg(`Erro de rede: ${err}`);
+    } finally {
+      setBackfillingCor(false);
+    }
   };
 
   const limparIgnorados = () => {
@@ -216,6 +250,14 @@ export default function ReconciliacaoSkuPage() {
               {syncingSku ? "Sincronizando…" : `🔧 Sincronizar ${resumo.por_tipo.SKU_DIVERGENTE_PERSISTIDO} SKUs`}
             </button>
           )}
+          <button
+            onClick={backfillCor}
+            disabled={backfillingCor}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-[#E8740E]/40 text-[#E8740E] hover:bg-[#FFF5EB] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Copia cor/categoria/observacao do estoque pra vendas que tem estoque_id mas estao sem esses campos. Elimina 'cor nao aparece' em vendas antigas."
+          >
+            {backfillingCor ? "Preenchendo…" : "🎨 Backfill cor das vendas"}
+          </button>
         </div>
       </div>
       {syncMsg && (
