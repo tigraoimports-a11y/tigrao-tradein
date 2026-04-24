@@ -401,45 +401,101 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
 
                 {/* Numeric (battery) config */}
                 {q.tipo === "numeric" && (
-                  <div>
-                    <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Thresholds de desconto</label>
-                    <div className="mt-2 space-y-2">
-                      {(Array.isArray((q.config as Record<string, unknown>).thresholds) ? (q.config.thresholds as Array<{ below: number; discount: number }>) : []).map((t, ti) => (
-                        <div key={ti} className="flex items-center gap-2 bg-[#F5F5F7] rounded-lg px-3 py-2">
-                          <span className="text-xs text-[#86868B]">Abaixo de</span>
-                          <input
-                            type="number"
-                            value={t.below}
-                            onChange={(e) => {
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Thresholds de desconto</label>
+                      <div className="mt-2 space-y-2">
+                        {(Array.isArray((q.config as Record<string, unknown>).thresholds) ? (q.config.thresholds as Array<{ below: number; discount: number }>) : []).map((t, ti) => (
+                          <div key={ti} className="flex items-center gap-2 bg-[#F5F5F7] rounded-lg px-3 py-2">
+                            <span className="text-xs text-[#86868B]">Abaixo de</span>
+                            <input
+                              type="number"
+                              value={t.below}
+                              onChange={(e) => {
+                                const thresholds = [...(q.config.thresholds as Array<{ below: number; discount: number }>)];
+                                thresholds[ti] = { ...thresholds[ti], below: Number(e.target.value) };
+                                updateConfig(q.id, "thresholds", thresholds);
+                              }}
+                              className="w-16 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
+                            />
+                            <span className="text-xs text-[#86868B]">% → desconto R$</span>
+                            <input
+                              type="number"
+                              value={t.discount}
+                              onChange={(e) => {
+                                const thresholds = [...(q.config.thresholds as Array<{ below: number; discount: number }>)];
+                                thresholds[ti] = { ...thresholds[ti], discount: Number(e.target.value) };
+                                updateConfig(q.id, "thresholds", thresholds);
+                              }}
+                              className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
+                            />
+                            <button onClick={() => {
                               const thresholds = [...(q.config.thresholds as Array<{ below: number; discount: number }>)];
-                              thresholds[ti] = { ...thresholds[ti], below: Number(e.target.value) };
+                              thresholds.splice(ti, 1);
                               updateConfig(q.id, "thresholds", thresholds);
-                            }}
-                            className="w-16 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
-                          />
-                          <span className="text-xs text-[#86868B]">% → desconto R$</span>
-                          <input
-                            type="number"
-                            value={t.discount}
-                            onChange={(e) => {
-                              const thresholds = [...(q.config.thresholds as Array<{ below: number; discount: number }>)];
-                              thresholds[ti] = { ...thresholds[ti], discount: Number(e.target.value) };
-                              updateConfig(q.id, "thresholds", thresholds);
-                            }}
-                            className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
-                          />
-                          <button onClick={() => {
-                            const thresholds = [...(q.config.thresholds as Array<{ below: number; discount: number }>)];
-                            thresholds.splice(ti, 1);
-                            updateConfig(q.id, "thresholds", thresholds);
-                          }} className="text-red-400 hover:text-red-600 text-xs">✕</button>
-                        </div>
-                      ))}
-                      <button onClick={() => {
-                        const current = Array.isArray((q.config as Record<string, unknown>).thresholds) ? [...(q.config.thresholds as Array<{ below: number; discount: number }>)] : [];
-                        current.push({ below: 80, discount: -200 });
-                        updateConfig(q.id, "thresholds", current);
-                      }} className="text-xs font-semibold text-[#E8740E] hover:underline mt-1">+ Adicionar threshold</button>
+                            }} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                          </div>
+                        ))}
+                        <button onClick={() => {
+                          const current = Array.isArray((q.config as Record<string, unknown>).thresholds) ? [...(q.config.thresholds as Array<{ below: number; discount: number }>)] : [];
+                          current.push({ below: 80, discount: -200 });
+                          updateConfig(q.id, "thresholds", current);
+                        }} className="text-xs font-semibold text-[#E8740E] hover:underline mt-1">+ Adicionar threshold</button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Placeholder do input</label>
+                      <input
+                        type="text"
+                        value={typeof (q.config as Record<string, unknown>).placeholder === "string" ? (q.config.placeholder as string) : ""}
+                        onChange={(e) => updateConfig(q.id, "placeholder", e.target.value)}
+                        placeholder="Ex: 87"
+                        className="mt-1 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Texto de ajuda (&quot;Como descobrir?&quot;)</label>
+                      <textarea
+                        value={typeof (q.config as Record<string, unknown>).helpText === "string" ? (q.config.helpText as string) : ""}
+                        onChange={(e) => updateConfig(q.id, "helpText", e.target.value)}
+                        placeholder="Ajustes > Bateria > Saude da Bateria"
+                        rows={3}
+                        className="mt-1 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                      />
+                      <p className="mt-1 text-[11px] text-[#86868B]">Aparece como painel expansivel &quot;Como descobrir?&quot; abaixo do input.</p>
+                    </div>
+
+                    <div className="border-t border-[#E5E5EA] pt-3">
+                      <label className="text-xs font-semibold text-red-600 uppercase tracking-wider">Rejeicao por valor minimo</label>
+                      <p className="mt-1 text-[11px] text-[#86868B]">Se o cliente digitar um valor menor que &quot;Rejeitar abaixo de&quot;, mostra a mensagem e bloqueia as perguntas seguintes.</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs text-[#86868B]">Rejeitar abaixo de</span>
+                        <input
+                          type="number"
+                          value={typeof (q.config as Record<string, unknown>).rejectBelow === "number" ? String((q.config.rejectBelow as number)) : ""}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            if (raw === "") {
+                              const next = { ...q.config } as Record<string, unknown>;
+                              delete next.rejectBelow;
+                              updateQuestion(q.id, { config: next });
+                            } else {
+                              updateConfig(q.id, "rejectBelow", Number(raw));
+                            }
+                          }}
+                          placeholder="Ex: 80"
+                          className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-red-500"
+                        />
+                      </div>
+                      <textarea
+                        value={typeof (q.config as Record<string, unknown>).rejectMessage === "string" ? (q.config.rejectMessage as string) : ""}
+                        onChange={(e) => updateConfig(q.id, "rejectMessage", e.target.value)}
+                        placeholder="Ex: Infelizmente nao aceitamos aparelhos com saude de bateria abaixo de 80%."
+                        rows={2}
+                        className="mt-2 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-red-500"
+                      />
                     </div>
                   </div>
                 )}
