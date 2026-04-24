@@ -635,6 +635,7 @@ interface ProdutoEstoque {
   encomenda_id: string | null;
   codigo_rastreio: string | null;
   contato: string | null;
+  sku: string | null;
 }
 
 interface ImeiSearchResult {
