@@ -38,8 +38,11 @@ function formatSkuDivergenciaMsg(json: {
   const diffs = (json.diferencas || [])
     .map((d) => `• ${d.campo}: ${d.esperado} → ${d.selecionado}`)
     .join("\n");
+  // Temporario: texto de ALERTA em vez de "bloqueada" — andre pediu pra liberar
+  // registro via botao "Registrar mesmo assim" ate ajustes finos do sistema SKU
+  // (acessorios cadastrados com categoria errada disparam falso-positivo).
   return [
-    "🚫 PRODUTO ERRADO — venda bloqueada",
+    "⚠️ ALERTA — produto não bate 100% com o pedido",
     "",
     `Cliente pediu:    ${json.produto_venda || "?"}`,
     `Você selecionou:  ${json.produto_estoque || "?"}`,
@@ -47,13 +50,18 @@ function formatSkuDivergenciaMsg(json: {
     "Diverge em:",
     diffs || `• SKU diferente (${json.esperado} ≠ ${json.selecionado})`,
     "",
-    "Corrija a seleção antes de registrar.",
+    "Revise a seleção. Se realmente é o produto certo, clique em “Registrar mesmo assim”.",
   ].join("\n");
 }
 
 export default function VendasPage() {
   const { password, user, darkMode } = useAdmin();
   const skuFilter = useSkuFilter();
+  // SKU override: quando backend retorna 409 SKU_DIVERGENTE, em vez de bloquear
+  // a venda exibe alerta com botao "Registrar mesmo assim". Se usuario clicar,
+  // seta a ref e chama handleSubmit de novo com flag _sku_override=true.
+  const skuOverrideRef = useRef(false);
+  const [skuAlertaAtivo, setSkuAlertaAtivo] = useState(false);
   const vendedoresList = useVendedores(password);
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -1746,6 +1754,7 @@ export default function VendasPage() {
           for (let i = 0; i < nPatch; i++) {
             const patchBody: Record<string, unknown> = { id: editandoGrupoIds[i], ...groupPayloads[i] };
             if (precisaCriarGrupo) patchBody.grupo_id = grupoIdOriginal;
+            if (skuOverrideRef.current) patchBody._sku_override = true;
             const res = await fetch("/api/vendas", {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "x-admin-password": password },
@@ -1759,6 +1768,7 @@ export default function VendasPage() {
                   ? formatSkuDivergenciaMsg(json)
                   : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
               );
+              if (json.codigo === "SKU_DIVERGENTE") setSkuAlertaAtivo(true);
               break;
             }
           }
@@ -1766,7 +1776,8 @@ export default function VendasPage() {
           // 2. POST novos produtos (se allProducts.length > editandoGrupoIds.length)
           if (allOk && allProducts.length > editandoGrupoIds.length) {
             for (let i = editandoGrupoIds.length; i < allProducts.length; i++) {
-              const payload = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
+              const payload: Record<string, unknown> = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
+              if (skuOverrideRef.current) payload._sku_override = true;
               const res = await fetch("/api/vendas", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-admin-password": password },
@@ -1780,6 +1791,7 @@ export default function VendasPage() {
                     ? formatSkuDivergenciaMsg(json)
                     : "Erro ao criar novo item: " + (json.error || "erro desconhecido"),
                 );
+                if (json.codigo === "SKU_DIVERGENTE") setSkuAlertaAtivo(true);
                 break;
               }
             }
@@ -1830,6 +1842,8 @@ export default function VendasPage() {
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
             setMsg(msgFinal);
+            setSkuAlertaAtivo(false);
+            skuOverrideRef.current = false;
             fetchVendas();
             fetchEstoque();
           }
@@ -1837,10 +1851,12 @@ export default function VendasPage() {
           // Edição simples (1 produto)
           const prod = allProducts[0];
           const payload = buildPayload(prod);
+          const body: Record<string, unknown> = { id: editandoVendaId, ...payload };
+          if (skuOverrideRef.current) body._sku_override = true;
           const res = await fetch("/api/vendas", {
             method: "PATCH",
             headers: { "Content-Type": "application/json", "x-admin-password": password },
-            body: JSON.stringify({ id: editandoVendaId, ...payload }),
+            body: JSON.stringify(body),
           });
           const json = await res.json();
           if (json.ok || json.data) {
@@ -1872,6 +1888,9 @@ export default function VendasPage() {
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
             setMsg("Venda atualizada com sucesso!");
+            // Sucesso — resetar estado do alerta/override
+            setSkuAlertaAtivo(false);
+            skuOverrideRef.current = false;
             fetchVendas();
             fetchEstoque();
           } else {
@@ -1882,6 +1901,13 @@ export default function VendasPage() {
                 ? formatSkuDivergenciaMsg(json)
                 : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
             );
+            if (json.codigo === "SKU_DIVERGENTE") {
+              setSkuAlertaAtivo(true);
+            } else {
+              // Erro diferente → limpa flag pra proximo save nao carregar override
+              setSkuAlertaAtivo(false);
+              skuOverrideRef.current = false;
+            }
           }
         }
       } catch {
@@ -1906,10 +1932,13 @@ export default function VendasPage() {
       const prod = allProducts[i];
 
       try {
+        const bodyFinal = skuOverrideRef.current
+          ? { ...payload, _sku_override: true }
+          : payload;
         const res = await fetch("/api/vendas", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(bodyFinal),
         });
         const json = await res.json();
         if (json.ok) {
@@ -1919,9 +1948,10 @@ export default function VendasPage() {
             errors.push(`⚠️ Crédito lojista: ${json.creditoDebitError}`);
           }
         } else if (json.codigo === "SKU_DIVERGENTE") {
-          // Erro critico: produto nao bate com o pedido. Mensagem detalhada
-          // em vez de concatenar no erros[] generico.
+          // Alerta: produto nao bate com o pedido. Admin pode confirmar via
+          // botao "Registrar mesmo assim" que refaz o submit com _sku_override.
           errors.push(`${prod.produto}: ${formatSkuDivergenciaMsg(json)}`);
+          setSkuAlertaAtivo(true);
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
@@ -1934,6 +1964,9 @@ export default function VendasPage() {
     }
 
     if (successCount > 0) {
+      // Sucesso — resetar estado do alerta/override pra nao carregar no proximo save
+      setSkuAlertaAtivo(false);
+      skuOverrideRef.current = false;
       setDuplicadoInfo(null);
       setLastClienteData(null);
       setProdutosCarrinho([]);
@@ -2579,7 +2612,46 @@ export default function VendasPage() {
             </div>
           )}
 
-          {msg && <div className={`px-4 py-3 rounded-xl text-sm whitespace-pre-line ${msg.includes("Erro") || msg.includes("🚫") || msg.includes("bloqueada") ? "bg-red-50 text-red-700 border border-red-200" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+          {msg && (
+            <div className={`px-4 py-3 rounded-xl text-sm whitespace-pre-line ${
+              skuAlertaAtivo
+                ? "bg-amber-50 text-amber-800 border border-amber-300"
+                : msg.includes("Erro") || msg.includes("🚫") || msg.includes("bloqueada")
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-green-50 text-green-700"
+            }`}>
+              <div>{msg}</div>
+              {skuAlertaAtivo && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      // Override: proxima submissao envia _sku_override=true e pula validacao.
+                      // Limpa msg + alerta e re-chama handleSubmit pra retentar o save.
+                      skuOverrideRef.current = true;
+                      setSkuAlertaAtivo(false);
+                      setMsg("");
+                      handleSubmit();
+                    }}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    ⚠️ Registrar mesmo assim
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Usuario quer corrigir a selecao — so limpa o alerta
+                      setSkuAlertaAtivo(false);
+                      skuOverrideRef.current = false;
+                      setMsg("");
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium border border-amber-400 text-amber-800 bg-white hover:bg-amber-50 transition-colors"
+                  >
+                    Corrigir seleção
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <SkuFilterBanner />
 
           {/* Row 1: Data + Brinde */}
