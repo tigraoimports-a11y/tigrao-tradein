@@ -542,7 +542,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
           {step === 1 && selectedDeviceType && (
             <StepUsedDeviceMulti
-              key={resetKey}
+              key={`${resetKey}-${selectedDeviceType}`}
               usedValues={usedData.usedValues}
               excludedModels={usedData.excludedModels}
               modelDiscounts={usedData.modelDiscounts}
@@ -589,7 +589,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               </div>
               <p className="text-[17px] font-bold mb-4" style={{ color: tema.text }}>Agora avalie o 2o aparelho:</p>
               <StepUsedDeviceMulti
-                key={resetKey + 100}
+                key={`${resetKey + 100}-${selectedDeviceType}`}
                 usedValues={usedData.usedValues}
                 excludedModels={usedData.excludedModels}
                 modelDiscounts={usedData.modelDiscounts}
