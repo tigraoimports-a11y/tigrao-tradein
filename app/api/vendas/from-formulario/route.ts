@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimitSubmission, checkHoneypot } from "@/lib/rate-limit";
 import { dispararContratoAuto } from "@/lib/contrato-auto";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 // ============================================================
 // POST /api/vendas/from-formulario
@@ -194,11 +195,25 @@ export async function POST(req: NextRequest) {
     utm_term: body.utm_term ? String(body.utm_term).slice(0, 200) : null,
   };
 
+  // SKU canonico do produto principal. Importante: gerar AQUI (mesmo que
+  // o POST /api/vendas tambem gere) porque from-formulario faz insert direto
+  // no Supabase, sem passar por /api/vendas. Sem isso, vendas de formulario
+  // ficariam com sku=null e a validacao na hora de vincular estoque nao
+  // teria baseline.
+  const skuFormulario = gerarSkuSafe({
+    produto: body.produto,
+    categoria: detectarCategoriaPorTexto(body.produto),
+    cor: body.cor || null,
+    observacao: null,
+    tipo: "NOVO",
+  });
+
   // Produto principal: recebe o desconto, troca e sinal_antecipado.
   // Extras: só produto/preço. Admin soma tudo ao exibir o grupo.
   const payloadPrincipal: Record<string, unknown> = {
     ...dadosComuns,
     produto: body.cor ? `${body.produto} ${String(body.cor).toUpperCase()}`.trim() : body.produto,
+    ...(skuFormulario ? { sku: skuFormulario } : {}),
     preco_vendido: valorLiquido,
     sinal_antecipado: entradaPixNum > 0 ? entradaPixNum : null,
     // Troca (aparelho 1) — admin lê produto_na_troca como VALOR MONETÁRIO em
@@ -229,13 +244,23 @@ export async function POST(req: NextRequest) {
   const grupoId = temExtras ? (globalThis.crypto?.randomUUID?.() ?? `grp_${Date.now()}_${Math.random().toString(36).slice(2,10)}`) : null;
   if (grupoId) payloadPrincipal.grupo_id = grupoId;
 
-  const payloadsExtras = extras.map(p => ({
-    ...dadosComuns,
-    produto: p.nome,
-    preco_vendido: Number(p.preco) || 0,
-    grupo_id: grupoId,
-    produto_na_troca: null,
-  }));
+  const payloadsExtras = extras.map(p => {
+    const skuExtra = gerarSkuSafe({
+      produto: p.nome,
+      categoria: detectarCategoriaPorTexto(p.nome),
+      cor: null,
+      observacao: null,
+      tipo: "NOVO",
+    });
+    return {
+      ...dadosComuns,
+      produto: p.nome,
+      preco_vendido: Number(p.preco) || 0,
+      grupo_id: grupoId,
+      produto_na_troca: null,
+      ...(skuExtra ? { sku: skuExtra } : {}),
+    };
+  });
 
   // Idempotência: se já existem vendas FORMULARIO_PREENCHIDO desse short_code,
   // apaga e reinsere. Se existir venda em outro status, mantém e pula (equipe

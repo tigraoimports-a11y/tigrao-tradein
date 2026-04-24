@@ -308,6 +308,8 @@ export const COR_PT_TO_EN: Record<string, string> = {
   "PRETO ESPACIAL": "SPACE BLACK",
   "PRETO ONYX": "ONYX BLACK",
   "PRATA": "SILVER",
+  "PRATEADO": "SILVER",   // sinonimo — Apple Watch as vezes cadastrado assim
+  "PRATEADA": "SILVER",   // variacao feminina
   "ROSA": "PINK",
   "ROXO": "PURPLE",
   "ROXO PROFUNDO": "DEEP PURPLE",

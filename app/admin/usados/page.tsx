@@ -135,7 +135,8 @@ const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
     { key: "conectividade", label: "Conectividade", options: ["Wifi", "Wifi + Cel"] },
   ],
   macbook: [
-    { key: "tela", label: "Tela", options: ['13"', '14"', '15"', '16"'] },
+    // Tela fica no NOME do modelo (ex: "MacBook Air M2 13\""), nao como spec
+    // separado — evita duplicacao e mantem consistente com a view agrupada.
     { key: "ram", label: "RAM", options: ["8GB", "16GB", "24GB", "32GB", "64GB", "96GB", "128GB"] },
     { key: "ssd", label: "SSD", options: ["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"] },
   ],
@@ -149,7 +150,7 @@ const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
 const MODELO_PLACEHOLDER_BY_CAT: Record<string, string> = {
   iphone: "Ex: 17 Pro Max (sem 'iPhone')",
   ipad: "Ex: Air M3 (sem 'iPad')",
-  macbook: "Ex: Air M3 (sem 'MacBook')",
+  macbook: "Ex: Air M3 13\" (sem 'MacBook', inclua a tela)",
   watch: "Ex: Series 9 (sem 'Apple Watch')",
 };
 
@@ -240,6 +241,10 @@ export function UsadosContent() {
   // (sem precisar abrir o form grande no topo e redigitar Linha+Modelo).
   // Chave = nome do modelo. Valor = { specs por campo, valor_base }.
   const [addingVariante, setAddingVariante] = useState<Record<string, { specs: Record<string, string>; valor_base: string }>>({});
+  // Form matriz RAM x SSD pra MacBook. Gera N*M variantes de uma vez com
+  // o mesmo valor — admin ajusta preco por celula depois. Chave = modelo.
+  // Nao tem campo de tela porque a tela fica no nome do modelo (ex: "MacBook Air M2 13\"").
+  const [addingMatrix, setAddingMatrix] = useState<Record<string, { rams: string[]; ssds: string[]; valor_base: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
@@ -352,6 +357,45 @@ export function UsadosContent() {
     });
     const e = { ...addingVariante }; delete e[modelo]; setAddingVariante(e);
     setMsg(`${modelo}: ${toCreate.length} variante${toCreate.length > 1 ? "s" : ""} adicionada${toCreate.length > 1 ? "s" : ""}!`);
+    setSaving(null);
+  };
+
+  // Salva matriz RAM x SSD pra MacBook: gera 1 variante por combinacao.
+  // Formato do `armazenamento`: "RAM | SSD" (novo formato, mesmo separador
+  // " | " do iPad/Watch). A tela fica no nome do modelo (ex: "MacBook Air M2 13\"").
+  // Admin pode ajustar valor individual depois em cada celula.
+  const handleSaveMatrix = async (modelo: string) => {
+    const entry = addingMatrix[modelo];
+    if (!entry) return;
+    if (entry.rams.length === 0) { setMsg("Selecione pelo menos 1 RAM"); return; }
+    if (entry.ssds.length === 0) { setMsg("Selecione pelo menos 1 SSD"); return; }
+    if (!entry.valor_base.trim()) { setMsg("Preencha o valor base (use 0 pra sem preco fixo)"); return; }
+    const val = parseFloat(entry.valor_base);
+    if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
+    const savingKey = `matrix-${modelo}`;
+    setSaving(savingKey);
+    const toCreate: string[] = [];
+    for (const ram of entry.rams) {
+      for (const ssd of entry.ssds) {
+        toCreate.push(`${ram} | ${ssd}`);
+      }
+    }
+    let ok = 0;
+    for (const armaz of toCreate) {
+      const res = await apiPost({ action: "upsert_valor", modelo, armazenamento: armaz, valor_base: val });
+      if (res.ok) ok++;
+    }
+    setValores((prev) => {
+      const upd = [...prev];
+      for (const armaz of toCreate) {
+        const idx = upd.findIndex((v) => v.modelo === modelo && v.armazenamento === armaz);
+        if (idx >= 0) upd[idx] = { ...upd[idx], valor_base: val };
+        else upd.push({ id: crypto.randomUUID(), modelo, armazenamento: armaz, valor_base: val, ativo: true });
+      }
+      return upd;
+    });
+    const e = { ...addingMatrix }; delete e[modelo]; setAddingMatrix(e);
+    setMsg(`${modelo}: ${ok} de ${toCreate.length} variante${toCreate.length > 1 ? "s" : ""} adicionada${toCreate.length > 1 ? "s" : ""}!`);
     setSaving(null);
   };
 
@@ -671,8 +715,33 @@ export function UsadosContent() {
     if (unit === "MB") return num / 1000;
     return num;
   };
+  // Pra MacBook (formato "RAM | SSD"), ordenar por RAM primeiro, depois SSD —
+  // sem isso, variantes com mesma RAM apareciam fora de ordem (ex: 16GB|1TB
+  // vindo antes de 16GB|256GB por causa do parseInt("1TB")=1).
+  const macbookSortKey = (arm: string): [number, number] => {
+    if (arm.includes("|")) {
+      const parts = arm.split("|").map(p => p.trim());
+      // Formato legado "tela | ram | ssd"
+      if (parts[0]?.includes('"')) return [storageToGB(parts[1] || ""), storageToGB(parts[2] || "")];
+      // Formato novo "ram | ssd"
+      return [storageToGB(parts[0] || ""), storageToGB(parts[1] || "")];
+    }
+    if (arm.includes("/")) {
+      const [ssd = "", ram = ""] = arm.split("/").map(p => p.trim());
+      return [storageToGB(ram), storageToGB(ssd)];
+    }
+    return [0, storageToGB(arm)];
+  };
   for (const modelo of Object.keys(grouped)) {
-    grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+    if (catFilter === "macbook") {
+      grouped[modelo].sort((a, b) => {
+        const [ra, sa] = macbookSortKey(a.armazenamento);
+        const [rb, sb] = macbookSortKey(b.armazenamento);
+        return ra !== rb ? ra - rb : sa - sb;
+      });
+    } else {
+      grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+    }
   }
 
   // Agrupa por "base" (tudo exceto conectividade) pros iPad/Watch: 1 linha visual
@@ -1072,6 +1141,16 @@ export function UsadosContent() {
                     >
                       ➕ Variante
                     </button>
+                    {catFilter === "macbook" && (
+                      <button
+                        onClick={() => setAddingMatrix((prev) => ({ ...prev, [modelo]: prev[modelo] || { rams: [], ssds: [], valor_base: "" } }))}
+                        disabled={addingMatrix[modelo] !== undefined}
+                        className="px-3 py-1 rounded-lg text-xs font-semibold text-white bg-[#E8740E] hover:bg-[#F5A623] transition-colors whitespace-nowrap disabled:opacity-40"
+                        title="Cadastra varias combinacoes RAM x SSD de uma vez"
+                      >
+                        ⚡ Matriz RAM × SSD
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         const novo = prompt(`Renomear "${modelo}" para:`, modelo);
@@ -1434,6 +1513,95 @@ export function UsadosContent() {
                     {/* Row inline pra adicionar nova variante — aparece quando o admin
                         clica no botao "+ Variante" do header. Usa todos os specs
                         da categoria. */}
+                    {addingMatrix[modelo] && catFilter === "macbook" && (() => {
+                      const entry = addingMatrix[modelo];
+                      const ramOpts = SPEC_FIELDS_BY_CAT.macbook.find((f) => f.key === "ram")?.options || [];
+                      const ssdOpts = SPEC_FIELDS_BY_CAT.macbook.find((f) => f.key === "ssd")?.options || [];
+                      const savingKey = `matrix-${modelo}`;
+                      const isSaving = saving === savingKey;
+                      const totalNew = entry.rams.length * entry.ssds.length;
+                      const toggleArr = (arr: string[], v: string) => arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+                      const update = (patch: Partial<typeof entry>) => setAddingMatrix({ ...addingMatrix, [modelo]: { ...entry, ...patch } });
+                      return (
+                        <tr className="bg-[#FFF7ED] border-t-2 border-[#E8740E]">
+                          <td className="px-5 py-3" colSpan={hasConectField ? 1 + conectOptions.length : 4}>
+                            <div className="flex flex-col gap-3">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] font-bold text-[#E8740E] uppercase tracking-wider">⚡ Matriz RAM × SSD</span>
+                                <span className="text-[11px] text-[#86868B]">Gera 1 variante por combinacao. Admin ajusta preco depois em cada celula.</span>
+                              </div>
+
+                              <div className="flex flex-wrap gap-4 items-start">
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wider text-[#86868B] font-semibold mb-1">RAMs disponiveis *</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {ramOpts.map((r) => {
+                                      const sel = entry.rams.includes(r);
+                                      return (
+                                        <button key={r} type="button"
+                                          onClick={() => update({ rams: toggleArr(entry.rams, r) })}
+                                          className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${sel ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                                          {r}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wider text-[#86868B] font-semibold mb-1">SSDs disponiveis *</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {ssdOpts.map((s) => {
+                                      const sel = entry.ssds.includes(s);
+                                      return (
+                                        <button key={s} type="button"
+                                          onClick={() => update({ ssds: toggleArr(entry.ssds, s) })}
+                                          className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${sel ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                                          {s}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wider text-[#86868B] font-semibold mb-1">Valor base (R$)</p>
+                                  <input
+                                    type="number"
+                                    value={entry.valor_base}
+                                    onChange={(e) => update({ valor_base: e.target.value })}
+                                    placeholder="Ex: 3500 (0 = sem preco fixo)"
+                                    className="w-48 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                                  />
+                                  <p className="text-[10px] text-[#86868B] mt-0.5">Aplicado a todas as combinacoes</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 pt-1 border-t border-[#F5A62333]">
+                                {totalNew > 0 && (
+                                  <span className="text-[11px] font-semibold text-[#1D1D1F]">Vai adicionar {totalNew} variante{totalNew > 1 ? "s" : ""}</span>
+                                )}
+                                <div className="flex gap-1 ml-auto">
+                                  <button
+                                    onClick={() => handleSaveMatrix(modelo)}
+                                    disabled={isSaving || totalNew === 0}
+                                    className="px-3 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
+                                  >
+                                    {isSaving ? "..." : `Gerar ${totalNew || ""} variantes`}
+                                  </button>
+                                  <button
+                                    onClick={() => { const x = { ...addingMatrix }; delete x[modelo]; setAddingMatrix(x); }}
+                                    className="px-2 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
                     {addingVariante[modelo] && (() => {
                       // Conectividade e escondida do form porque ja tem uma coluna por
                       // opcao (Wifi/Wifi+Cel ou GPS/GPS+Cel) — salvar cria 1 linha por

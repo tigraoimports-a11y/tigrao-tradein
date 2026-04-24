@@ -17,18 +17,20 @@ export async function GET(req: NextRequest) {
   const searchTerm = `%${q}%`;
 
   // ── 1. Buscar no estoque (produtos com serial/IMEI) ──
+  // Inclui busca por SKU canonico (ex: "IPHONE-17-PRO-MAX-256GB") alem dos
+  // campos de texto livre.
   const { data: estoqueResults } = await supabase
     .from("estoque")
-    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria, serial_no, imei, origem, garantia, troca_id")
-    .or(`produto.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cliente.ilike.${searchTerm},cor.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm}`)
+    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria, serial_no, imei, origem, garantia, troca_id, sku")
+    .or(`produto.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cliente.ilike.${searchTerm},cor.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm},sku.ilike.${searchTerm}`)
     .order("data_entrada", { ascending: false })
     .limit(30);
 
   // ── 2. Buscar nas vendas (inclui fornecedor para entradas/recompras) ──
   const { data: vendasResults } = await supabase
     .from("vendas")
-    .select("id, produto, cliente, fornecedor, preco_vendido, custo, data, forma, banco, status_pagamento, tipo, origem, serial_no, imei, cpf, email")
-    .or(`produto.ilike.${searchTerm},cliente.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm},fornecedor.ilike.${searchTerm}`)
+    .select("id, produto, cliente, fornecedor, preco_vendido, custo, data, forma, banco, status_pagamento, tipo, origem, serial_no, imei, cpf, email, sku")
+    .or(`produto.ilike.${searchTerm},cliente.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm},fornecedor.ilike.${searchTerm},sku.ilike.${searchTerm}`)
     .neq("status_pagamento", "CANCELADO")
     .order("data", { ascending: false })
     .limit(includeHistory ? 100 : 30);
@@ -184,6 +186,7 @@ export async function GET(req: NextRequest) {
     garantia: e.garantia,
     troca_id: e.troca_id,
     troca_info: e.troca_id ? trocasMap.get(e.troca_id) || null : null,
+    sku: e.sku,
   }));
 
   // ── 6. Montar resultados de vendas ──
@@ -212,6 +215,7 @@ export async function GET(req: NextRequest) {
       serial_no: v.serial_no,
       imei: v.imei,
       is_entrada: matchedByFornecedor,
+      sku: v.sku,
     };
   });
 

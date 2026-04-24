@@ -4,6 +4,22 @@ import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
 import { recalcBalancos } from "@/lib/recalc-balancos";
 import { getModeloBase } from "@/lib/produto-display";
+import { gerarSkuSafe } from "@/lib/sku";
+
+// Auto-popular SKU canonico em rows novas/editadas. Centralizado pra
+// garantir que todo insert/upsert no estoque grave o SKU consistente.
+// Mutates row.sku in-place; nao sobrescreve se ja vier preenchido no body.
+function addSkuToRow(row: Record<string, unknown>): void {
+  if (row.sku) return;
+  const sku = gerarSkuSafe({
+    produto: String(row.produto || ""),
+    categoria: String(row.categoria || ""),
+    cor: (row.cor as string | null) ?? null,
+    observacao: (row.observacao as string | null) ?? null,
+    tipo: (row.tipo as string | null) ?? null,
+  });
+  if (sku) row.sku = sku;
+}
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -246,6 +262,7 @@ export async function POST(req: NextRequest) {
     if (row.produto && typeof row.produto === "string") row.produto = normalizeProdutoNome(row.produto.trim());
     row.updated_at = new Date().toISOString();
     if (row.custo_compra == null) row.custo_compra = row.custo_unitario;
+    addSkuToRow(row);
     const { data, error } = await supabase.from("estoque").insert([row]).select();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const usuario = getUsuario(req);
@@ -276,6 +293,7 @@ export async function POST(req: NextRequest) {
         // Garante custo_compra no primeiro insert
         const base: Record<string, unknown> = { ...r, updated_at: new Date().toISOString() };
         if (base.custo_compra == null) base.custo_compra = base.custo_unitario;
+        addSkuToRow(base);
         seen.set(key, base);
       }
     }
@@ -312,6 +330,7 @@ export async function POST(req: NextRequest) {
       } else {
         const rowIns: Record<string, unknown> = { ...row };
         if (rowIns.custo_compra == null) rowIns.custo_compra = rowIns.custo_unitario;
+        addSkuToRow(rowIns);
         const { error: ie } = await supabase.from("estoque").insert(rowIns);
         if (ie) errors.push(`${produto}: ${ie.message}`);
         else imported++;
@@ -435,6 +454,7 @@ export async function POST(req: NextRequest) {
   if (insertBody.custo_compra == null && insertBody.custo_unitario != null) {
     insertBody.custo_compra = insertBody.custo_unitario;
   }
+  addSkuToRow(insertBody);
 
   const { data, error } = await supabase.from("estoque").insert(insertBody).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -527,6 +547,21 @@ export async function PATCH(req: NextRequest) {
   // Se tem serial_no, força qnt=1
   const serialFinal = fields.serial_no ?? antes?.serial_no;
   if (serialFinal) fields.qnt = 1;
+
+  // Regerar SKU se algum campo que afeta foi alterado. So sobrescreve
+  // se a regeracao funcionar — senao mantem o SKU antigo.
+  const camposQueAfetamSku = ["produto", "cor", "categoria", "observacao", "tipo"];
+  if (antes && camposQueAfetamSku.some((k) => k in fields)) {
+    const merged = { ...antes, ...fields } as Record<string, unknown>;
+    const novoSku = gerarSkuSafe({
+      produto: String(merged.produto || ""),
+      categoria: String(merged.categoria || ""),
+      cor: (merged.cor as string | null) ?? null,
+      observacao: (merged.observacao as string | null) ?? null,
+      tipo: (merged.tipo as string | null) ?? null,
+    });
+    if (novoSku) (fields as Record<string, unknown>).sku = novoSku;
+  }
 
   const { error } = await supabase.from("estoque").update({
     ...fields,
