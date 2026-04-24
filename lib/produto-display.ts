@@ -1,4 +1,16 @@
 import { corParaPT, normalizarCoresNoTexto } from "./cor-pt";
+import { parseSku, inferirCorDoTexto } from "./sku";
+
+// Regex pra detectar segmentos "classificaveis" (storage, chip, tela, etc) que
+// NAO sao cor — usado pra filtrar specs do SKU quando queremos extrair cor.
+function isClassificavelSpec(s: string): boolean {
+  return (
+    /^\d+(GB|TB|MM)$/.test(s) ||
+    /^M\d+/.test(s) ||
+    (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+    ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s)
+  );
+}
 
 const STRUCTURED = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 
@@ -59,6 +71,80 @@ export function limparNomeProduto(raw: string | null | undefined): string {
     }
   }
   return s;
+}
+
+/**
+ * Garante que o nome do produto exibido tem a cor.
+ *
+ * Estrategia em cascata (do mais confiavel pro mais aproximativo):
+ *   1. SKU canonico (extrai specs-nao-classificaveis como cor)
+ *   2. corDireta (ex: venda.cor copiado do estoque) — EN ou PT, normaliza
+ *   3. textoOriginal — infere cor conhecida do texto bruto
+ *
+ * Se achar cor em qualquer etapa, anexa ao display (caso ja nao esteja visivel).
+ *
+ * Args:
+ *   display — texto ja processado (ex: saida de getModeloBase, sem cor)
+ *   sku — SKU canonico da venda/estoque
+ *   textoOriginal — texto bruto do produto (pode ter cor embutida)
+ *   corDireta — cor vinda de outra fonte (ex: venda.cor copiado do estoque).
+ *               Normalmente mais confiavel que inferir do texto.
+ */
+export function produtoComCorGarantida(
+  display: string | null | undefined,
+  sku: string | null | undefined,
+  textoOriginal?: string | null,
+  corDireta?: string | null,
+): string {
+  const texto = normalizarCoresNoTexto(display || "");
+
+  // 1. Tenta extrair cor do SKU canonico
+  let corSegments: string[] = [];
+  if (sku) {
+    const parsed = parseSku(sku);
+    if (parsed) {
+      corSegments = parsed.specs.filter((s) => !isClassificavelSpec(s));
+    }
+  }
+
+  // 2. Se SKU nao tem cor, usa corDireta (venda.cor copiado do estoque —
+  //    fonte confiavel quando o SKU esta incompleto / cruzado).
+  if (corSegments.length === 0 && corDireta && corDireta.trim()) {
+    const corLimpa = corDireta.trim();
+    // Normaliza EN→PT (Cosmic Orange → Laranja, Space Black → Preto)
+    const corNormalizada = normalizarCoresNoTexto(corLimpa);
+    const corInferida = inferirCorDoTexto(corNormalizada);
+    if (corInferida) {
+      corSegments = corInferida.split(/\s+/);
+    } else if (corNormalizada) {
+      // Se normalizador nao reconheceu, usa cor bruta (ex: cores novas da Apple
+      // que ainda nao estao no dicionario — melhor mostrar algo do que nada).
+      corSegments = corNormalizada.toUpperCase().split(/\s+/);
+    }
+  }
+
+  // 3. Fallback: infere do texto original (vendas legadas / estoque sem cor)
+  if (corSegments.length === 0) {
+    const textoFonte = textoOriginal || display || "";
+    const textoNormalizado = normalizarCoresNoTexto(textoFonte);
+    const corInferida = inferirCorDoTexto(textoNormalizado);
+    if (corInferida) corSegments = corInferida.split(/\s+/);
+  }
+
+  if (corSegments.length === 0) return texto;
+
+  // "BRANCO-NUVEM" → "Branco Nuvem"
+  const corBonita = corSegments
+    .map((p) => p.charAt(0) + p.slice(1).toLowerCase())
+    .join(" ");
+
+  // Ja tem a cor no display? (case-insensitive)
+  const textoUpper = texto.toUpperCase();
+  const corUpper = corSegments.join(" ").toUpperCase();
+  if (textoUpper.includes(corUpper)) return texto;
+  if (corSegments.length > 1 && textoUpper.includes(corSegments[0])) return texto;
+  // Anexa
+  return `${texto} ${corBonita}`;
 }
 
 /** Formata o nome do produto para exibição (PT simplificado). Compartilhado entre estoque, gastos e etc. */
@@ -183,7 +269,11 @@ export function getModeloBase(produto: string, categoria: string, observacao?: s
   const p = (produto || "").toUpperCase().trim();
   let baseCat = getBaseCat(categoria || "");
   if (!baseCat || !["IPHONES","IPADS","MACBOOK","MAC_MINI","APPLE_WATCH","AIRPODS","ACESSORIOS"].includes(baseCat)) {
-    if (/\bIPHONE\b/.test(p)) baseCat = "IPHONES";
+    // ACESSORIOS ANTES de IPAD/IPHONE/etc — senao "Magic Keyboard iPad Pro M4"
+    // cai em IPADS (porque tem "IPAD" no nome) e vira "iPad Pro M4" no display,
+    // escondendo que e um acessorio. Lista cobre os acessorios Apple comuns.
+    if (/\bMAGIC\s*(KEYBOARD|MOUSE|TRACKPAD)\b|\bAPPLE\s*PENCIL\b|\bCARREGADOR\b|\bCAPA\b|\bCASE\b|\bCABO\b|\bFONTE\b|\bPELICULA\b|\bP[EÉ]LICULA\b|\bADAPTADOR\b|\bHUB\b|\bPULSEIRA\b|\bSMART\s*FOLIO\b/.test(p)) baseCat = "ACESSORIOS";
+    else if (/\bIPHONE\b/.test(p)) baseCat = "IPHONES";
     else if (/\bIPAD\b/.test(p)) baseCat = "IPADS";
     else if (/\bMACBOOK\b/.test(p)) baseCat = "MACBOOK";
     else if (/\bMAC\s*MINI\b/.test(p)) baseCat = "MAC_MINI";

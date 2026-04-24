@@ -10,12 +10,13 @@ import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
 import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
-import { getModeloBase } from "@/lib/produto-display";
+import { getModeloBase, produtoComCorGarantida } from "@/lib/produto-display";
 import { maskCpf, maskCnpj, maskTelefone, maskCep } from "@/lib/mask";
 import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -24,15 +25,16 @@ const VENDAS_PASSWORD = "tigrao$vendas";
 // Display do produto da venda: pega a chave "base" do getModeloBase (que inclui
 // storage/tela/RAM+SSD conforme categoria) e anexa a cor PT. Para acessorios
 // resolve o caso "MAGIC KEYBOARD IPAD PRO M4" vindo puro no v.produto e
-// aparecendo sem tela/cor — aqui enriquece com v.observacao ([TELA:X"]) e v.cor.
+// aparecendo sem tela/cor — aqui enriquece com v.observacao ([TELA:X"]) e cor
+// derivada do SKU canonico (vendas nao tem coluna cor propria).
 function buildProdutoDisplay(v: Venda): string {
   const base = getModeloBase(v.produto || "", v.categoria || "", v.observacao);
-  const cor = v.cor ? corParaPT(v.cor) : "";
-  const corValida = cor && cor !== "—" ? cor : "";
-  if (corValida && !base.toUpperCase().includes(corValida.toUpperCase())) {
-    return `${base} ${corValida}`;
-  }
-  return base;
+  // Cascata de fontes de cor (confiabilidade decrescente):
+  //   1. SKU canonico (mais confiavel quando tem cor gravada)
+  //   2. v.cor — copiado do estoque na criacao da venda
+  //   3. v.produto — texto bruto digitado pelo admin (ultima tentativa)
+  const sku = (v as unknown as { sku?: string | null }).sku;
+  return produtoComCorGarantida(base, sku, v.produto, v.cor);
 }
 
 // Formata a resposta de erro do backend quando SKU do estoque selecionado
@@ -105,6 +107,9 @@ export default function VendasPage() {
   // seta a ref e chama handleSubmit de novo com flag _sku_override=true.
   const skuOverrideRef = useRef(false);
   const [skuAlertaAtivo, setSkuAlertaAtivo] = useState(false);
+  // Escape hatch: se o filtro por SKU nao acha unidades (caso edge), admin
+  // pode clicar "Mostrar todas" pra ver tudo do estoque.
+  const [verTodasUnidadesEstoque, setVerTodasUnidadesEstoque] = useState(false);
   const vendedoresList = useVendedores(password);
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -1874,7 +1879,7 @@ export default function VendasPage() {
               : allProducts.length > editandoGrupoIds.length
                 ? `${editandoGrupoIds.length} atualizadas + ${allProducts.length - editandoGrupoIds.length} novas criadas!`
                 : `${allProducts.length} atualizadas + ${editandoGrupoIds.length - allProducts.length} removidas!`;
-            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -1920,7 +1925,7 @@ export default function VendasPage() {
           });
           const json = await res.json();
           if (json.ok || json.data) {
-            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -2519,7 +2524,7 @@ export default function VendasPage() {
               </div>
               <button
                 onClick={() => {
-                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false);
                   setEditandoGrupoIds([]);
                   setProdutosCarrinho([]);
                   setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
@@ -2565,7 +2570,7 @@ export default function VendasPage() {
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
-                  setProdutosCarrinho([]); setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
+                  setProdutosCarrinho([]); setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
@@ -3465,26 +3470,92 @@ export default function VendasPage() {
                     unidade fisica sai (em vez de digitar/bipar manualmente). */}
                 {statusPagamentoOriginal === "FORMULARIO_PREENCHIDO" && editandoVendaId && (() => {
                   const vendaEdicao = vendas.find(v => v.id === editandoVendaId);
-                  const skuVenda = (vendaEdicao as unknown as { sku?: string | null } | undefined)?.sku;
-                  if (!skuVenda) return null;
-                  const unidades = estoque.filter(
-                    (p) => (p.sku || "").toUpperCase() === skuVenda.toUpperCase()
-                      && p.qnt > 0
-                      && p.status === "EM ESTOQUE"
-                  );
+                  const skuVendaPersistido = (vendaEdicao as unknown as { sku?: string | null } | undefined)?.sku || null;
+                  // Gera SKU do texto da venda AGORA (pode diferir do persistido
+                  // quando venda e antiga ou quando texto foi editado manualmente).
+                  // Isso garante que o match use o SKU mais atualizado.
+                  const produtoTexto = vendaEdicao?.produto || "";
+                  const skuVendaInferido = gerarSkuSafe({
+                    produto: produtoTexto,
+                    categoria: detectarCategoriaPorTexto(produtoTexto),
+                    cor: null,
+                    observacao: null,
+                    tipo: "NOVO",
+                  });
+                  // Lista de SKUs a tentar (ordenados por confiabilidade)
+                  const skusAlvo = [skuVendaPersistido, skuVendaInferido]
+                    .filter(Boolean)
+                    .map(s => s!.toUpperCase());
+                  if (skusAlvo.length === 0) return null;
+
+                  const unidades = estoque.filter((p) => {
+                    if (p.qnt <= 0 || p.status !== "EM ESTOQUE") return false;
+                    // Escape hatch: admin clicou "Mostrar todas" — ignora filtro
+                    if (verTodasUnidadesEstoque) return true;
+                    // Match A: SKU persistido do estoque (backfill)
+                    const skuEstoquePersistido = (p.sku || "").toUpperCase();
+                    if (skuEstoquePersistido && skusAlvo.includes(skuEstoquePersistido)) return true;
+                    // Match B: gera SKU do texto do estoque e compara — cobre itens
+                    // sem SKU persistido (ex: unidade nova cadastrada depois do
+                    // backfill) ou backfill que falhou pra aquela row.
+                    const skuEstoqueInferido = gerarSkuSafe({
+                      produto: p.produto || "",
+                      categoria: p.categoria || "",
+                      cor: p.cor ?? null,
+                      observacao: null,
+                      tipo: p.tipo === "SEMINOVO" ? "SEMINOVO" : "NOVO",
+                    });
+                    const skuEstoqueFinal = skuEstoqueInferido?.toUpperCase() || skuEstoquePersistido;
+                    if (skuEstoqueFinal && skusAlvo.includes(skuEstoqueFinal)) return true;
+                    // Match C (prefixo): SKU da venda pode estar incompleto (ex:
+                    // "IPHONE-17-256GB" sem cor, de venda legada). Se o SKU do
+                    // estoque comeca com o SKU da venda + "-", considera compativel
+                    // — estoque so tem mais detalhe (cor). Cobre caso reportado:
+                    //   venda: IPHONE-17-256GB
+                    //   estoque: IPHONE-17-256GB-PRETO → ✅ aparece pra escolher
+                    if (skuEstoqueFinal) {
+                      for (const alvo of skusAlvo) {
+                        if (skuEstoqueFinal === alvo) return true;
+                        if (skuEstoqueFinal.startsWith(alvo + "-")) return true;
+                        if (alvo.startsWith(skuEstoqueFinal + "-")) return true;
+                      }
+                    }
+                    return false;
+                  });
+
                   if (unidades.length === 0) {
                     return (
-                      <div className={`mt-2 px-3 py-2 rounded-xl text-xs ${dm ? "bg-red-900/20 text-red-300 border border-red-900/40" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                        ⚠️ Nenhuma unidade desse produto em estoque ainda.
-                        Encomende antes de registrar a venda.
+                      <div className={`mt-2 p-3 rounded-xl text-xs space-y-2 ${dm ? "bg-red-900/20 text-red-300 border border-red-900/40" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                        <p>
+                          ⚠️ Nenhuma unidade desse produto em estoque ainda.
+                          Encomende antes de registrar a venda.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setVerTodasUnidadesEstoque(true)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:bg-[#3A3A3C]" : "bg-white text-[#1D1D1F] border border-[#D2D2D7] hover:border-red-400"}`}
+                        >
+                          🔓 Mostrar todas as unidades do estoque
+                        </button>
                       </div>
                     );
                   }
                   return (
                     <div className={`mt-2 p-3 rounded-xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-[#FFF8F0] border border-[#E8740E]/30"}`}>
-                      <p className={`text-xs font-bold mb-2 ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>
-                        📦 {unidades.length} {unidades.length === 1 ? "unidade disponível" : "unidades disponíveis"} — clique pra selecionar
-                      </p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className={`text-xs font-bold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>
+                          📦 {unidades.length} {unidades.length === 1 ? "unidade disponível" : verTodasUnidadesEstoque ? "unidades (TODO o estoque)" : "unidades disponíveis"} — clique pra selecionar
+                        </p>
+                        {verTodasUnidadesEstoque && (
+                          <button
+                            type="button"
+                            onClick={() => setVerTodasUnidadesEstoque(false)}
+                            className={`text-[10px] px-2 py-0.5 rounded-lg border ${dm ? "border-[#3A3A3C] text-[#98989D] hover:text-[#F5A623]" : "border-[#D2D2D7] text-[#86868B] hover:text-[#E8740E]"}`}
+                          >
+                            Filtrar só este SKU
+                          </button>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {unidades.map((p) => {
                           const isSelected = estoqueId === p.id;
@@ -3515,6 +3586,15 @@ export default function VendasPage() {
                               <div className="flex items-center gap-2">
                                 <span>{isSelected ? "✓" : "📱"}</span>
                                 <div className="flex flex-col items-start gap-0.5">
+                                  {/* Quando admin ve TODAS as unidades, mostra
+                                      produto+cor pra ele identificar (senao
+                                      so o serial e suficiente, todas sao do
+                                      mesmo modelo). */}
+                                  {verTodasUnidadesEstoque && (
+                                    <span className={`text-[10px] font-semibold ${isSelected ? "text-white" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>
+                                      {p.produto}
+                                    </span>
+                                  )}
                                   <span className="font-mono text-[11px]">{codigo}</span>
                                   {p.fornecedor && (
                                     <span className={`text-[9px] ${isSelected ? "text-white/80" : (dm ? "text-[#98989D]" : "text-[#86868B]")}`}>
@@ -3570,7 +3650,7 @@ export default function VendasPage() {
                   setProdutosCarrinho([]);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
-                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false); setEditandoGrupoIds([]); setDuplicadoInfo(null);
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
