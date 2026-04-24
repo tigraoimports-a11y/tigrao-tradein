@@ -355,12 +355,16 @@ export async function GET(req: NextRequest) {
       const vendasAlvo = vendasSemEstoque.filter((v) => v.serial_no || v.imei);
 
       // Cruzamento heuristico pra auto-classificar vendas sem baixa:
-      //   1. Serial/IMEI bate com algum item de estoque → basta vincular
-      //   2. SKU bate com item em estoque (EM ESTOQUE) → pode ser este item
-      //   3. SKU bate com item ESGOTADO → pode ser que ja foi dado baixa
-      //      em outra venda (nao vincular, alertar dupla contagem)
+      //   1. Serial/IMEI match → basta vincular (alta confianca)
+      //   2. SKU EXATO bate com EM ESTOQUE → pode ser este
+      //   3. SKU PREFIX — venda sem cor vs estoque com cor (ex:
+      //      venda "IPHONE-17-256GB" vs estoque "IPHONE-17-256GB-PRETO")
+      //   4. SKU bate com item ESGOTADO → dupla contagem, alertar
+      //   5. SKU nao existe em LUGAR NENHUM no estoque → "legado nao cadastrado"
+      //      (vendas antigas importadas sem vincular — baixa severidade, ignora)
       //
-      // Carrega estoque candidato em 1 query — filtra por SKU/serial/imei.
+      // Busca: EXATO + PREFIX (estoque.sku LIKE venda.sku || '-%') pra cobrir
+      // caso de venda com SKU parcial (sem cor).
       const skusVendas = [...new Set(vendasAlvo.map((v) => v.sku).filter(Boolean) as string[])];
       const seriaisVendas = [...new Set(vendasAlvo.map((v) => v.serial_no).filter(Boolean) as string[])];
       const imeisVendas = [...new Set(vendasAlvo.map((v) => v.imei).filter(Boolean) as string[])];
@@ -370,17 +374,31 @@ export async function GET(req: NextRequest) {
         serial_no: string | null; imei: string | null; status: string | null;
       }> = [];
       if (skusVendas.length > 0 || seriaisVendas.length > 0 || imeisVendas.length > 0) {
-        const filtros: string[] = [];
-        if (skusVendas.length > 0) filtros.push(`sku.in.(${skusVendas.map((s) => `"${s}"`).join(",")})`);
-        if (seriaisVendas.length > 0) filtros.push(`serial_no.in.(${seriaisVendas.map((s) => `"${s}"`).join(",")})`);
-        if (imeisVendas.length > 0) filtros.push(`imei.in.(${imeisVendas.map((i) => `"${i}"`).join(",")})`);
+        // Monta OR conditions individuais pra suportar PREFIX (.like)
+        const orParts: string[] = [];
+        for (const s of skusVendas) {
+          orParts.push(`sku.eq.${s}`);
+          orParts.push(`sku.like.${s}-*`); // prefix match (venda sem cor vs estoque com)
+        }
+        for (const s of seriaisVendas) orParts.push(`serial_no.eq.${s}`);
+        for (const i of imeisVendas) orParts.push(`imei.eq.${i}`);
 
         const { data } = await supabase
           .from("estoque")
           .select("id, produto, sku, serial_no, imei, status")
-          .or(filtros.join(","));
+          .or(orParts.join(","));
         estoqueCandidato = data || [];
       }
+
+      // Helper: SKU A e prefix-compativel com B quando sao iguais OU um comeca
+      // com o outro + "-" (ex: "IPHONE-17-256GB" ⊂ "IPHONE-17-256GB-PRETO")
+      const skuMatch = (a: string | null, b: string | null): boolean => {
+        if (!a || !b) return false;
+        if (a === b) return true;
+        if (b.startsWith(a + "-")) return true;
+        if (a.startsWith(b + "-")) return true;
+        return false;
+      };
 
       for (const v of vendasAlvo) {
         let hipotese: Hipotese | undefined;
@@ -392,7 +410,6 @@ export async function GET(req: NextRequest) {
           return false;
         });
         if (matchSerial) {
-          // Se item ta em estoque — vincula pra marcar saida
           if (matchSerial.status === "EM ESTOQUE" || matchSerial.status === "PENDENTE") {
             hipotese = {
               tipo: "serial_match",
@@ -401,8 +418,6 @@ export async function GET(req: NextRequest) {
               estoque_id: matchSerial.id,
             };
           } else if (matchSerial.status === "ESGOTADO") {
-            // Item ja esta esgotado — serial bate, provavelmente e a mesma unidade
-            // mas o vinculo ficou solto. Vincular corrige.
             hipotese = {
               tipo: "serial_match",
               confianca: "alta",
@@ -412,34 +427,40 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // 2. SKU match — confianca media
+        // 2. SKU match (EXATO ou PREFIX) — confianca media
         if (!hipotese && v.sku) {
-          // Prefere item EM ESTOQUE (disponivel); se nao achar, considera ESGOTADO
-          const emEstoque = estoqueCandidato.find((e) => e.sku === v.sku && e.status === "EM ESTOQUE");
-          const esgotado = estoqueCandidato.find((e) => e.sku === v.sku && e.status === "ESGOTADO");
+          // Prefere EM ESTOQUE; se nao achar, considera ESGOTADO. Usa skuMatch
+          // pra aceitar venda sem cor vs estoque com cor (e vice-versa).
+          const emEstoque = estoqueCandidato.find((e) => skuMatch(v.sku, e.sku) && e.status === "EM ESTOQUE");
+          const esgotado = estoqueCandidato.find((e) => skuMatch(v.sku, e.sku) && e.status === "ESGOTADO");
           if (emEstoque) {
+            const skuIgual = emEstoque.sku === v.sku;
             hipotese = {
               tipo: "estoque_disponivel",
-              confianca: "media",
-              descricao: `Ha item com mesmo SKU no estoque (disponivel). Pode ser este — verifica serial/IMEI antes de vincular.`,
+              confianca: skuIgual ? "media" : "media",
+              descricao: skuIgual
+                ? `Ha item com mesmo SKU no estoque (disponivel). Pode ser este — verifica serial/IMEI antes de vincular.`
+                : `Ha item compativel no estoque (SKU ${emEstoque.sku} — venda tem SKU parcial ${v.sku}). Vincular se confirmar.`,
               estoque_id: emEstoque.id,
             };
           } else if (esgotado) {
             hipotese = {
               tipo: "estoque_esgotado",
               confianca: "baixa",
-              descricao: `Ha item com mesmo SKU ja ESGOTADO. Pode ser dupla contagem (outra venda ja deu baixa) — investigar antes de vincular.`,
+              descricao: `Ha item com mesmo SKU ja ESGOTADO (${esgotado.sku}). Pode ser dupla contagem (outra venda ja deu baixa) — investigar antes.`,
               estoque_id: esgotado.id,
             };
           }
         }
 
-        // 3. Nada encontrado
+        // 3. Nada encontrado — e uma venda "legado" (provavelmente importada
+        // sem cadastrar estoque na epoca). Marca com hipotese suave pra admin
+        // ignorar em massa sem achar que e problema grave.
         if (!hipotese) {
           hipotese = {
             tipo: "nenhuma",
             confianca: "baixa",
-            descricao: "Nao achei item correspondente no estoque. Item pode ter sido importado direto, nao cadastrado, ou deletado.",
+            descricao: "Nao achei item no estoque (provavelmente venda antiga/importada sem cadastrar estoque). Pode ignorar se ja sabe que e legado.",
           };
         }
 
@@ -449,7 +470,7 @@ export async function GET(req: NextRequest) {
           ? "media"
           : hipotese.tipo === "estoque_esgotado"
           ? "alta" // dupla contagem = perigoso
-          : "media";
+          : "baixa"; // "nenhuma" = provavel legado, baixa severidade
 
         resultados.push({
           tipo: "VENDA_SEM_ESTOQUE",
