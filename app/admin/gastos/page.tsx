@@ -12,11 +12,20 @@ import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS, DEFAULT_SPEC, type P
 import { corParaPT, corParaEN, normalizarCoresNoTexto } from "@/lib/cor-pt";
 import { formatProdutoDisplay } from "@/lib/produto-display";
 
-/** Converte string BR (ex: "12.250,89" ou "128,89") para número */
+/** Converte string BR (ex: "12.250,89" ou "128,89") para número.
+ *  Se NAO tem virgula, tratamos ponto como separador decimal (formato US)
+ *  em vez de milhares. Antes parseBR("27.68") virava 2768 porque removia
+ *  o ponto como se fosse milhares — bug reportado na /admin/gastos quando
+ *  o valor com virgula era re-editado e o browser serializava com ponto. */
 const parseBR = (v: string): number => {
   if (!v) return 0;
-  const clean = v.replace(/\./g, "").replace(",", ".");
-  return parseFloat(clean) || 0;
+  const s = String(v).trim();
+  if (s.includes(",")) {
+    // Formato BR: pontos sao milhares, virgula eh decimal
+    return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+  // Sem virgula: ponto eh decimal (ou nao tem separador)
+  return parseFloat(s) || 0;
 };
 
 const BANCOS: Banco[] = ["ITAU", "INFINITE", "MERCADO_PAGO", "ESPECIE"];

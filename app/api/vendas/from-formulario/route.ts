@@ -77,6 +77,12 @@ interface BodyIn {
   horarioEntrega?: string;
   vendedor?: string;
   origem?: string;
+  // Encomenda: cliente paga sinal antecipado. Body trazem flag + parametros,
+  // mas o backend so trata como encomenda se o link_compras.tipo === ENCOMENDA
+  // (evita cliente forcar isso por URL).
+  encomenda?: boolean;
+  previsaoChegada?: string;
+  sinalPct?: number;
   // UTM tracking — passado pelo client via withUTMs() de lib/utm-tracker
   utm_source?: string;
   utm_medium?: string;
@@ -127,6 +133,27 @@ export async function POST(req: NextRequest) {
 
   // Hoje local no fuso de SP (padrão do resto do sistema)
   const hojeStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
+  // Encomenda: flag organizacional vinda do link_compras (operador marca).
+  // So vira encomenda se o link for do tipo ENCOMENDA (check no banco pra
+  // impedir cliente forcar via URL). Venda eh criada normalmente em `vendas`
+  // com flags extras — fluxo de pagamento eh identico a compra normal.
+  // sinal_pct NULL/0 = pagamento integral; >0 = cobrou so esse % no link.
+  let ehEncomenda = false;
+  let previsaoChegadaLink: string | null = null;
+  let sinalPctLink = 0; // 0 = integral
+  if (body.encomenda) {
+    const { data: lk } = await supabase
+      .from("link_compras")
+      .select("tipo, previsao_chegada, sinal_pct")
+      .eq("short_code", body.shortCode)
+      .maybeSingle();
+    if (lk?.tipo === "ENCOMENDA") {
+      ehEncomenda = true;
+      previsaoChegadaLink = (lk.previsao_chegada as string | null) || body.previsaoChegada || null;
+      sinalPctLink = Number(lk.sinal_pct) || 0;
+    }
+  }
 
   const precoNum = Number(body.preco) || 0;
   const trocaValorNum = Number(body.trocaValor) || 0;
@@ -195,6 +222,12 @@ export async function POST(req: NextRequest) {
     utm_campaign: body.utm_campaign ? String(body.utm_campaign).slice(0, 200) : null,
     utm_content: body.utm_content ? String(body.utm_content).slice(0, 200) : null,
     utm_term: body.utm_term ? String(body.utm_term).slice(0, 200) : null,
+    // Encomenda — flag organizacional. O link_compras.tipo === ENCOMENDA
+    // e validado em `ehEncomenda` acima (cliente nao forca via URL).
+    ...(ehEncomenda ? {
+      encomenda: true,
+      previsao_chegada: previsaoChegadaLink,
+    } : {}),
   };
 
   // SKU canonico do produto principal. Importante: gerar AQUI (mesmo que
