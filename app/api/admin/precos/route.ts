@@ -32,8 +32,7 @@ export async function GET(req: NextRequest) {
   let q = supabase
     .from("precos")
     .select("*")
-    .order("modelo")
-    .order("armazenamento");
+    .order("modelo");
 
   if (tipoFilter === "SEMINOVO") {
     q = q.eq("tipo", "SEMINOVO");
@@ -47,7 +46,26 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ data: data ?? [] });
+  // Ordena armazenamento numericamente (nao alfabetico). Antes "1TB" vinha
+  // antes de "256GB" porque "1" < "2" em string sort. Agora converte TB → GB
+  // pra comparar magnitude real.
+  const armazenamentoGB = (arm: string | null): number => {
+    if (!arm) return 0;
+    const m = String(arm).match(/(\d+)\s*(GB|TB|MB)/i);
+    if (!m) return 0;
+    const n = parseInt(m[1]);
+    const u = m[2].toUpperCase();
+    if (u === "TB") return n * 1024;
+    if (u === "MB") return n / 1024;
+    return n;
+  };
+  const ordenados = (data ?? []).sort((a, b) => {
+    const mm = (a.modelo || "").localeCompare(b.modelo || "");
+    if (mm !== 0) return mm;
+    return armazenamentoGB(a.armazenamento) - armazenamentoGB(b.armazenamento);
+  });
+
+  return NextResponse.json({ data: ordenados });
 }
 
 // POST — upsert de um produto (modelo + armazenamento + preco_pix + status + categoria)
