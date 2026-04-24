@@ -1121,7 +1121,14 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
     // pra separar variantes do mesmo modelo (Magic Keyboard 11" != 13")
     const telaMatch = observacao?.match(/\[TELA:([^\]]+)\]/);
     const tela = telaMatch ? ` ${telaMatch[1].trim().replace(/"?$/, '"')}` : "";
-    const nome = produto.replace(/\s*[-–]\s*$/, "").trim();
+    // Stripa cor do final do nome pra agrupar variantes no mesmo card
+    // (ex: "MAGIC KEYBOARD IPAD AIR M3 13\" BRANCO" + "MAGIC KEYBOARD IPAD
+    // AIR M3 13\"" viram o mesmo base — cor fica so na subdivisao).
+    const coresPT = /\b(PRETO|BRANCO|CINZA|AZUL|VERDE|PRATA|DOURAD[OA]?|ROXO|ROSA|LARANJA|AMARELO|VERMELHO|ESTELAR|TIT[AÂ]NIO(?:\s+(?:PRETO|BRANCO|AZUL|DESERTO|NATURAL|PRATA|LARANJA))?|MEIA[-\s]NOITE)$/i;
+    let nome = produto.replace(/\s*[-–]\s*$/, "").trim();
+    while (coresPT.test(nome)) {
+      nome = nome.replace(coresPT, "").trim();
+    }
     return `${nome}${tela}`;
   }
   // Fallback: normalizar trailing dashes/espaços

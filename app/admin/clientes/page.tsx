@@ -1144,31 +1144,37 @@ export default function ClientesPage() {
         };
 
         const saveEdit = async () => {
+          // Antes fazia loop de N vendas * 2 requests (cliente com 85 compras
+          // = 170 requests sequenciais, UI travava). Pior: o segundo fetch
+          // tinha service_role key HARDCODED no browser — vazava acesso root
+          // ao Supabase. Agora manda 1 chamada admin que faz UPDATE em massa.
+          const camposMudados: Record<string, string | null> = {};
+          if (editForm.cpf !== (c.cpf || "")) camposMudados.cpf = editForm.cpf || null;
+          if (editForm.email !== (c.email || "")) camposMudados.email = editForm.email || null;
+          if (editForm.bairro !== (c.bairro || "")) camposMudados.bairro = editForm.bairro || null;
+          if (editForm.cidade !== (c.cidade || "")) camposMudados.cidade = editForm.cidade || null;
+          if (editForm.uf !== (c.uf || "")) camposMudados.uf = editForm.uf || null;
+          const renomeou = editForm.nome && editForm.nome.toUpperCase() !== (c.nome || "").toUpperCase();
+          if (Object.keys(camposMudados).length === 0 && !renomeou) {
+            setEditing(false); setDetailClient(null); return;
+          }
           setSavingClient(true);
-          for (const v of detailVendas) {
-            const updates: Record<string, string | null> = {};
-            if (editForm.nome && editForm.nome !== c.nome) updates.cliente = editForm.nome.toUpperCase();
-            if (editForm.cpf !== (c.cpf || "")) updates.cpf = editForm.cpf || null;
-            if (editForm.email !== (c.email || "")) updates.email = editForm.email || null;
-            if (editForm.bairro !== (c.bairro || "")) updates.bairro = editForm.bairro || null;
-            if (editForm.cidade !== (c.cidade || "")) updates.cidade = editForm.cidade || null;
-            if (editForm.uf !== (c.uf || "")) updates.uf = editForm.uf || null;
-            if (Object.keys(updates).length > 0) {
-              await fetch("/api/estoque", {
-                method: "PATCH",
-                headers: { ...apiHeaders(), "Content-Type": "application/json" },
-                body: JSON.stringify({ table: "vendas", id: v.id, ...updates }),
-              }).catch(() => {});
-              await fetch(`https://fohhlehrqtwruzxjzrql.supabase.co/rest/v1/vendas?id=eq.${v.id}`, {
-                method: "PATCH",
-                headers: {
-                  "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvaGhsZWhycXR3cnV6eGp6cnFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzg1OTI1MiwiZXhwIjoyMDg5NDM1MjUyfQ.l0655fvNwRljhyDZl8ODW5H2HS3PH7rZb1Kjx5TJXvg",
-                  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvaGhsZWhycXR3cnV6eGp6cnFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzg1OTI1MiwiZXhwIjoyMDg5NDM1MjUyfQ.l0655fvNwRljhyDZl8ODW5H2HS3PH7rZb1Kjx5TJXvg",
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(updates),
-              }).catch(() => {});
+          try {
+            const res = await fetch("/api/admin/clientes/rename", {
+              method: "POST",
+              headers: { ...apiHeaders(), "Content-Type": "application/json" },
+              body: JSON.stringify({
+                nomeAntigo: c.nome,
+                ...(renomeou ? { nomeNovo: editForm.nome } : {}),
+                ...camposMudados,
+              }),
+            });
+            if (!res.ok) {
+              const j = await res.json().catch(() => ({}));
+              alert(`Erro ao salvar: ${j.error || res.status}`);
             }
+          } catch (err) {
+            alert(`Erro ao salvar: ${String(err)}`);
           }
           setSavingClient(false);
           setEditing(false);

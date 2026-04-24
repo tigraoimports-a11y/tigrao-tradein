@@ -162,7 +162,11 @@ export default function VendasPage() {
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
   const [showLojistaSuggestions, setShowLojistaSuggestions] = useState(false);
-  const [lojistas, setLojistas] = useState<{ id: string; nome: string; cpf?: string | null; cnpj?: string | null; saldo_credito?: number }[]>([]);
+  const [lojistas, setLojistas] = useState<{
+    id: string; nome: string; cpf?: string | null; cnpj?: string | null; saldo_credito?: number;
+    email?: string | null; telefone?: string | null; endereco?: string | null;
+    cep?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null;
+  }[]>([]);
 
   // Card title overrides (sincronizado com a página de Estoque)
   const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
@@ -2790,7 +2794,14 @@ export default function VendasPage() {
                             e.preventDefault();
                             set("cliente", (l.nome || "").toUpperCase());
                             if (l.cpf) set("cpf", maskCpf(l.cpf));
-                            if (l.cnpj) set("cnpj", maskCnpj(l.cnpj));
+                            if (l.cnpj) { set("cnpj", maskCnpj(l.cnpj)); set("pessoa", "PJ"); }
+                            if (l.email) set("email", l.email);
+                            if (l.telefone) set("telefone", maskTelefone(l.telefone));
+                            if (l.endereco) set("endereco", l.endereco);
+                            if (l.cep) set("cep", maskCep(l.cep));
+                            if (l.bairro) set("bairro", l.bairro);
+                            if (l.cidade) set("cidade", l.cidade);
+                            if (l.uf) set("uf", l.uf);
                             setShowLojistaSuggestions(false);
                           }}
                           className="w-full px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors border-b border-[#F5F5F7] last:border-0"
