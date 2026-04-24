@@ -660,17 +660,26 @@ export function UsadosContent() {
 
   // Agrupa por "base" (tudo exceto conectividade) pros iPad/Watch: 1 linha visual
   // contendo ate N variantes (uma por conect option). Chave = baseKey (ex: "64GB | 11\"").
+  //
+  // A conectividade e detectada pela correspondencia direta com conectOptions
+  // (["Wifi", "Wifi + Cel"] ou ["GPS", "GPS + Cel"]) — nao pelo indice fixo no
+  // array de partes. Isso torna o agrupamento robusto a linhas legadas sem tela
+  // (ex: "64GB | Wifi" — so 2 partes, sem conseguir diferenciar tela de conect
+  // pela posicao). Com a deteccao por valor, legacy "64GB | Wifi" e o novo
+  // "64GB | 11\" | Wifi" caem juntos pelo mesmo conect=Wifi.
   type BaseGroup = { baseKey: string; baseParts: string[]; variants: Record<string, ValorUsado> };
   const baseGroupsByModel: Record<string, BaseGroup[]> = {};
   if (hasConectField) {
-    const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
-    const conectIdx = specFields.findIndex((f) => f.key === "conectividade");
+    const conectOptSet = new Set(conectOptions);
     for (const modelo of Object.keys(grouped)) {
       const bases: Record<string, BaseGroup> = {};
       for (const r of grouped[modelo]) {
         const parts = r.armazenamento.split("|").map((p) => p.trim());
-        const conect = parts[conectIdx] || "_sem_conect_";
-        const basePartsArr = specFields.map((_, i) => parts[i] || "").filter((_, i) => i !== conectIdx);
+        const conectIdxInRow = parts.findIndex((p) => conectOptSet.has(p));
+        const conect = conectIdxInRow !== -1 ? parts[conectIdxInRow] : "_sem_conect_";
+        const basePartsArr = conectIdxInRow !== -1
+          ? parts.filter((_, i) => i !== conectIdxInRow)
+          : parts;
         const baseKey = basePartsArr.join(" | ");
         if (!bases[baseKey]) bases[baseKey] = { baseKey, baseParts: basePartsArr, variants: {} };
         bases[baseKey].variants[conect] = r;
