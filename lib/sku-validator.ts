@@ -20,6 +20,25 @@
 //   - Frontend /admin/vendas (alerta visual em tempo real antes do submit)
 
 import { parseSku } from "./sku";
+import { corParaPT } from "./cor-pt";
+
+// Normaliza cor pra comparacao lingua-agnostica: "SILVER" e "PRATA" viram
+// ambos "PRATA" (via corParaPT — Silver mapeia pra Prata). Serve pra
+// identificarDiferencas nao marcar divergencia entre cores EN vs PT da
+// mesma Apple color (Silver, Space Black, Midnight, etc).
+function normalizarCorParaComparacao(cor: string | null): string | null {
+  if (!cor) return null;
+  // corParaPT espera case-sensitive; tenta Titlecase, UPPER, lower pra casar
+  const tentativas = [cor, cor.charAt(0) + cor.slice(1).toLowerCase(), cor.toLowerCase()];
+  for (const t of tentativas) {
+    const pt = corParaPT(t);
+    if (pt && pt !== "—" && pt.toLowerCase() !== t.toLowerCase()) {
+      return pt.toUpperCase();
+    }
+  }
+  // Nao bateu no dicionario — retorna como veio (uppercase pra comparar)
+  return cor.toUpperCase();
+}
 
 export interface SkuComparison {
   ok: boolean;               // true = pode vincular, false = bloqueado
@@ -111,8 +130,15 @@ function identificarDiferencas(esperado: string, selecionado: string): Array<{ c
     diffs.push({ campo: "categoria", esperado: pE.categoria, selecionado: pS.categoria });
   }
 
-  // Modelo (primeiros 2 segmentos: ex "IPHONE-17", "IPHONE-17-PRO")
-  if (pE.modelo !== pS.modelo) {
+  // Modelo: tolera SUBSET — quando o modelo de um lado e prefix do outro,
+  // considera compativel. Ex: venda "MACBOOK-NEO" e estoque "MACBOOK-NEO-A18-PRO"
+  // (cliente pediu generico, estoque tem variante especifica — compativel).
+  // So marca divergencia quando os modelos realmente diferem (ex: IPHONE-16
+  // vs IPHONE-17).
+  const modeloCompat = pE.modelo === pS.modelo
+    || pS.modelo.startsWith(pE.modelo + "-")
+    || pE.modelo.startsWith(pS.modelo + "-");
+  if (!modeloCompat) {
     diffs.push({ campo: "modelo", esperado: pE.modelo, selecionado: pS.modelo });
   }
 
@@ -129,7 +155,12 @@ function identificarDiferencas(esperado: string, selecionado: string): Array<{ c
   if (difere(specE.storage, specS.storage)) {
     diffs.push({ campo: "storage", esperado: specE.storage!, selecionado: specS.storage! });
   }
-  if (difere(specE.cor, specS.cor)) {
+  // Cor: normaliza pra PT antes de comparar — "SILVER" e "PRATA" sao o
+  // mesmo (Apple usa EN no catalogo, nos gravamos em PT). normalizarCorPara...
+  // usa corParaPT que mapeia EN canonico → PT.
+  const corE_n = normalizarCorParaComparacao(specE.cor);
+  const corS_n = normalizarCorParaComparacao(specS.cor);
+  if (difere(corE_n, corS_n)) {
     diffs.push({ campo: "cor", esperado: specE.cor!, selecionado: specS.cor! });
   }
   if (difere(specE.tamanhoWatch, specS.tamanhoWatch)) {
