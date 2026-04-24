@@ -468,6 +468,37 @@ function CompraForm() {
   const [printsErro, setPrintsErro] = useState<Record<string, string>>({});
   const temSegundoAparelho = !!trocaProduto2Param;
 
+  // Apenas iPhone tem IMEI — iPad, Apple Watch e MacBook so tem Nº de Serie.
+  // Quando o cliente da um desses na troca, nao exigimos IMEI (nem print
+  // nem campo de texto). Mantem validacao rigida pra iPhone (2 prints).
+  //
+  // Detecta pelo nome do produto (texto livre vindo do simulador ou do link
+  // gerado pelo admin). Fallback pro antigo comportamento (exige IMEI) quando
+  // nome vazio — mais seguro do que pular a validacao por engano.
+  const produtoTemImei = (produto: string | null | undefined): boolean => {
+    const p = (produto || "").toUpperCase();
+    if (!p) return true; // sem info → exige IMEI (comportamento original)
+    if (/\bIPAD\b/.test(p)) return false;
+    if (/\bMACBOOK\b|\bMAC\s*MINI\b|\bMAC\s*BOOK\b/.test(p)) return false;
+    if (/\bAPPLE\s*WATCH\b|\bWATCH\b/.test(p)) return false;
+    if (/\bAIRPODS\b/.test(p)) return false;
+    return true; // default (iPhone, seminovo, outros celulares) exige IMEI
+  };
+  const aparelho1TemImei = produtoTemImei(trocaProdutoParam);
+  const aparelho2TemImei = produtoTemImei(trocaProduto2Param);
+
+  // Detecta tipo de aparelho pelo nome (pra exibir caminho correto de Ajustes
+  // no texto de instrucao). Se nao identificar, retorna "aparelho" generico.
+  const detectarTipoAparelho = (produto: string | null | undefined): string => {
+    const p = (produto || "").toUpperCase();
+    if (/\bIPHONE\b/.test(p)) return "iPhone";
+    if (/\bIPAD\b/.test(p)) return "iPad";
+    if (/\bMACBOOK\b|\bMAC\s*BOOK\b|\bMAC\s*MINI\b/.test(p)) return "MacBook";
+    if (/\bAPPLE\s*WATCH\b|\bWATCH\b/.test(p)) return "Apple Watch";
+    if (/\bAIRPODS\b/.test(p)) return "AirPods";
+    return "aparelho";
+  };
+
   // IMEI e Nº de Série dos aparelhos na troca.
   // Fluxo: cliente anexa o print → backend usa Claude Vision pra ler o
   // número automaticamente → valor aparece preenchido aqui (read-only por
@@ -667,20 +698,22 @@ function CompraForm() {
     }
 
     // Valida prints do aparelho na troca (obrigatorios quando ha troca + link de compra)
+    // IMEI so e exigido pra iPhone — iPad/Watch/MacBook so tem Nº de Serie.
     if (temTroca && shortCode) {
-      const faltaAparelho1 = !printsUrls.serial1 || !printsUrls.imei1;
-      const faltaAparelho2 = temSegundoAparelho && (!printsUrls.serial2 || !printsUrls.imei2);
-      if (faltaAparelho1 || faltaAparelho2) {
+      const faltaSerial1 = !printsUrls.serial1;
+      const faltaImei1 = aparelho1TemImei && !printsUrls.imei1;
+      const faltaSerial2 = temSegundoAparelho && !printsUrls.serial2;
+      const faltaImei2 = temSegundoAparelho && aparelho2TemImei && !printsUrls.imei2;
+      if (faltaSerial1 || faltaImei1 || faltaSerial2 || faltaImei2) {
         // Scroll pra area de prints e destaca (em vez de alert que fecha)
         const el = document.getElementById("prints-troca");
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           el.classList.add("ring-4", "ring-red-500", "animate-pulse");
           setTimeout(() => el.classList.remove("ring-4", "ring-red-500", "animate-pulse"), 3000);
-          // Tenta abrir a galeria do primeiro print faltante (funciona em iOS/Android quando
-          // invocado dentro de evento do submit, alguns browsers exigem gesture separado)
+          // Tenta abrir a galeria do primeiro print faltante
           setTimeout(() => {
-            const key = !printsUrls.serial1 ? "serial1" : !printsUrls.imei1 ? "imei1" : !printsUrls.serial2 ? "serial2" : "imei2";
+            const key = faltaSerial1 ? "serial1" : faltaImei1 ? "imei1" : faltaSerial2 ? "serial2" : "imei2";
             const input = document.getElementById(`print-input-${key}`) as HTMLInputElement | null;
             input?.click();
           }, 400);
@@ -691,11 +724,12 @@ function CompraForm() {
       // Valida que o IMEI e Nº de Série foram extraídos com sucesso (via OCR
       // ou preenchidos manualmente quando OCR falha). Serial mínimo 6 chars,
       // IMEI mínimo 14 dígitos (IMEI tem 15, aceita 14+ pra tolerar 1 falha do OCR).
+      // IMEI so e exigido pra iPhone.
       const soDigitos = (s: string) => s.replace(/\D/g, "");
       const serial1Ok = trocaSerial1.trim().length >= 6;
-      const imei1Ok = soDigitos(trocaImei1).length >= 14;
+      const imei1Ok = !aparelho1TemImei || soDigitos(trocaImei1).length >= 14;
       const serial2Ok = !temSegundoAparelho || trocaSerial2.trim().length >= 6;
-      const imei2Ok = !temSegundoAparelho || soDigitos(trocaImei2).length >= 14;
+      const imei2Ok = !temSegundoAparelho || !aparelho2TemImei || soDigitos(trocaImei2).length >= 14;
       if (!serial1Ok || !imei1Ok || !serial2Ok || !imei2Ok) {
         const el = document.getElementById("prints-troca");
         if (el) {
@@ -703,7 +737,12 @@ function CompraForm() {
           el.classList.add("ring-4", "ring-red-500", "animate-pulse");
           setTimeout(() => el.classList.remove("ring-4", "ring-red-500", "animate-pulse"), 3000);
         }
-        alert("Não conseguimos ler o Nº de Série ou o IMEI em algum dos prints. Tire novos prints mais nítidos (tela do iPhone em Ajustes > Geral > Sobre) ou use o botão 'Corrigir' pra digitar manualmente.");
+        const semImei = !aparelho1TemImei && (!temSegundoAparelho || !aparelho2TemImei);
+        alert(
+          semImei
+            ? "Não conseguimos ler o Nº de Série em algum dos prints. Tire novos prints mais nítidos ou use o botão 'Corrigir' pra digitar manualmente."
+            : "Não conseguimos ler o Nº de Série ou o IMEI em algum dos prints. Tire novos prints mais nítidos (tela do iPhone em Ajustes > Geral > Sobre) ou use o botão 'Corrigir' pra digitar manualmente.",
+        );
         return;
       }
     }
@@ -1881,14 +1920,44 @@ function CompraForm() {
 
         {/* Prints da troca — card independente, aparece tanto no fluxo do simulador
             quanto quando o cliente marca troca manualmente */}
-        {temTroca && shortCode && (
+        {temTroca && shortCode && (() => {
+          // Texto do titulo/instrucao muda conforme o tipo de aparelho:
+          //   iPhone → "Nº de Série e IMEI" (pede ambos)
+          //   iPad/Watch/MacBook → "Nº de Série" (sem IMEI)
+          //   Mix (iPhone + iPad na mesma troca) → "Nº de Série" no geral,
+          //   IMEI so aparece pro iPhone na lista de slots
+          const algumTemImei = aparelho1TemImei || (temSegundoAparelho && aparelho2TemImei);
+          const tituloCard = algumTemImei
+            ? "📸 Nº de Série e IMEI do seu aparelho (obrigatório)"
+            : "📸 Nº de Série do seu aparelho (obrigatório)";
+          // Instrucao: especifica localizacao por tipo de aparelho. Se mix,
+          // usa genérico.
+          const instrucaoPath = (() => {
+            const tipo1 = aparelho1TemImei ? "iPhone" : detectarTipoAparelho(trocaProdutoParam);
+            const tipo2 = temSegundoAparelho
+              ? (aparelho2TemImei ? "iPhone" : detectarTipoAparelho(trocaProduto2Param))
+              : tipo1;
+            // Ajustes > Geral > Sobre funciona em iPhone/iPad/iPod. Watch/Mac tem path diferente.
+            if (tipo1 === tipo2) {
+              if (tipo1 === "Apple Watch") return "No seu Apple Watch, vá em **Ajustes → Geral → Sobre**";
+              if (tipo1 === "MacBook") return "No seu MacBook, vá em **Menu Apple () → Sobre este Mac**";
+              return "No seu aparelho, vá em **Ajustes → Geral → Sobre**";
+            }
+            return "Em cada aparelho, acesse **Ajustes → Geral → Sobre** (no Mac: **Menu Apple → Sobre este Mac**)";
+          })();
+          return (
           <div className={cardCls}>
-            <p className={sectionTitle}>📸 Nº de Série e IMEI do seu aparelho (obrigatório)</p>
+            <p className={sectionTitle}>{tituloCard}</p>
             <div id="prints-troca" className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 transition-all">
               <p className="text-xs text-[#6E6E73] mb-3">
-                No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong> e tire <strong>2 prints</strong>:
-                um mostrando o <strong>Nº de Série</strong> e outro o <strong>IMEI</strong>. Nosso sistema lê
-                os números automaticamente — você só precisa anexar os prints.
+                {instrucaoPath.split("**").map((parte, i) =>
+                  i % 2 === 1 ? <strong key={i}>{parte}</strong> : <span key={i}>{parte}</span>,
+                )}
+                {" "}e tire {algumTemImei ? <strong>os prints pedidos</strong> : <strong>1 print</strong>}:
+                {algumTemImei
+                  ? <> mostrando o <strong>Nº de Série</strong>{algumTemImei ? <> e, se for iPhone, o <strong>IMEI</strong></> : null}.</>
+                  : <> mostrando o <strong>Nº de Série</strong>.</>}
+                {" "}Nosso sistema lê o número automaticamente — você só precisa anexar.
               </p>
 
               {/* Explicação do POR QUE pedimos essa info — passa segurança ao cliente */}
@@ -1903,11 +1972,14 @@ function CompraForm() {
               </div>
 
               {([
-                { tipo: "serial", aparelho: 1, label: "Nº de Série (aparelho 1)" },
-                { tipo: "imei", aparelho: 1, label: "IMEI (aparelho 1)" },
+                { tipo: "serial", aparelho: 1, label: `Nº de Série${temSegundoAparelho ? " (aparelho 1)" : ""}` },
+                // IMEI so aparece pra iPhone — iPad/Watch/MacBook nao tem
+                ...(aparelho1TemImei ? [
+                  { tipo: "imei", aparelho: 1, label: `IMEI${temSegundoAparelho ? " (aparelho 1)" : ""}` },
+                ] : []),
                 ...(temSegundoAparelho ? [
-                  { tipo: "serial", aparelho: 2, label: "Nº de Série (aparelho 2)" },
-                  { tipo: "imei", aparelho: 2, label: "IMEI (aparelho 2)" },
+                  { tipo: "serial", aparelho: 2, label: "Nº de Série (aparelho 2)" } as PrintSlot,
+                  ...(aparelho2TemImei ? [{ tipo: "imei", aparelho: 2, label: "IMEI (aparelho 2)" } as PrintSlot] : []),
                 ] : []),
               ] as PrintSlot[]).map((slot) => {
                 const key = `${slot.tipo}${slot.aparelho}`;
@@ -2009,12 +2081,17 @@ function CompraForm() {
 
               {/* Aviso sobre o Termo de Procedência (aparece quando todos os prints + textos foram preenchidos) */}
               {(() => {
-                const textosOk1 = trocaSerial1.trim().length >= 6 && trocaImei1.replace(/\D/g, "").length >= 14;
-                const textosOk2 = !temSegundoAparelho || (trocaSerial2.trim().length >= 6 && trocaImei2.replace(/\D/g, "").length >= 14);
-                const printsOk = temSegundoAparelho
-                  ? !!(printsUrls.serial1 && printsUrls.imei1 && printsUrls.serial2 && printsUrls.imei2)
-                  : !!(printsUrls.serial1 && printsUrls.imei1);
-                const todosEnviados = printsOk && textosOk1 && textosOk2;
+                // IMEI so conta se o aparelho tem IMEI (iPhone). Sem isso,
+                // iPad/Watch/MacBook nunca mostrariam o aviso de conclusao.
+                const textosOk1 = trocaSerial1.trim().length >= 6
+                  && (!aparelho1TemImei || trocaImei1.replace(/\D/g, "").length >= 14);
+                const textosOk2 = !temSegundoAparelho
+                  || (trocaSerial2.trim().length >= 6
+                      && (!aparelho2TemImei || trocaImei2.replace(/\D/g, "").length >= 14));
+                const printsOk1 = !!printsUrls.serial1 && (!aparelho1TemImei || !!printsUrls.imei1);
+                const printsOk2 = !temSegundoAparelho
+                  || (!!printsUrls.serial2 && (!aparelho2TemImei || !!printsUrls.imei2));
+                const todosEnviados = printsOk1 && printsOk2 && textosOk1 && textosOk2;
                 if (!todosEnviados) return null;
                 return (
                   <div className="mt-4 p-3 rounded-lg bg-green-50 border-2 border-green-300">
@@ -2034,7 +2111,8 @@ function CompraForm() {
               })()}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Entrega */}
         <div className={cardCls}>
