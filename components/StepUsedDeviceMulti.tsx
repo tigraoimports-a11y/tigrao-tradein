@@ -603,7 +603,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </Section>
       )}
 
-      {model && storageCompleto && !isExcluded && isQActive(qc, "hasDamage") && (
+      {model && storageCompleto && !isExcluded && cor.trim() && isQActive(qc, "hasDamage") && (
         <Section title={getQTitle(qc, "hasDamage", "O aparelho esta trincado, quebrado ou com defeito?")}>
           <div className="flex gap-2">
             {(() => {
