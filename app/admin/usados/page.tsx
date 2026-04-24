@@ -242,7 +242,8 @@ export function UsadosContent() {
   const [addingVariante, setAddingVariante] = useState<Record<string, { specs: Record<string, string>; valor_base: string }>>({});
   // Form matriz RAM x SSD pra MacBook. Gera N*M variantes de uma vez com
   // o mesmo valor — admin ajusta preco por celula depois. Chave = modelo.
-  const [addingMatrix, setAddingMatrix] = useState<Record<string, { tela: string; rams: string[]; ssds: string[]; valor_base: string }>>({});
+  // Nao tem campo de tela porque a tela fica no nome do modelo (ex: "MacBook Air M2 13\"").
+  const [addingMatrix, setAddingMatrix] = useState<Record<string, { rams: string[]; ssds: string[]; valor_base: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
@@ -359,12 +360,12 @@ export function UsadosContent() {
   };
 
   // Salva matriz RAM x SSD pra MacBook: gera 1 variante por combinacao.
-  // Formato do `armazenamento`: "tela | ram | ssd" (ex: '13" | 8GB | 256GB').
+  // Formato do `armazenamento`: "SSD/RAM" (legado, ja em uso no banco).
+  // A tela fica no nome do modelo (ex: "MacBook Air M2 13\""), fora do armaz.
   // Admin pode ajustar valor individual depois em cada celula.
   const handleSaveMatrix = async (modelo: string) => {
     const entry = addingMatrix[modelo];
     if (!entry) return;
-    if (!entry.tela) { setMsg("Escolha o tamanho da tela"); return; }
     if (entry.rams.length === 0) { setMsg("Selecione pelo menos 1 RAM"); return; }
     if (entry.ssds.length === 0) { setMsg("Selecione pelo menos 1 SSD"); return; }
     if (!entry.valor_base.trim()) { setMsg("Preencha o valor base (use 0 pra sem preco fixo)"); return; }
@@ -375,7 +376,7 @@ export function UsadosContent() {
     const toCreate: string[] = [];
     for (const ram of entry.rams) {
       for (const ssd of entry.ssds) {
-        toCreate.push(`${entry.tela} | ${ram} | ${ssd}`);
+        toCreate.push(`${ssd}/${ram}`);
       }
     }
     let ok = 0;
@@ -1116,7 +1117,7 @@ export function UsadosContent() {
                     </button>
                     {catFilter === "macbook" && (
                       <button
-                        onClick={() => setAddingMatrix((prev) => ({ ...prev, [modelo]: prev[modelo] || { tela: "", rams: [], ssds: [], valor_base: "" } }))}
+                        onClick={() => setAddingMatrix((prev) => ({ ...prev, [modelo]: prev[modelo] || { rams: [], ssds: [], valor_base: "" } }))}
                         disabled={addingMatrix[modelo] !== undefined}
                         className="px-3 py-1 rounded-lg text-xs font-semibold text-white bg-[#E8740E] hover:bg-[#F5A623] transition-colors whitespace-nowrap disabled:opacity-40"
                         title="Cadastra varias combinacoes RAM x SSD de uma vez"
@@ -1488,7 +1489,6 @@ export function UsadosContent() {
                         da categoria. */}
                     {addingMatrix[modelo] && catFilter === "macbook" && (() => {
                       const entry = addingMatrix[modelo];
-                      const telaOpts = SPEC_FIELDS_BY_CAT.macbook.find((f) => f.key === "tela")?.options || [];
                       const ramOpts = SPEC_FIELDS_BY_CAT.macbook.find((f) => f.key === "ram")?.options || [];
                       const ssdOpts = SPEC_FIELDS_BY_CAT.macbook.find((f) => f.key === "ssd")?.options || [];
                       const savingKey = `matrix-${modelo}`;
@@ -1502,22 +1502,10 @@ export function UsadosContent() {
                             <div className="flex flex-col gap-3">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[11px] font-bold text-[#E8740E] uppercase tracking-wider">⚡ Matriz RAM × SSD</span>
-                                <span className="text-[11px] text-[#86868B]">Gera 1 variante por combinacao. Admin ajusta preco depois em cada celula.</span>
+                                <span className="text-[11px] text-[#86868B]">Gera 1 variante por combinacao. Tela fica no nome do modelo. Admin ajusta preco depois em cada celula.</span>
                               </div>
 
                               <div className="flex flex-wrap gap-4 items-start">
-                                <div>
-                                  <p className="text-[10px] uppercase tracking-wider text-[#86868B] font-semibold mb-1">Tela *</p>
-                                  <select
-                                    value={entry.tela}
-                                    onChange={(e) => update({ tela: e.target.value })}
-                                    className="px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
-                                  >
-                                    <option value="">—</option>
-                                    {telaOpts.map((t) => <option key={t} value={t}>{t}</option>)}
-                                  </select>
-                                </div>
-
                                 <div>
                                   <p className="text-[10px] uppercase tracking-wider text-[#86868B] font-semibold mb-1">RAMs disponiveis *</p>
                                   <div className="flex flex-wrap gap-1">
