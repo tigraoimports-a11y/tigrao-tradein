@@ -444,6 +444,18 @@ export function isValidSku(sku: string): boolean {
 // Retorna a categoria canonica do estoque (IPHONES, IPADS, MACBOOK, ...) ou OUTROS.
 export function detectarCategoriaPorTexto(texto: string | null | undefined): string {
   const up = upper(texto);
+  // ACESSORIOS PRIMEIRO — senao "Magic Keyboard iPad Pro" cai em IPADS
+  // (porque tem "IPAD" no nome) e gera SKU como se fosse um iPad.
+  // Lista cobre os acessorios Apple comuns:
+  //   Magic Mouse/Keyboard/Trackpad, Apple Pencil, Smart Folio,
+  //   Carregadores (fonte/cabo), Capas, Peliculas, Adaptadores, HUB, Pulseiras
+  if (/\bMAGIC\s*(KEYBOARD|MOUSE|TRACKPAD)\b/.test(up)) return "ACESSORIOS";
+  if (/\bAPPLE\s*PENCIL\b/.test(up)) return "ACESSORIOS";
+  if (/\bSMART\s*FOLIO\b|\bSMART\s*COVER\b/.test(up)) return "ACESSORIOS";
+  if (/\bCARREGADOR\b|\bFONTE\s*(APPLE|USB)\b|\bCABO\s*(USB|LIGHTNING|TIPO)/.test(up)) return "ACESSORIOS";
+  if (/\bCAPA\b|\bCASE\b|\bP[EÉ]LICULA\b|\bPELICULA\b/.test(up)) return "ACESSORIOS";
+  if (/\bADAPTADOR\b|\bHUB\b|\bDOCK\b/.test(up)) return "ACESSORIOS";
+  if (/\bPULSEIRA\b(?!\s*ESPORTIVA.*WATCH)/.test(up)) return "ACESSORIOS";
   if (/IPHONE/.test(up)) return "IPHONES";
   if (/IPAD/.test(up)) return "IPADS";
   if (/MAC.*MINI/.test(up)) return "MAC_MINI";

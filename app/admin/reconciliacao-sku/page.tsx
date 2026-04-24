@@ -60,6 +60,21 @@ export default function ReconciliacaoSkuPage() {
   const [tipoFiltro, setTipoFiltro] = useState<TipoInc | "todos">("todos");
   const [skuInfo, setSkuInfo] = useState<string | null>(null);
   const [periodoDias, setPeriodoDias] = useState(30);
+  const [syncingSku, setSyncingSku] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  // Set de ids (venda_id ou estoque_id) que o admin marcou como "ignorar".
+  // Persiste em localStorage — util pra casos legitimos como atacado em lote,
+  // brindes internos, ou vendas fora do sistema que nao queremos ver de novo.
+  const [ignorados, setIgnorados] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = localStorage.getItem("tigrao_reconciliacao_ignorados") || "[]";
+      return new Set(JSON.parse(raw) as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const [mostrarIgnorados, setMostrarIgnorados] = useState(false);
 
   const fetchData = useCallback(() => {
     if (!password) return;
@@ -86,9 +101,78 @@ export default function ReconciliacaoSkuPage() {
     fetchData();
   }, [fetchData]);
 
-  const filtradas = (inconsistencias || []).filter((i) =>
-    tipoFiltro === "todos" ? true : i.tipo === tipoFiltro,
-  );
+  // Chave unica pra persistir decisao de ignorar: usa o ID mais especifico
+  // disponivel (venda_id > estoque_id) mais o tipo, pra evitar colisao entre
+  // tipos de alerta que compartilhem ids.
+  const keyIgnorar = (i: Inconsistencia): string =>
+    `${i.tipo}:${i.ids.venda_id || i.ids.estoque_id || "?"}`;
+
+  const toggleIgnorar = (inc: Inconsistencia) => {
+    const k = keyIgnorar(inc);
+    const novo = new Set(ignorados);
+    if (novo.has(k)) novo.delete(k);
+    else novo.add(k);
+    setIgnorados(novo);
+    try {
+      localStorage.setItem("tigrao_reconciliacao_ignorados", JSON.stringify([...novo]));
+    } catch {}
+  };
+
+  const limparIgnorados = () => {
+    if (!confirm("Remover todos os alertas ignorados? Eles voltarao a aparecer na proxima auditoria.")) return;
+    setIgnorados(new Set());
+    try {
+      localStorage.setItem("tigrao_reconciliacao_ignorados", "[]");
+    } catch {}
+  };
+
+  const filtradas = (inconsistencias || []).filter((i) => {
+    if (tipoFiltro !== "todos" && i.tipo !== tipoFiltro) return false;
+    const isIgnorado = ignorados.has(keyIgnorar(i));
+    if (mostrarIgnorados) return isIgnorado;
+    return !isIgnorado;
+  });
+  const numIgnorados = (inconsistencias || []).filter((i) => ignorados.has(keyIgnorar(i))).length;
+
+  // Corrige divergencias SKU em massa: copia estoque.sku → venda.sku quando
+  // diferem. Resolve o caso Daniel (SKUs cruzados entre produtos do grupo) e
+  // Glauco (Magic Mouse com SKU gerado via texto antes do backfill).
+  const syncSkuDivergentes = async () => {
+    if (!password) return;
+    const divergentes = (inconsistencias || []).filter(
+      (i) => i.tipo === "SKU_DIVERGENTE_PERSISTIDO" && i.ids.venda_id,
+    );
+    if (divergentes.length === 0) {
+      setSyncMsg("Nenhuma divergencia SKU pra corrigir");
+      return;
+    }
+    if (!confirm(`Sincronizar ${divergentes.length} vendas com SKU do estoque? Isso sobrescreve o SKU atual da venda com o SKU gravado no estoque vinculado.`)) {
+      return;
+    }
+    setSyncingSku(true);
+    setSyncMsg(null);
+    try {
+      const venda_ids = divergentes.map((i) => i.ids.venda_id!).filter(Boolean);
+      const res = await fetch("/api/admin/sku/reconciliacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ action: "sync_from_estoque", venda_ids }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setSyncMsg(
+          `✅ ${json.atualizadas} vendas atualizadas${json.falhas?.length ? ` (${json.falhas.length} falhas)` : ""}`,
+        );
+        fetchData();
+      } else {
+        setSyncMsg(`Erro: ${json.error || "desconhecido"}`);
+      }
+    } catch (err) {
+      setSyncMsg(`Erro de rede: ${err}`);
+    } finally {
+      setSyncingSku(false);
+    }
+  };
 
   const severidadeColor = (s: Severidade): string =>
     s === "alta" ? "bg-red-100 text-red-700 border-red-200"
@@ -105,7 +189,7 @@ export default function ReconciliacaoSkuPage() {
             Auditoria cruzando estoque × vendas × SKU — detecta sumiço, erro de registro e divergências.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <select
             value={periodoDias}
             onChange={(e) => setPeriodoDias(Number(e.target.value))}
@@ -122,41 +206,65 @@ export default function ReconciliacaoSkuPage() {
           >
             Atualizar
           </button>
+          {resumo && resumo.por_tipo.SKU_DIVERGENTE_PERSISTIDO > 0 && (
+            <button
+              onClick={syncSkuDivergentes}
+              disabled={syncingSku}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#E8740E] text-white hover:bg-[#D26509] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Corrige automaticamente as vendas com SKU divergente — copia o SKU do estoque vinculado pra venda."
+            >
+              {syncingSku ? "Sincronizando…" : `🔧 Sincronizar ${resumo.por_tipo.SKU_DIVERGENTE_PERSISTIDO} SKUs`}
+            </button>
+          )}
         </div>
       </div>
-
-      {/* Resumo */}
-      {resumo && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KPICard
-            label="Total"
-            value={resumo.total}
-            sub={`${resumo.periodo.from} → ${resumo.periodo.until}`}
-            accent={resumo.total === 0 ? "green" : resumo.total > 10 ? "red" : "orange"}
-          />
-          <KPICard
-            label="Alta severidade"
-            value={resumo.por_severidade.alta}
-            sub="investigar urgente"
-            accent="red"
-          />
-          <KPICard
-            label="Divergências SKU"
-            value={resumo.por_tipo.SKU_DIVERGENTE_PERSISTIDO}
-            sub="produto errado"
-            accent="red"
-          />
-          <KPICard
-            label="Possíveis sumiços"
-            value={resumo.por_tipo.ESGOTADO_SEM_VENDA}
-            sub="esgotados sem venda"
-            accent="orange"
-          />
+      {syncMsg && (
+        <div className="bg-[#FFF5EB] border border-[#E8740E]/30 rounded-lg p-3 text-xs text-[#1D1D1F]">
+          {syncMsg}
         </div>
       )}
 
+      {/* Resumo — exclui os ignorados pra nao inflar os numeros com casos ja triados */}
+      {resumo && (() => {
+        const ativos = (inconsistencias || []).filter((i) => !ignorados.has(keyIgnorar(i)));
+        const ativosPorTipo = {
+          SKU_DIVERGENTE_PERSISTIDO: ativos.filter((i) => i.tipo === "SKU_DIVERGENTE_PERSISTIDO").length,
+          ESGOTADO_SEM_VENDA: ativos.filter((i) => i.tipo === "ESGOTADO_SEM_VENDA").length,
+          VENDA_SEM_ESTOQUE: ativos.filter((i) => i.tipo === "VENDA_SEM_ESTOQUE").length,
+        };
+        const ativosAlta = ativos.filter((i) => i.severidade === "alta").length;
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <KPICard
+              label="Total ativo"
+              value={ativos.length}
+              sub={`${resumo.periodo.from} → ${resumo.periodo.until}${numIgnorados > 0 ? ` · ${numIgnorados} ignorados` : ""}`}
+              accent={ativos.length === 0 ? "green" : ativos.length > 10 ? "red" : "orange"}
+            />
+            <KPICard
+              label="Alta severidade"
+              value={ativosAlta}
+              sub="investigar urgente"
+              accent="red"
+            />
+            <KPICard
+              label="Divergências SKU"
+              value={ativosPorTipo.SKU_DIVERGENTE_PERSISTIDO}
+              sub="produto errado"
+              accent="red"
+            />
+            <KPICard
+              label="Possíveis sumiços"
+              value={ativosPorTipo.ESGOTADO_SEM_VENDA}
+              sub="esgotados sem venda"
+              accent="orange"
+            />
+          </div>
+        );
+      })()}
+
       {/* Filtros por tipo */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         <button
           onClick={() => setTipoFiltro("todos")}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -176,6 +284,28 @@ export default function ReconciliacaoSkuPage() {
             {TIPO_LABEL[tipo].icone} {TIPO_LABEL[tipo].titulo} ({resumo?.por_tipo[tipo] || 0})
           </button>
         ))}
+        {numIgnorados > 0 && (
+          <>
+            <span className="w-px h-5 bg-[#D2D2D7] mx-1" />
+            <button
+              onClick={() => setMostrarIgnorados(!mostrarIgnorados)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                mostrarIgnorados ? "bg-[#86868B] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B]"
+              }`}
+              title="Mostra/esconde os alertas que voce marcou como 'ignorar'"
+            >
+              {mostrarIgnorados ? "👁 Ver ativos" : `🙈 Ignorados (${numIgnorados})`}
+            </button>
+            {mostrarIgnorados && (
+              <button
+                onClick={limparIgnorados}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-[#D2D2D7] text-[#86868B] hover:border-red-300 hover:text-red-600 transition-colors"
+              >
+                Limpar ignorados
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* Lista de inconsistências */}
@@ -248,6 +378,21 @@ export default function ReconciliacaoSkuPage() {
                         Ver estoque
                       </a>
                     )}
+                    <button
+                      onClick={() => toggleIgnorar(inc)}
+                      className={`text-xs px-2 py-1 rounded border text-center transition-colors ${
+                        mostrarIgnorados
+                          ? "border-[#E8740E]/30 text-[#E8740E] hover:bg-[#FFF5EB]"
+                          : "border-[#D2D2D7] text-[#86868B] hover:border-red-300 hover:text-red-600"
+                      }`}
+                      title={
+                        mostrarIgnorados
+                          ? "Voltar a mostrar este alerta"
+                          : "Ocultar este alerta — usar pra casos legitimos (atacado, brinde, venda fora do sistema)"
+                      }
+                    >
+                      {mostrarIgnorados ? "↩ Restaurar" : "🙈 Ignorar"}
+                    </button>
                   </div>
                 </div>
               </div>

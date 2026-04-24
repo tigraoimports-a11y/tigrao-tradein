@@ -25,6 +25,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { compararSkus } from "@/lib/sku-validator";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -78,22 +79,27 @@ export async function GET(req: NextRequest) {
       for (const v of vendasComEstoque) {
         const est = estoqueMap.get(v.estoque_id!);
         if (!est || !est.sku) continue; // se estoque nao tem SKU, pula
-        if (est.sku !== v.sku) {
-          resultados.push({
-            tipo: "SKU_DIVERGENTE_PERSISTIDO",
-            severidade: "alta",
-            descricao: "Venda vinculada a item de estoque com SKU diferente",
-            produto: v.produto || est.produto,
-            detalhes: {
-              venda_sku: v.sku,
-              estoque_sku: est.sku,
-              cliente: v.cliente || "?",
-              data: v.data || "?",
-              preco: Number(v.preco_vendido || 0),
-            },
-            ids: { venda_id: v.id, estoque_id: v.estoque_id! },
-          });
-        }
+        // Usa o mesmo comparador do bloqueio de criacao/edicao — tolera SKU
+        // parcial (ex: venda gravada sem cor vs estoque com cor). Se compararSkus
+        // considera OK, NAO e divergencia real — pula.
+        const comp = compararSkus(v.sku, est.sku);
+        if (comp.ok) continue;
+        resultados.push({
+          tipo: "SKU_DIVERGENTE_PERSISTIDO",
+          severidade: "alta",
+          descricao: comp.motivo
+            ? `Divergencia em: ${comp.motivo}`
+            : "Venda vinculada a item de estoque com SKU diferente",
+          produto: v.produto || est.produto,
+          detalhes: {
+            venda_sku: v.sku,
+            estoque_sku: est.sku,
+            cliente: v.cliente || "?",
+            data: v.data || "?",
+            preco: Number(v.preco_vendido || 0),
+          },
+          ids: { venda_id: v.id, estoque_id: v.estoque_id! },
+        });
       }
     }
 
@@ -187,6 +193,73 @@ export async function GET(req: NextRequest) {
     };
 
     return NextResponse.json({ ok: true, resumo, inconsistencias: resultados });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+// ─── POST: sincronizar SKU das vendas a partir do estoque vinculado ──
+// Corrige o caso onde venda.sku foi gerado errado (texto livre) mas estoque.sku
+// esta correto. Copia estoque.sku pra venda.sku pra cada venda_id informado.
+//
+// Body: { action: "sync_from_estoque", venda_ids: string[] }
+// Resp: { ok, atualizadas: n, falhas: [{ venda_id, motivo }] }
+export async function POST(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const body = await req.json();
+    if (body.action !== "sync_from_estoque") {
+      return NextResponse.json({ error: "action invalida — use sync_from_estoque" }, { status: 400 });
+    }
+    const vendaIds = Array.isArray(body.venda_ids) ? body.venda_ids.filter((v: unknown) => typeof v === "string") : [];
+    if (vendaIds.length === 0) {
+      return NextResponse.json({ error: "venda_ids vazio" }, { status: 400 });
+    }
+
+    const { data: vendas } = await supabase
+      .from("vendas")
+      .select("id, sku, estoque_id")
+      .in("id", vendaIds)
+      .not("estoque_id", "is", null);
+    if (!vendas || vendas.length === 0) {
+      return NextResponse.json({ ok: true, atualizadas: 0, falhas: vendaIds.map((id: string) => ({ venda_id: id, motivo: "venda nao encontrada ou sem estoque_id" })) });
+    }
+
+    const estoqueIds = vendas.map((v) => v.estoque_id!).filter(Boolean) as string[];
+    const { data: estoques } = await supabase
+      .from("estoque")
+      .select("id, sku")
+      .in("id", estoqueIds);
+    const skuByEstoqueId = new Map<string, string>();
+    for (const e of estoques || []) {
+      if (e.sku) skuByEstoqueId.set(e.id, e.sku);
+    }
+
+    let atualizadas = 0;
+    const falhas: Array<{ venda_id: string; motivo: string }> = [];
+    for (const v of vendas) {
+      const estoqueSku = skuByEstoqueId.get(v.estoque_id!);
+      if (!estoqueSku) {
+        falhas.push({ venda_id: v.id, motivo: "estoque sem SKU" });
+        continue;
+      }
+      if (estoqueSku === v.sku) {
+        // Ja bate — nada a fazer
+        continue;
+      }
+      const { error: upErr } = await supabase
+        .from("vendas")
+        .update({ sku: estoqueSku })
+        .eq("id", v.id);
+      if (upErr) {
+        falhas.push({ venda_id: v.id, motivo: upErr.message });
+      } else {
+        atualizadas++;
+      }
+    }
+
+    return NextResponse.json({ ok: true, atualizadas, falhas });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
