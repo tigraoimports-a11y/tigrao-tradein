@@ -20,6 +20,20 @@ const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 const VENDAS_PASSWORD = "tigrao$vendas";
 
+// Display do produto da venda: pega a chave "base" do getModeloBase (que inclui
+// storage/tela/RAM+SSD conforme categoria) e anexa a cor PT. Para acessorios
+// resolve o caso "MAGIC KEYBOARD IPAD PRO M4" vindo puro no v.produto e
+// aparecendo sem tela/cor — aqui enriquece com v.observacao ([TELA:X"]) e v.cor.
+function buildProdutoDisplay(v: Venda): string {
+  const base = getModeloBase(v.produto || "", v.categoria || "", v.observacao);
+  const cor = v.cor ? corParaPT(v.cor) : "";
+  const corValida = cor && cor !== "—" ? cor : "";
+  if (corValida && !base.toUpperCase().includes(corValida.toUpperCase())) {
+    return `${base} ${corValida}`;
+  }
+  return base;
+}
+
 // Formata a resposta de erro do backend quando SKU do estoque selecionado
 // nao bate com o SKU esperado pela venda (cliente pediu produto diferente).
 // Retorna string multilinha pronta pra setMsg.
@@ -5520,7 +5534,7 @@ export default function VendasPage() {
                                 {v.is_brinde && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-pink-100 text-pink-700">BRINDE</span>}
                               </td>
                               <td className="px-3 py-2.5 max-w-[220px] text-xs">
-                                <span className="truncate block whitespace-nowrap">{normalizarCoresNoTexto(v.produto)}</span>
+                                <span className="truncate block whitespace-nowrap">{normalizarCoresNoTexto(buildProdutoDisplay(v))}</span>
                                 {isFirstInGrupo && (
                                   <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E]">📦 {grupoItens.length} itens</span>
                                 )}
@@ -6884,7 +6898,7 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
                                       <div className="text-xs space-y-1">
-                                        <p><strong>Produto:</strong> {normalizarCoresNoTexto(v.produto)}</p>
+                                        <p><strong>Produto:</strong> {normalizarCoresNoTexto(buildProdutoDisplay(v))}</p>
                                         <p>
                                           <strong>Serial No.:</strong>{" "}
                                           {editingId === v.id + "-serial" ? (
