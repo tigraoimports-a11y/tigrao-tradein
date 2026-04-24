@@ -3643,7 +3643,18 @@ export default function VendasPage() {
                           /^M\d+/.test(s) ||
                           (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
                           ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
-                        const getStorage = (specs: string[]) => specs.find(s => /^\d+(GB|TB)$/.test(s)) || null;
+                        // Pega o MAIOR storage (SSD em MacBook — diferencial
+                        // comercial). Pegar o primeiro pegaria RAM (8GB) que
+                        // bate em TODOS os MacBooks e daria match falso-positivo.
+                        const getStorage = (specs: string[]) => {
+                          const storages = specs.filter(s => /^\d+(GB|TB)$/.test(s));
+                          if (storages.length === 0) return null;
+                          return storages.sort((a, b) => {
+                            const valA = a.endsWith("TB") ? parseInt(a) * 1024 : parseInt(a);
+                            const valB = b.endsWith("TB") ? parseInt(b) * 1024 : parseInt(b);
+                            return valB - valA;
+                          })[0];
+                        };
                         const getCor = (specs: string[]) => specs.filter(s => !isSpecForCor(s)).join("-") || null;
                         const estStorage = getStorage(parsedEst.specs);
                         const estCor = getCor(parsedEst.specs);
@@ -3658,7 +3669,7 @@ export default function VendasPage() {
                             || parsedEst.modelo.startsWith(parsedAlv.modelo + "-")
                             || parsedAlv.modelo.startsWith(parsedEst.modelo + "-");
                           if (!modeloCompat) continue;
-                          // Storage bate (ou um dos lados nao tem)
+                          // Storage (SSD) bate (ou um dos lados nao tem)
                           const alvStorage = getStorage(parsedAlv.specs);
                           const alvCor = getCor(parsedAlv.specs);
                           const storageOk = !alvStorage || !estStorage || alvStorage === estStorage;
