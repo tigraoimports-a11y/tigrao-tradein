@@ -700,7 +700,11 @@ export default function GerarLinkPage() {
         for (let i = 1; i < prodsFilled.length; i++) {
           shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
         }
-        if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+        // Encomenda com sinal — o link exibe/cobra o valor do sinal, nao o total
+        const valorExibir = encomenda && sinalPct
+          ? String(Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100))
+          : rawPreco;
+        if (valorExibir && valorExibir !== "0") shortData.v = valorExibir;
         if (descontoNum > 0) shortData.dc = String(descontoNum);
         shortData.s = vendedorNome || "";
         if (campanha.trim()) shortData.cm = campanha.trim();
@@ -1050,7 +1054,11 @@ export default function GerarLinkPage() {
       const precoExtra = useCart ? (carrinhoLink[i]?.preco || 0) : (precosPorProduto[i] || 0);
       if (precoExtra > 0) shortData[`v${i + 1}`] = String(precoExtra);
     }
-    if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    // Encomenda com sinal — cobra sinal no link em vez do total
+    const valorExibirMp = encomenda && sinalPct
+      ? String(Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100))
+      : rawPreco;
+    if (valorExibirMp && valorExibirMp !== "0") shortData.v = valorExibirMp;
     if (descontoNum > 0) shortData.dc = String(descontoNum);
     shortData.s = vendedorNome || "";
     if (campanha.trim()) shortData.cm = campanha.trim();
@@ -1111,11 +1119,13 @@ export default function GerarLinkPage() {
             body: JSON.stringify({
               short_code: json.code,
               url_curta: urlCurta,
-              // Encomenda tem precedencia sobre troca: pode ter encomenda COM troca,
-              // mas o tipo do link conta pra fluxo do /compra (banner de prazo/sinal).
+              // Encomenda tem precedencia sobre troca: pode ter encomenda COM
+              // troca, mas o tipo do link conta pra fluxo do /compra (banner).
+              // sinal_pct > 0 = cobra so esse % no link (sinal antecipado).
+              // sinal_pct null/0 = pagamento integral (valor cheio).
               tipo: encomenda ? "ENCOMENDA" : (trocaProduto ? "TROCA" : "COMPRA"),
               previsao_chegada: encomenda ? (previsaoChegada.trim() || null) : null,
-              sinal_pct: encomenda ? (Number(sinalPct) || 50) : null,
+              sinal_pct: encomenda && sinalPct ? Number(sinalPct) : null,
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -1123,7 +1133,10 @@ export default function GerarLinkPage() {
               produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
               cor: corENCanon || null,
-              valor: Number(rawPreco) || 0,
+              // Quando encomenda com sinal, cobra o sinal no link em vez do total
+              valor: encomenda && sinalPct
+                ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+                : Number(rawPreco) || 0,
               desconto: descontoNum || 0,
               forma_pagamento: forma || null,
               parcelas: parcelas || null,
@@ -1230,7 +1243,11 @@ export default function GerarLinkPage() {
     // `valorComTaxa` porque o /compra recalcula `valorBase = preco - desconto - troca`.
     // Se passássemos valorComTaxa (que já desconta troca), o form subtrairia
     // troca de novo e daria valor errado.
-    if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    // Encomenda com sinal — cobra sinal no link em vez do total
+    const valorExibirMp2 = encomenda && sinalPct
+      ? String(Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100))
+      : rawPreco;
+    if (valorExibirMp2 && valorExibirMp2 !== "0") shortData.v = valorExibirMp2;
     if (descontoNum > 0) shortData.dc = String(descontoNum);
     // Forma + parcelas + entrada PIX — pra /compra montar "Pagamento 1/2"
     // quando há entrada PIX pendente (valor parcelado no link MP + PIX separado).
@@ -2581,38 +2598,74 @@ export default function GerarLinkPage() {
           />
         </div>
 
-        {/* Encomenda — so operador marca, cliente nao ve. Combinavel com troca. */}
+        {/* Encomenda — so operador marca, cliente nao ve o toggle. Combinavel
+            com troca. Flag organizacional que marca a venda como encomenda,
+            com prazo pra chegada apos pagamento. O cliente paga pelo mesmo
+            fluxo de compra normal (forma selecionada na secao de pagamento). */}
         <div className={`p-3 rounded-xl border ${encomenda ? "border-blue-400 bg-blue-50" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={encomenda}
-              onChange={(e) => { setEncomenda(e.target.checked); if (!e.target.checked) { setPrevisaoChegada(""); setSinalPct("50"); } }}
+              onChange={(e) => { setEncomenda(e.target.checked); if (!e.target.checked) { setPrevisaoChegada(""); setSinalPct(""); } }}
               className="w-4 h-4 rounded accent-blue-500"
             />
-            <span className="text-sm font-semibold text-[#1D1D1F]">📦 Encomenda (sinal antecipado)</span>
+            <span className="text-sm font-semibold text-[#1D1D1F]">📦 Encomenda</span>
           </label>
           {encomenda && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="space-y-3 mt-3">
               <div>
-                <label className={labelCls}>Previsão de chegada</label>
+                <label className={labelCls}>Prazo de entrega (após pagamento)</label>
                 <input
                   value={previsaoChegada}
                   onChange={(e) => setPrevisaoChegada(e.target.value)}
-                  placeholder="Ex: 15 a 30 dias"
+                  placeholder="Ex: 15 dias"
                   className={inputCls}
                 />
               </div>
               <div>
-                <label className={labelCls}>% do sinal</label>
-                <input
-                  value={sinalPct}
-                  onChange={(e) => setSinalPct(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                  placeholder="50"
-                  inputMode="numeric"
-                  className={inputCls}
-                />
+                <label className={labelCls}>Pagamento</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSinalPct("")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${!sinalPct ? "bg-blue-500 text-white border-blue-500" : "bg-white text-[#1D1D1F] border-[#D2D2D7]"}`}
+                  >
+                    Integral
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (!sinalPct) setSinalPct("50"); }}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${sinalPct ? "bg-blue-500 text-white border-blue-500" : "bg-white text-[#1D1D1F] border-[#D2D2D7]"}`}
+                  >
+                    Sinal antecipado
+                  </button>
+                </div>
+                {sinalPct && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <label className="text-xs text-[#86868B]">% do sinal:</label>
+                    <input
+                      value={sinalPct}
+                      onChange={(e) => setSinalPct(e.target.value.replace(/\D/g, "").slice(0, 3) || "50")}
+                      placeholder="50"
+                      inputMode="numeric"
+                      className={`${inputCls} max-w-[100px]`}
+                    />
+                    <span className="text-xs text-[#86868B]">
+                      {(() => {
+                        const pct = Number(sinalPct) || 0;
+                        const preco = Number(rawPreco) || 0;
+                        if (!pct || !preco) return "Preencha valor e %";
+                        const sinal = Math.round((preco * pct) / 100);
+                        return `→ Sinal R$ ${sinal.toLocaleString("pt-BR")} · Restante R$ ${(preco - sinal).toLocaleString("pt-BR")} na entrega`;
+                      })()}
+                    </span>
+                  </div>
+                )}
               </div>
+              <p className="text-[11px] text-blue-700 leading-snug">
+                Cliente paga pelo fluxo normal (PIX/Cartão/Link). O valor cobrado no link é {sinalPct ? `o sinal (${sinalPct}%)` : "integral"}. Restante (se sinal) combina na entrega.
+              </p>
             </div>
           )}
         </div>

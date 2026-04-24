@@ -75,12 +75,13 @@ function CompraForm() {
   const whatsapp = searchParams.get("whatsapp") || "";
   const shortCode = searchParams.get("short") || "";
 
-  // Encomenda (sinal antecipado) — parametros controlados pelo operador no
-  // gerar-link. Cliente NAO deve conseguir desligar isso pelo URL, mas o
-  // submit confere com o link_compras.tipo antes de criar `encomendas`.
+  // Encomenda — flag organizacional controlada pelo operador no gerar-link.
+  // Cliente nao pode desligar via URL; o backend valida com link_compras.tipo.
+  // sinal_pct=0 (ou nao setado) = pagamento integral. >0 = cobrou so esse %
+  // no link, com restante combinado na entrega.
   const encomendaParam = searchParams.get("encomenda") === "1";
   const previsaoChegadaParam = searchParams.get("previsao_chegada") || "";
-  const sinalPctParam = Math.max(0, Math.min(100, Number(searchParams.get("sinal_pct") || "50") || 50));
+  const sinalPctParam = Math.max(0, Math.min(100, Number(searchParams.get("sinal_pct") || "0") || 0));
 
   // Trade-in params (vindos do StepQuote)
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
@@ -1238,37 +1239,31 @@ function CompraForm() {
       {/* Header */}
       <div className="bg-[#E8740E] text-white px-4 py-4 text-center">
         <p className="text-lg font-bold">&#x1F42F; TigraoImports</p>
-        <p className="text-sm opacity-90">{encomendaParam ? "Encomenda — Sinal Antecipado" : "Formulario de Compra"}</p>
+        <p className="text-sm opacity-90">{encomendaParam ? "📦 Encomenda" : "Formulario de Compra"}</p>
       </div>
 
-      {/* Banner de encomenda — aparece no topo se o link tiver sido criado
-          como ENCOMENDA. Mostra prazo + valor do sinal que o cliente vai pagar.
-          Restante e pago no ato da entrega (combinado por WhatsApp). */}
+      {/* Banner de encomenda — flag organizacional. Mostra prazo de entrega
+          apos pagamento e, se for sinal antecipado, avisa que o restante fica
+          pra pagar na entrega. Pagamento segue o fluxo normal (PIX/Cartao/Link). */}
       {encomendaParam && (() => {
-        const valorTotal = preco > 0 ? preco : precoAuto;
-        const sinalValor = valorTotal > 0 ? Math.round((valorTotal * sinalPctParam) / 100) : 0;
-        const restante = Math.max(valorTotal - sinalValor, 0);
+        const temSinal = sinalPctParam > 0 && sinalPctParam < 100;
         return (
           <div className="mx-4 mt-4 rounded-xl p-4 border-2 border-blue-300 bg-blue-50">
             <p className="text-sm font-bold text-blue-900 mb-2">📦 Este pedido é uma encomenda</p>
             {previsaoChegadaParam && (
               <p className="text-xs text-blue-800 mb-1">
-                <span className="font-semibold">Prazo:</span> {previsaoChegadaParam}
+                <span className="font-semibold">Prazo de entrega:</span> {previsaoChegadaParam} após o pagamento
               </p>
             )}
-            {valorTotal > 0 && (
-              <>
-                <p className="text-xs text-blue-800 mb-1">
-                  <span className="font-semibold">Sinal ({sinalPctParam}%) agora:</span> R$ {fmt(sinalValor)}
-                </p>
-                <p className="text-xs text-blue-800">
-                  <span className="font-semibold">Restante na entrega:</span> R$ {fmt(restante)}
-                </p>
-              </>
+            {temSinal ? (
+              <p className="text-xs text-blue-800">
+                Este pagamento é o <span className="font-semibold">sinal de {sinalPctParam}%</span>. O restante é combinado para a entrega.
+              </p>
+            ) : (
+              <p className="text-xs text-blue-800">
+                Pagamento integral adiantado. Entrega conforme o prazo acima.
+              </p>
             )}
-            <p className="text-[11px] text-blue-700 mt-2 leading-snug">
-              Ao enviar o formulário, você confirma a encomenda. Combinamos o pagamento do sinal pelo WhatsApp.
-            </p>
           </div>
         );
       })()}

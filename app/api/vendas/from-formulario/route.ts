@@ -134,25 +134,24 @@ export async function POST(req: NextRequest) {
   // Hoje local no fuso de SP (padrão do resto do sistema)
   const hojeStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
-  // Encomenda: cliente passa encomenda=true + sinalPct + previsaoChegada.
-  // So vira encomenda se o link_compras for do tipo ENCOMENDA (checa no banco
-  // pra impedir cliente forcar via URL). Quando encomenda: cria em `encomendas`
-  // com sinal_recebido e previsao_chegada, skip insert em `vendas`.
+  // Encomenda: flag organizacional vinda do link_compras (operador marca).
+  // So vira encomenda se o link for do tipo ENCOMENDA (check no banco pra
+  // impedir cliente forcar via URL). Venda eh criada normalmente em `vendas`
+  // com flags extras — fluxo de pagamento eh identico a compra normal.
+  // sinal_pct NULL/0 = pagamento integral; >0 = cobrou so esse % no link.
   let ehEncomenda = false;
   let previsaoChegadaLink: string | null = null;
-  let sinalPctLink = 50;
-  let vendedorLink: string | null = null;
+  let sinalPctLink = 0; // 0 = integral
   if (body.encomenda) {
     const { data: lk } = await supabase
       .from("link_compras")
-      .select("tipo, previsao_chegada, sinal_pct, vendedor")
+      .select("tipo, previsao_chegada, sinal_pct")
       .eq("short_code", body.shortCode)
       .maybeSingle();
     if (lk?.tipo === "ENCOMENDA") {
       ehEncomenda = true;
       previsaoChegadaLink = (lk.previsao_chegada as string | null) || body.previsaoChegada || null;
-      sinalPctLink = Number(lk.sinal_pct) || Number(body.sinalPct) || 50;
-      vendedorLink = (lk.vendedor as string | null) || null;
+      sinalPctLink = Number(lk.sinal_pct) || 0;
     }
   }
 
