@@ -94,14 +94,30 @@ export async function POST(req: NextRequest) {
   // case, acentos e espaços duplos). Cobre casos como "Mega Cell",
   // "MEGA CELL", "MEGA  CELL", "MÉGA CELL" todos como mesmo lojista.
   try {
-    const { data: todosLojistas } = await supabase
+    const { data: todosLojistas, error: errLoj } = await supabase
       .from("lojistas")
       .select("id, nome, saldo_credito");
+    if (errLoj) {
+      erros.push(`lojistas (select): ${errLoj.message}`);
+    }
 
     const novoNorm = normalizar(novo);
 
     const lojistasAntigos = (todosLojistas || []).filter(l => normalizar(l.nome || "") === antigoNorm);
     const lojistaNovo = (todosLojistas || []).find(l => normalizar(l.nome || "") === novoNorm);
+
+    // Log diagnostico quando nao achar o antigo — ajuda identificar casos
+    // onde o frontend mostra um nome que nao bate com o banco (cache stale,
+    // lojista ja foi renomeado, char invisivel). Lista os nomes distintos
+    // que comecam com a primeira palavra do antigo pra o Nicolas ver.
+    if (lojistasAntigos.length === 0) {
+      const primeiraPalavra = antigoNorm.split(" ")[0] || "";
+      const similares = (todosLojistas || [])
+        .map(l => l.nome as string)
+        .filter(n => typeof n === "string" && normalizar(n).includes(primeiraPalavra))
+        .slice(0, 10);
+      erros.push(`lojistas: nenhum lojista casa com "${antigoRaw}" (normalizado "${antigoNorm}"). Total lojistas: ${(todosLojistas || []).length}. Similares: ${similares.join(" | ") || "(nenhum)"}.`);
+    }
 
     if (lojistasAntigos.length > 0) {
       if (lojistaNovo) {
