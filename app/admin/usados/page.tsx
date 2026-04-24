@@ -308,33 +308,50 @@ export function UsadosContent() {
     const entry = addingVariante[modelo];
     if (!entry) return;
     const specFields = SPEC_FIELDS_BY_CAT[cat] || [];
-    const missing = specFields.find((f) => !entry.specs[f.key]?.trim());
-    if (missing) { setMsg(`Selecione ${missing.label.toLowerCase()}`); return; }
+    const conectField = specFields.find((f) => f.key === "conectividade");
+    const hasConect = !!conectField;
+    // Validacao: basta 1 spec field preenchido (nao obrigamos tela, RAM, etc).
+    // Conectividade e tratada fora (quando hasConect, cria 1 linha por opcao).
+    const filledSpecs = specFields.filter((f) => f.key !== "conectividade" && entry.specs[f.key]?.trim());
+    if (filledSpecs.length === 0) { setMsg("Preencha ao menos um campo (ex: Armazenamento)"); return; }
     if (!entry.valor_base.trim()) { setMsg("Preencha o valor (use 0 pra sem preco fixo)"); return; }
     const val = parseFloat(entry.valor_base);
     if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
-    // Junta na ORDEM dos fields (armaz | tela | conect), campos vazios somem
-    const armazenamento = specFields.map((f) => (entry.specs[f.key] || "").trim()).filter(Boolean).join(" | ");
+    // Pra categorias com conectividade: cria 1 linha por opcao (Wifi + Wifi+Cel
+    // ou GPS + GPS+Cel). Valor aplicado pros 2 — admin pode editar cada celula
+    // depois se precisar de precos diferentes.
+    const conectOpts = hasConect ? conectField!.options : [""];
+    const toCreate: string[] = [];
+    for (const conectVal of conectOpts) {
+      const armazParts = specFields.map((f) => {
+        if (f.key === "conectividade") return conectVal;
+        return (entry.specs[f.key] || "").trim();
+      }).filter(Boolean);
+      if (armazParts.length > 0) toCreate.push(armazParts.join(" | "));
+    }
+    if (toCreate.length === 0) { setMsg("Nada pra salvar"); return; }
     const savingKey = `new-variante-${modelo}`;
     setSaving(savingKey);
-    const res = await apiPost({ action: "upsert_valor", modelo, armazenamento, valor_base: val });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      alert(`Erro: ${j.error || "falha ao adicionar variante"}`);
-      setSaving(null);
-      return;
+    for (const armaz of toCreate) {
+      const res = await apiPost({ action: "upsert_valor", modelo, armazenamento: armaz, valor_base: val });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(`Erro ao salvar ${armaz}: ${j.error || "falha ao adicionar variante"}`);
+        setSaving(null);
+        return;
+      }
     }
     setValores((prev) => {
-      const exists = prev.findIndex((v) => v.modelo === modelo && v.armazenamento === armazenamento);
-      if (exists >= 0) {
-        const nv = [...prev];
-        nv[exists] = { ...nv[exists], valor_base: val };
-        return nv;
+      const upd = [...prev];
+      for (const armaz of toCreate) {
+        const idx = upd.findIndex((v) => v.modelo === modelo && v.armazenamento === armaz);
+        if (idx >= 0) upd[idx] = { ...upd[idx], valor_base: val };
+        else upd.push({ id: crypto.randomUUID(), modelo, armazenamento: armaz, valor_base: val, ativo: true });
       }
-      return [...prev, { id: crypto.randomUUID(), modelo, armazenamento, valor_base: val, ativo: true }];
+      return upd;
     });
     const e = { ...addingVariante }; delete e[modelo]; setAddingVariante(e);
-    setMsg(`${modelo} ${armazenamento} adicionado!`);
+    setMsg(`${modelo}: ${toCreate.length} variante${toCreate.length > 1 ? "s" : ""} adicionada${toCreate.length > 1 ? "s" : ""}!`);
     setSaving(null);
   };
 
@@ -1418,7 +1435,10 @@ export function UsadosContent() {
                         clica no botao "+ Variante" do header. Usa todos os specs
                         da categoria. */}
                     {addingVariante[modelo] && (() => {
-                      const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+                      // Conectividade e escondida do form porque ja tem uma coluna por
+                      // opcao (Wifi/Wifi+Cel ou GPS/GPS+Cel) — salvar cria 1 linha por
+                      // opcao. Outros specs (tela, RAM, SSD) sao opcionais.
+                      const specFields = (SPEC_FIELDS_BY_CAT[catFilter] || []).filter((f) => f.key !== "conectividade");
                       const entry = addingVariante[modelo];
                       const savingKey = `new-variante-${modelo}`;
                       const isSavingNew = saving === savingKey;
@@ -1426,9 +1446,11 @@ export function UsadosContent() {
                         <tr className="bg-[#FFF7ED] border-t-2 border-[#E8740E]">
                           <td className="px-5 py-3" colSpan={hasConectField ? 1 + conectOptions.length : 4}>
                             <div className="flex items-end gap-2 flex-wrap">
-                              {specFields.map((f) => (
+                              {specFields.map((f, idx) => (
                                 <div key={f.key} className="flex flex-col">
-                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">{f.label}</label>
+                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">
+                                    {f.label}{idx === 0 ? " *" : ""}
+                                  </label>
                                   <select
                                     value={entry.specs[f.key] || ""}
                                     onChange={(e) => setAddingVariante({ ...addingVariante, [modelo]: { ...entry, specs: { ...entry.specs, [f.key]: e.target.value } } })}
