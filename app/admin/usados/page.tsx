@@ -297,8 +297,8 @@ export function UsadosContent() {
     setSaving(null);
   };
 
-  const handleSaveNewVariante = async (groupKey: string, modelo: string, cat: string) => {
-    const entry = addingVariante[groupKey];
+  const handleSaveNewVariante = async (modelo: string, cat: string) => {
+    const entry = addingVariante[modelo];
     if (!entry) return;
     const specFields = SPEC_FIELDS_BY_CAT[cat] || [];
     const missing = specFields.find((f) => !entry.specs[f.key]?.trim());
@@ -326,7 +326,7 @@ export function UsadosContent() {
       }
       return [...prev, { id: crypto.randomUUID(), modelo, armazenamento, valor_base: val, ativo: true }];
     });
-    const e = { ...addingVariante }; delete e[groupKey]; setAddingVariante(e);
+    const e = { ...addingVariante }; delete e[modelo]; setAddingVariante(e);
     setMsg(`${modelo} ${armazenamento} adicionado!`);
     setSaving(null);
   };
@@ -520,31 +520,36 @@ export function UsadosContent() {
   // ja estao na aba "Excluidos" (pra nao editar em dois lugares). Match exato
   // case-insensitive — diferente do cliente que usa `includes()` fuzzy.
   //
-  // Pra iPad e Watch, particiona tambem por conectividade (Wifi/Wifi+Cel ou
-  // GPS/GPS+Cel) — cada card vira "iPad Pro M2 · Wifi" ou "Apple Watch
-  // Series 10 · GPS + Cel". Isso tira a coluna Conectividade de cada row e
-  // usa uma tag no header. Pra iPhone/MacBook, agrupa so por modelo.
+  // Pra iPad/Watch, extrai as conectividades presentes pra mostrar como tags
+  // no header do card (UM card por modelo — sem multiplicar cards).
   const excluidosSet = new Set(excluidos.map((m) => m.toLowerCase()));
-  const partitionByConect = catFilter === "ipad" || catFilter === "watch";
   const extractConect = (armazenamento: string): string => {
-    if (!partitionByConect) return "";
-    // Ordem em SPEC_FIELDS_BY_CAT: iPad = [armaz, tela, conect]; Watch = [tamanho, conect]
     const parts = armazenamento.split("|").map((p) => p.trim());
     const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
     const idx = specFields.findIndex((f) => f.key === "conectividade");
     return idx >= 0 ? (parts[idx] || "") : "";
   };
   const grouped: Record<string, ValorUsado[]> = {};
-  const groupMeta: Record<string, { modelo: string; conectividade: string }> = {};
   valores
     .filter(v => v.modelo.startsWith(catPrefix))
     .filter(v => !excluidosSet.has(v.modelo.toLowerCase()))
     .forEach((v) => {
-      const conect = extractConect(v.armazenamento);
-      const key = partitionByConect && conect ? `${v.modelo} · ${conect}` : v.modelo;
-      if (!grouped[key]) { grouped[key] = []; groupMeta[key] = { modelo: v.modelo, conectividade: conect }; }
-      grouped[key].push(v);
+      if (!grouped[v.modelo]) grouped[v.modelo] = [];
+      grouped[v.modelo].push(v);
     });
+  // Pra cada modelo, extrai conectividades unicas presentes (usado como tags)
+  const conectividadesByModel: Record<string, string[]> = {};
+  const hasConectField = (SPEC_FIELDS_BY_CAT[catFilter] || []).some((f) => f.key === "conectividade");
+  if (hasConectField) {
+    for (const modelo of Object.keys(grouped)) {
+      const set = new Set<string>();
+      for (const v of grouped[modelo]) {
+        const c = extractConect(v.armazenamento);
+        if (c) set.add(c);
+      }
+      conectividadesByModel[modelo] = [...set].sort();
+    }
+  }
   // Ordenar variantes dentro de cada modelo por capacidade crescente
   // (64GB → 128GB → 256GB → 512GB → 1TB). Formatos desconhecidos caem no
   // final. Mesma regra da listagem de seminovos em /admin/precos.
@@ -557,8 +562,8 @@ export function UsadosContent() {
     if (unit === "MB") return num / 1000;
     return num;
   };
-  for (const gkey of Object.keys(grouped)) {
-    grouped[gkey].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+  for (const modelo of Object.keys(grouped)) {
+    grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
   }
 
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
@@ -901,34 +906,25 @@ export function UsadosContent() {
               </button>
             </div>
           ) : (
-            Object.entries(grouped).map(([groupKey, rows]) => {
-              const meta = groupMeta[groupKey] || { modelo: groupKey, conectividade: "" };
-              const modelo = meta.modelo;
-              const conectividade = meta.conectividade;
-              // No card particionado por conectividade, a conectividade ja e
-              // fixa — ao abrir "+ Variante" pre-preenche pra o admin so
-              // preencher armaz/tela.
-              const initNewVariante = (): { specs: Record<string, string>; valor_base: string } => ({
-                specs: conectividade ? { conectividade } : {},
-                valor_base: "",
-              });
+            Object.entries(grouped).map(([modelo, rows]) => {
+              const conectividadesDoModelo = conectividadesByModel[modelo] || [];
               return (
-              <div key={groupKey} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+              <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
-                    {conectividade && (
-                      <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200">
-                        {conectividade}
+                    {conectividadesDoModelo.map((c) => (
+                      <span key={c} className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-medium border border-blue-200">
+                        {c}
                       </span>
-                    )}
+                    ))}
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setAddingVariante((prev) => ({ ...prev, [groupKey]: prev[groupKey] || initNewVariante() }))}
-                      disabled={addingVariante[groupKey] !== undefined}
+                      onClick={() => setAddingVariante((prev) => ({ ...prev, [modelo]: prev[modelo] || { specs: {}, valor_base: "" } }))}
+                      disabled={addingVariante[modelo] !== undefined}
                       className="px-3 py-1 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] bg-white hover:bg-[#FFF7ED] transition-colors whitespace-nowrap disabled:opacity-40"
-                      title={conectividade ? `Adiciona uma variante (armaz/tela) pro ${modelo} ${conectividade}` : "Adiciona uma variante para esse modelo"}
+                      title="Adiciona uma nova variante para esse modelo"
                     >
                       ➕ Variante
                     </button>
@@ -1053,26 +1049,15 @@ export function UsadosContent() {
                                 </div>
                               </div>
                             ) : (
-                              (() => {
-                                // Se o card ja tem tag de conectividade no header
-                                // (iPad/Watch particionado), tira a conectividade do
-                                // display pra nao repetir "64GB | 11" | Wifi" em todas
-                                // as rows — mostra so "64GB | 11"".
-                                const displayArmaz = conectividade
-                                  ? v.armazenamento.split("|").map((p) => p.trim()).filter((p) => p !== conectividade).join(" | ")
-                                  : v.armazenamento;
-                                return (
-                                  <button
-                                    type="button"
-                                    title="Clique para editar"
-                                    onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: initSpecsEdit() })}
-                                    className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors group"
-                                  >
-                                    {displayArmaz || "—"}
-                                    <span className="ml-1.5 text-[#C7C7CC] group-hover:text-[#E8740E] text-xs">✏️</span>
-                                  </button>
-                                );
-                              })()
+                              <button
+                                type="button"
+                                title="Clique para editar"
+                                onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: initSpecsEdit() })}
+                                className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors group"
+                              >
+                                {v.armazenamento}
+                                <span className="ml-1.5 text-[#C7C7CC] group-hover:text-[#E8740E] text-xs">✏️</span>
+                              </button>
                             )}
                           </td>
                           <td className="px-5 py-3">
@@ -1137,25 +1122,23 @@ export function UsadosContent() {
                       );
                     })}
                     {/* Row inline pra adicionar nova variante — aparece quando o admin
-                        clica no botao "+ Variante" do header. Se o card ja foi
-                        particionado por conectividade (iPad/Watch), o select de
-                        conectividade some — ja vem pre-preenchido do groupMeta. */}
-                    {addingVariante[groupKey] && (() => {
-                      const allSpecFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
-                      const specFieldsToShow = conectividade ? allSpecFields.filter((f) => f.key !== "conectividade") : allSpecFields;
-                      const entry = addingVariante[groupKey];
+                        clica no botao "+ Variante" do header. Usa todos os specs
+                        da categoria. */}
+                    {addingVariante[modelo] && (() => {
+                      const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+                      const entry = addingVariante[modelo];
                       const savingKey = `new-variante-${modelo}`;
                       const isSavingNew = saving === savingKey;
                       return (
                         <tr className="bg-[#FFF7ED] border-t-2 border-[#E8740E]">
                           <td className="px-5 py-3" colSpan={4}>
                             <div className="flex items-end gap-2 flex-wrap">
-                              {specFieldsToShow.map((f) => (
+                              {specFields.map((f) => (
                                 <div key={f.key} className="flex flex-col">
                                   <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">{f.label}</label>
                                   <select
                                     value={entry.specs[f.key] || ""}
-                                    onChange={(e) => setAddingVariante({ ...addingVariante, [groupKey]: { ...entry, specs: { ...entry.specs, [f.key]: e.target.value } } })}
+                                    onChange={(e) => setAddingVariante({ ...addingVariante, [modelo]: { ...entry, specs: { ...entry.specs, [f.key]: e.target.value } } })}
                                     className="px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
                                   >
                                     <option value="">—</option>
@@ -1168,10 +1151,10 @@ export function UsadosContent() {
                                 <input
                                   type="number"
                                   value={entry.valor_base}
-                                  onChange={(e) => setAddingVariante({ ...addingVariante, [groupKey]: { ...entry, valor_base: e.target.value } })}
+                                  onChange={(e) => setAddingVariante({ ...addingVariante, [modelo]: { ...entry, valor_base: e.target.value } })}
                                   onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveNewVariante(groupKey, modelo, catFilter);
-                                    if (e.key === "Escape") { const x = { ...addingVariante }; delete x[groupKey]; setAddingVariante(x); }
+                                    if (e.key === "Enter") handleSaveNewVariante(modelo, catFilter);
+                                    if (e.key === "Escape") { const x = { ...addingVariante }; delete x[modelo]; setAddingVariante(x); }
                                   }}
                                   placeholder="Ex: 3500 (0 = sem preco fixo)"
                                   className="w-48 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
@@ -1179,7 +1162,7 @@ export function UsadosContent() {
                               </div>
                               <div className="flex gap-1 ml-auto">
                                 <button
-                                  onClick={() => handleSaveNewVariante(groupKey, modelo, catFilter)}
+                                  onClick={() => handleSaveNewVariante(modelo, catFilter)}
                                   disabled={isSavingNew}
                                   title="Adicionar (Enter)"
                                   className="px-3 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
@@ -1187,7 +1170,7 @@ export function UsadosContent() {
                                   {isSavingNew ? "..." : "Adicionar"}
                                 </button>
                                 <button
-                                  onClick={() => { const x = { ...addingVariante }; delete x[groupKey]; setAddingVariante(x); }}
+                                  onClick={() => { const x = { ...addingVariante }; delete x[modelo]; setAddingVariante(x); }}
                                   title="Cancelar (Esc)"
                                   className="px-2 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]"
                                 >
