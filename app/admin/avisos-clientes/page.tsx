@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
 
 interface EstoqueMatch {
   id: string;
@@ -22,6 +23,7 @@ interface Aviso {
   created_at: string;
   disponivel_qnt?: number;
   estoque_matches?: EstoqueMatch[];
+  sku?: string | null;
 }
 
 const STATUS_LABELS: Record<Aviso["status"], string> = {
@@ -53,6 +55,7 @@ function buildMensagemChegou(aviso: Aviso): string {
 
 export default function AvisosClientesPage() {
   const { password, apiHeaders, darkMode: dm } = useAdmin();
+  const skuFilter = useSkuFilter();
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<"TODOS" | "DISPONIVEL" | Aviso["status"]>("DISPONIVEL");
@@ -124,11 +127,15 @@ export default function AvisosClientesPage() {
     });
   };
 
-  const disponivelAgora = avisos.filter(a => a.status === "AGUARDANDO" && (a.disponivel_qnt || 0) > 0);
+  // Filtro por SKU via URL (?sku=X) — aplica ANTES dos filtros de status
+  const avisosFiltradosSku = skuFilter
+    ? avisos.filter((a) => (a.sku || "").toUpperCase() === skuFilter)
+    : avisos;
+  const disponivelAgora = avisosFiltradosSku.filter(a => a.status === "AGUARDANDO" && (a.disponivel_qnt || 0) > 0);
   let filtrados: Aviso[];
-  if (filtro === "TODOS") filtrados = avisos;
+  if (filtro === "TODOS") filtrados = avisosFiltradosSku;
   else if (filtro === "DISPONIVEL") filtrados = disponivelAgora;
-  else filtrados = avisos.filter(a => a.status === filtro);
+  else filtrados = avisosFiltradosSku.filter(a => a.status === filtro);
   // Disponíveis primeiro (mesmo dentro de cada filtro), depois por data
   filtrados = [...filtrados].sort((a, b) => {
     const aHas = (a.disponivel_qnt || 0) > 0 && a.status === "AGUARDANDO" ? 1 : 0;
@@ -155,6 +162,8 @@ export default function AvisosClientesPage() {
         <h1 className={`text-lg font-bold ${titleCls}`}>📢 Avisos para Clientes</h1>
         <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Anotações de produtos aguardados — notifique quando chegar</p>
       </div>
+
+      <SkuFilterBanner total={filtrados.length} />
 
       {msg && (
         <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? (dm ? "bg-red-900/30 text-red-300" : "bg-red-50 text-red-700") : (dm ? "bg-green-900/30 text-green-300" : "bg-green-50 text-green-700")}`}>

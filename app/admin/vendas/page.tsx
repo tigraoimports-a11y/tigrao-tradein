@@ -14,6 +14,7 @@ import { getModeloBase } from "@/lib/produto-display";
 import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -22,7 +23,7 @@ const VENDAS_PASSWORD = "tigrao$vendas";
 // Formata a resposta de erro do backend quando SKU do estoque selecionado
 // nao bate com o SKU esperado pela venda (cliente pediu produto diferente).
 // Retorna string multilinha pronta pra setMsg.
-function formatSkuDivergenciaMsg(json: {
+interface SkuDivergencia {
   codigo?: string;
   error?: string;
   produto_venda?: string;
@@ -30,15 +31,20 @@ function formatSkuDivergenciaMsg(json: {
   diferencas?: Array<{ campo: string; esperado: string; selecionado: string }>;
   esperado?: string;
   selecionado?: string;
-}): string {
+}
+
+function formatSkuDivergenciaMsg(json: SkuDivergencia): string {
   if (json?.codigo !== "SKU_DIVERGENTE") {
     return json?.error || "erro desconhecido";
   }
   const diffs = (json.diferencas || [])
     .map((d) => `• ${d.campo}: ${d.esperado} → ${d.selecionado}`)
     .join("\n");
+  // Temporario: texto de ALERTA em vez de "bloqueada" — andre pediu pra liberar
+  // registro via botao "Registrar mesmo assim" ate ajustes finos do sistema SKU
+  // (acessorios cadastrados com categoria errada disparam falso-positivo).
   return [
-    "🚫 PRODUTO ERRADO — venda bloqueada",
+    "⚠️ ALERTA — produto não bate 100% com o pedido",
     "",
     `Cliente pediu:    ${json.produto_venda || "?"}`,
     `Você selecionou:  ${json.produto_estoque || "?"}`,
@@ -46,12 +52,44 @@ function formatSkuDivergenciaMsg(json: {
     "Diverge em:",
     diffs || `• SKU diferente (${json.esperado} ≠ ${json.selecionado})`,
     "",
-    "Corrija a seleção antes de registrar.",
+    "Revise a seleção. Se realmente é o produto certo, clique em “Registrar mesmo assim”.",
   ].join("\n");
+}
+
+// Formata N divergencias de uma vez quando o carrinho tem multiplos produtos e
+// mais de um diverge. Evita que o admin precise salvar 3x pra ver 3 alertas —
+// lista tudo junto pra ele revisar de uma vez so.
+function formatSkuDivergenciasMultiplas(erros: SkuDivergencia[]): string {
+  if (erros.length === 0) return "";
+  if (erros.length === 1) return formatSkuDivergenciaMsg(erros[0]);
+
+  const linhas = [
+    `⚠️ ALERTA — ${erros.length} produtos não batem 100%`,
+    "",
+  ];
+  erros.forEach((e, idx) => {
+    const diffs = (e.diferencas || [])
+      .map((d) => `   • ${d.campo}: ${d.esperado} → ${d.selecionado}`)
+      .join("\n");
+    linhas.push(
+      `${idx + 1}) ${e.produto_venda || "?"}`,
+      `   → Você vinculou: ${e.produto_estoque || "?"}`,
+      diffs || `   • SKU diferente`,
+      "",
+    );
+  });
+  linhas.push("Revise cada um. Se estiver tudo certo, clique em “Registrar mesmo assim”.");
+  return linhas.join("\n");
 }
 
 export default function VendasPage() {
   const { password, user, darkMode } = useAdmin();
+  const skuFilter = useSkuFilter();
+  // SKU override: quando backend retorna 409 SKU_DIVERGENTE, em vez de bloquear
+  // a venda exibe alerta com botao "Registrar mesmo assim". Se usuario clicar,
+  // seta a ref e chama handleSubmit de novo com flag _sku_override=true.
+  const skuOverrideRef = useRef(false);
+  const [skuAlertaAtivo, setSkuAlertaAtivo] = useState(false);
   const vendedoresList = useVendedores(password);
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -358,7 +396,7 @@ export default function VendasPage() {
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null; observacao: string | null }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null; observacao: string | null; sku: string | null }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -445,11 +483,38 @@ export default function VendasPage() {
 
   const handleQRDetected = useCallback((rawValue: string) => {
     const val = rawValue.trim();
-    const found = estoque.find(p =>
-      (p.serial_no && p.serial_no.toUpperCase() === val.toUpperCase()) ||
-      (p.imei && p.imei.toUpperCase() === val.toUpperCase()) ||
-      p.id === val
-    );
+    // Novo formato das etiquetas (pos-SKU): QR codifica JSON { sku, c: codigo }.
+    // Prefere busca por SKU (100% preciso) + fallback pelo codigo serial/IMEI.
+    // Retrocompat: QR antigo sem JSON continua funcionando (codigo bruto).
+    let sku: string | null = null;
+    let codigo = val;
+    if (val.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(val) as { sku?: string; c?: string };
+        if (parsed.sku) sku = String(parsed.sku).toUpperCase();
+        if (parsed.c) codigo = String(parsed.c);
+      } catch {
+        /* nao e JSON valido — trata val inteiro como codigo */
+      }
+    }
+
+    // Busca no estoque: prioridade SKU, depois serial/imei/id
+    const found = estoque.find(p => {
+      if (sku && p.sku && p.sku.toUpperCase() === sku) {
+        // Match por SKU: se ainda bate por serial/imei tambem, perfeito;
+        // senao aceita qualquer unidade do SKU (mas idealmente deve bater codigo).
+        return (p.serial_no && p.serial_no.toUpperCase() === codigo.toUpperCase()) ||
+               (p.imei && p.imei.toUpperCase() === codigo.toUpperCase()) ||
+               // Se codigo nao bate serial/imei, aceita mesmo assim — pode ser
+               // etiqueta de item sem serial (raro). Usuario pode editar depois.
+               true;
+      }
+      // Fallback: busca por serial/imei/id (comportamento antigo)
+      return (p.serial_no && p.serial_no.toUpperCase() === codigo.toUpperCase()) ||
+             (p.imei && p.imei.toUpperCase() === codigo.toUpperCase()) ||
+             p.id === codigo;
+    });
+
     if (found) {
       const tipoKey = (found.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
       setCatSel(`${found.categoria}__${tipoKey}`);
@@ -460,9 +525,9 @@ export default function VendasPage() {
       if (found.serial_no) { set("serial_no", found.serial_no); setSerialBusca(found.serial_no); }
       if (found.imei) { set("imei", found.imei); if (!found.serial_no) setSerialBusca(found.imei); }
       handleStopQR();
-      setMsg(`✅ Produto encontrado: ${found.produto}`);
+      setMsg(`✅ Produto encontrado: ${found.produto}${sku ? ` (SKU ${sku})` : ""}`);
     } else {
-      setQrScanMsg(`⚠️ Serial não encontrado em estoque: ${val.slice(0, 20)}…`);
+      setQrScanMsg(`⚠️ ${sku ? `SKU ${sku} com ${codigo.slice(0, 16)}…` : `Codigo ${codigo.slice(0, 20)}…`} nao encontrado em estoque`);
     }
   }, [estoque, set, handleStopQR]);
 
@@ -1709,6 +1774,11 @@ export default function VendasPage() {
             || (precisaCriarGrupo ? crypto.randomUUID() : editandoGrupoIds[0]);
 
           let allOk = true;
+          // Acumula divergencias de SKU (nao quebra o loop) — assim o admin
+          // ve TODAS as linhas problematicas de uma vez em vez de salvar
+          // varias vezes descobrindo 1 por vez.
+          const skuDivergencias: SkuDivergencia[] = [];
+          let primeiroErroNaoSku = "";
 
           // 1. PATCH nos produtos que casam com vendas existentes.
           // Se estamos criando grupo novo (venda unica virando multi), propaga grupo_id
@@ -1717,6 +1787,7 @@ export default function VendasPage() {
           for (let i = 0; i < nPatch; i++) {
             const patchBody: Record<string, unknown> = { id: editandoGrupoIds[i], ...groupPayloads[i] };
             if (precisaCriarGrupo) patchBody.grupo_id = grupoIdOriginal;
+            if (skuOverrideRef.current) patchBody._sku_override = true;
             const res = await fetch("/api/vendas", {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "x-admin-password": password },
@@ -1724,20 +1795,26 @@ export default function VendasPage() {
             });
             const json = await res.json();
             if (!json.ok && !json.data) {
-              allOk = false;
-              setMsg(
-                json.codigo === "SKU_DIVERGENTE"
-                  ? formatSkuDivergenciaMsg(json)
-                  : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
-              );
-              break;
+              if (json.codigo === "SKU_DIVERGENTE") {
+                // Coleta e continua — vai reportar tudo no final.
+                skuDivergencias.push(json);
+                allOk = false;
+              } else if (!primeiroErroNaoSku) {
+                // Outros erros (nao SKU): guarda o primeiro e quebra o loop.
+                primeiroErroNaoSku = "Erro ao atualizar: " + (json.error || "erro desconhecido");
+                allOk = false;
+                break;
+              }
             }
           }
 
           // 2. POST novos produtos (se allProducts.length > editandoGrupoIds.length)
+          // So roda se fase 1 passou 100% — divergencias de SKU em PATCH
+          // existentes impedem avancar pra criar itens novos sem admin revisar.
           if (allOk && allProducts.length > editandoGrupoIds.length) {
             for (let i = editandoGrupoIds.length; i < allProducts.length; i++) {
-              const payload = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
+              const payload: Record<string, unknown> = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
+              if (skuOverrideRef.current) payload._sku_override = true;
               const res = await fetch("/api/vendas", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-admin-password": password },
@@ -1745,15 +1822,24 @@ export default function VendasPage() {
               });
               const json = await res.json();
               if (!json.ok && !json.data) {
-                allOk = false;
-                setMsg(
-                  json.codigo === "SKU_DIVERGENTE"
-                    ? formatSkuDivergenciaMsg(json)
-                    : "Erro ao criar novo item: " + (json.error || "erro desconhecido"),
-                );
-                break;
+                if (json.codigo === "SKU_DIVERGENTE") {
+                  skuDivergencias.push(json);
+                  allOk = false;
+                } else if (!primeiroErroNaoSku) {
+                  primeiroErroNaoSku = "Erro ao criar novo item: " + (json.error || "erro desconhecido");
+                  allOk = false;
+                  break;
+                }
               }
             }
+          }
+
+          // Se teve divergencia de SKU em qualquer fase, mostra alerta agregado
+          if (skuDivergencias.length > 0) {
+            setMsg(formatSkuDivergenciasMultiplas(skuDivergencias));
+            setSkuAlertaAtivo(true);
+          } else if (primeiroErroNaoSku) {
+            setMsg(primeiroErroNaoSku);
           }
 
           // 3. DELETE vendas removidas (se allProducts.length < editandoGrupoIds.length)
@@ -1801,6 +1887,8 @@ export default function VendasPage() {
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
             setMsg(msgFinal);
+            setSkuAlertaAtivo(false);
+            skuOverrideRef.current = false;
             fetchVendas();
             fetchEstoque();
           }
@@ -1808,10 +1896,12 @@ export default function VendasPage() {
           // Edição simples (1 produto)
           const prod = allProducts[0];
           const payload = buildPayload(prod);
+          const body: Record<string, unknown> = { id: editandoVendaId, ...payload };
+          if (skuOverrideRef.current) body._sku_override = true;
           const res = await fetch("/api/vendas", {
             method: "PATCH",
             headers: { "Content-Type": "application/json", "x-admin-password": password },
-            body: JSON.stringify({ id: editandoVendaId, ...payload }),
+            body: JSON.stringify(body),
           });
           const json = await res.json();
           if (json.ok || json.data) {
@@ -1843,6 +1933,9 @@ export default function VendasPage() {
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
             setMsg("Venda atualizada com sucesso!");
+            // Sucesso — resetar estado do alerta/override
+            setSkuAlertaAtivo(false);
+            skuOverrideRef.current = false;
             fetchVendas();
             fetchEstoque();
           } else {
@@ -1853,6 +1946,13 @@ export default function VendasPage() {
                 ? formatSkuDivergenciaMsg(json)
                 : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
             );
+            if (json.codigo === "SKU_DIVERGENTE") {
+              setSkuAlertaAtivo(true);
+            } else {
+              // Erro diferente → limpa flag pra proximo save nao carregar override
+              setSkuAlertaAtivo(false);
+              skuOverrideRef.current = false;
+            }
           }
         }
       } catch {
@@ -1871,16 +1971,22 @@ export default function VendasPage() {
     let successCount = 0;
     const errors: string[] = [];
     const savedVendaIds: string[] = [];
+    // Acumula divergencias de SKU pra mostrar tudo de uma vez no final
+    // (multi-produto com varios erros SKU = 1 alerta consolidado).
+    const skuDivergenciasPost: SkuDivergencia[] = [];
 
     for (let i = 0; i < payloads.length; i++) {
       const payload = payloads[i];
       const prod = allProducts[i];
 
       try {
+        const bodyFinal = skuOverrideRef.current
+          ? { ...payload, _sku_override: true }
+          : payload;
         const res = await fetch("/api/vendas", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(bodyFinal),
         });
         const json = await res.json();
         if (json.ok) {
@@ -1890,9 +1996,9 @@ export default function VendasPage() {
             errors.push(`⚠️ Crédito lojista: ${json.creditoDebitError}`);
           }
         } else if (json.codigo === "SKU_DIVERGENTE") {
-          // Erro critico: produto nao bate com o pedido. Mensagem detalhada
-          // em vez de concatenar no erros[] generico.
-          errors.push(`${prod.produto}: ${formatSkuDivergenciaMsg(json)}`);
+          // Alerta: coleta e continua o loop pra reportar TODOS os SKUs
+          // divergentes de uma vez (evita admin salvar varias vezes).
+          skuDivergenciasPost.push(json);
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
@@ -1904,7 +2010,15 @@ export default function VendasPage() {
       }
     }
 
+    // Se teve divergencias SKU, ativa o alerta agregado (setMsg vem depois)
+    if (skuDivergenciasPost.length > 0) {
+      setSkuAlertaAtivo(true);
+    }
+
     if (successCount > 0) {
+      // Sucesso — resetar estado do alerta/override pra nao carregar no proximo save
+      setSkuAlertaAtivo(false);
+      skuOverrideRef.current = false;
       setDuplicadoInfo(null);
       setLastClienteData(null);
       setProdutosCarrinho([]);
@@ -1938,12 +2052,16 @@ export default function VendasPage() {
       localStorage.removeItem("tigrao_venda_draft");
       const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
+      const totalFalhas = errors.length + skuDivergenciasPost.length;
+      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${totalFalhas > 0 ? ` (${totalFalhas} erro${totalFalhas > 1 ? "s" : ""})` : ""}`);
       fetchVendas();
       fetchEstoque();
       // NF é adicionada depois nas vendas pendentes, não no momento do registro
 
       // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
+    } else if (skuDivergenciasPost.length > 0) {
+      // Nenhuma venda registrada + todas bateram SKU_DIVERGENTE → alerta consolidado
+      setMsg(formatSkuDivergenciasMultiplas(skuDivergenciasPost));
     } else {
       setMsg("Erro: " + errors.join("; "));
     }
@@ -2550,7 +2668,47 @@ export default function VendasPage() {
             </div>
           )}
 
-          {msg && <div className={`px-4 py-3 rounded-xl text-sm whitespace-pre-line ${msg.includes("Erro") || msg.includes("🚫") || msg.includes("bloqueada") ? "bg-red-50 text-red-700 border border-red-200" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+          {msg && (
+            <div className={`px-4 py-3 rounded-xl text-sm whitespace-pre-line ${
+              skuAlertaAtivo
+                ? "bg-amber-50 text-amber-800 border border-amber-300"
+                : msg.includes("Erro") || msg.includes("🚫") || msg.includes("bloqueada")
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-green-50 text-green-700"
+            }`}>
+              <div>{msg}</div>
+              {skuAlertaAtivo && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      // Override: proxima submissao envia _sku_override=true e pula validacao.
+                      // Limpa msg + alerta e re-chama handleSubmit pra retentar o save.
+                      skuOverrideRef.current = true;
+                      setSkuAlertaAtivo(false);
+                      setMsg("");
+                      handleSubmit();
+                    }}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    ⚠️ Registrar mesmo assim
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Usuario quer corrigir a selecao — so limpa o alerta
+                      setSkuAlertaAtivo(false);
+                      skuOverrideRef.current = false;
+                      setMsg("");
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium border border-amber-400 text-amber-800 bg-white hover:bg-amber-50 transition-colors"
+                  >
+                    Corrigir seleção
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          <SkuFilterBanner />
 
           {/* Row 1: Data + Brinde */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -4764,6 +4922,11 @@ export default function VendasPage() {
           ).filter(v => !filtroBrinde || v.is_brinde);
           // Aplicar filtro de pendencia (se ativo)
           const filteredRaw = filteredRawSemPendencia.filter(v => {
+            // Filtro SKU via URL (?sku=X) tem prioridade — restringe tudo
+            if (skuFilter) {
+              const vSku = ((v as unknown as { sku?: string | null }).sku || "").toUpperCase();
+              if (vSku !== skuFilter) return false;
+            }
             if (pendenciaFilter === "nf") return isNFPendente(v);
             if (pendenciaFilter === "termo") return isTermoPendente(v);
             return true;
