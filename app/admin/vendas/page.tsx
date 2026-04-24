@@ -14,6 +14,7 @@ import { getModeloBase } from "@/lib/produto-display";
 import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -52,6 +53,7 @@ function formatSkuDivergenciaMsg(json: {
 
 export default function VendasPage() {
   const { password, user, darkMode } = useAdmin();
+  const skuFilter = useSkuFilter();
   const vendedoresList = useVendedores(password);
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -358,7 +360,7 @@ export default function VendasPage() {
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null; sku: string | null }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -445,11 +447,38 @@ export default function VendasPage() {
 
   const handleQRDetected = useCallback((rawValue: string) => {
     const val = rawValue.trim();
-    const found = estoque.find(p =>
-      (p.serial_no && p.serial_no.toUpperCase() === val.toUpperCase()) ||
-      (p.imei && p.imei.toUpperCase() === val.toUpperCase()) ||
-      p.id === val
-    );
+    // Novo formato das etiquetas (pos-SKU): QR codifica JSON { sku, c: codigo }.
+    // Prefere busca por SKU (100% preciso) + fallback pelo codigo serial/IMEI.
+    // Retrocompat: QR antigo sem JSON continua funcionando (codigo bruto).
+    let sku: string | null = null;
+    let codigo = val;
+    if (val.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(val) as { sku?: string; c?: string };
+        if (parsed.sku) sku = String(parsed.sku).toUpperCase();
+        if (parsed.c) codigo = String(parsed.c);
+      } catch {
+        /* nao e JSON valido — trata val inteiro como codigo */
+      }
+    }
+
+    // Busca no estoque: prioridade SKU, depois serial/imei/id
+    const found = estoque.find(p => {
+      if (sku && p.sku && p.sku.toUpperCase() === sku) {
+        // Match por SKU: se ainda bate por serial/imei tambem, perfeito;
+        // senao aceita qualquer unidade do SKU (mas idealmente deve bater codigo).
+        return (p.serial_no && p.serial_no.toUpperCase() === codigo.toUpperCase()) ||
+               (p.imei && p.imei.toUpperCase() === codigo.toUpperCase()) ||
+               // Se codigo nao bate serial/imei, aceita mesmo assim — pode ser
+               // etiqueta de item sem serial (raro). Usuario pode editar depois.
+               true;
+      }
+      // Fallback: busca por serial/imei/id (comportamento antigo)
+      return (p.serial_no && p.serial_no.toUpperCase() === codigo.toUpperCase()) ||
+             (p.imei && p.imei.toUpperCase() === codigo.toUpperCase()) ||
+             p.id === codigo;
+    });
+
     if (found) {
       const tipoKey = (found.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
       setCatSel(`${found.categoria}__${tipoKey}`);
@@ -460,9 +489,9 @@ export default function VendasPage() {
       if (found.serial_no) { set("serial_no", found.serial_no); setSerialBusca(found.serial_no); }
       if (found.imei) { set("imei", found.imei); if (!found.serial_no) setSerialBusca(found.imei); }
       handleStopQR();
-      setMsg(`✅ Produto encontrado: ${found.produto}`);
+      setMsg(`✅ Produto encontrado: ${found.produto}${sku ? ` (SKU ${sku})` : ""}`);
     } else {
-      setQrScanMsg(`⚠️ Serial não encontrado em estoque: ${val.slice(0, 20)}…`);
+      setQrScanMsg(`⚠️ ${sku ? `SKU ${sku} com ${codigo.slice(0, 16)}…` : `Codigo ${codigo.slice(0, 20)}…`} nao encontrado em estoque`);
     }
   }, [estoque, set, handleStopQR]);
 
@@ -2551,6 +2580,7 @@ export default function VendasPage() {
           )}
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm whitespace-pre-line ${msg.includes("Erro") || msg.includes("🚫") || msg.includes("bloqueada") ? "bg-red-50 text-red-700 border border-red-200" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+          <SkuFilterBanner />
 
           {/* Row 1: Data + Brinde */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -4764,6 +4794,11 @@ export default function VendasPage() {
           ).filter(v => !filtroBrinde || v.is_brinde);
           // Aplicar filtro de pendencia (se ativo)
           const filteredRaw = filteredRawSemPendencia.filter(v => {
+            // Filtro SKU via URL (?sku=X) tem prioridade — restringe tudo
+            if (skuFilter) {
+              const vSku = ((v as unknown as { sku?: string | null }).sku || "").toUpperCase();
+              if (vSku !== skuFilter) return false;
+            }
             if (pendenciaFilter === "nf") return isNFPendente(v);
             if (pendenciaFilter === "termo") return isTermoPendente(v);
             return true;

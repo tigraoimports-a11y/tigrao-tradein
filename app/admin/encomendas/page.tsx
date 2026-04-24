@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
 import { corParaPT } from "@/lib/cor-pt";
 import { hojeBR } from "@/lib/date-utils";
 import ProdutoSpecFields, {
@@ -145,7 +146,12 @@ const fmt = (v: number) => "R$ " + Math.round(v).toLocaleString("pt-BR");
 
 export default function EncomendasPage() {
   const { password, user, darkMode: dm } = useAdmin();
-  const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
+  const skuFilter = useSkuFilter();
+  const [encomendasRaw, setEncomendas] = useState<Encomenda[]>([]);
+  // Aplica filtro por SKU (?sku=X) transparentemente
+  const encomendas = skuFilter
+    ? encomendasRaw.filter((e) => ((e as unknown as { sku?: string | null }).sku || "").toUpperCase() === skuFilter)
+    : encomendasRaw;
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"lista" | "nova">("lista");
   const [msg, setMsg] = useState("");
@@ -793,6 +799,7 @@ export default function EncomendasPage() {
 
   return (
     <div className="space-y-6">
+      <SkuFilterBanner total={encomendas.length} />
       {msg && (
         <div
           className={`px-4 py-3 rounded-xl text-sm ${
