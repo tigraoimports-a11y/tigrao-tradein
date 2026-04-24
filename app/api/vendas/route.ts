@@ -863,7 +863,7 @@ export async function PATCH(req: NextRequest) {
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
   // e status_pagamento (evitar reenvio de NF/Telegram em edicoes posteriores).
-  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento, troca_produto, produto_na_troca, troca_produto2, produto_na_troca2, troca_serial, troca_imei, troca_serial2, troca_imei2, cliente").eq("id", id).single();
+  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento, troca_produto, produto_na_troca, troca_produto2, produto_na_troca2, troca_serial, troca_imei, troca_serial2, troca_imei2, cliente, sku").eq("id", id).single();
   const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
   const statusPagamentoAnterior = (vendaAnterior as unknown as { status_pagamento?: string } | null)?.status_pagamento || null;
   const jaTinhaTroca1Antes = !!((vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.troca_produto || (vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.produto_na_troca);
