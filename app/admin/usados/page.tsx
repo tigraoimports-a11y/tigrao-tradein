@@ -224,10 +224,11 @@ export function UsadosContent() {
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [editingDesc, setEditingDesc] = useState<Record<string, string>>({});
   const [editingGarantia, setEditingGarantia] = useState<Record<string, string>>({});
-  // Edicao inline dos specs (armazenamento/tela/conectividade) por linha.
-  // Chave = `${modelo}|${armazenamento_atual}` — o mesmo formato ja usado em
-  // editing/editingGarantia. Valor = { armazenamento, tela, conectividade }.
-  const [editingSpecs, setEditingSpecs] = useState<Record<string, { armazenamento: string; tela: string; conectividade: string }>>({});
+  // Edicao inline dos specs por linha. Chave do mapa externo =
+  // `${modelo}|${armazenamento_atual}`. Chave interna = f.key de SPEC_FIELDS_BY_CAT
+  // (armazenamento/tela/conectividade pra iPad, tamanho/conectividade pra Watch,
+  // tela/ram/ssd pra MacBook). Ao salvar, junta valores na ORDEM dos fields.
+  const [editingSpecs, setEditingSpecs] = useState<Record<string, Record<string, string>>>({});
   // Form inline pra adicionar nova variante direto no header de cada modelo
   // (sem precisar abrir o form grande no topo e redigitar Linha+Modelo).
   // Chave = nome do modelo. Valor = { specs por campo, valor_base }.
@@ -296,16 +297,17 @@ export function UsadosContent() {
     setSaving(null);
   };
 
-  const handleSaveNewVariante = async (modelo: string, cat: string) => {
-    const entry = addingVariante[modelo];
+  const handleSaveNewVariante = async (groupKey: string, modelo: string, cat: string) => {
+    const entry = addingVariante[groupKey];
     if (!entry) return;
     const specFields = SPEC_FIELDS_BY_CAT[cat] || [];
     const missing = specFields.find((f) => !entry.specs[f.key]?.trim());
     if (missing) { setMsg(`Selecione ${missing.label.toLowerCase()}`); return; }
-    if (!entry.valor_base.trim()) { setMsg("Preencha o valor"); return; }
+    if (!entry.valor_base.trim()) { setMsg("Preencha o valor (use 0 pra sem preco fixo)"); return; }
     const val = parseFloat(entry.valor_base);
     if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
-    const armazenamento = specFields.map((f) => entry.specs[f.key].trim()).join(" | ");
+    // Junta na ORDEM dos fields (armaz | tela | conect), campos vazios somem
+    const armazenamento = specFields.map((f) => (entry.specs[f.key] || "").trim()).filter(Boolean).join(" | ");
     const savingKey = `new-variante-${modelo}`;
     setSaving(savingKey);
     const res = await apiPost({ action: "upsert_valor", modelo, armazenamento, valor_base: val });
@@ -324,17 +326,20 @@ export function UsadosContent() {
       }
       return [...prev, { id: crypto.randomUUID(), modelo, armazenamento, valor_base: val, ativo: true }];
     });
-    const e = { ...addingVariante }; delete e[modelo]; setAddingVariante(e);
+    const e = { ...addingVariante }; delete e[groupKey]; setAddingVariante(e);
     setMsg(`${modelo} ${armazenamento} adicionado!`);
     setSaving(null);
   };
 
-  const handleSaveSpecs = async (v: ValorUsado) => {
+  const handleSaveSpecs = async (v: ValorUsado, cat: string) => {
     const key = `${v.modelo}|${v.armazenamento}`;
     const spec = editingSpecs[key];
     if (!spec) return;
-    const novoArmaz = formatStorageSpec(spec);
-    if (!novoArmaz) { alert("Armazenamento nao pode ficar vazio."); return; }
+    const specFields = SPEC_FIELDS_BY_CAT[cat] || [];
+    // Junta na ORDEM dos fields (pra ficar "armaz | tela | conect" e nao
+    // embaralhar conforme ordem de digitacao). Campos vazios somem.
+    const novoArmaz = specFields.map((f) => (spec[f.key] || "").trim()).filter(Boolean).join(" | ");
+    if (!novoArmaz) { alert("Preencha pelo menos um campo."); return; }
     if (novoArmaz === v.armazenamento) {
       const e = { ...editingSpecs }; delete e[key]; setEditingSpecs(e);
       return;
@@ -514,14 +519,31 @@ export function UsadosContent() {
   // Agrupar valores por modelo — filtrado pela categoria e escondendo os que
   // ja estao na aba "Excluidos" (pra nao editar em dois lugares). Match exato
   // case-insensitive — diferente do cliente que usa `includes()` fuzzy.
+  //
+  // Pra iPad e Watch, particiona tambem por conectividade (Wifi/Wifi+Cel ou
+  // GPS/GPS+Cel) — cada card vira "iPad Pro M2 · Wifi" ou "Apple Watch
+  // Series 10 · GPS + Cel". Isso tira a coluna Conectividade de cada row e
+  // usa uma tag no header. Pra iPhone/MacBook, agrupa so por modelo.
   const excluidosSet = new Set(excluidos.map((m) => m.toLowerCase()));
+  const partitionByConect = catFilter === "ipad" || catFilter === "watch";
+  const extractConect = (armazenamento: string): string => {
+    if (!partitionByConect) return "";
+    // Ordem em SPEC_FIELDS_BY_CAT: iPad = [armaz, tela, conect]; Watch = [tamanho, conect]
+    const parts = armazenamento.split("|").map((p) => p.trim());
+    const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+    const idx = specFields.findIndex((f) => f.key === "conectividade");
+    return idx >= 0 ? (parts[idx] || "") : "";
+  };
   const grouped: Record<string, ValorUsado[]> = {};
+  const groupMeta: Record<string, { modelo: string; conectividade: string }> = {};
   valores
     .filter(v => v.modelo.startsWith(catPrefix))
     .filter(v => !excluidosSet.has(v.modelo.toLowerCase()))
     .forEach((v) => {
-      if (!grouped[v.modelo]) grouped[v.modelo] = [];
-      grouped[v.modelo].push(v);
+      const conect = extractConect(v.armazenamento);
+      const key = partitionByConect && conect ? `${v.modelo} · ${conect}` : v.modelo;
+      if (!grouped[key]) { grouped[key] = []; groupMeta[key] = { modelo: v.modelo, conectividade: conect }; }
+      grouped[key].push(v);
     });
   // Ordenar variantes dentro de cada modelo por capacidade crescente
   // (64GB → 128GB → 256GB → 512GB → 1TB). Formatos desconhecidos caem no
@@ -535,8 +557,8 @@ export function UsadosContent() {
     if (unit === "MB") return num / 1000;
     return num;
   };
-  for (const modelo of Object.keys(grouped)) {
-    grouped[modelo].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
+  for (const gkey of Object.keys(grouped)) {
+    grouped[gkey].sort((a, b) => storageToGB(a.armazenamento) - storageToGB(b.armazenamento));
   }
 
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
@@ -879,16 +901,34 @@ export function UsadosContent() {
               </button>
             </div>
           ) : (
-            Object.entries(grouped).map(([modelo, rows]) => (
-              <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+            Object.entries(grouped).map(([groupKey, rows]) => {
+              const meta = groupMeta[groupKey] || { modelo: groupKey, conectividade: "" };
+              const modelo = meta.modelo;
+              const conectividade = meta.conectividade;
+              // No card particionado por conectividade, a conectividade ja e
+              // fixa — ao abrir "+ Variante" pre-preenche pra o admin so
+              // preencher armaz/tela.
+              const initNewVariante = (): { specs: Record<string, string>; valor_base: string } => ({
+                specs: conectividade ? { conectividade } : {},
+                valor_base: "",
+              });
+              return (
+              <div key={groupKey} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between gap-3 flex-wrap">
-                  <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
+                    {conectividade && (
+                      <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200">
+                        {conectividade}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setAddingVariante((prev) => ({ ...prev, [modelo]: prev[modelo] || { specs: {}, valor_base: "" } }))}
-                      disabled={addingVariante[modelo] !== undefined}
+                      onClick={() => setAddingVariante((prev) => ({ ...prev, [groupKey]: prev[groupKey] || initNewVariante() }))}
+                      disabled={addingVariante[groupKey] !== undefined}
                       className="px-3 py-1 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] bg-white hover:bg-[#FFF7ED] transition-colors whitespace-nowrap disabled:opacity-40"
-                      title="Adiciona uma nova variante (armaz/tela/conect/valor) para esse modelo sem precisar abrir o form no topo"
+                      title={conectividade ? `Adiciona uma variante (armaz/tela) pro ${modelo} ${conectividade}` : "Adiciona uma variante para esse modelo"}
                     >
                       ➕ Variante
                     </button>
@@ -958,49 +998,45 @@ export function UsadosContent() {
                       const isSaving = saving === key;
                       const specKey = key;
                       const isEditSpecs = editingSpecs[specKey] !== undefined;
-                      const specs = editingSpecs[specKey] || parseStorageSpec(v.armazenamento);
+                      const specFieldsEdit = SPEC_FIELDS_BY_CAT[catFilter] || [];
+                      // Ao iniciar edicao: split do `armazenamento` por "|" e mapeia
+                      // cada parte pro field.key correspondente (pela ordem). Permite
+                      // editar iPad/Watch (formato "|") com selects pre-definidos.
+                      const initSpecsEdit = (): Record<string, string> => {
+                        const parts = v.armazenamento.split("|").map((p) => p.trim());
+                        const out: Record<string, string> = {};
+                        specFieldsEdit.forEach((f, idx) => { out[f.key] = parts[idx] || ""; });
+                        return out;
+                      };
+                      const specs = editingSpecs[specKey] || initSpecsEdit();
                       return (
                         <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
                           <td className="px-5 py-3 font-medium">
-                            {isEditSpecs ? (
+                            {isEditSpecs && specFieldsEdit.length > 0 ? (
                               <div className="flex items-end gap-2 flex-wrap">
-                                <div className="flex flex-col">
-                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Armaz.</label>
-                                  <input
-                                    type="text"
-                                    value={specs.armazenamento}
-                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, armazenamento: e.target.value } })}
-                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
-                                    placeholder="64GB"
-                                    className="w-20 px-2 py-1 rounded border border-[#E8740E] text-xs"
-                                    autoFocus
-                                  />
-                                </div>
-                                <div className="flex flex-col">
-                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Tela</label>
-                                  <input
-                                    type="text"
-                                    value={specs.tela}
-                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, tela: e.target.value } })}
-                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
-                                    placeholder='11"'
-                                    className="w-16 px-2 py-1 rounded border border-[#D2D2D7] text-xs"
-                                  />
-                                </div>
-                                <div className="flex flex-col">
-                                  <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">Conect.</label>
-                                  <input
-                                    type="text"
-                                    value={specs.conectividade}
-                                    onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, conectividade: e.target.value } })}
-                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
-                                    placeholder="Wifi"
-                                    className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-xs"
-                                  />
-                                </div>
+                                {specFieldsEdit.map((f, idx) => {
+                                  const curVal = specs[f.key] || "";
+                                  const hasInOptions = f.options.includes(curVal);
+                                  return (
+                                    <div key={f.key} className="flex flex-col">
+                                      <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">{f.label}</label>
+                                      <select
+                                        value={curVal}
+                                        onChange={(e) => setEditingSpecs({ ...editingSpecs, [specKey]: { ...specs, [f.key]: e.target.value } })}
+                                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveSpecs(v, catFilter); if (e.key === "Escape") { const x = { ...editingSpecs }; delete x[specKey]; setEditingSpecs(x); } }}
+                                        autoFocus={idx === 0}
+                                        className={`px-2 py-1 rounded border text-xs focus:outline-none ${idx === 0 ? "border-[#E8740E]" : "border-[#D2D2D7]"}`}
+                                      >
+                                        <option value="">—</option>
+                                        {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                                        {curVal && !hasInOptions && <option value={curVal}>{curVal}</option>}
+                                      </select>
+                                    </div>
+                                  );
+                                })}
                                 <div className="flex gap-1">
                                   <button
-                                    onClick={() => handleSaveSpecs(v)}
+                                    onClick={() => handleSaveSpecs(v, catFilter)}
                                     disabled={saving === specKey}
                                     title="Salvar (Enter)"
                                     className="px-2 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
@@ -1017,23 +1053,51 @@ export function UsadosContent() {
                                 </div>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                title="Clique para editar armazenamento, tela e conectividade"
-                                onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: parseStorageSpec(v.armazenamento) })}
-                                className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors group"
-                              >
-                                {v.armazenamento}
-                                <span className="ml-1.5 text-[#C7C7CC] group-hover:text-[#E8740E] text-xs">✏️</span>
-                              </button>
+                              (() => {
+                                // Se o card ja tem tag de conectividade no header
+                                // (iPad/Watch particionado), tira a conectividade do
+                                // display pra nao repetir "64GB | 11" | Wifi" em todas
+                                // as rows — mostra so "64GB | 11"".
+                                const displayArmaz = conectividade
+                                  ? v.armazenamento.split("|").map((p) => p.trim()).filter((p) => p !== conectividade).join(" | ")
+                                  : v.armazenamento;
+                                return (
+                                  <button
+                                    type="button"
+                                    title="Clique para editar"
+                                    onClick={() => setEditingSpecs({ ...editingSpecs, [specKey]: initSpecsEdit() })}
+                                    className="text-left text-sm font-medium text-[#1D1D1F] hover:text-[#E8740E] transition-colors group"
+                                  >
+                                    {displayArmaz || "—"}
+                                    <span className="ml-1.5 text-[#C7C7CC] group-hover:text-[#E8740E] text-xs">✏️</span>
+                                  </button>
+                                );
+                              })()
                             )}
                           </td>
                           <td className="px-5 py-3">
                             {isEditing ? (
                               <div className="flex items-center gap-2">
                                 <span className="text-[#86868B] text-sm">R$</span>
-                                <input type="number" value={editing[key]} onChange={(e) => setEditing({ ...editing, [key]: e.target.value })} onKeyDown={(e) => e.key === "Enter" && handleSaveValor(v)} className={inputCls} autoFocus />
+                                <input
+                                  type="number"
+                                  value={editing[key]}
+                                  onChange={(e) => setEditing({ ...editing, [key]: e.target.value })}
+                                  onKeyDown={(e) => e.key === "Enter" && handleSaveValor(v)}
+                                  placeholder="0 = sem preco fixo"
+                                  className={inputCls}
+                                  autoFocus
+                                />
                               </div>
+                            ) : v.valor_base === 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setEditing({ ...editing, [key]: String(v.valor_base) })}
+                                title="Sem preco fixo — cliente vai ser direcionado pro WhatsApp manual pra cotar essa variante. Clique para definir um valor."
+                                className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 text-xs font-medium border border-orange-200 hover:bg-orange-100 transition-colors"
+                              >
+                                Sem preco fixo
+                              </button>
                             ) : (
                               <span className="cursor-pointer hover:text-[#E8740E] transition-colors font-medium" onClick={() => setEditing({ ...editing, [key]: String(v.valor_base) })}>
                                 {fmt(v.valor_base)}
@@ -1073,23 +1137,25 @@ export function UsadosContent() {
                       );
                     })}
                     {/* Row inline pra adicionar nova variante — aparece quando o admin
-                        clica no botao "+ Variante" do header. Usa o catFilter atual pra
-                        saber quais specs pedir (armaz/tela/conect pra iPad, etc). */}
-                    {addingVariante[modelo] && (() => {
-                      const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
-                      const entry = addingVariante[modelo];
+                        clica no botao "+ Variante" do header. Se o card ja foi
+                        particionado por conectividade (iPad/Watch), o select de
+                        conectividade some — ja vem pre-preenchido do groupMeta. */}
+                    {addingVariante[groupKey] && (() => {
+                      const allSpecFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
+                      const specFieldsToShow = conectividade ? allSpecFields.filter((f) => f.key !== "conectividade") : allSpecFields;
+                      const entry = addingVariante[groupKey];
                       const savingKey = `new-variante-${modelo}`;
                       const isSavingNew = saving === savingKey;
                       return (
                         <tr className="bg-[#FFF7ED] border-t-2 border-[#E8740E]">
                           <td className="px-5 py-3" colSpan={4}>
                             <div className="flex items-end gap-2 flex-wrap">
-                              {specFields.map((f) => (
+                              {specFieldsToShow.map((f) => (
                                 <div key={f.key} className="flex flex-col">
                                   <label className="text-[9px] uppercase tracking-wider text-[#86868B] font-semibold mb-0.5">{f.label}</label>
                                   <select
                                     value={entry.specs[f.key] || ""}
-                                    onChange={(e) => setAddingVariante({ ...addingVariante, [modelo]: { ...entry, specs: { ...entry.specs, [f.key]: e.target.value } } })}
+                                    onChange={(e) => setAddingVariante({ ...addingVariante, [groupKey]: { ...entry, specs: { ...entry.specs, [f.key]: e.target.value } } })}
                                     className="px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
                                   >
                                     <option value="">—</option>
@@ -1102,18 +1168,18 @@ export function UsadosContent() {
                                 <input
                                   type="number"
                                   value={entry.valor_base}
-                                  onChange={(e) => setAddingVariante({ ...addingVariante, [modelo]: { ...entry, valor_base: e.target.value } })}
+                                  onChange={(e) => setAddingVariante({ ...addingVariante, [groupKey]: { ...entry, valor_base: e.target.value } })}
                                   onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveNewVariante(modelo, catFilter);
-                                    if (e.key === "Escape") { const x = { ...addingVariante }; delete x[modelo]; setAddingVariante(x); }
+                                    if (e.key === "Enter") handleSaveNewVariante(groupKey, modelo, catFilter);
+                                    if (e.key === "Escape") { const x = { ...addingVariante }; delete x[groupKey]; setAddingVariante(x); }
                                   }}
-                                  placeholder="Ex: 3500"
-                                  className="w-24 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                                  placeholder="Ex: 3500 (0 = sem preco fixo)"
+                                  className="w-48 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
                                 />
                               </div>
                               <div className="flex gap-1 ml-auto">
                                 <button
-                                  onClick={() => handleSaveNewVariante(modelo, catFilter)}
+                                  onClick={() => handleSaveNewVariante(groupKey, modelo, catFilter)}
                                   disabled={isSavingNew}
                                   title="Adicionar (Enter)"
                                   className="px-3 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
@@ -1121,7 +1187,7 @@ export function UsadosContent() {
                                   {isSavingNew ? "..." : "Adicionar"}
                                 </button>
                                 <button
-                                  onClick={() => { const x = { ...addingVariante }; delete x[modelo]; setAddingVariante(x); }}
+                                  onClick={() => { const x = { ...addingVariante }; delete x[groupKey]; setAddingVariante(x); }}
                                   title="Cancelar (Esc)"
                                   className="px-2 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]"
                                 >
@@ -1136,7 +1202,8 @@ export function UsadosContent() {
                   </tbody>
                 </table>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       ) : tab === "descontos" ? (
