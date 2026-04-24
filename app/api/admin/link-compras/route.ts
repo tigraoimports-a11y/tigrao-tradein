@@ -197,6 +197,8 @@ export async function POST(request: Request) {
     tipo: tipoValidos.includes(tipoInput) ? tipoInput : "COMPRA",
     previsao_chegada: body.previsao_chegada || null,
     sinal_pct: body.sinal_pct != null ? Number(body.sinal_pct) : null,
+    extra_descricao: body.extra_descricao || null,
+    extra_valor: body.extra_valor != null ? Number(body.extra_valor) : null,
     cliente_nome: body.cliente_nome || null,
     cliente_telefone: body.cliente_telefone || null,
     cliente_cpf: body.cliente_cpf || null,
@@ -283,6 +285,7 @@ export async function PATCH(request: Request) {
     "mp_link", "mp_preference_id",
     // Encomenda
     "previsao_chegada", "sinal_pct",
+    "extra_descricao", "extra_valor",
   ];
   for (const k of editableFields) {
     if (k in patch) allowed[k] = patch[k];

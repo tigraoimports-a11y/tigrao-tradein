@@ -82,6 +82,10 @@ function CompraForm() {
   const encomendaParam = searchParams.get("encomenda") === "1";
   const previsaoChegadaParam = searchParams.get("previsao_chegada") || "";
   const sinalPctParam = Math.max(0, Math.min(100, Number(searchParams.get("sinal_pct") || "0") || 0));
+  // Cobranca extra opcional — capa, pelicula, brinde, etc. Ja esta somada no
+  // valor cobrado (preco param). Aqui so pra mostrar breakdown ao cliente.
+  const extraDescricaoParam = searchParams.get("extra_descricao") || "";
+  const extraValorParam = Number(searchParams.get("extra_valor") || "0") || 0;
 
   // Trade-in params (vindos do StepQuote)
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
@@ -1112,13 +1116,22 @@ function CompraForm() {
 
     // Calcula valor a cobrar no MP. Se há entrada PIX (pagamento dividido),
     // o MP cobra só o valor parcelar (o PIX fica pendente pra retirada).
+    // IMPORTANTE: aplica a taxa do cartao/link nas parcelas — o operador
+    // define "Link 12x" esperando cobrar R$ com taxa repassada (ex: 5497
+    // base + 13% = 6212 em 12x de 517,67). Antes o MP cobrava so R$ 5497
+    // (sem taxa), ficava 12x de 458,08 e a loja nao recebia o repasse.
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
     // `precoFinal` ja e o total somado — gerar-link envia `v = total`. Nao
     // somar extras aqui (double count).
     const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
-    const valorMpCobrado =
+    const valorSemTaxa =
       entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
+    const nParcelasMp = parseInt(parcelas || "1") || 1;
+    const taxaParcelasMp = nParcelasMp > 1 ? (TAXAS[nParcelasMp] ?? 0) : 0;
+    const valorMpCobrado = taxaParcelasMp > 0
+      ? Math.round(valorSemTaxa * (1 + taxaParcelasMp / 100))
+      : valorSemTaxa;
 
     if (valorMpCobrado <= 0) {
       setErroMp("Valor a pagar via Mercado Pago inválido (R$ 0).");
@@ -1275,37 +1288,77 @@ function CompraForm() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
-      {/* Header */}
-      <div className="bg-[#E8740E] text-white px-4 py-4 text-center">
+      {/* Header — fica AZUL quando encomenda pra diferenciar visualmente do
+          fluxo de compra normal (laranja). Cliente entende ja no topo que
+          esta num pedido sob encomenda. */}
+      <div className={`${encomendaParam ? "bg-blue-600" : "bg-[#E8740E]"} text-white px-4 py-4 text-center`}>
         <p className="text-lg font-bold">&#x1F42F; TigraoImports</p>
-        <p className="text-sm opacity-90">{encomendaParam ? "📦 Encomenda" : "Formulario de Compra"}</p>
+        <p className="text-sm opacity-90">{encomendaParam ? "📦 ENCOMENDA — Reserva do seu produto" : "Formulario de Compra"}</p>
       </div>
 
-      {/* Banner de encomenda — flag organizacional. Mostra prazo de entrega
-          apos pagamento e, se for sinal antecipado, avisa que o restante fica
-          pra pagar na entrega. Pagamento segue o fluxo normal (PIX/Cartao/Link). */}
+      {/* Banner de encomenda — mini-timeline em 3 passos. Substitui o texto
+          seco anterior por uma visualizacao clara: pagar agora -> aguardar
+          chegada -> retirar (e entregar troca, se houver). Mostra valores em
+          R$ pra o cliente nao precisar calcular ou rolar pro resumo. */}
       {encomendaParam && (() => {
         const temSinal = sinalPctParam > 0 && sinalPctParam < 100;
+        const temTrocaEnc = !!trocaProdutoParam;
+        const valorTotalEnc = preco;
+        const valorAposTrocaEnc = Math.max(valorTotalEnc - trocaNum, 0);
+        const valorSinalEnc = temSinal ? Math.round((valorAposTrocaEnc * sinalPctParam) / 100) : valorAposTrocaEnc;
+        const valorRestanteEnc = temSinal ? Math.max(valorAposTrocaEnc - valorSinalEnc, 0) : 0;
         return (
-          <div className="mx-4 mt-4 rounded-xl p-4 border-2 border-blue-300 bg-blue-50">
-            <p className="text-sm font-bold text-blue-900 mb-2">📦 Este pedido é uma encomenda</p>
-            {previsaoChegadaParam && (
-              <p className="text-xs text-blue-800 mb-1">
-                <span className="font-semibold">Prazo de entrega:</span> {previsaoChegadaParam} após o pagamento
-              </p>
-            )}
-            {temSinal ? (
-              <p className="text-xs text-blue-800">
-                Este pagamento é o <span className="font-semibold">sinal de {sinalPctParam}%</span>. O restante é combinado para a entrega.
-              </p>
-            ) : (
-              <p className="text-xs text-blue-800">
-                Pagamento integral adiantado. Entrega conforme o prazo acima.
+          <div className="mx-4 mt-4 rounded-2xl p-5 border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 shadow-sm">
+            <p className="text-sm font-bold text-blue-900 mb-4 flex items-center gap-1.5">
+              <span>📦</span><span>Como funciona sua encomenda</span>
+            </p>
+            <div className="grid grid-cols-3 gap-2 relative">
+              {/* Linha conectora horizontal — atras dos circulos */}
+              <div className="absolute top-4 left-[16.67%] right-[16.67%] h-0.5 bg-blue-300" aria-hidden="true" />
+              {/* Passo 1: Pagar agora */}
+              <div className="relative flex flex-col items-center text-center">
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-md">1</div>
+                <p className="text-[11px] font-bold text-blue-900 leading-tight">Pagar agora</p>
+                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{temSinal ? `Sinal ${sinalPctParam}%` : "Integral"}</p>
+                {valorSinalEnc > 0 && (
+                  <p className="text-xs font-bold text-blue-900 mt-1">R$ {fmt(valorSinalEnc)}</p>
+                )}
+              </div>
+              {/* Passo 2: Aguardar chegada */}
+              <div className="relative flex flex-col items-center text-center">
+                <div className="w-8 h-8 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-sm">2</div>
+                <p className="text-[11px] font-bold text-blue-900 leading-tight">Aguardar</p>
+                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{previsaoChegadaParam || "em breve"}</p>
+                <p className="text-[10px] text-blue-700 mt-1">📦 chegada</p>
+              </div>
+              {/* Passo 3: Retirar (+ entregar troca se houver) */}
+              <div className="relative flex flex-col items-center text-center">
+                <div className="w-8 h-8 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-sm">3</div>
+                <p className="text-[11px] font-bold text-blue-900 leading-tight">Retirar</p>
+                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{temTrocaEnc ? "+ entregar troca" : "na loja"}</p>
+                {valorRestanteEnc > 0 && (
+                  <p className="text-xs font-bold text-blue-900 mt-1">R$ {fmt(valorRestanteEnc)}</p>
+                )}
+              </div>
+            </div>
+            {temTrocaEnc && (
+              <p className="text-[11px] text-blue-800 mt-4 pt-3 border-t border-blue-200 leading-relaxed">
+                <span className="font-semibold">💱 Sobre sua troca:</span> seu aparelho usado sera avaliado e recolhido na data da retirada — voce nao precisa entregar antes.
               </p>
             )}
           </div>
         );
       })()}
+
+      {/* Cobranca extra — capa, pelicula, brinde, etc. Ja esta somada no total
+          cobrado, aqui so avisa ao cliente que esta incluido. */}
+      {extraDescricaoParam && extraValorParam > 0 && (
+        <div className="mx-4 mt-4 rounded-xl p-3 border border-amber-300 bg-amber-50">
+          <p className="text-xs text-amber-900">
+            <span className="font-semibold">➕ Inclui:</span> {extraDescricaoParam} — R$ {fmt(extraValorParam)}
+          </p>
+        </div>
+      )}
 
       {/* Product info */}
       <div className="mx-4 mt-4 bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED]">
