@@ -28,10 +28,12 @@ const VENDAS_PASSWORD = "tigrao$vendas";
 // derivada do SKU canonico (vendas nao tem coluna cor propria).
 function buildProdutoDisplay(v: Venda): string {
   const base = getModeloBase(v.produto || "", v.categoria || "", v.observacao);
-  // Vendas nao tem coluna 'cor' — deriva do SKU canonico ou do texto bruto
-  // do produto (fallback quando o SKU esta sem cor / cruzado no grupo).
+  // Cascata de fontes de cor (confiabilidade decrescente):
+  //   1. SKU canonico (mais confiavel quando tem cor gravada)
+  //   2. v.cor — copiado do estoque na criacao da venda
+  //   3. v.produto — texto bruto digitado pelo admin (ultima tentativa)
   const sku = (v as unknown as { sku?: string | null }).sku;
-  return produtoComCorGarantida(base, sku, v.produto);
+  return produtoComCorGarantida(base, sku, v.produto, v.cor);
 }
 
 // Formata a resposta de erro do backend quando SKU do estoque selecionado

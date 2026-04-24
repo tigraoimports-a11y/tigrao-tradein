@@ -1,6 +1,17 @@
 import { corParaPT, normalizarCoresNoTexto } from "./cor-pt";
 import { parseSku, inferirCorDoTexto } from "./sku";
 
+// Regex pra detectar segmentos "classificaveis" (storage, chip, tela, etc) que
+// NAO sao cor — usado pra filtrar specs do SKU quando queremos extrair cor.
+function isClassificavelSpec(s: string): boolean {
+  return (
+    /^\d+(GB|TB|MM)$/.test(s) ||
+    /^M\d+/.test(s) ||
+    (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+    ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s)
+  );
+}
+
 const STRUCTURED = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 
 export function getBaseCat(cat: string): string {
@@ -65,44 +76,56 @@ export function limparNomeProduto(raw: string | null | undefined): string {
 /**
  * Garante que o nome do produto exibido tem a cor.
  *
- * Estrategia em cascata:
- *   1. Extrai cor do SKU canonico (mais confiavel quando o SKU tem cor)
- *   2. Se SKU nao tem cor (legado / grupo multi-produto com SKU cruzado),
- *      tenta inferir do texto ORIGINAL do produto via inferirCorDoTexto
- *   3. Se achar cor em qualquer uma, anexa ao display (se nao estiver ja visivel)
+ * Estrategia em cascata (do mais confiavel pro mais aproximativo):
+ *   1. SKU canonico (extrai specs-nao-classificaveis como cor)
+ *   2. corDireta (ex: venda.cor copiado do estoque) — EN ou PT, normaliza
+ *   3. textoOriginal — infere cor conhecida do texto bruto
+ *
+ * Se achar cor em qualquer etapa, anexa ao display (caso ja nao esteja visivel).
  *
  * Args:
  *   display — texto ja processado (ex: saida de getModeloBase, sem cor)
  *   sku — SKU canonico da venda/estoque
- *   textoOriginal — texto bruto do produto (pode ter cor embutida), usado como
- *                   fallback de inferencia quando sku nao tem cor.
+ *   textoOriginal — texto bruto do produto (pode ter cor embutida)
+ *   corDireta — cor vinda de outra fonte (ex: venda.cor copiado do estoque).
+ *               Normalmente mais confiavel que inferir do texto.
  */
 export function produtoComCorGarantida(
   display: string | null | undefined,
   sku: string | null | undefined,
   textoOriginal?: string | null,
+  corDireta?: string | null,
 ): string {
   const texto = normalizarCoresNoTexto(display || "");
-  const isClassificavel = (s: string) =>
-    /^\d+(GB|TB|MM)$/.test(s) ||
-    /^M\d+/.test(s) ||
-    (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
-    ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
 
-  // Tenta extrair cor do SKU
+  // 1. Tenta extrair cor do SKU canonico
   let corSegments: string[] = [];
   if (sku) {
     const parsed = parseSku(sku);
     if (parsed) {
-      corSegments = parsed.specs.filter((s) => !isClassificavel(s));
+      corSegments = parsed.specs.filter((s) => !isClassificavelSpec(s));
     }
   }
 
-  // Fallback: se SKU nao tem cor, tenta inferir do texto original
-  // (cobre vendas legadas com SKU sem cor ou grupos com SKU cruzado)
+  // 2. Se SKU nao tem cor, usa corDireta (venda.cor copiado do estoque —
+  //    fonte confiavel quando o SKU esta incompleto / cruzado).
+  if (corSegments.length === 0 && corDireta && corDireta.trim()) {
+    const corLimpa = corDireta.trim();
+    // Normaliza EN→PT (Cosmic Orange → Laranja, Space Black → Preto)
+    const corNormalizada = normalizarCoresNoTexto(corLimpa);
+    const corInferida = inferirCorDoTexto(corNormalizada);
+    if (corInferida) {
+      corSegments = corInferida.split(/\s+/);
+    } else if (corNormalizada) {
+      // Se normalizador nao reconheceu, usa cor bruta (ex: cores novas da Apple
+      // que ainda nao estao no dicionario — melhor mostrar algo do que nada).
+      corSegments = corNormalizada.toUpperCase().split(/\s+/);
+    }
+  }
+
+  // 3. Fallback: infere do texto original (vendas legadas / estoque sem cor)
   if (corSegments.length === 0) {
     const textoFonte = textoOriginal || display || "";
-    // Normaliza primeiro (SPACE BLACK → Preto, Silver → Prata, etc)
     const textoNormalizado = normalizarCoresNoTexto(textoFonte);
     const corInferida = inferirCorDoTexto(textoNormalizado);
     if (corInferida) corSegments = corInferida.split(/\s+/);
