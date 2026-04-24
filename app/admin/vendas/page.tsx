@@ -358,7 +358,7 @@ export default function VendasPage() {
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null; observacao: string | null }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -3090,8 +3090,8 @@ export default function VendasPage() {
                   // Usa getModeloBase do lib/produto-display (mesma lógica do estoque):
                   // Watch inclui tamanho + conectividade (GPS/GPS+CEL) e corrige SE→Series 11 em 46/49mm;
                   // MacBook inclui RAM+SSD; iPhone/iPad incluem storage.
-                  const extractModeloBase = (nome: string, categoria: string) => {
-                    return getModeloBase(nome, categoria);
+                  const extractModeloBase = (nome: string, categoria: string, observacao?: string | null) => {
+                    return getModeloBase(nome, categoria, observacao);
                   };
 
                   // Reagrupar: modelo base → cores → itens
@@ -3099,7 +3099,7 @@ export default function VendasPage() {
                   for (const key of grupoKeys) {
                     const itens = grupos[key];
                     for (const p of itens) {
-                      const base = extractModeloBase(stripOrigemVendas(p.produto), p.categoria || "");
+                      const base = extractModeloBase(stripOrigemVendas(p.produto), p.categoria || "", p.observacao);
                       const cor = p.cor || extractCor(p.produto) || "—";
                       if (!porModelo[base]) porModelo[base] = {};
                       if (!porModelo[base][cor]) porModelo[base][cor] = [];
