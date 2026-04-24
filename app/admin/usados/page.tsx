@@ -135,7 +135,8 @@ const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
     { key: "conectividade", label: "Conectividade", options: ["Wifi", "Wifi + Cel"] },
   ],
   macbook: [
-    { key: "tela", label: "Tela", options: ['13"', '14"', '15"', '16"'] },
+    // Tela fica no NOME do modelo (ex: "MacBook Air M2 13\""), nao como spec
+    // separado — evita duplicacao e mantem consistente com a view agrupada.
     { key: "ram", label: "RAM", options: ["8GB", "16GB", "24GB", "32GB", "64GB", "96GB", "128GB"] },
     { key: "ssd", label: "SSD", options: ["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"] },
   ],
@@ -149,7 +150,7 @@ const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
 const MODELO_PLACEHOLDER_BY_CAT: Record<string, string> = {
   iphone: "Ex: 17 Pro Max (sem 'iPhone')",
   ipad: "Ex: Air M3 (sem 'iPad')",
-  macbook: "Ex: Air M3 (sem 'MacBook')",
+  macbook: "Ex: Air M3 13\" (sem 'MacBook', inclua a tela)",
   watch: "Ex: Series 9 (sem 'Apple Watch')",
 };
 
@@ -360,8 +361,8 @@ export function UsadosContent() {
   };
 
   // Salva matriz RAM x SSD pra MacBook: gera 1 variante por combinacao.
-  // Formato do `armazenamento`: "SSD/RAM" (legado, ja em uso no banco).
-  // A tela fica no nome do modelo (ex: "MacBook Air M2 13\""), fora do armaz.
+  // Formato do `armazenamento`: "RAM | SSD" (novo formato, mesmo separador
+  // " | " do iPad/Watch). A tela fica no nome do modelo (ex: "MacBook Air M2 13\"").
   // Admin pode ajustar valor individual depois em cada celula.
   const handleSaveMatrix = async (modelo: string) => {
     const entry = addingMatrix[modelo];
@@ -376,7 +377,7 @@ export function UsadosContent() {
     const toCreate: string[] = [];
     for (const ram of entry.rams) {
       for (const ssd of entry.ssds) {
-        toCreate.push(`${ssd}/${ram}`);
+        toCreate.push(`${ram} | ${ssd}`);
       }
     }
     let ok = 0;
@@ -1502,7 +1503,7 @@ export function UsadosContent() {
                             <div className="flex flex-col gap-3">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[11px] font-bold text-[#E8740E] uppercase tracking-wider">⚡ Matriz RAM × SSD</span>
-                                <span className="text-[11px] text-[#86868B]">Gera 1 variante por combinacao. Tela fica no nome do modelo. Admin ajusta preco depois em cada celula.</span>
+                                <span className="text-[11px] text-[#86868B]">Gera 1 variante por combinacao. Admin ajusta preco depois em cada celula.</span>
                               </div>
 
                               <div className="flex flex-wrap gap-4 items-start">
