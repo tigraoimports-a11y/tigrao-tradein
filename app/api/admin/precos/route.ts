@@ -59,9 +59,38 @@ export async function GET(req: NextRequest) {
     if (u === "MB") return n / 1024;
     return n;
   };
+  // iPhone: ordem pelos variantes (base → e → Plus → Air → Pro → Pro Max)
+  // alem da ordem numerica do modelo. Antes string sort colocava "iPhone 17e"
+  // depois de "iPhone 17 Pro Max" porque "e" > " ".
+  const IPHONE_VARIANTES = ["", "E", "PLUS", "AIR", "PRO", "PRO MAX"];
+  const iphoneKey = (modelo: string | null): [number, number] | null => {
+    if (!modelo) return null;
+    const m = modelo.match(/^iPhone\s+(\d+)(e)?\s*(Plus|Air|Pro\s+Max|Pro)?$/i);
+    if (!m) return null;
+    const num = parseInt(m[1]);
+    let variante = "";
+    if (m[2]) variante = "E";
+    else if (m[3]) {
+      const v = m[3].toUpperCase().replace(/\s+/g, " ");
+      if (v === "PLUS" || v === "AIR" || v === "PRO" || v === "PRO MAX") variante = v;
+    }
+    const idx = IPHONE_VARIANTES.indexOf(variante);
+    return [num, idx < 0 ? 99 : idx];
+  };
   const ordenados = (data ?? []).sort((a, b) => {
-    const mm = (a.modelo || "").localeCompare(b.modelo || "");
-    if (mm !== 0) return mm;
+    const ka = iphoneKey(a.modelo);
+    const kb = iphoneKey(b.modelo);
+    if (ka && kb) {
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      if (ka[1] !== kb[1]) return ka[1] - kb[1];
+    } else if (ka && !kb) {
+      return -1; // iPhone vem antes de nao-iPhone
+    } else if (!ka && kb) {
+      return 1;
+    } else {
+      const mm = (a.modelo || "").localeCompare(b.modelo || "");
+      if (mm !== 0) return mm;
+    }
     return armazenamentoGB(a.armazenamento) - armazenamentoGB(b.armazenamento);
   });
 
