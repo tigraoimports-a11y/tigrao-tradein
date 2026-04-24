@@ -634,7 +634,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
 
             return (
               <>
-                {telaOpts.length > 1 && (
+                {telaOpts.length > 0 && (
                   <Section title="Tamanho da tela">
                     <div className={`grid gap-2 ${telaOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
                       {telaOpts.map(t => (
@@ -645,7 +645,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                     </div>
                   </Section>
                 )}
-                {(telaOpts.length <= 1 || current.tela) && ramOpts.length > 0 && (
+                {(telaOpts.length === 0 || current.tela) && ramOpts.length > 0 && (
                   <Section title="Memoria RAM">
                     <div className={`grid gap-2 ${ramOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
                       {ramOpts.map(r => (
