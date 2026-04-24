@@ -279,47 +279,66 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Question breakdown */}
-      {data.questionBreakdown.length > 0 && (
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
-            Perguntas Respondidas (Etapa 1)
-          </h2>
-          <p className="text-xs text-[#86868B] mb-4">
-            Sessoes que responderam cada pergunta — queda indica onde desistem
-          </p>
-          <div className="space-y-2">
-            {data.questionBreakdown
-              .filter((q) => q.step === 1)
-              .map((q) => {
-                const stepViews =
-                  data.funnel.find((f) => f.step === q.step)?.views || 1;
-                const pct = ((q.sessions / stepViews) * 100).toFixed(0);
-                return (
-                  <div
-                    key={`${q.step}:${q.question}`}
-                    className="flex items-center gap-3"
-                  >
-                    <span className="text-xs text-[#6E6E73] w-28 shrink-0 truncate">
-                      {QUESTION_LABELS[q.question] || q.question}
-                    </span>
-                    <div className="flex-1 h-5 bg-[#F5F5F7] rounded overflow-hidden">
-                      <div
-                        className="h-full bg-[#E8740E]/70 rounded transition-all duration-500"
-                        style={{
-                          width: `${Math.max(parseFloat(pct), 2)}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs font-medium text-[#1D1D1F] w-16 text-right">
-                      {q.sessions} ({pct}%)
+      {/* Question breakdown — TODAS as etapas (drop-off fino por pergunta) */}
+      {data.questionBreakdown.length > 0 && (() => {
+        // Agrupa perguntas por etapa
+        const stepsComPerguntas = [...new Set(data.questionBreakdown.map(q => q.step))].sort((a, b) => a - b);
+        return (
+          <div className="space-y-4">
+            {stepsComPerguntas.map(step => {
+              const perguntasStep = data.questionBreakdown.filter(q => q.step === step);
+              const stepViews = data.funnel.find(f => f.step === step)?.views || 1;
+              const stepLabel = STEP_LABELS[step] || `Step ${step}`;
+
+              // Drop-off dentro da etapa: diferença entre a primeira e última pergunta
+              const maxSessions = Math.max(...perguntasStep.map(q => q.sessions), 1);
+              const minSessions = Math.min(...perguntasStep.map(q => q.sessions), maxSessions);
+              const dropoffInterno = maxSessions > 0
+                ? (((maxSessions - minSessions) / maxSessions) * 100).toFixed(0)
+                : "0";
+
+              return (
+                <div key={step} className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+                  <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                    <h2 className="text-base font-semibold text-[#1D1D1F]">
+                      Etapa {step}: {stepLabel}
+                    </h2>
+                    <span className="text-[11px] text-[#E74C3C] font-semibold">
+                      {dropoffInterno}% drop-off interno · {stepViews} sessões entraram
                     </span>
                   </div>
-                );
-              })}
+                  <p className="text-xs text-[#86868B] mb-4">
+                    Perguntas respondidas dentro dessa etapa — queda entre elas indica onde desistem
+                  </p>
+                  <div className="space-y-2">
+                    {perguntasStep
+                      .sort((a, b) => b.sessions - a.sessions)
+                      .map((q) => {
+                        const pct = ((q.sessions / stepViews) * 100).toFixed(0);
+                        return (
+                          <div key={`${q.step}:${q.question}`} className="flex items-center gap-3">
+                            <span className="text-xs text-[#6E6E73] w-28 shrink-0 truncate">
+                              {QUESTION_LABELS[q.question] || q.question}
+                            </span>
+                            <div className="flex-1 h-5 bg-[#F5F5F7] rounded overflow-hidden">
+                              <div
+                                className="h-full bg-[#E8740E]/70 rounded transition-all duration-500"
+                                style={{ width: `${Math.max(parseFloat(pct), 2)}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-medium text-[#1D1D1F] w-16 text-right">
+                              {q.sessions} ({pct}%)
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Daily chart (simple bar chart) */}
       {data.daily.length > 0 && (
