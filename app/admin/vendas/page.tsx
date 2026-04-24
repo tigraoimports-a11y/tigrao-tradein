@@ -12,6 +12,7 @@ import type { Venda } from "@/lib/admin-types";
 import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
 import { getModeloBase, produtoComCorGarantida } from "@/lib/produto-display";
 import { maskCpf, maskCnpj, maskTelefone, maskCep } from "@/lib/mask";
+import { confirmar, perguntar, avisar } from "@/lib/confirm-modal";
 import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
@@ -6678,15 +6679,29 @@ export default function VendasPage() {
                                               const qtdProdutos = grupoIds.length;
                                               const pluralTxt = qtdProdutos > 1 ? `de ${qtdProdutos} produtos` : "";
                                               let devolverComoCredito = false;
+                                              const detalhesPadrao = "- Marca como cancelada\n- Devolve produto(s) ao estoque\n- Remove o seminovo (se houver troca)";
                                               if (isLojista) {
                                                 const valorTotal = vendas.filter(gv => grupoIds.includes(gv.id)).reduce((s, gv) => s + Number(gv.preco_vendido || 0), 0);
-                                                const r = confirm(`Cancelar venda ${pluralTxt} de ${v.cliente}?\n\n✅ OK = Manter valor como CRÉDITO para o lojista (R$ ${valorTotal.toLocaleString("pt-BR")})\n❌ Cancelar = apenas cancelar SEM creditar`);
-                                                if (r) devolverComoCredito = true;
-                                                else {
-                                                  if (!confirm(`Cancelar ${pluralTxt} SEM creditar?\n\nIsso vai:\n- Marcar como cancelada\n- Devolver produto(s) ao estoque\n- Remover o seminovo do estoque (se houver troca)`)) return;
-                                                }
+                                                const escolha = await perguntar({
+                                                  title: `Cancelar venda ${pluralTxt} de ${v.cliente}?`,
+                                                  body: `Cliente atacado — o que fazer com o valor?\n\n${detalhesPadrao}`,
+                                                  options: [
+                                                    { label: `Creditar R$ ${valorTotal.toLocaleString("pt-BR")} pro lojista`, value: "creditar", variant: "primary" },
+                                                    { label: "Cancelar sem creditar", value: "sem_credito", variant: "danger" },
+                                                    { label: "Voltar", value: "voltar", variant: "default" },
+                                                  ],
+                                                });
+                                                if (!escolha || escolha === "voltar") return;
+                                                devolverComoCredito = escolha === "creditar";
                                               } else {
-                                                if (!confirm(`Cancelar venda ${pluralTxt} de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Devolver produto(s) ao estoque\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                                const ok = await confirmar({
+                                                  title: `Cancelar venda ${pluralTxt} de ${v.cliente}?`,
+                                                  body: detalhesPadrao,
+                                                  confirmLabel: "Cancelar venda",
+                                                  cancelLabel: "Voltar",
+                                                  variant: "danger",
+                                                });
+                                                if (!ok) return;
                                               }
                                               let allOk = true;
                                               for (const vid of grupoIds) {
