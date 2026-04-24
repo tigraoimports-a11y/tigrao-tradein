@@ -67,26 +67,28 @@ export async function POST(req: NextRequest) {
 
   const { supabase } = await import("@/lib/supabase");
 
+  // Tipo sempre definido: LACRADO default = TRADEIN. Precisa ser NOT NULL pra
+  // o unique constraint (modelo, armazenamento, tipo) funcionar — Postgres
+  // trata NULL como distinto em unique, e dois NULLs conviveriam furando a regra.
+  const tipoFinal = tipo || "TRADEIN";
   const row: Record<string, unknown> = {
     modelo,
     armazenamento,
     preco_pix: Number(preco_pix),
     status: status ?? "ativo",
+    tipo: tipoFinal,
     updated_at: new Date().toISOString(),
   };
   // Só enviar categoria se a coluna existir (backwards-compatible)
   if (categoria) row.categoria = categoria;
-  // tipo: TRADEIN (default) | CATALOGO | AMBOS
-  if (tipo) row.tipo = tipo;
 
-  const { error } = await supabase.from("precos").upsert(row, { onConflict: "modelo,armazenamento" });
+  const { error } = await supabase.from("precos").upsert(row, { onConflict: "modelo,armazenamento,tipo" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await logActivity(usuario, "Alterou preco", `${modelo} ${armazenamento} -> R$ ${Number(preco_pix).toLocaleString("pt-BR")}`, "precos");
 
   // Notificar design via Telegram (apenas para produtos TRADEIN ou AMBOS)
-  const tipoFinal = tipo ?? "TRADEIN";
   const shouldNotifyTelegram = tipoFinal === "TRADEIN" || tipoFinal === "AMBOS";
   if (shouldNotifyTelegram) try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -188,12 +190,13 @@ export async function PUT(req: NextRequest) {
     preco_pix: p.precoPix,
     status: "ativo",
     categoria: "IPHONE",
+    tipo: "TRADEIN",
     updated_at: new Date().toISOString(),
   }));
 
   const { error } = await supabase
     .from("precos")
-    .upsert(rows, { onConflict: "modelo,armazenamento" });
+    .upsert(rows, { onConflict: "modelo,armazenamento,tipo" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -205,7 +208,7 @@ export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { modelo, armazenamento } = body;
+  const { modelo, armazenamento, tipo } = body;
 
   if (!modelo) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -213,11 +216,16 @@ export async function DELETE(req: NextRequest) {
 
   const { supabase } = await import("@/lib/supabase");
 
+  // tipo distingue LACRADO vs SEMINOVO no unique. Sem ele, deletar iPhone 16
+  // 128GB LACRADO tiraria tambem o SEMINOVO. Default TRADEIN pra frontend que
+  // ainda nao manda tipo (devem sempre mandar apos este fix).
+  const tipoFinal = tipo || "TRADEIN";
   const { error } = await supabase
     .from("precos")
     .delete()
     .eq("modelo", modelo)
-    .eq("armazenamento", armazenamento);
+    .eq("armazenamento", armazenamento)
+    .eq("tipo", tipoFinal);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

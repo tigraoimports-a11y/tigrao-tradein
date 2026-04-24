@@ -91,6 +91,15 @@ function formatDateBR(dateStr: string) {
   return `${d}/${m}`;
 }
 
+// Formata telefone BR com DDI: "21976949939" -> "+55 (21) 97694-9939"
+function formatTelefoneBR(tel: string | null | undefined): string {
+  if (!tel) return "";
+  const digits = tel.replace(/\D/g, "").replace(/^55/, "");
+  if (digits.length === 11) return `+55 (${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `+55 (${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return tel;
+}
+
 // Tabela de taxas em nível de módulo pra reuso em formatPagamentoDisplay e no form
 const TAXAS_PARCELAS_MODULE: Record<number, number> = {
   1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
@@ -927,7 +936,7 @@ export default function EntregasPage() {
       pagLine,
       ...(form.local_entrega === "RESIDÊNCIA" ? [`⚠️ PAGAMENTO ANTECIPADO`] : form.local_entrega === "SHOPPING" ? [`✅ PAGAR NA ENTREGA`] : []),
       `🧑 *CLIENTE:* ${form.cliente || "—"}`,
-      `📞 *CONTATO:* ${form.telefone || "—"}`,
+      `📞 *CONTATO:* ${formatTelefoneBR(form.telefone) || "—"}`,
       form.observacao ? `OBS: ${form.observacao}` : "",
       `💼 Vendedor: ${form.vendedor || "—"}`,
     ].filter(Boolean);
@@ -2976,25 +2985,22 @@ export default function EntregasPage() {
                     onClick={() => {
                       if (e.tipo === "COLETA") {
                         // Formulário de COLETA — sem valores financeiros
-                        const detalhesAparelho = e.detalhes_upgrade
-                          ? e.detalhes_upgrade.split("\n").filter(l => !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao")).join("\n• ")
-                          : "";
+                        const detalhesPartes = e.detalhes_upgrade
+                          ? e.detalhes_upgrade.split("\n").map(l => l.trim()).filter(l => l && !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao"))
+                          : [];
                         const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
                         const produtoFmtC = formatProdutoMotoboy(e.produto);
-                        const produtoLineC = produtoFmtC.startsWith("\n")
-                          ? `🍎 *PRODUTO:*${produtoFmtC}`
-                          : `🍎 *PRODUTO:* ${produtoFmtC}`;
+                        const produtoBase = produtoFmtC.startsWith("\n") ? produtoFmtC.replace(/\n\s*•\s*/g, " + ").trim() : produtoFmtC;
+                        const aparelhoLine = `📱 *APARELHO DA COLETA:* ${[produtoBase, ...detalhesPartes].filter(Boolean).join(" | ")}`;
                         const msg = [
                           `🛵 *COLETA* 🛵`,
                           ``,
                           `⏰ *HORÁRIO:* ${e.horario || "Horário a combinar"}`,
                           `📍 *LOCAL COLETA:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
-                          produtoLineC,
-                          ``,
-                          ...(detalhesAparelho ? [`📱 *APARELHO NA COLETA:*`, `• ${detalhesAparelho}`] : []),
+                          aparelhoLine,
                           ``,
                           `🧑 *CLIENTE:* ${e.cliente || ""}`,
-                          `📞 *CONTATO:* ${e.telefone || ""}`,
+                          `📞 *CONTATO:* ${formatTelefoneBR(e.telefone) || "—"}`,
                           obsLimpa ? `\nOBS: ${obsLimpa}` : "",
                           ``,
                           `💼 Vendedor: ${e.vendedor || ""}`,
@@ -3034,7 +3040,7 @@ export default function EntregasPage() {
                           ...(isUpgrade && trocaTexto ? [`🔄 *PRODUTO NA TROCA:* ${trocaTexto}`] : []),
                           pagLine,
                           `🧑 *CLIENTE:* ${e.cliente || ""}`,
-                          `📞 *CONTATO:* ${e.telefone || ""}`,
+                          `📞 *CONTATO:* ${formatTelefoneBR(e.telefone) || "—"}`,
                           obsLimpa ? `OBS: ${obsLimpa}` : "",
                           `💼 Vendedor: ${e.vendedor || ""}`,
                           "________________________________",

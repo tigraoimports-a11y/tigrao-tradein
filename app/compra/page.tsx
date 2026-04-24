@@ -508,6 +508,8 @@ function CompraForm() {
       if (whatsappClienteParam) fd.append("cliente_telefone", whatsappClienteParam);
       if (trocaProdutoParam) fd.append("troca_produto", trocaProdutoParam);
       if (trocaValorParam) fd.append("troca_valor", trocaValorParam);
+      if (trocaCorParam) fd.append("troca_cor", trocaCorParam);
+      if (trocaCondParam) fd.append("troca_condicao", trocaCondParam);
       const res = await fetch("/api/link-compras/upload-print", { method: "POST", body: fd });
       const json = await res.json();
       if (json.ok) {

@@ -78,11 +78,17 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1. Buscar precos atuais da tabela precos
+    // 1. Buscar precos atuais da tabela precos — SO LACRADO.
+    // Simulacoes vem do fluxo /troca (aparelho novo lacrado). Se cruzassemos
+    // com SEMINOVO, que tem mesmo modelo+armazenamento mas preco bem mais
+    // baixo, a conta de "baixou R$X" daria um valor enorme e o robo mandaria
+    // "queda" errada. Filtro no banco evita confusao mesmo com tipo LACRADO
+    // tendo varios valores (TRADEIN/CATALOGO/AMBOS).
     const { data: precos, error: errPrecos } = await supabase
       .from("precos")
       .select("modelo, armazenamento, preco_pix")
-      .neq("status", "esgotado");
+      .neq("status", "esgotado")
+      .neq("tipo", "SEMINOVO");
 
     if (errPrecos || !precos) {
       console.error("[AlertaPreco] Erro ao buscar precos:", errPrecos);

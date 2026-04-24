@@ -398,35 +398,46 @@ export default function StepQuote(p: StepQuoteProps) {
               const shortRes = await fetch("/api/short-link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: shortData }) });
               const shortJson = await shortRes.json();
               if (shortJson.code) {
-                // Criar link_compras (fire-and-forget) — evita bloquear navegação
-                fetch("/api/link-compras-auto", {
-                  method: "POST", headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    short_code: shortJson.code,
-                    url_curta: `${baseOrigin}/c/${shortJson.code}`,
-                    tipo: usedModel ? "TROCA" : "COMPRA",
-                    cliente_nome: clienteNome || null,
-                    cliente_telefone: clienteWhatsApp || null,
-                    produto: `${newModel} ${newStorage}`.trim(),
-                    // Simulador nao pede cor do produto novo ao cliente — fica null,
-                    // vendedor acerta a cor por WhatsApp depois e edita o link.
-                    cor: null,
-                    valor: Math.round(newPrice),
-                    troca_produto: usedModel ? `${usedModel} ${usedStorage || ""}`.trim() : null,
-                    troca_valor: Math.round(valor1),
-                    troca_condicao: condStr || null,
-                    troca_cor: usedColor || null,
-                    troca_produto2: hasSecond && usedModel2 ? `${usedModel2} ${usedStorage2 || ""}`.trim() : null,
-                    troca_valor2: hasSecond ? Math.round(valor2) : 0,
-                    troca_condicao2: cond2Lines || null,
-                    troca_cor2: hasSecond ? (usedColor2 || null) : null,
-                    vendedor: vendedor || null,
-                    website: getHoneypotValue(),
-                  }),
-                }).catch(() => {});
+                // Criar link_compras. Antes era fire-and-forget, mas precisamos
+                // do response: quando o endpoint dedupa (mesmo cliente+produto
+                // nos ultimos 30min), ele retorna o short_code ja existente.
+                // Redirecionar pro novo geraria um link orfao e o upload-print
+                // criava placeholder incompleto depois.
+                let codigoFinal = shortJson.code;
+                try {
+                  const lcRes = await fetch("/api/link-compras-auto", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      short_code: shortJson.code,
+                      url_curta: `${baseOrigin}/c/${shortJson.code}`,
+                      tipo: usedModel ? "TROCA" : "COMPRA",
+                      cliente_nome: clienteNome || null,
+                      cliente_telefone: clienteWhatsApp || null,
+                      produto: `${newModel} ${newStorage}`.trim(),
+                      // Simulador nao pede cor do produto novo ao cliente — fica null,
+                      // vendedor acerta a cor por WhatsApp depois e edita o link.
+                      cor: null,
+                      valor: Math.round(newPrice),
+                      troca_produto: usedModel ? `${usedModel} ${usedStorage || ""}`.trim() : null,
+                      troca_valor: Math.round(valor1),
+                      troca_condicao: condStr || null,
+                      troca_cor: usedColor || null,
+                      troca_produto2: hasSecond && usedModel2 ? `${usedModel2} ${usedStorage2 || ""}`.trim() : null,
+                      troca_valor2: hasSecond ? Math.round(valor2) : 0,
+                      troca_condicao2: cond2Lines || null,
+                      troca_cor2: hasSecond ? (usedColor2 || null) : null,
+                      vendedor: vendedor || null,
+                      website: getHoneypotValue(),
+                    }),
+                  });
+                  const lcJson = await lcRes.json().catch(() => null);
+                  if (lcJson?.exists && lcJson?.data?.short_code) {
+                    codigoFinal = lcJson.data.short_code;
+                  }
+                } catch { /* segue com shortJson.code (modo degradado) */ }
                 // Inclui ?short=<code> na URL de /compra pra que a submissão salve o preenchimento
                 const u = new URL(compraUrl);
-                u.searchParams.set("short", shortJson.code);
+                u.searchParams.set("short", codigoFinal);
                 finalUrl = u.toString();
               }
             } catch {

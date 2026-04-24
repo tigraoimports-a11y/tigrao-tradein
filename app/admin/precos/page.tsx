@@ -211,7 +211,7 @@ function PrecosContent() {
       }),
     });
     setData((prev) => prev?.map((r) =>
-      r.modelo === row.modelo && r.armazenamento === row.armazenamento
+      r.modelo === row.modelo && r.armazenamento === row.armazenamento && (r.tipo ?? "TRADEIN") === (row.tipo ?? "TRADEIN")
         ? { ...r, preco_pix: newPrice }
         : r
     ) ?? null);
@@ -236,7 +236,7 @@ function PrecosContent() {
       }),
     });
     setData((prev) => prev?.map((r) =>
-      r.modelo === row.modelo && r.armazenamento === row.armazenamento
+      r.modelo === row.modelo && r.armazenamento === row.armazenamento && (r.tipo ?? "TRADEIN") === (row.tipo ?? "TRADEIN")
         ? { ...r, status: newStatus }
         : r
     ) ?? null);
@@ -247,10 +247,10 @@ function PrecosContent() {
     await fetch("/api/admin/precos", {
       method: "DELETE",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-      body: JSON.stringify({ modelo: row.modelo, armazenamento: row.armazenamento }),
+      body: JSON.stringify({ modelo: row.modelo, armazenamento: row.armazenamento, tipo: row.tipo ?? "TRADEIN" }),
     });
     setData((prev) => prev?.filter((r) =>
-      !(r.modelo === row.modelo && r.armazenamento === row.armazenamento)
+      !(r.modelo === row.modelo && r.armazenamento === row.armazenamento && (r.tipo ?? "TRADEIN") === (row.tipo ?? "TRADEIN"))
     ) ?? null);
   }
 
