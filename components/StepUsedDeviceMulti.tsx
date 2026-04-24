@@ -382,7 +382,12 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   });
 
   const isExcluded = excludedSet.has(model.toLowerCase());
-  const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= 1 && battery <= 100);
+  // MacBook usa ciclos (0..9999), demais usam saude em % (1..100). Sem esse
+  // split, digitar >100 ciclos no Mac mantinha batteryFilled=false e travava
+  // o fluxo (proximas perguntas nao apareciam).
+  const batteryMax = deviceType === "macbook" ? 9999 : 100;
+  const batteryMin = deviceType === "macbook" ? 0 : 1;
+  const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= batteryMin && battery <= batteryMax);
 
   // Reveal progressivo: mostra pergunta N so quando todas as anteriores (na ordem
   // configurada pelo admin) estao respondidas. Sem isso, perguntas apareciam em
