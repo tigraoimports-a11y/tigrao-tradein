@@ -419,10 +419,17 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // no qc — pros hardcoded missing, usa HARDCODED_DEFAULT_ORDEM como fallback.
   // Isso garante que allPriorAnswered/isPriorRejecting funcionem mesmo quando o
   // admin deletou o slug ou o qc ainda nao chegou (race condition no loading).
+  // Exceto: slugs do sistema antigo de marcas (screenScratch/sideScratch/peeling)
+  // nao entram no fallback quando useNewWearMarks=true, senao bloqueiam o reveal
+  // de partsReplaced/hasWarranty/hasOriginalBox (ficam "nao respondidos" pra sempre
+  // porque nao sao renderizados). Antes dessa excecao, o fluxo de iPhone travava
+  // apos "marcas de uso: Nao".
+  const LEGACY_WEAR_SLUGS = new Set(["screenScratch", "sideScratch", "peeling"]);
   const qcSorted = (() => {
     const list = (qc || []).filter(q => q.ativo !== false);
     const seen = new Set(list.map(q => q.slug));
     for (const slug of Object.keys(HARDCODED_DEFAULT_ORDEM)) {
+      if (useNewWearMarks && LEGACY_WEAR_SLUGS.has(slug)) continue;
       if (!seen.has(slug) && isQActive(qc, slug)) {
         list.push({
           id: `hc-${slug}`, device_type: deviceType, slug, titulo: "", tipo: "yesno",
