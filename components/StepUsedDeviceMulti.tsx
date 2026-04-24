@@ -33,6 +33,16 @@ const HARDCODED_SLUGS = new Set([
   "warrantyMonth", "wearMarks",
 ]);
 
+// Ordem fallback pros slugs hardcoded quando o admin nao configurou nada no
+// qc (config carregando, slug removido, ou qc vazio). Permite que o gate
+// `allPriorAnswered` funcione mesmo antes do qc chegar, evitando que a
+// pergunta "battery" apareca antes de "hasDamage" ser respondida.
+const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
+  hasDamage: 1, battery: 2, hasWearMarks: 3, wearMarks: 4,
+  screenScratch: 4.1, sideScratch: 4.2, peeling: 4.3,
+  partsReplaced: 5, hasWarranty: 6, warrantyMonth: 7, hasOriginalBox: 8,
+};
+
 // Formata uma resposta dinamica pra exibir no resumo/WhatsApp.
 function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
   if (value === undefined || value === null || value === "") return "—";
@@ -385,7 +395,23 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       }
     }
   };
-  const qcSorted = (qc || []).filter(q => q.ativo !== false).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  // qcSorted inclui tanto slugs do admin (ativos) quanto hardcoded que faltam
+  // no qc — pros hardcoded missing, usa HARDCODED_DEFAULT_ORDEM como fallback.
+  // Isso garante que allPriorAnswered/isPriorRejecting funcionem mesmo quando o
+  // admin deletou o slug ou o qc ainda nao chegou (race condition no loading).
+  const qcSorted = (() => {
+    const list = (qc || []).filter(q => q.ativo !== false);
+    const seen = new Set(list.map(q => q.slug));
+    for (const slug of Object.keys(HARDCODED_DEFAULT_ORDEM)) {
+      if (!seen.has(slug) && isQActive(qc, slug)) {
+        list.push({
+          id: `hc-${slug}`, device_type: deviceType, slug, titulo: "", tipo: "yesno",
+          opcoes: [], ordem: HARDCODED_DEFAULT_ORDEM[slug], ativo: true, config: {},
+        } as TradeInQuestion);
+      }
+    }
+    return list.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  })();
   const allPriorAnswered = (slug: string): boolean => {
     const idx = qcSorted.findIndex(q => q.slug === slug);
     if (idx === -1) return true; // nao ordenado = sem bloqueio
