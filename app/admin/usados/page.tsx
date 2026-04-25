@@ -692,10 +692,13 @@ export function UsadosContent() {
   // no header do card (UM card por modelo — sem multiplicar cards).
   const excluidosSet = new Set(excluidos.map((m) => m.toLowerCase()));
   const extractConect = (armazenamento: string): string => {
+    // Match por valor (nao por indice) pra tolerar variantes legacy com partes
+    // extras em armazenamento — ex: iPad Pro M2 antigo "128GB | 11\" | Wifi"
+    // depois que tela saiu de SPEC_FIELDS_BY_CAT.ipad, o indice fixo apontava
+    // pra "11\"" e mostrava ele como conectividade no header do card.
     const parts = armazenamento.split("|").map((p) => p.trim());
-    const specFields = SPEC_FIELDS_BY_CAT[catFilter] || [];
-    const idx = specFields.findIndex((f) => f.key === "conectividade");
-    return idx >= 0 ? (parts[idx] || "") : "";
+    const conectOpts = new Set((SPEC_FIELDS_BY_CAT[catFilter] || []).find((f) => f.key === "conectividade")?.options || []);
+    return parts.find((p) => conectOpts.has(p)) || "";
   };
   const grouped: Record<string, ValorUsado[]> = {};
   valores
