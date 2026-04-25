@@ -39,12 +39,15 @@ const DEVICE_OPTIONS: { type: MultiDeviceType; emoji: string; label: string }[] 
   { type: "watch", emoji: "\u{231A}", label: "Apple Watch" },
 ];
 
-// Influencers que ja compraram na TigraoImports — exibidos como social proof
-// na landing inicial. Andre tem fotos pessoais COM eles (no momento da compra)
-// + autorizacao verbal de uso. Cada @ vira link clicavel pro perfil do Insta.
-// Pra adicionar mais: subir foto em /public/images/influencer-N.jpg e
-// adicionar item no array.
-const INFLUENCERS_LANDING: { handle: string; foto: string }[] = [
+// Influencers FALLBACK — usado APENAS quando o admin ainda nao configurou
+// nenhum em /admin/configuracoes/site (config no banco vazia). Quando o
+// admin gerencia via tela, este array e ignorado e a landing usa
+// tradeinConfig.site_influencers (do JSONB labels).
+//
+// Manter sincronizado com as fotos em /public/images/influencer-{1,2,3}.jpg
+// pra que continue funcionando em ambientes sem config no banco (testes,
+// CI, etc).
+const INFLUENCERS_FALLBACK: { handle: string; foto: string }[] = [
   { handle: "@leostronda", foto: "/images/influencer-1.jpg" },
   { handle: "@euxama", foto: "/images/influencer-2.jpg" },
   { handle: "@diegocruz_", foto: "/images/influencer-3.jpg" },
@@ -121,7 +124,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
   const [catConfigs, setCatConfigs] = useState<{ categoria: string; modo: string; ativo: boolean }[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_formularios_seminovos?: string; whatsapp_seminovo_iphone?: string; whatsapp_seminovo_ipad?: string; whatsapp_seminovo_macbook?: string; whatsapp_seminovo_watch?: string; whatsapp_vendedores?: Record<string, string> }) | null>(null);
+  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_formularios_seminovos?: string; whatsapp_seminovo_iphone?: string; whatsapp_seminovo_ipad?: string; whatsapp_seminovo_macbook?: string; whatsapp_seminovo_watch?: string; whatsapp_vendedores?: Record<string, string>; site_logo_url?: string | null; site_logo_position?: string; site_influencers_enabled?: boolean | string; site_influencers?: { handle: string; foto_url: string }[] }) | null>(null);
   // Mapa dinamico de WhatsApp por vendedor — usa DB se disponivel
   const VENDEDOR_WHATSAPP = useMemo(() => {
     const dbMap = tradeinConfig?.whatsapp_vendedores;
@@ -139,6 +142,32 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     macbook: tradeinConfig?.whatsapp_seminovo_macbook || whatsappFormulariosSeminovos,
     watch: tradeinConfig?.whatsapp_seminovo_watch || whatsappFormulariosSeminovos,
   };
+
+  // Configuracao da LANDING — gerenciada via /admin/configuracoes/site.
+  // Fallback: se admin nao configurou nada, usa os assets em /public/images/
+  // (landing v1, hardcoded). Garante que o site nunca quebra mesmo se o
+  // banco vier vazio (testes, primeira instalacao, rollback de config).
+  const siteLogoUrl: string = tradeinConfig?.site_logo_url || "/images/andre.png";
+  const siteLogoPosition: string = tradeinConfig?.site_logo_position || "center 15%";
+  // Aceita boolean ou "true"/"false" string (JSONB pode serializar de qualquer
+  // forma dependendo de como foi inserido). Default: ativado se ja tem
+  // influencers configurados, ou false se nao tem nada.
+  const siteInfluencersEnabled: boolean = (() => {
+    const raw = tradeinConfig?.site_influencers_enabled;
+    if (raw === undefined || raw === null) return true; // default: mostra (compatibilidade com landing v2)
+    return raw === true || raw === "true";
+  })();
+  // Lista de influencers — usa do banco se houver, senao fallback hardcoded.
+  // Mapeia foto_url (admin) -> foto (renderizacao) pra manter shape interno.
+  const siteInfluencers: { handle: string; foto: string }[] = (() => {
+    const fromDb = tradeinConfig?.site_influencers;
+    if (Array.isArray(fromDb) && fromDb.length > 0) {
+      return fromDb
+        .filter((i) => i && i.handle && i.foto_url)
+        .map((i) => ({ handle: i.handle, foto: i.foto_url }));
+    }
+    return INFLUENCERS_FALLBACK;
+  })();
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
@@ -409,9 +438,9 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
             <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-[28px]"
               style={{ backgroundColor: "var(--ti-accent-light, #FFF5EC)", border: "2px solid var(--ti-accent, #E8740E)" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/andre.png" alt="TigrãoImports"
+              <img src={siteLogoUrl} alt="TigrãoImports"
                 className="w-full h-full object-cover"
-                style={{ objectPosition: "center 15%" }}
+                style={{ objectPosition: siteLogoPosition }}
                 onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement!.innerHTML = "🐯"; }} />
             </div>
             <div className="text-left">
@@ -454,14 +483,14 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
             <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> Garantia Apple</span>
           </div>
 
-          {/* SECAO INFLUENCERS — placeholder ate Andre subir as fotos em
-              /public/images/influencer-1.jpg (etc) e me passar os @s. Quando
-              tiver as fotos, basta preencher o array INFLUENCERS abaixo. */}
-          {INFLUENCERS_LANDING.length > 0 && (
+          {/* SECAO INFLUENCERS — gerenciada pelo admin em
+              /admin/configuracoes/site. Esconde se admin desativou ou se
+              nao tem nenhum cadastrado (banco vazio + fallback vazio). */}
+          {siteInfluencersEnabled && siteInfluencers.length > 0 && (
             <div className="pt-4 space-y-3" style={{ borderTop: `1px solid ${tema.cardBorder}` }}>
               <p className="text-[11px] font-semibold tracking-wider uppercase text-center" style={{ color: tema.textMuted }}>Quem comprou aqui</p>
               <div className="flex justify-center gap-3">
-                {INFLUENCERS_LANDING.map((inf) => (
+                {siteInfluencers.map((inf) => (
                   <a key={inf.handle} href={`https://instagram.com/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer"
                     className="flex flex-col items-center gap-2 transition-opacity hover:opacity-80">
                     <div className="w-20 h-20 rounded-full overflow-hidden" style={{ border: "2px solid var(--ti-accent, #E8740E)" }}>
