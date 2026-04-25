@@ -26,9 +26,12 @@ export interface ImeiConsultaResult {
 // Padrao de URL: https://api.infosimples.com/api/v2/consultas/anatel/celular-legal
 const INFOSIMPLES_ENDPOINT = "https://api.infosimples.com/api/v2/consultas/anatel/celular-legal";
 
-// Timeout pra evitar travar o upload-print indefinidamente (Infosimples lenta).
-// 8s e bem mais que a latencia tipica (1-3s) mas evita travar o usuario.
-const TIMEOUT_MS = 8000;
+// Timeout pra evitar travar o upload-print indefinidamente.
+// Infosimples pode demorar 10-30s em consultas cold (primeira chamada do dia
+// ou quando o sistema da Anatel ta lento). Aumentado de 8s pra 45s depois de
+// observar timeouts em producao retornando "⚠️ Consultar manual" pra IMEIs
+// validos. O upload-print tem maxDuration=60s, sobra margem.
+const TIMEOUT_MS = 45000;
 
 /**
  * Consulta um IMEI na API Infosimples (Anatel/Celular Legal).
@@ -159,7 +162,7 @@ export async function consultarImei(imei: string): Promise<ImeiConsultaResult> {
     console.error(`[infosimples] Falha: ${msg}`);
     return {
       status: "ERRO",
-      detalhes: isAbort ? "Infosimples nao respondeu em 8s" : `Falha de rede: ${msg.slice(0, 150)}`,
+      detalhes: isAbort ? `Infosimples nao respondeu em ${TIMEOUT_MS / 1000}s` : `Falha de rede: ${msg.slice(0, 150)}`,
       imei: imeiNorm,
       consultadoEm,
     };
