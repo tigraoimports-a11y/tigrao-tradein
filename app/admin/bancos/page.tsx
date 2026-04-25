@@ -221,11 +221,15 @@ export default function BancosPage() {
   return (
     <div className="space-y-4 max-w-5xl">
       {/* Pluggy Connect Widget — renderiza so quando tem token (clica em
-          conectar). Componente abre modal nativo e dispara callbacks. */}
+          conectar). Componente abre modal nativo e dispara callbacks.
+          includeSandbox=true permite testar com bancos simulados (Pluggy
+          Bank) enquanto a aplicacao Pluggy ainda nao foi aprovada pra
+          producao. Quando production for habilitado, sandbox + production
+          aparecem juntos — admin escolhe. */}
       {pluggyToken && (
         <PluggyConnect
           connectToken={pluggyToken}
-          includeSandbox={false}
+          includeSandbox={true}
           updateItem={itemIdParaAtualizar}
           onSuccess={onPluggySuccess}
           onError={onPluggyError}
