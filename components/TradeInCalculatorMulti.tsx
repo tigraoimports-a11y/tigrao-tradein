@@ -425,7 +425,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               parcelamento. Mantem 21x como ancora de "compravel". */}
           <div className="text-center space-y-3">
             <h1 className="text-[26px] font-bold tracking-tight leading-tight" style={{ color: tema.text }}>
-              Troque seu iPhone usado por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>lacrado</span><br />pagando só a diferença
+              Troque seu iPhone usado por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>NOVO</span><br />pagando só a diferença
             </h1>
             <p className="text-[15px] leading-relaxed" style={{ color: tema.textMuted }}>
               Descubra em <strong style={{ color: tema.text }}>30 segundos</strong> quanto vale seu aparelho na troca por um novo com garantia Apple.
@@ -444,7 +444,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
           {/* Social proof — 5 estrelas + numero de trocas */}
           <div className="flex items-center justify-center gap-2">
             <span className="text-base leading-none">{"\u2B50\u2B50\u2B50\u2B50\u2B50"}</span>
-            <span className="text-[13px] font-semibold" style={{ color: tema.text }}>+400 trocas realizadas</span>
+            <span className="text-[13px] font-semibold" style={{ color: tema.text }}>+1.730 trocas realizadas</span>
           </div>
 
           {/* Trust badges — usa cor de marca em vez de verde generico */}
@@ -480,7 +480,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               aberta ao publico). */}
           <div className="pt-5 text-center space-y-1" style={{ borderTop: `1px solid ${tema.cardBorder}` }}>
             <p className="text-[12px] font-semibold" style={{ color: tema.text }}>TigrãoImports</p>
-            <p className="text-[11px]" style={{ color: tema.textMuted }}>+5 anos no Rio de Janeiro · +400 trocas realizadas</p>
+            <p className="text-[11px]" style={{ color: tema.textMuted }}>+5 anos no Rio de Janeiro · +1.730 trocas realizadas</p>
             <p className="text-[10px]" style={{ color: tema.textDim }}>CNPJ 50.139.554/0001-42</p>
           </div>
         </div>
