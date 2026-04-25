@@ -978,10 +978,10 @@ function CompraForm() {
         if (trocaSerial1.trim()) lines.push(`*Nº de Série:* ${trocaSerial1.trim()}`);
         if (trocaImei1.trim()) {
           // Status Anatel/Infosimples vai grudado no IMEI pra equipe ver de
-          // cara. ✅ = pode comprar, ❌ = NAO comprar (consultar manual antes),
+          // cara. ✅ = pode comprar (livre), ❌ = NAO comprar (consultar manual),
           // ⚠️ = consulta falhou (consultar manual no site da Anatel).
           const statusIcon =
-            trocaImeiStatus1 === "OK" ? " ✅ Verificado" :
+            trocaImeiStatus1 === "OK" ? " ✅ Verificado (livre de bloqueios)" :
             trocaImeiStatus1 === "BLOQUEADO" ? " ❌ BLOQUEADO — NAO COMPRAR" :
             trocaImeiStatus1 === "ERRO" ? " ⚠️ Consultar manual" :
             "";
@@ -1001,7 +1001,7 @@ function CompraForm() {
         if (trocaSerial2.trim()) lines.push(`*Nº de Série:* ${trocaSerial2.trim()}`);
         if (trocaImei2.trim()) {
           const statusIcon2 =
-            trocaImeiStatus2 === "OK" ? " ✅ Verificado" :
+            trocaImeiStatus2 === "OK" ? " ✅ Verificado (livre de bloqueios)" :
             trocaImeiStatus2 === "BLOQUEADO" ? " ❌ BLOQUEADO — NAO COMPRAR" :
             trocaImeiStatus2 === "ERRO" ? " ⚠️ Consultar manual" :
             "";
