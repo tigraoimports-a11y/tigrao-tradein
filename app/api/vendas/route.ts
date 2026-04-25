@@ -1,6 +1,8 @@
 import { hojeBR } from "@/lib/date-utils";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
+import { compararSkus } from "@/lib/sku-validator";
 import { sendPaymentNotification, sendSaleNotification, sendCancelNotification } from "@/lib/telegram";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
@@ -130,6 +132,32 @@ export async function GET(req: NextRequest) {
         }
       }
     }
+
+    // Enriquecer com cor/categoria/observacao do estoque quando venda tem
+    // estoque_id. O campo vendas.cor pode estar NULL (nao e populado na criacao
+    // da venda), entao buscamos no estoque pra ter fonte confiavel pro display.
+    // So preenche se a venda ja nao tem valor — nao sobrescreve dados existentes.
+    const estoqueIds = data
+      .filter((v: Record<string, unknown>) => v.estoque_id && (!v.cor || !v.categoria))
+      .map((v: Record<string, unknown>) => v.estoque_id as string);
+    if (estoqueIds.length > 0) {
+      const { data: estoqueRows } = await supabase
+        .from("estoque")
+        .select("id, cor, categoria, observacao")
+        .in("id", estoqueIds);
+      if (estoqueRows && estoqueRows.length > 0) {
+        const porEstoque = new Map(estoqueRows.map((e: { id: string }) => [e.id, e]));
+        for (const v of data as Record<string, unknown>[]) {
+          const eid = v.estoque_id as string | null;
+          if (!eid) continue;
+          const est = porEstoque.get(eid) as { cor?: string | null; categoria?: string | null; observacao?: string | null } | undefined;
+          if (!est) continue;
+          if (!v.cor && est.cor) v.cor = est.cor;
+          if (!v.categoria && est.categoria) v.categoria = est.categoria;
+          if (!v.observacao && est.observacao) v.observacao = est.observacao;
+        }
+      }
+    }
   }
 
   return NextResponse.json({ data });
@@ -182,11 +210,18 @@ export async function POST(req: NextRequest) {
   let estoqueId = body._estoque_id;
   delete body._estoque_id;
 
-  // Se tem estoque_id, verificar se produto ainda está disponível e copiar IMEI/Serial
+  // Se tem estoque_id, verificar se produto ainda está disponível e copiar IMEI/Serial/SKU
   let imeiFromEstoque: string | null = null;
   let serialFromEstoque: string | null = null;
+  let skuFromEstoque: string | null = null;
+  // Cor / categoria / observacao: copiar do estoque pra venda poder derivar
+  // display completo (ex: "iPhone 17 PRO MAX 512GB Laranja") sem depender de
+  // enriquecimento no GET. Persiste a fonte de verdade na venda.
+  let corFromEstoque: string | null = null;
+  let categoriaFromEstoque: string | null = null;
+  let observacaoFromEstoque: string | null = null;
   if (estoqueId) {
-    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo").eq("id", estoqueId).single();
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo, sku, produto, cor, categoria, observacao").eq("id", estoqueId).single();
     if (!estoqueItem) return NextResponse.json({ error: "Produto não encontrado no estoque" }, { status: 404 });
     if (estoqueItem.status === "ESGOTADO" || estoqueItem.qnt <= 0) {
       return NextResponse.json({ error: "Produto já foi vendido (ESGOTADO). Não é possível registrar outra venda." }, { status: 409 });
@@ -197,8 +232,42 @@ export async function POST(req: NextRequest) {
         error: "Item está em PENDÊNCIAS. Mova pra estoque (Recalc Balanços ou botão de confirmar recebimento) antes de vender.",
       }, { status: 409 });
     }
+    // Validar SKU: bloqueia venda quando item do estoque difere do produto
+    // informado no body. Importante pro caminho "Nova venda" quando admin
+    // digita produto livre + escolhe item do estoque de outro SKU por engano.
+    if (!body._sku_override) {
+      const skuBodyBaseline = body.sku || gerarSkuSafe({
+        produto: String(body.produto || ""),
+        categoria: String(body.categoria || detectarCategoriaPorTexto(String(body.produto || ""))),
+        cor: body.cor ?? null,
+        observacao: null,
+        tipo: "NOVO",
+      });
+      const comp = compararSkus(skuBodyBaseline, estoqueItem.sku || null);
+      if (!comp.ok) {
+        return NextResponse.json({
+          error: "Produto selecionado nao bate com o produto digitado",
+          codigo: "SKU_DIVERGENTE",
+          esperado: comp.skuEsperado,
+          selecionado: comp.skuSelecionado,
+          diferencas: comp.diferencas,
+          detalhes: comp.detalhes,
+          produto_estoque: estoqueItem.produto,
+          produto_venda: body.produto,
+        }, { status: 409 });
+      }
+    }
+    delete body._sku_override;
     if (estoqueItem.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
     if (estoqueItem.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
+    if (estoqueItem.sku) skuFromEstoque = estoqueItem.sku;
+    // Copia cor/categoria/observacao se nao foram passadas explicitamente
+    // pelo frontend. Importante pro display — o buildPayload do frontend nao
+    // envia cor, entao sem isso a venda ficava com cor=null e o display
+    // nao conseguia mostrar.
+    if (estoqueItem.cor && !body.cor) corFromEstoque = estoqueItem.cor;
+    if (estoqueItem.categoria && !body.categoria) categoriaFromEstoque = estoqueItem.categoria;
+    if (estoqueItem.observacao && !body.observacao) observacaoFromEstoque = estoqueItem.observacao;
   }
 
   // Garantir nome do cliente em caixa alta
@@ -266,11 +335,28 @@ export async function POST(req: NextRequest) {
   // Remover campo virtual forma_sinal (não existe na tabela vendas)
   delete body.forma_sinal;
 
+  // SKU: prefere copiar do estoque vinculado (ja passou pelo gerador validado).
+  // Fallback: gera do texto livre produto+cor+categoria da venda. Sempre tipo
+  // NOVO (seminovo tem fluxo separado via campo produto_na_troca).
+  const skuVenda = skuFromEstoque || gerarSkuSafe({
+    produto: String(body.produto || ""),
+    categoria: String(body.categoria || detectarCategoriaPorTexto(body.produto)),
+    cor: body.cor ?? null,
+    observacao: null,
+    tipo: "NOVO",
+  });
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
     ...(imeiFromEstoque ? { imei: imeiFromEstoque } : {}),
     ...(serialFromEstoque ? { serial_no: serialFromEstoque } : {}),
+    ...(skuVenda ? { sku: skuVenda } : {}),
+    // Persiste cor/categoria/observacao herdadas do estoque — display usa isso
+    // pra montar nome completo sem precisar de join/enrichment no GET.
+    ...(corFromEstoque ? { cor: corFromEstoque } : {}),
+    ...(categoriaFromEstoque ? { categoria: categoriaFromEstoque } : {}),
+    ...(observacaoFromEstoque ? { observacao: observacaoFromEstoque } : {}),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -821,7 +907,7 @@ export async function PATCH(req: NextRequest) {
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
   // e status_pagamento (evitar reenvio de NF/Telegram em edicoes posteriores).
-  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento, troca_produto, produto_na_troca, troca_produto2, produto_na_troca2, troca_serial, troca_imei, troca_serial2, troca_imei2, cliente").eq("id", id).single();
+  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto, status_pagamento, troca_produto, produto_na_troca, troca_produto2, produto_na_troca2, troca_serial, troca_imei, troca_serial2, troca_imei2, cliente, sku").eq("id", id).single();
   const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
   const statusPagamentoAnterior = (vendaAnterior as unknown as { status_pagamento?: string } | null)?.status_pagamento || null;
   const jaTinhaTroca1Antes = !!((vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.troca_produto || (vendaAnterior as unknown as { troca_produto?: string; produto_na_troca?: string } | null)?.produto_na_troca);
@@ -854,6 +940,56 @@ export async function PATCH(req: NextRequest) {
       }, { status: 400 });
     }
   }
+
+  // VALIDACAO DE SKU (regra definida com Andre): ao vincular um NOVO item
+  // do estoque, o SKU do item tem que bater EXATAMENTE com o SKU da venda
+  // (derivado do formulario do cliente). Qualquer divergencia (cor, storage,
+  // modelo, chip) bloqueia — impede separar produto errado.
+  //
+  // Excecoes: se a venda nao tem SKU (antiga) ou se o estoque nao tem SKU
+  // (acessorio sem classificacao), permite e avisa no response.
+  //
+  // override=true no body pula a validacao (admin ciente da divergencia).
+  if (estoqueIdFoiEnviado && novoEstoqueId && novoEstoqueId !== estoqueIdAnterior && !fields._sku_override) {
+    const { data: estoqueNovo } = await supabase
+      .from("estoque")
+      .select("sku, produto, cor, categoria, observacao")
+      .eq("id", novoEstoqueId)
+      .single();
+    const vendaAtualSku = (vendaAnterior as unknown as { sku?: string | null } | null)?.sku || null;
+    // Fallback: se venda nao tinha SKU salvo, tenta gerar na hora pra ter baseline.
+    const vendaSkuBaseline = vendaAtualSku || gerarSkuSafe({
+      produto: String((vendaAnterior as unknown as { produto?: string })?.produto || ""),
+      categoria: detectarCategoriaPorTexto(String((vendaAnterior as unknown as { produto?: string })?.produto || "")),
+      cor: null,
+      observacao: null,
+      tipo: "NOVO",
+    });
+    const comp = compararSkus(vendaSkuBaseline, estoqueNovo?.sku || null);
+    if (!comp.ok) {
+      return NextResponse.json({
+        error: "Produto selecionado nao bate com o pedido do cliente",
+        codigo: "SKU_DIVERGENTE",
+        esperado: comp.skuEsperado,
+        selecionado: comp.skuSelecionado,
+        diferencas: comp.diferencas,
+        detalhes: comp.detalhes,
+        produto_estoque: estoqueNovo?.produto,
+        produto_venda: (vendaAnterior as unknown as { produto?: string } | null)?.produto,
+      }, { status: 409 });
+    }
+    // Ao vincular, copia SKU + cor/categoria/observacao do estoque pra venda
+    // (garante consistencia daqui pra frente — venda vira "oficialmente" o SKU
+    // e os atributos do item vendido; display mostra cor correta imediatamente).
+    if (estoqueNovo?.sku) {
+      fields.sku = estoqueNovo.sku;
+    }
+    if (estoqueNovo?.cor && !fields.cor) fields.cor = estoqueNovo.cor;
+    if (estoqueNovo?.categoria && !fields.categoria) fields.categoria = estoqueNovo.categoria;
+    if (estoqueNovo?.observacao && !fields.observacao) fields.observacao = estoqueNovo.observacao;
+  }
+  // Limpa flag de override pra nao gravar no banco
+  delete fields._sku_override;
 
   // Se o admin enviou _estoque_id (mesmo null), atualizar o vinculo na venda
   if (estoqueIdFoiEnviado) {

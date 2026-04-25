@@ -91,6 +91,15 @@ function formatDateBR(dateStr: string) {
   return `${d}/${m}`;
 }
 
+// Formata telefone BR com DDI: "21976949939" -> "+55 (21) 97694-9939"
+function formatTelefoneBR(tel: string | null | undefined): string {
+  if (!tel) return "";
+  const digits = tel.replace(/\D/g, "").replace(/^55/, "");
+  if (digits.length === 11) return `+55 (${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `+55 (${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return tel;
+}
+
 // Tabela de taxas em nível de módulo pra reuso em formatPagamentoDisplay e no form
 const TAXAS_PARCELAS_MODULE: Record<number, number> = {
   1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
@@ -908,6 +917,35 @@ export default function EntregasPage() {
     // formatProdutoDisplay retorna string vazia ou com leading "\n" se multi.
     // Pra single produto, sai na mesma linha do emoji/label. Pra multi, quebra.
     const produtoFormatado = formatProdutoMotoboy(produtoText);
+
+    // Coleta: titulo COLETA, produto + detalhes do aparelho numa linha so
+    // (bateria, estado, caixa, marcas + observacao livre), sem TIPO/PAGAMENTO.
+    // Motoboy da coleta nao recebe valor, entao nao adianta poluir o texto.
+    const isColeta = modoColeta || form.tipo === "COLETA";
+    if (isColeta) {
+      const detalhesParts: string[] = [];
+      if (coletaBateria) detalhesParts.push(`Saude bateria ${coletaBateria}%`);
+      if (coletaEstado) detalhesParts.push(`Estado: ${coletaEstado}`);
+      if (coletaMarcas) detalhesParts.push(coletaMarcas);
+      if (coletaCaixa === "sim") detalhesParts.push("Tem a caixa original");
+      else if (coletaCaixa === "nao") detalhesParts.push("Sem caixa original");
+      if (form.observacao) detalhesParts.push(form.observacao);
+      const produtoBase = produtoFormatado.startsWith("\n")
+        ? produtoFormatado.replace(/\n\s*•\s*/g, " + ").trim()
+        : produtoFormatado;
+      const produtoColetaLine = `🍎 *PRODUTO DA COLETA:* ${[produtoBase, ...detalhesParts].filter(Boolean).join(" | ")}`;
+      return [
+        `🛵 *COLETA ${(form.bairro || "—").toUpperCase()}* 🛵`,
+        `🛵`,
+        `⏰ *HORÁRIO:* ${form.horario || "—"}`,
+        `📍 *LOCAL:* ${form.endereco || "—"}${form.bairro ? ` - ${form.bairro}` : ""}`,
+        produtoColetaLine,
+        `🧑 *CLIENTE:* ${form.cliente || "—"}`,
+        `📞 *CONTATO:* ${formatTelefoneBR(form.telefone) || "—"}`,
+        `💼 Vendedor: ${form.vendedor || "—"}`,
+      ].join("\n");
+    }
+
     const produtoLine = produtoFormatado.startsWith("\n")
       ? `🍎 *PRODUTO:*${produtoFormatado}`
       : `🍎 *PRODUTO:* ${produtoFormatado}`;
@@ -927,7 +965,7 @@ export default function EntregasPage() {
       pagLine,
       ...(form.local_entrega === "RESIDÊNCIA" ? [`⚠️ PAGAMENTO ANTECIPADO`] : form.local_entrega === "SHOPPING" ? [`✅ PAGAR NA ENTREGA`] : []),
       `🧑 *CLIENTE:* ${form.cliente || "—"}`,
-      `📞 *CONTATO:* ${form.telefone || "—"}`,
+      `📞 *CONTATO:* ${formatTelefoneBR(form.telefone) || "—"}`,
       form.observacao ? `OBS: ${form.observacao}` : "",
       `💼 Vendedor: ${form.vendedor || "—"}`,
     ].filter(Boolean);
@@ -2975,30 +3013,30 @@ export default function EntregasPage() {
                   <button
                     onClick={() => {
                       if (e.tipo === "COLETA") {
-                        // Formulário de COLETA — sem valores financeiros
-                        const detalhesAparelho = e.detalhes_upgrade
-                          ? e.detalhes_upgrade.split("\n").filter(l => !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao")).join("\n• ")
-                          : "";
-                        const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
+                        // Formulário de COLETA — sem valores financeiros.
+                        // Detalhes do aparelho (bateria, marcas, caixa, pecas) saem
+                        // inline no PRODUTO DA COLETA; observacao livre tambem entra
+                        // na mesma linha. Evita OBS duplicada la embaixo.
+                        const detalhesPartes = e.detalhes_upgrade
+                          ? e.detalhes_upgrade.split("\n").map(l => l.trim()).filter(l => l && !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao"))
+                          : [];
+                        const obsLimpa = (e.observacao || "").split(/\s*\|\s*|\n/)
+                          .map(p => p.trim())
+                          .filter(p => p && !p.startsWith("Endereço cadastro:") && !p.startsWith("Encaminhada do link") && !p.startsWith("Instagram:"));
                         const produtoFmtC = formatProdutoMotoboy(e.produto);
-                        const produtoLineC = produtoFmtC.startsWith("\n")
-                          ? `🍎 *PRODUTO:*${produtoFmtC}`
-                          : `🍎 *PRODUTO:* ${produtoFmtC}`;
+                        const produtoBase = produtoFmtC.startsWith("\n") ? produtoFmtC.replace(/\n\s*•\s*/g, " + ").trim() : produtoFmtC;
+                        const produtoColetaLine = `🍎 *PRODUTO DA COLETA:* ${[produtoBase, ...detalhesPartes, ...obsLimpa].filter(Boolean).join(" | ")}`;
+                        const regiaoC = (e.regiao || e.bairro || "").toUpperCase();
                         const msg = [
-                          `🛵 *COLETA* 🛵`,
-                          ``,
+                          `🛵 *COLETA${regiaoC ? ` ${regiaoC}` : ""}* 🛵`,
+                          `🛵`,
                           `⏰ *HORÁRIO:* ${e.horario || "Horário a combinar"}`,
-                          `📍 *LOCAL COLETA:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
-                          produtoLineC,
-                          ``,
-                          ...(detalhesAparelho ? [`📱 *APARELHO NA COLETA:*`, `• ${detalhesAparelho}`] : []),
-                          ``,
+                          `📍 *LOCAL:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
+                          produtoColetaLine,
                           `🧑 *CLIENTE:* ${e.cliente || ""}`,
-                          `📞 *CONTATO:* ${e.telefone || ""}`,
-                          obsLimpa ? `\nOBS: ${obsLimpa}` : "",
-                          ``,
+                          `📞 *CONTATO:* ${formatTelefoneBR(e.telefone) || "—"}`,
                           `💼 Vendedor: ${e.vendedor || ""}`,
-                        ].filter(l => l !== undefined).join("\n");
+                        ].join("\n");
                         navigator.clipboard.writeText(msg);
                         alert("Formulário de coleta copiado! Cole no WhatsApp do motoboy.");
                       } else {
@@ -3034,7 +3072,7 @@ export default function EntregasPage() {
                           ...(isUpgrade && trocaTexto ? [`🔄 *PRODUTO NA TROCA:* ${trocaTexto}`] : []),
                           pagLine,
                           `🧑 *CLIENTE:* ${e.cliente || ""}`,
-                          `📞 *CONTATO:* ${e.telefone || ""}`,
+                          `📞 *CONTATO:* ${formatTelefoneBR(e.telefone) || "—"}`,
                           obsLimpa ? `OBS: ${obsLimpa}` : "",
                           `💼 Vendedor: ${e.vendedor || ""}`,
                           "________________________________",

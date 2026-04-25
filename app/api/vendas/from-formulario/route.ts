@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimitSubmission, checkHoneypot } from "@/lib/rate-limit";
 import { dispararContratoAuto } from "@/lib/contrato-auto";
+import { maskCpf, maskCnpj, maskCep, maskTelefone } from "@/lib/mask";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 // ============================================================
 // POST /api/vendas/from-formulario
@@ -75,6 +77,12 @@ interface BodyIn {
   horarioEntrega?: string;
   vendedor?: string;
   origem?: string;
+  // Encomenda: cliente paga sinal antecipado. Body trazem flag + parametros,
+  // mas o backend so trata como encomenda se o link_compras.tipo === ENCOMENDA
+  // (evita cliente forcar isso por URL).
+  encomenda?: boolean;
+  previsaoChegada?: string;
+  sinalPct?: number;
   // UTM tracking — passado pelo client via withUTMs() de lib/utm-tracker
   utm_source?: string;
   utm_medium?: string;
@@ -126,6 +134,27 @@ export async function POST(req: NextRequest) {
   // Hoje local no fuso de SP (padrão do resto do sistema)
   const hojeStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
+  // Encomenda: flag organizacional vinda do link_compras (operador marca).
+  // So vira encomenda se o link for do tipo ENCOMENDA (check no banco pra
+  // impedir cliente forcar via URL). Venda eh criada normalmente em `vendas`
+  // com flags extras — fluxo de pagamento eh identico a compra normal.
+  // sinal_pct NULL/0 = pagamento integral; >0 = cobrou so esse % no link.
+  let ehEncomenda = false;
+  let previsaoChegadaLink: string | null = null;
+  let sinalPctLink = 0; // 0 = integral
+  if (body.encomenda) {
+    const { data: lk } = await supabase
+      .from("link_compras")
+      .select("tipo, previsao_chegada, sinal_pct")
+      .eq("short_code", body.shortCode)
+      .maybeSingle();
+    if (lk?.tipo === "ENCOMENDA") {
+      ehEncomenda = true;
+      previsaoChegadaLink = (lk.previsao_chegada as string | null) || body.previsaoChegada || null;
+      sinalPctLink = Number(lk.sinal_pct) || 0;
+    }
+  }
+
   const precoNum = Number(body.preco) || 0;
   const trocaValorNum = Number(body.trocaValor) || 0;
   const trocaValor2Num = Number(body.trocaValor2) || 0;
@@ -136,12 +165,13 @@ export async function POST(req: NextRequest) {
   const parcelasNum = body.parcelas ? Number(body.parcelas) || 1 : 1;
   const { forma, banco, recebimento } = mapForma(body.formaPagamento);
 
-  // Telefone normalizado
-  const telefoneDigits = (body.telefone || "").replace(/\D/g, "");
-
-  // CPF/CNPJ — usa o que vier
-  const cpfDigits = (body.cpf || "").replace(/\D/g, "");
-  const cnpjDigits = (body.cnpj || "").replace(/\D/g, "");
+  // Telefone / CPF / CNPJ / CEP formatados — admin le e cadastro tem mascara
+  // no form, entao banco guarda o mesmo formato pra consistencia. Se vier
+  // cru do /compra (cliente preencheu), a mask helper normaliza.
+  const telefoneFmt = maskTelefone(body.telefone || "");
+  const cpfFmt = maskCpf(body.cpf || "");
+  const cnpjFmt = maskCnpj(body.cnpj || "");
+  const cepFmt = maskCep(body.cep || "");
 
   // Endereço completo pra coluna de display
   const enderecoFull = [body.endereco, body.numero, body.complemento, body.bairro]
@@ -173,12 +203,12 @@ export async function POST(req: NextRequest) {
     data: hojeStr,
     data_programada: body.dataEntrega || null,
     cliente: body.nome,
-    cpf: body.pessoa === "PJ" ? null : (cpfDigits || null),
-    cnpj: body.pessoa === "PJ" ? (cnpjDigits || null) : null,
-    telefone: telefoneDigits || null,
+    cpf: body.pessoa === "PJ" ? null : (cpfFmt || null),
+    cnpj: body.pessoa === "PJ" ? (cnpjFmt || null) : null,
+    telefone: telefoneFmt || null,
     email: body.email || null,
     endereco: enderecoFull || null,
-    cep: body.cep || null,
+    cep: cepFmt || null,
     forma,
     banco,
     recebimento,
@@ -192,13 +222,33 @@ export async function POST(req: NextRequest) {
     utm_campaign: body.utm_campaign ? String(body.utm_campaign).slice(0, 200) : null,
     utm_content: body.utm_content ? String(body.utm_content).slice(0, 200) : null,
     utm_term: body.utm_term ? String(body.utm_term).slice(0, 200) : null,
+    // Encomenda — flag organizacional. O link_compras.tipo === ENCOMENDA
+    // e validado em `ehEncomenda` acima (cliente nao forca via URL).
+    ...(ehEncomenda ? {
+      encomenda: true,
+      previsao_chegada: previsaoChegadaLink,
+    } : {}),
   };
+
+  // SKU canonico do produto principal. Importante: gerar AQUI (mesmo que
+  // o POST /api/vendas tambem gere) porque from-formulario faz insert direto
+  // no Supabase, sem passar por /api/vendas. Sem isso, vendas de formulario
+  // ficariam com sku=null e a validacao na hora de vincular estoque nao
+  // teria baseline.
+  const skuFormulario = gerarSkuSafe({
+    produto: body.produto,
+    categoria: detectarCategoriaPorTexto(body.produto),
+    cor: body.cor || null,
+    observacao: null,
+    tipo: "NOVO",
+  });
 
   // Produto principal: recebe o desconto, troca e sinal_antecipado.
   // Extras: só produto/preço. Admin soma tudo ao exibir o grupo.
   const payloadPrincipal: Record<string, unknown> = {
     ...dadosComuns,
     produto: body.cor ? `${body.produto} ${String(body.cor).toUpperCase()}`.trim() : body.produto,
+    ...(skuFormulario ? { sku: skuFormulario } : {}),
     preco_vendido: valorLiquido,
     sinal_antecipado: entradaPixNum > 0 ? entradaPixNum : null,
     // Troca (aparelho 1) — admin lê produto_na_troca como VALOR MONETÁRIO em
@@ -229,13 +279,23 @@ export async function POST(req: NextRequest) {
   const grupoId = temExtras ? (globalThis.crypto?.randomUUID?.() ?? `grp_${Date.now()}_${Math.random().toString(36).slice(2,10)}`) : null;
   if (grupoId) payloadPrincipal.grupo_id = grupoId;
 
-  const payloadsExtras = extras.map(p => ({
-    ...dadosComuns,
-    produto: p.nome,
-    preco_vendido: Number(p.preco) || 0,
-    grupo_id: grupoId,
-    produto_na_troca: null,
-  }));
+  const payloadsExtras = extras.map(p => {
+    const skuExtra = gerarSkuSafe({
+      produto: p.nome,
+      categoria: detectarCategoriaPorTexto(p.nome),
+      cor: null,
+      observacao: null,
+      tipo: "NOVO",
+    });
+    return {
+      ...dadosComuns,
+      produto: p.nome,
+      preco_vendido: Number(p.preco) || 0,
+      grupo_id: grupoId,
+      produto_na_troca: null,
+      ...(skuExtra ? { sku: skuExtra } : {}),
+    };
+  });
 
   // Idempotência: se já existem vendas FORMULARIO_PREENCHIDO desse short_code,
   // apaga e reinsere. Se existir venda em outro status, mantém e pula (equipe

@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { fetchUsedValues, fetchExcludedModels, fetchDiscountRules, fetchModelDiscounts } from "@/lib/sheets";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
+}
+
+// Auto-popular SKU canonico em rows de avaliacao_usados.
+// Sempre tipo=SEMINOVO; categoria detectada pelo nome do modelo.
+// Sem cor (avaliacao_usados nao guarda cor — preco e o mesmo independente).
+function addSkuUsado(row: Record<string, unknown>): void {
+  if (row.sku) return;
+  const modelo = String(row.modelo || "");
+  const storage = String(row.armazenamento || "");
+  if (!modelo) return;
+  const sku = gerarSkuSafe({
+    produto: `${modelo} ${storage}`.trim(),
+    categoria: detectarCategoriaPorTexto(modelo),
+    cor: null,
+    observacao: null,
+    tipo: "SEMINOVO",
+  });
+  if (sku) row.sku = sku;
 }
 
 // PUT: Importar tudo do Google Sheets para o Supabase
@@ -26,12 +45,16 @@ export async function PUT(req: NextRequest) {
 
     // 1. Valores Base
     if (usedValues.length > 0) {
-      const rows = usedValues.map((v) => ({
-        modelo: v.modelo,
-        armazenamento: v.armazenamento,
-        valor_base: v.valorBase,
-        updated_at: now,
-      }));
+      const rows = usedValues.map((v) => {
+        const row: Record<string, unknown> = {
+          modelo: v.modelo,
+          armazenamento: v.armazenamento,
+          valor_base: v.valorBase,
+          updated_at: now,
+        };
+        addSkuUsado(row);
+        return row;
+      });
       const { error } = await supabase.from("avaliacao_usados").upsert(rows, { onConflict: "modelo,armazenamento" });
       if (!error) importedValores = rows.length;
     }
@@ -118,8 +141,10 @@ export async function POST(req: NextRequest) {
 
   if (action === "upsert_valor") {
     const { modelo, armazenamento, valor_base } = body;
+    const row: Record<string, unknown> = { modelo, armazenamento, valor_base, updated_at: new Date().toISOString() };
+    addSkuUsado(row);
     const { error } = await supabase.from("avaliacao_usados").upsert(
-      { modelo, armazenamento, valor_base, updated_at: new Date().toISOString() },
+      row,
       { onConflict: "modelo,armazenamento" }
     );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -327,8 +352,13 @@ export async function POST(req: NextRequest) {
     const defaults = body.valores as { modelo: string; armazenamento: string; valor_base: number }[];
     if (!defaults?.length) return NextResponse.json({ error: "valores required" }, { status: 400 });
 
+    const rows = defaults.map((d) => {
+      const row: Record<string, unknown> = { ...d, updated_at: new Date().toISOString() };
+      addSkuUsado(row);
+      return row;
+    });
     const { error } = await supabase.from("avaliacao_usados").upsert(
-      defaults.map((d) => ({ ...d, updated_at: new Date().toISOString() })),
+      rows,
       { onConflict: "modelo,armazenamento" }
     );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

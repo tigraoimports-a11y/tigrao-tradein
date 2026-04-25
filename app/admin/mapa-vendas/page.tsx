@@ -47,6 +47,16 @@ interface CampanhaBucket {
   receita: number;
 }
 
+interface CrescimentoRow {
+  nome: string;
+  cidade: string;
+  atual: { qty: number; receita: number; lucro: number };
+  anterior: { qty: number; receita: number; lucro: number };
+  deltaQty: number;
+  deltaReceita: number;
+  score: number;
+}
+
 interface CampanhaStat {
   campanha: string;
   source: string;
@@ -69,6 +79,9 @@ interface MapaData {
   topClientes: ClienteData[];
   porDiaSemana: DiaSemanaData[];
   campanhas?: CampanhaStat[];
+  crescimentoRegiao?: CrescimentoRow[];
+  crescimentoInicioAtual?: string;
+  crescimentoInicioAnterior?: string;
 }
 
 type RangeOption = "7" | "month" | "30" | "90" | "all" | "custom";
@@ -420,6 +433,13 @@ export default function MapaVendasPage() {
 
       {/* Cruzamento Meta Ads × região (UTM) */}
       <CampanhasSection campanhas={data.campanhas ?? []} />
+
+      {/* Crescimento por regiao — mes atual vs mes anterior */}
+      <CrescimentoRegiaoSection
+        rows={data.crescimentoRegiao ?? []}
+        inicioAtual={data.crescimentoInicioAtual}
+        inicioAnterior={data.crescimentoInicioAnterior}
+      />
     </div>
   );
 }
@@ -540,6 +560,99 @@ function formatDate(d: string): string {
   if (!d) return "\u2014";
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
+}
+
+function CrescimentoRegiaoSection({ rows, inicioAtual, inicioAnterior }: { rows: CrescimentoRow[]; inicioAtual?: string; inicioAnterior?: string }) {
+  const [aba, setAba] = useState<"subindo" | "descendo" | "novos" | "sumindo">("subindo");
+
+  const subindo = rows.filter(r => r.atual.qty > 0 && r.anterior.qty > 0 && r.deltaQty > 0).sort((a, b) => b.deltaQty - a.deltaQty).slice(0, 10);
+  const descendo = rows.filter(r => r.atual.qty > 0 && r.anterior.qty > 0 && r.deltaQty < 0).sort((a, b) => a.deltaQty - b.deltaQty).slice(0, 10);
+  const novos = rows.filter(r => r.atual.qty > 0 && r.anterior.qty === 0).sort((a, b) => b.atual.qty - a.atual.qty).slice(0, 10);
+  const sumindo = rows.filter(r => r.atual.qty === 0 && r.anterior.qty > 0).sort((a, b) => b.anterior.qty - a.anterior.qty).slice(0, 10);
+
+  const visiveis =
+    aba === "subindo" ? subindo :
+    aba === "descendo" ? descendo :
+    aba === "novos" ? novos :
+    sumindo;
+
+  return (
+    <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+        <h2 className="text-base font-semibold text-[#1D1D1F]">📈 Crescimento por Região (mês vs anterior)</h2>
+        {inicioAtual && inicioAnterior && (
+          <span className="text-[10px] text-[#86868B]">
+            {formatDate(inicioAnterior)} → {formatDate(inicioAtual)}  vs  {formatDate(inicioAtual)} → hoje
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-[#86868B] mb-4">
+        Compara vendas dos últimos 30 dias com os 30 dias anteriores. Ajuda a identificar onde a demanda subiu ou sumiu.
+      </p>
+
+      {/* Abas */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {[
+          { k: "subindo" as const, label: `📈 Subindo (${subindo.length})`, color: "#2ECC71" },
+          { k: "descendo" as const, label: `📉 Descendo (${descendo.length})`, color: "#E74C3C" },
+          { k: "novos" as const, label: `✨ Novos (${novos.length})`, color: "#3498DB" },
+          { k: "sumindo" as const, label: `🚨 Sumindo (${sumindo.length})`, color: "#95A5A6" },
+        ].map(tab => (
+          <button
+            key={tab.k}
+            onClick={() => setAba(tab.k)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              aba === tab.k
+                ? "bg-[#E8740E] text-white"
+                : "bg-white border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tabela */}
+      {visiveis.length === 0 ? (
+        <p className="text-xs text-[#86868B] text-center py-6">
+          {aba === "subindo" && "Nenhuma região com crescimento."}
+          {aba === "descendo" && "Nenhuma região em queda."}
+          {aba === "novos" && "Nenhuma região nova nos últimos 30 dias."}
+          {aba === "sumindo" && "Nenhuma região sumiu."}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {visiveis.map((r) => {
+            const isNovo = aba === "novos";
+            const isSumindo = aba === "sumindo";
+            const deltaStr = isNovo ? "novo" : isSumindo ? "sumiu" : `${r.deltaQty > 0 ? "+" : ""}${r.deltaQty}%`;
+            const deltaColor = isNovo ? "text-blue-600" :
+              isSumindo ? "text-gray-500" :
+              r.deltaQty > 0 ? "text-green-600" : "text-red-500";
+            return (
+              <div key={r.nome} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg border border-[#E8E8ED] hover:bg-[#FAFAFA]">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#1D1D1F] truncate">{r.nome}</p>
+                  <p className="text-[10px] text-[#86868B]">
+                    Agora: {r.atual.qty}x · R$ {Math.round(r.atual.receita).toLocaleString("pt-BR")}
+                    {!isNovo && !isSumindo && (
+                      <>  ·  Antes: {r.anterior.qty}x · R$ {Math.round(r.anterior.receita).toLocaleString("pt-BR")}</>
+                    )}
+                    {isSumindo && (
+                      <>  (tinha {r.anterior.qty}x · R$ {Math.round(r.anterior.receita).toLocaleString("pt-BR")})</>
+                    )}
+                  </p>
+                </div>
+                <span className={`text-sm font-bold shrink-0 ${deltaColor}`}>
+                  {deltaStr}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function KPICard({

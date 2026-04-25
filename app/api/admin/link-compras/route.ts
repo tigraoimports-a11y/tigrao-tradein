@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity-log";
 import { entregaFromLink } from "@/lib/entrega-from-link";
+import { gerarSkuSafe, detectarCategoriaPorTexto } from "@/lib/sku";
 
 function auth(request: Request) {
   const pw = request.headers.get("x-admin-password");
@@ -186,10 +187,18 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { supabase } = await import("@/lib/supabase");
 
+  // tipo: ENCOMENDA (com sinal antecipado) / TROCA (com aparelho na troca) / COMPRA.
+  // Aceita qualquer um — os tres valores tem fluxos diferentes no /compra.
+  const tipoValidos = ["COMPRA", "TROCA", "ENCOMENDA"];
+  const tipoInput = typeof body.tipo === "string" ? body.tipo.toUpperCase() : "COMPRA";
   const payload = {
     short_code: body.short_code,
     url_curta: body.url_curta || null,
-    tipo: body.tipo === "TROCA" ? "TROCA" : "COMPRA",
+    tipo: tipoValidos.includes(tipoInput) ? tipoInput : "COMPRA",
+    previsao_chegada: body.previsao_chegada || null,
+    sinal_pct: body.sinal_pct != null ? Number(body.sinal_pct) : null,
+    extra_descricao: body.extra_descricao || null,
+    extra_valor: body.extra_valor != null ? Number(body.extra_valor) : null,
     cliente_nome: body.cliente_nome || null,
     cliente_telefone: body.cliente_telefone || null,
     cliente_cpf: body.cliente_cpf || null,
@@ -225,6 +234,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "short_code e produto são obrigatórios" }, { status: 400 });
   }
 
+  // Auto-popular SKU canonico. Detecta categoria pelo nome do produto
+  // (link_compras nao guarda categoria separada). Sempre tipo NOVO.
+  const sku = gerarSkuSafe({
+    produto: payload.produto,
+    categoria: detectarCategoriaPorTexto(payload.produto),
+    cor: payload.cor,
+    observacao: null,
+    tipo: "NOVO",
+  });
+  if (sku) (payload as Record<string, unknown>).sku = sku;
+
   // Idempotencia: se ja existe link com esse short_code, nao cria novo.
   // Protege contra caso do frontend perder `editingLinkId` e cair aqui em vez
   // do PATCH — resultado seria duplicacao. Em vez de criar, retornamos o
@@ -254,7 +274,7 @@ export async function PATCH(request: Request) {
 
   const allowed: Record<string, unknown> = {};
   const editableFields = [
-    "arquivado", "status", "observacao",
+    "arquivado", "status", "observacao", "tipo",
     "cliente_nome", "cliente_telefone", "cliente_cpf", "cliente_email",
     "produto", "cor", "valor", "desconto", "forma_pagamento", "parcelas", "entrada",
     "produtos_extras",
@@ -263,6 +283,9 @@ export async function PATCH(request: Request) {
     "vendedor", "campanha", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
     "pagamento_pago", "taxa_entrega",
     "mp_link", "mp_preference_id",
+    // Encomenda
+    "previsao_chegada", "sinal_pct",
+    "extra_descricao", "extra_valor",
   ];
   for (const k of editableFields) {
     if (k in patch) allowed[k] = patch[k];
@@ -270,6 +293,21 @@ export async function PATCH(request: Request) {
   // produtos_extras deve ser salvo como JSON string
   if (allowed.produtos_extras && Array.isArray(allowed.produtos_extras)) {
     allowed.produtos_extras = JSON.stringify(allowed.produtos_extras);
+  }
+  // Regerar SKU se editou produto ou cor
+  if ("produto" in allowed || "cor" in allowed) {
+    const produtoFinal = String(allowed.produto || "");
+    const corFinal = (allowed.cor as string | null | undefined) ?? null;
+    if (produtoFinal) {
+      const novoSku = gerarSkuSafe({
+        produto: produtoFinal,
+        categoria: detectarCategoriaPorTexto(produtoFinal),
+        cor: corFinal,
+        observacao: null,
+        tipo: "NOVO",
+      });
+      if (novoSku) allowed.sku = novoSku;
+    }
   }
   allowed.updated_at = new Date().toISOString();
 

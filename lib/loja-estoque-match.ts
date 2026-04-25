@@ -1,12 +1,20 @@
 // lib/loja-estoque-match.ts
 // Liga loja_variacoes (mostruário público) ao estoque real pra esconder esgotados.
 //
-// Matching é fuzzy mas determinístico:
-//   chave = getModeloBase(produto, categoria) + "::" + corParaPT(cor) normalizada
+// Duas estrategias de match, usadas em cascata:
 //
-// Permissivo: se não achar match nenhum pra uma variação, deixa ela visível
-// (benefício da dúvida — não esconde quando a heurística falhou). Só esconde
-// quando confirmou que existe o SKU no estoque mas está zerado/ESGOTADO.
+//   1) JOIN por SKU canonico (preferencial, precisao 100%):
+//      Se a variacao tem sku E existe alguma row de estoque com o mesmo sku,
+//      usa lookup exato. Zero falsos positivos/negativos.
+//
+//   2) Fallback fuzzy (legado, pra rows sem SKU):
+//      chave = getModeloBase(produto, categoria) + "::" + corParaPT(cor)
+//      Permissivo: se nao achar match nenhum, deixa visivel (beneficio da
+//      duvida). So esconde quando confirmou existir SKU zerado.
+//
+// Transicao: conforme backfill popular SKUs, o (1) vira caminho principal
+// e o (2) so roda em rows orfas. Quando atingir 100% cobertura, podemos
+// remover o fuzzy.
 
 import { getModeloBase } from "./produto-display";
 import { corParaPT } from "./cor-pt";
@@ -18,6 +26,7 @@ export interface EstoqueRow {
   status: string | null;
   cor: string | null;
   observacao?: string | null;
+  sku?: string | null;
 }
 
 interface EstoqueAgg {
@@ -122,4 +131,51 @@ export function checkVariacaoEsgotada(
   // existe (alguma linha de estoque com essa chave, mesmo que zerada).
   const confirmouSKU = keysPresentes.has(key);
   return { esgotado: confirmouSKU, modeloBase, key };
+}
+
+// ─── Path preferencial: JOIN por SKU canonico ─────────────────────
+
+/**
+ * Indices por SKU. Separados em dois porque a semantica e diferente:
+ *   - disponivel: soma qnt quando status="EM ESTOQUE" e qnt>0 (pra saber se "tem")
+ *   - presentes: qualquer row (mesmo ESGOTADO) pra saber se o SKU existe no sistema
+ */
+export function buildEstoqueIndexBySku(rows: EstoqueRow[]): {
+  disponivel: Map<string, EstoqueAgg>;
+  presentes: Set<string>;
+} {
+  const disponivel = new Map<string, EstoqueAgg>();
+  const presentes = new Set<string>();
+  for (const row of rows) {
+    if (!row.sku) continue;
+    presentes.add(row.sku);
+    const qnt = Number(row.qnt || 0);
+    const isEmEstoque = (row.status || "").toUpperCase() === "EM ESTOQUE" && qnt > 0;
+    if (isEmEstoque) {
+      const existing = disponivel.get(row.sku) || { totalEmEstoque: 0 };
+      existing.totalEmEstoque += qnt;
+      disponivel.set(row.sku, existing);
+    }
+  }
+  return { disponivel, presentes };
+}
+
+/**
+ * Decide esgotado usando SKU canonico. Retorna null quando o lookup nao
+ * pode ser feito (variacao sem SKU) — nesse caso o caller deve cair no
+ * fallback fuzzy checkVariacaoEsgotada.
+ *
+ * Mesma semantica do fuzzy: so esconde se confirmou que SKU existe.
+ */
+export function checkVariacaoEsgotadaBySku(
+  variacaoSku: string | null | undefined,
+  disponivel: Map<string, EstoqueAgg>,
+  presentes: Set<string>,
+): { esgotado: boolean; matchedBySku: true } | null {
+  if (!variacaoSku) return null;
+  const agg = disponivel.get(variacaoSku);
+  const temEstoque = (agg?.totalEmEstoque || 0) > 0;
+  if (temEstoque) return { esgotado: false, matchedBySku: true };
+  const confirmou = presentes.has(variacaoSku);
+  return { esgotado: confirmou, matchedBySku: true };
 }

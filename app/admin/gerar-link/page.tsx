@@ -9,6 +9,7 @@ import { getModeloBase } from "@/lib/produto-display";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 import { getPublicBaseUrl } from "@/lib/public-url";
 import { formatPedidoMessage, type PedidoData, type PedidoTrocaItem } from "@/lib/formatPedido";
+import { confirmar } from "@/lib/confirm-modal";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -228,6 +229,11 @@ export default function GerarLinkPage() {
   const [dataEntrega, setDataEntrega] = useState("");
   const [desconto, setDesconto] = useState("");
   const [temTroca, setTemTroca] = useState(false);
+  // Encomenda: cliente paga sinal antecipado (default 50%) e produto tem
+  // prazo de chegada. So operador marca (cliente nao escolhe).
+  const [encomenda, setEncomenda] = useState(false);
+  const [previsaoChegada, setPrevisaoChegada] = useState("");
+  const [sinalPct, setSinalPct] = useState("50");
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
   const [temSegundaTroca, setTemSegundaTroca] = useState(false);
@@ -240,6 +246,9 @@ export default function GerarLinkPage() {
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
+  // Cobranca extra opcional (capa, pelicula, brinde, etc). Soma no total do link.
+  const [extraDescricao, setExtraDescricao] = useState("");
+  const [extraValor, setExtraValor] = useState("");
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
   // Fluxo invertido: habilita botão "Pagar com Mercado Pago" no /compra.
   const [pagarMp, setPagarMp] = useState(false);
@@ -335,7 +344,7 @@ export default function GerarLinkPage() {
     id: string;
     short_code: string;
     url_curta: string | null;
-    tipo: "COMPRA" | "TROCA";
+    tipo: "COMPRA" | "TROCA" | "ENCOMENDA";
     cliente_nome: string | null;
     cliente_telefone: string | null;
     cliente_cpf: string | null;
@@ -695,7 +704,15 @@ export default function GerarLinkPage() {
         for (let i = 1; i < prodsFilled.length; i++) {
           shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
         }
-        if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+        // Valor cobrado no link = produto (sinal se encomenda) + extra cobranca
+        const extraNumBase = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+        const baseCobrado = encomenda && sinalPct
+          ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+          : Number(rawPreco) || 0;
+        const valorExibir = String(baseCobrado + extraNumBase);
+        if (valorExibir && valorExibir !== "0") shortData.v = valorExibir;
+        if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
+        if (extraNumBase > 0) shortData.ex_v = String(extraNumBase);
         if (descontoNum > 0) shortData.dc = String(descontoNum);
         shortData.s = vendedorNome || "";
         if (campanha.trim()) shortData.cm = campanha.trim();
@@ -721,6 +738,13 @@ export default function GerarLinkPage() {
         if (pagamentoPago) shortData.pp = pagamentoPago;
         // pm=1 → formulário primeiro, depois cliente paga MP direto do /compra
         if (pagarMp) shortData.pm = "1";
+        // Encomenda: flag + prazo + % do sinal. Cliente nao pode desativar isso
+        // pelo URL (backend ignora quando o link_compras.tipo for diferente).
+        if (encomenda) {
+          shortData.enc = "1";
+          if (previsaoChegada.trim()) shortData.prev = previsaoChegada.trim();
+          if (sinalPct) shortData.sinal = String(sinalPct);
+        }
         if (incluirDadosCliente) {
           if (cliNome.trim()) shortData.cn = cliNome.trim();
           if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
@@ -811,6 +835,16 @@ export default function GerarLinkPage() {
       if (l.troca_condicao) setTrocaCondicao(l.troca_condicao);
       if (l.troca_cor) setTrocaCor(l.troca_cor);
     }
+    // Encomenda: restaura se o link original era tipo ENCOMENDA
+    const lAny = l as unknown as { tipo?: string; previsao_chegada?: string | null; sinal_pct?: number | null; extra_descricao?: string | null; extra_valor?: number | null };
+    if (lAny.tipo === "ENCOMENDA") {
+      setEncomenda(true);
+      if (lAny.previsao_chegada) setPrevisaoChegada(lAny.previsao_chegada);
+      if (lAny.sinal_pct != null) setSinalPct(String(lAny.sinal_pct));
+    }
+    // Cobranca extra: restaura independente do tipo
+    if (lAny.extra_descricao) setExtraDescricao(lAny.extra_descricao);
+    if (lAny.extra_valor != null) setExtraValor(Number(lAny.extra_valor).toLocaleString("pt-BR"));
     setAba("novo");
   }
 
@@ -941,6 +975,9 @@ export default function GerarLinkPage() {
     // Troca
     setTemTroca(false); setTrocaProduto(""); setTrocaValor(""); setTrocaCondicao(""); setTrocaCor("");
     setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); setTrocaCondicao2(""); setTrocaCor2("");
+    // Encomenda
+    setEncomenda(false); setPrevisaoChegada(""); setSinalPct("50");
+    setExtraDescricao(""); setExtraValor("");
     // Cliente
     setIncluirDadosCliente(false); limparDadosCliente();
     // Link gerado
@@ -989,6 +1026,45 @@ export default function GerarLinkPage() {
       setPasteMsg("⚠️ Selecione ao menos um produto antes de gerar o link.");
       return;
     }
+
+    // Encomenda: confirmacao explicita antes de gerar — operador valida prazo,
+    // valor de sinal/integral e o que cliente vera no /compra. Evita esquecer
+    // de preencher o prazo ou marcar encomenda por engano. So pede confirmacao
+    // em criacao nova (edicao ja tem fluxo proprio acima).
+    if (encomenda && !editingLinkId) {
+      const precoEnc = Number(rawPreco) || 0;
+      const trocaTEnc = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+      const baseEnc = Math.max(precoEnc - trocaTEnc, 0);
+      const pctEnc = Number(sinalPct) || 0;
+      const temSinalConf = pctEnc > 0 && pctEnc < 100;
+      const sinalConf = temSinalConf ? Math.round((baseEnc * pctEnc) / 100) : baseEnc;
+      const restConf = temSinalConf ? Math.max(baseEnc - sinalConf, 0) : 0;
+      if (!previsaoChegada.trim()) {
+        setPasteMsg("⚠️ Encomenda precisa de prazo de entrega — preencha antes de gerar.");
+        return;
+      }
+      const linhasBody: string[] = [];
+      linhasBody.push(`📦 PEDIDO SOB ENCOMENDA`);
+      linhasBody.push(`Prazo: ${previsaoChegada} após pagamento`);
+      linhasBody.push("");
+      if (temSinalConf) {
+        linhasBody.push(`Cliente paga AGORA: R$ ${sinalConf.toLocaleString("pt-BR")} (sinal ${pctEnc}%)`);
+        if (restConf > 0) linhasBody.push(`Restante na entrega: R$ ${restConf.toLocaleString("pt-BR")}`);
+      } else {
+        linhasBody.push(`Cliente paga AGORA: R$ ${baseEnc.toLocaleString("pt-BR")} (integral)`);
+      }
+      if (trocaTEnc > 0) {
+        linhasBody.push("");
+        linhasBody.push(`Troca: R$ ${trocaTEnc.toLocaleString("pt-BR")} (avaliacao recolhida na retirada)`);
+      }
+      const ok = await confirmar({
+        title: "Confirmar encomenda?",
+        body: linhasBody.join("\n"),
+        confirmLabel: "📦 Gerar link de encomenda",
+        cancelLabel: "Voltar e revisar",
+      });
+      if (!ok) return;
+    }
     // Cor do primeiro produto: do carrinho ou do seletor legado
     const corPTSimples = useCart ? (carrinhoLink[0].cor || "") : (corSel ? corParaPT(corSel) : "");
     const corENCanon = useCart ? (carrinhoLink[0].corEN || "") : (corSel ? (corParaEN(corSel) || corSel) : "");
@@ -1029,7 +1105,15 @@ export default function GerarLinkPage() {
       const precoExtra = useCart ? (carrinhoLink[i]?.preco || 0) : (precosPorProduto[i] || 0);
       if (precoExtra > 0) shortData[`v${i + 1}`] = String(precoExtra);
     }
-    if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    // Encomenda com sinal — cobra sinal no link em vez do total
+    const extraNumMp = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+    const baseCobradoMp = encomenda && sinalPct
+      ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+      : Number(rawPreco) || 0;
+    const valorExibirMp = String(baseCobradoMp + extraNumMp);
+    if (valorExibirMp && valorExibirMp !== "0") shortData.v = valorExibirMp;
+    if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
+    if (extraNumMp > 0) shortData.ex_v = String(extraNumMp);
     if (descontoNum > 0) shortData.dc = String(descontoNum);
     shortData.s = vendedorNome || "";
     if (campanha.trim()) shortData.cm = campanha.trim();
@@ -1090,7 +1174,15 @@ export default function GerarLinkPage() {
             body: JSON.stringify({
               short_code: json.code,
               url_curta: urlCurta,
-              tipo: trocaProduto ? "TROCA" : "COMPRA",
+              // Encomenda tem precedencia sobre troca: pode ter encomenda COM
+              // troca, mas o tipo do link conta pra fluxo do /compra (banner).
+              // sinal_pct > 0 = cobra so esse % no link (sinal antecipado).
+              // sinal_pct null/0 = pagamento integral (valor cheio).
+              tipo: encomenda ? "ENCOMENDA" : (trocaProduto ? "TROCA" : "COMPRA"),
+              previsao_chegada: encomenda ? (previsaoChegada.trim() || null) : null,
+              sinal_pct: encomenda && sinalPct ? Number(sinalPct) : null,
+              extra_descricao: extraDescricao.trim() || null,
+              extra_valor: extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || null : null,
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -1098,7 +1190,14 @@ export default function GerarLinkPage() {
               produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
               cor: corENCanon || null,
-              valor: Number(rawPreco) || 0,
+              // valor cobrado no link = produto (ou sinal se encomenda) + extra
+              valor: (() => {
+                const base = encomenda && sinalPct
+                  ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+                  : Number(rawPreco) || 0;
+                const extra = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+                return base + extra;
+              })(),
               desconto: descontoNum || 0,
               forma_pagamento: forma || null,
               parcelas: parcelas || null,
@@ -1205,7 +1304,15 @@ export default function GerarLinkPage() {
     // `valorComTaxa` porque o /compra recalcula `valorBase = preco - desconto - troca`.
     // Se passássemos valorComTaxa (que já desconta troca), o form subtrairia
     // troca de novo e daria valor errado.
-    if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    // Encomenda com sinal — cobra sinal no link em vez do total
+    const extraNumMp2 = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
+    const baseCobradoMp2 = encomenda && sinalPct
+      ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
+      : Number(rawPreco) || 0;
+    const valorExibirMp2 = String(baseCobradoMp2 + extraNumMp2);
+    if (valorExibirMp2 && valorExibirMp2 !== "0") shortData.v = valorExibirMp2;
+    if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
+    if (extraNumMp2 > 0) shortData.ex_v = String(extraNumMp2);
     if (descontoNum > 0) shortData.dc = String(descontoNum);
     // Forma + parcelas + entrada PIX — pra /compra montar "Pagamento 1/2"
     // quando há entrada PIX pendente (valor parcelado no link MP + PIX separado).
@@ -1231,6 +1338,13 @@ export default function GerarLinkPage() {
     if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
     const rawTroca2Mp = trocaValor2.replace(/\./g, "").replace(",", ".");
     if (temSegundaTroca && rawTroca2Mp && rawTroca2Mp !== "0") shortData.tv2 = rawTroca2Mp;
+
+    // Encomenda (so operador marca — cliente nao altera pelo URL)
+    if (encomenda) {
+      shortData.enc = "1";
+      if (previsaoChegada.trim()) shortData.prev = previsaoChegada.trim();
+      if (sinalPct) shortData.sinal = String(sinalPct);
+    }
 
     // Dados do cliente pré-preenchidos (quando o vendedor incluir)
     if (incluirDadosCliente) {
@@ -1295,8 +1409,11 @@ export default function GerarLinkPage() {
             body: JSON.stringify({
               short_code: shortCode,
               url_curta: urlCurta,
-              // Se tem troca ou entrada PIX, é um fluxo misto (COMPRA + PIX pendente)
-              tipo: trocaProduto ? "TROCA" : "COMPRA",
+              tipo: encomenda ? "ENCOMENDA" : (trocaProduto ? "TROCA" : "COMPRA"),
+              previsao_chegada: encomenda ? (previsaoChegada.trim() || null) : null,
+              sinal_pct: encomenda ? (Number(sinalPct) || 50) : null,
+              extra_descricao: extraDescricao.trim() || null,
+              extra_valor: extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || null : null,
               cliente_nome: cliNome.trim() || null,
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
@@ -2037,13 +2154,26 @@ export default function GerarLinkPage() {
             });
             return (
           <div className="space-y-2">
-            {visiveis.map((l) => (
-              <div key={l.id} className={`border rounded-xl p-3 ${l.tipo === "TROCA" ? "border-purple-200 bg-purple-50/30" : "border-[#E5E5EA] bg-[#F9F9FB]"}`}>
+            {visiveis.map((l) => {
+              // Encomenda pode ter troca junto. Badge fica "ENCOMENDA + TROCA"
+              // quando tem ambos, senao so o tipo principal.
+              const temTrocaLink = !!(l.troca_produto || l.troca_produto2);
+              const badge = l.tipo === "ENCOMENDA"
+                ? (temTrocaLink ? { icone: "📦", label: "ENCOMENDA + TROCA", cor: "bg-blue-200 text-blue-800" }
+                                : { icone: "📦", label: "ENCOMENDA", cor: "bg-blue-200 text-blue-800" })
+                : l.tipo === "TROCA"
+                  ? { icone: "🔄", label: "COMPRA + TROCA", cor: "bg-purple-200 text-purple-800" }
+                  : { icone: "🛒", label: "SÓ COMPRA", cor: "bg-orange-200 text-orange-800" };
+              const borderCor = l.tipo === "ENCOMENDA" ? "border-blue-200 bg-blue-50/30"
+                : l.tipo === "TROCA" ? "border-purple-200 bg-purple-50/30"
+                : "border-[#E5E5EA] bg-[#F9F9FB]";
+              return (
+              <div key={l.id} className={`border rounded-xl p-3 ${borderCor}`}>
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div className="flex-1 min-w-[200px]">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${l.tipo === "TROCA" ? "bg-purple-200 text-purple-800" : "bg-orange-200 text-orange-800"}`}>
-                        {l.tipo === "TROCA" ? "🔄 COMPRA + TROCA" : "🛒 SÓ COMPRA"}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${badge.cor}`}>
+                        {badge.icone} {badge.label}
                       </span>
                       <span className="text-[10px] text-[#86868B]">
                         {new Date(l.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -2220,7 +2350,8 @@ export default function GerarLinkPage() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
             );
           })()}
@@ -2271,6 +2402,172 @@ export default function GerarLinkPage() {
             {pasteMsg}
           </div>
         )}
+
+        {/* === ENCOMENDA: toggle prioritario no topo do form ===
+            Operador marca PRIMEIRO se eh encomenda — define o que o cliente
+            vai ver (header azul, mini-timeline) e como o sistema registra
+            (link_compras.tipo=ENCOMENDA, vendas.encomenda=true). Antes ficava
+            no meio do form e era facil esquecer; agora destaca-se ja na
+            primeira tela com gradiente azul quando ativo. */}
+        <div className={`p-4 rounded-2xl border-2 transition-all ${encomenda ? "border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-md" : `border-dashed ${dm ? "border-blue-700/40 bg-blue-900/10" : "border-blue-300 bg-blue-50/40"}`}`}>
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={encomenda}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setEncomenda(checked);
+                if (!checked) { setPrevisaoChegada(""); setSinalPct(""); }
+                // Encomenda nao aceita shopping/correios — limpa se ja selecionado
+                else if (localEntrega === "shopping" || localEntrega === "correios") setLocalEntrega("");
+              }}
+              className="w-5 h-5 mt-0.5 rounded accent-blue-600"
+            />
+            <div className="flex-1">
+              <span className={`text-base font-bold ${encomenda ? "text-blue-900" : (dm ? "text-blue-300" : "text-blue-800")}`}>📦 Marcar como ENCOMENDA</span>
+              <p className={`text-[11px] mt-0.5 leading-snug ${encomenda ? "text-blue-800" : (dm ? "text-blue-400/80" : "text-blue-700/80")}`}>
+                Produto em trânsito do fornecedor — cliente paga sinal/integral agora e recebe no prazo combinado. Cliente vê banner azul + timeline no /compra.
+              </p>
+            </div>
+          </label>
+
+          {encomenda && (
+            <div className="space-y-4 mt-4 pl-8">
+              {/* Prazo: numero + dropdown unidade */}
+              <div>
+                <label className="text-xs font-bold text-blue-900 mb-1.5 block uppercase tracking-wide">⏱ Prazo de entrega (após pagamento) *</label>
+                {(() => {
+                  const m = previsaoChegada.trim().match(/^(\d+)\s*(dia|semana|m[eê]s)/i);
+                  const num = m ? m[1] : "";
+                  const unidadeRaw = m ? m[2].toLowerCase() : "dias";
+                  const unidade = unidadeRaw.startsWith("dia") ? "dias" : unidadeRaw.startsWith("semana") ? "semanas" : "meses";
+                  const fmtPrazo = (n: string, u: string) => n ? `${n} ${u}` : "";
+                  return (
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={num}
+                        onChange={(e) => {
+                          const n = e.target.value.replace(/\D/g, "").slice(0, 3);
+                          setPrevisaoChegada(fmtPrazo(n, unidade));
+                        }}
+                        placeholder="15"
+                        className={`${inputCls} bg-white`}
+                      />
+                      <select
+                        value={unidade}
+                        onChange={(e) => setPrevisaoChegada(fmtPrazo(num, e.target.value))}
+                        className={`${inputCls} bg-white`}
+                      >
+                        <option value="dias">dias</option>
+                        <option value="semanas">semanas</option>
+                        <option value="meses">meses</option>
+                      </select>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Pagamento: integral vs sinal */}
+              <div>
+                <label className="text-xs font-bold text-blue-900 mb-1.5 block uppercase tracking-wide">💳 Como cliente paga? *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSinalPct("")}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold border-2 transition-colors ${!sinalPct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-900 border-blue-200 hover:border-blue-400"}`}
+                  >
+                    💯 Integral agora
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (!sinalPct) setSinalPct("50"); }}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold border-2 transition-colors ${sinalPct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-900 border-blue-200 hover:border-blue-400"}`}
+                  >
+                    💰 Sinal antecipado
+                  </button>
+                </div>
+                {sinalPct && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-blue-900 font-medium">% do sinal:</span>
+                      {[30, 50, 70].map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setSinalPct(String(p))}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border-2 transition-colors ${sinalPct === String(p) ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-700 border-blue-300 hover:border-blue-500"}`}
+                        >
+                          {p}%
+                        </button>
+                      ))}
+                      <input
+                        value={sinalPct}
+                        onChange={(e) => setSinalPct(e.target.value.replace(/\D/g, "").slice(0, 3) || "50")}
+                        placeholder="50"
+                        inputMode="numeric"
+                        className={`${inputCls} max-w-[80px] bg-white`}
+                      />
+                      <span className="text-xs text-blue-900">%</span>
+                    </div>
+                    {(() => {
+                      const pct = Number(sinalPct) || 0;
+                      const preco = Number(rawPreco) || 0;
+                      const trocaT = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+                      const baseAposTroca = Math.max(preco - trocaT, 0);
+                      if (!pct || !baseAposTroca) return null;
+                      const sinal = Math.round((baseAposTroca * pct) / 100);
+                      const restante = baseAposTroca - sinal;
+                      return (
+                        <p className="text-xs text-blue-900 leading-relaxed">
+                          → Cliente paga <strong>R$ {sinal.toLocaleString("pt-BR")}</strong> agora (sinal {pct}%) e <strong>R$ {restante.toLocaleString("pt-BR")}</strong> na entrega
+                          {trocaT > 0 ? ` (já descontada a troca de R$ ${trocaT.toLocaleString("pt-BR")})` : ""}.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              {/* Mini preview do banner que cliente vai ver no /compra */}
+              {previsaoChegada && (Number(rawPreco) > 0) && (() => {
+                const pctPrev = Number(sinalPct) || 0;
+                const precoPrev = Number(rawPreco) || 0;
+                const trocaTPrev = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+                const baseAposTrocaPrev = Math.max(precoPrev - trocaTPrev, 0);
+                const temSinalPrev = pctPrev > 0 && pctPrev < 100;
+                const sinalPrev = temSinalPrev ? Math.round((baseAposTrocaPrev * pctPrev) / 100) : baseAposTrocaPrev;
+                const restantePrev = temSinalPrev ? baseAposTrocaPrev - sinalPrev : 0;
+                return (
+                  <div className="mt-3 p-3 rounded-xl bg-white border border-blue-300 shadow-sm">
+                    <p className="text-[10px] uppercase tracking-wider text-blue-700 font-bold mb-2">👁 Cliente vai ver assim:</p>
+                    <div className="grid grid-cols-3 gap-1 relative">
+                      <div className="absolute top-3 left-[16.67%] right-[16.67%] h-0.5 bg-blue-300" />
+                      <div className="relative flex flex-col items-center text-center">
+                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold z-10 mb-1">1</div>
+                        <p className="text-[9px] font-bold text-blue-900">Pagar</p>
+                        <p className="text-[9px] text-blue-700">{temSinalPrev ? `Sinal ${pctPrev}%` : "Integral"}</p>
+                        {sinalPrev > 0 && <p className="text-[10px] font-bold text-blue-900">R$ {sinalPrev.toLocaleString("pt-BR")}</p>}
+                      </div>
+                      <div className="relative flex flex-col items-center text-center">
+                        <div className="w-6 h-6 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-[10px] font-bold z-10 mb-1">2</div>
+                        <p className="text-[9px] font-bold text-blue-900">Aguardar</p>
+                        <p className="text-[9px] text-blue-700">{previsaoChegada}</p>
+                      </div>
+                      <div className="relative flex flex-col items-center text-center">
+                        <div className="w-6 h-6 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-[10px] font-bold z-10 mb-1">3</div>
+                        <p className="text-[9px] font-bold text-blue-900">Retirar</p>
+                        <p className="text-[9px] text-blue-700">{trocaTPrev > 0 ? "+ troca" : "loja"}</p>
+                        {restantePrev > 0 && <p className="text-[10px] font-bold text-blue-900">R$ {restantePrev.toLocaleString("pt-BR")}</p>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
 
         {/* Produto — seleção do estoque ou manual */}
         <div className="flex items-center justify-between">
@@ -2548,6 +2845,31 @@ export default function GerarLinkPage() {
           />
         </div>
 
+        {/* Cobranca extra (capa, pelicula, brinde, etc). Soma no total do
+            link e fica visivel pra operadora no historico e pro cliente no
+            /compra junto com o produto. */}
+        <div className={`p-3 rounded-xl border ${extraValor ? "border-amber-400 bg-amber-50" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold text-[#1D1D1F]">➕ Cobrança extra</span>
+            <span className="text-[10px] text-[#86868B]">(opcional — capa, película, brinde, etc)</span>
+          </div>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <input
+              value={extraDescricao}
+              onChange={(e) => setExtraDescricao(e.target.value)}
+              placeholder="Ex: Capa + película"
+              className={inputCls}
+            />
+            <input
+              value={extraValor}
+              onChange={(e) => setExtraValor(formatPreco(e.target.value))}
+              placeholder="R$ 60"
+              inputMode="numeric"
+              className={`${inputCls} max-w-[120px]`}
+            />
+          </div>
+        </div>
+
         {/* Troca / Trade-in */}
         <div className={`p-3 rounded-xl border ${temTroca && trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -2791,6 +3113,38 @@ export default function GerarLinkPage() {
           )}
         </div>
 
+        {/* Bloco fluxo de pagamento — explica em texto claro o que cliente vai
+            pagar agora e quando, especialmente em encomenda com sinal. So
+            renderiza quando ha forma + preco preenchidos. */}
+        {forma && precoBase > 0 && (() => {
+          const trocaTotalFx = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+          const baseAposTroca = Math.max(precoBase - trocaTotalFx - descontoNum, 0);
+          const pctFx = Number(sinalPct) || 0;
+          const temSinalFx = encomenda && pctFx > 0 && pctFx < 100;
+          const valorAgora = temSinalFx ? Math.round((baseAposTroca * pctFx) / 100) : baseAposTroca;
+          const valorRestante = temSinalFx ? Math.max(baseAposTroca - valorAgora, 0) : 0;
+          const formaLabel = forma === "Pix" ? "PIX" : forma === "Link de Pagamento" ? `Link MP${parcelas ? ` ${parcelas}x` : ""}` : forma === "Cartao Credito" ? `Cartão${parcelas ? ` ${parcelas}x` : ""}` : forma === "Cartao Debito" ? "Débito" : forma === "Especie" ? "Espécie" : forma;
+          return (
+            <div className={`rounded-xl border p-3 text-xs leading-relaxed ${encomenda ? "border-blue-300 bg-blue-50 text-blue-900" : "border-[#D2D2D7] bg-[#F9F9FB] text-[#1D1D1F]"}`}>
+              <p className="font-bold mb-1.5">{encomenda ? "📦 Fluxo de pagamento (encomenda)" : "💳 Fluxo de pagamento"}</p>
+              <ol className="space-y-1 list-none">
+                <li>
+                  <span className="font-semibold">1.</span> Cliente paga <strong>R$ {valorAgora.toLocaleString("pt-BR")}</strong> agora via <strong>{formaLabel}</strong>{temSinalFx ? ` (sinal ${pctFx}%)` : ""}
+                </li>
+                {encomenda && previsaoChegada && (
+                  <li><span className="font-semibold">2.</span> Aguarda <strong>{previsaoChegada}</strong> para chegada do produto</li>
+                )}
+                {valorRestante > 0 && (
+                  <li><span className="font-semibold">{encomenda && previsaoChegada ? "3" : "2"}.</span> Paga restante <strong>R$ {valorRestante.toLocaleString("pt-BR")}</strong> na entrega</li>
+                )}
+                {trocaTotalFx > 0 && (
+                  <li><span className="font-semibold">{encomenda ? "4" : "2"}.</span> 💱 Aparelho da troca (R$ {trocaTotalFx.toLocaleString("pt-BR")}) recolhido na retirada</li>
+                )}
+              </ol>
+            </div>
+          );
+        })()}
+
         {showEntradaPix && (
           <div>
             <label className={labelCls}>Entrada no Pix (R$)</label>
@@ -2807,14 +3161,33 @@ export default function GerarLinkPage() {
 
         <div>
           <label className={labelCls}>Local de Entrega</label>
-          <select value={localEntrega} onChange={(e) => { setLocalEntrega(e.target.value); if (e.target.value !== "shopping" && e.target.value !== "outro") setShoppingNome(""); }} className={inputCls}>
+          <select
+            value={localEntrega}
+            onChange={(e) => {
+              const v = e.target.value;
+              // Encomenda nao aceita shopping/correios — se selecionou um, derruba
+              if (encomenda && (v === "shopping" || v === "correios")) return;
+              setLocalEntrega(v);
+              if (v !== "shopping" && v !== "outro") setShoppingNome("");
+            }}
+            className={inputCls}
+          >
             <option value="">-- Opcional --</option>
-            <option value="loja">Retirada em Loja</option>
-            <option value="shopping">Entrega em Shopping</option>
-            <option value="residencia">Entrega em Residencia</option>
-            <option value="correios">📦 Envio Correios</option>
-            <option value="outro">Outro local</option>
+            <option value="loja">Retirada no Escritório</option>
+            <option value="residencia">Entrega em Residência</option>
+            <option value="outro">Outro local combinado</option>
+            {!encomenda && (
+              <>
+                <option value="shopping">Entrega em Shopping</option>
+                <option value="correios">📦 Envio Correios</option>
+              </>
+            )}
           </select>
+          {encomenda && (
+            <p className="text-[11px] text-blue-700 mt-1">
+              📦 Encomenda: só aceita Residência, Escritório ou Outro local. {(localEntrega === "residencia" || localEntrega === "outro") && <span className="font-semibold">Pagamento será antecipado.</span>}
+            </p>
+          )}
         </div>
 
         {(localEntrega === "shopping" || localEntrega === "outro") && (
@@ -2848,12 +3221,38 @@ export default function GerarLinkPage() {
           </div>
           <div>
             <label className={labelCls}>Data</label>
-            <input
-              type="date"
-              value={dataEntrega}
-              onChange={(e) => setDataEntrega(e.target.value)}
-              className={inputCls}
-            />
+            {(() => {
+              // Encomenda: orcamento dura 24h, entao agendamento so pode ser
+              // hoje ou amanha. Fora disso, sem restricao (usa min/max do form
+              // padrao do browser, que aceita qualquer data).
+              const hoje = new Date();
+              const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
+              const isoFmt = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+              const minDate = encomenda ? isoFmt(hoje) : undefined;
+              const maxDate = encomenda ? isoFmt(amanha) : undefined;
+              return (
+                <input
+                  type="date"
+                  value={dataEntrega}
+                  min={minDate}
+                  max={maxDate}
+                  onChange={(e) => {
+                    let v = e.target.value;
+                    if (encomenda && v && (v < minDate! || v > maxDate!)) {
+                      // Clamp pra dentro da janela encomenda
+                      v = v < minDate! ? minDate! : maxDate!;
+                    }
+                    setDataEntrega(v);
+                  }}
+                  className={inputCls}
+                />
+              );
+            })()}
+            {encomenda && (
+              <p className="text-[11px] text-blue-700 mt-1">
+                ⏱ Encomenda: agendamento até amanhã (orçamento expira em 24h)
+              </p>
+            )}
           </div>
         </div>
 

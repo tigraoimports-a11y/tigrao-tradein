@@ -27,15 +27,29 @@ function fmtLocalDate(d: Date): string {
 /**
  * Janela de agendamento do Link de Compra: mínimo = hoje (ou amanhã se >=18h),
  * máximo = min + 2 dias. Domingos são pulados em ambos os extremos.
+ *
+ * `opts.encomenda`: encomenda tem orçamento valido por 24h, entao max = min + 1
+ * dia. Se cair em domingo, NAO empurra pra segunda (encolhe pra so o min em vez
+ * de estourar a janela de 24h pra 72h).
  */
-export function getAgendamentoBounds(now: Date = new Date()): { min: string; max: string } {
+export function getAgendamentoBounds(
+  now: Date = new Date(),
+  opts: { encomenda?: boolean } = {}
+): { min: string; max: string } {
   const base = new Date(now);
   base.setDate(base.getDate() + (base.getHours() >= 18 ? 1 : 0));
   while (base.getDay() === 0) base.setDate(base.getDate() + 1);
 
   const max = new Date(base);
-  max.setDate(max.getDate() + 2);
-  if (max.getDay() === 0) max.setDate(max.getDate() + 1);
+  max.setDate(max.getDate() + (opts.encomenda ? 1 : 2));
+  if (max.getDay() === 0) {
+    if (opts.encomenda) {
+      // Encomenda: nao estoura janela de 24h — encolhe pro proprio min
+      max.setDate(max.getDate() - 1);
+    } else {
+      max.setDate(max.getDate() + 1);
+    }
+  }
 
   return { min: fmtLocalDate(base), max: fmtLocalDate(max) };
 }

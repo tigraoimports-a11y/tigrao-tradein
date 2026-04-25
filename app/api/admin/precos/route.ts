@@ -32,8 +32,7 @@ export async function GET(req: NextRequest) {
   let q = supabase
     .from("precos")
     .select("*")
-    .order("modelo")
-    .order("armazenamento");
+    .order("modelo");
 
   if (tipoFilter === "SEMINOVO") {
     q = q.eq("tipo", "SEMINOVO");
@@ -47,7 +46,55 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ data: data ?? [] });
+  // Ordena armazenamento numericamente (nao alfabetico). Antes "1TB" vinha
+  // antes de "256GB" porque "1" < "2" em string sort. Agora converte TB → GB
+  // pra comparar magnitude real.
+  const armazenamentoGB = (arm: string | null): number => {
+    if (!arm) return 0;
+    const m = String(arm).match(/(\d+)\s*(GB|TB|MB)/i);
+    if (!m) return 0;
+    const n = parseInt(m[1]);
+    const u = m[2].toUpperCase();
+    if (u === "TB") return n * 1024;
+    if (u === "MB") return n / 1024;
+    return n;
+  };
+  // iPhone: ordem pelos variantes (base → e → Plus → Air → Pro → Pro Max)
+  // alem da ordem numerica do modelo. Antes string sort colocava "iPhone 17e"
+  // depois de "iPhone 17 Pro Max" porque "e" > " ".
+  const IPHONE_VARIANTES = ["", "E", "PLUS", "AIR", "PRO", "PRO MAX"];
+  const iphoneKey = (modelo: string | null): [number, number] | null => {
+    if (!modelo) return null;
+    const m = modelo.match(/^iPhone\s+(\d+)(e)?\s*(Plus|Air|Pro\s+Max|Pro)?$/i);
+    if (!m) return null;
+    const num = parseInt(m[1]);
+    let variante = "";
+    if (m[2]) variante = "E";
+    else if (m[3]) {
+      const v = m[3].toUpperCase().replace(/\s+/g, " ");
+      if (v === "PLUS" || v === "AIR" || v === "PRO" || v === "PRO MAX") variante = v;
+    }
+    const idx = IPHONE_VARIANTES.indexOf(variante);
+    return [num, idx < 0 ? 99 : idx];
+  };
+  const ordenados = (data ?? []).sort((a, b) => {
+    const ka = iphoneKey(a.modelo);
+    const kb = iphoneKey(b.modelo);
+    if (ka && kb) {
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      if (ka[1] !== kb[1]) return ka[1] - kb[1];
+    } else if (ka && !kb) {
+      return -1; // iPhone vem antes de nao-iPhone
+    } else if (!ka && kb) {
+      return 1;
+    } else {
+      const mm = (a.modelo || "").localeCompare(b.modelo || "");
+      if (mm !== 0) return mm;
+    }
+    return armazenamentoGB(a.armazenamento) - armazenamentoGB(b.armazenamento);
+  });
+
+  return NextResponse.json({ data: ordenados });
 }
 
 // POST — upsert de um produto (modelo + armazenamento + preco_pix + status + categoria)
@@ -67,26 +114,28 @@ export async function POST(req: NextRequest) {
 
   const { supabase } = await import("@/lib/supabase");
 
+  // Tipo sempre definido: LACRADO default = TRADEIN. Precisa ser NOT NULL pra
+  // o unique constraint (modelo, armazenamento, tipo) funcionar — Postgres
+  // trata NULL como distinto em unique, e dois NULLs conviveriam furando a regra.
+  const tipoFinal = tipo || "TRADEIN";
   const row: Record<string, unknown> = {
     modelo,
     armazenamento,
     preco_pix: Number(preco_pix),
     status: status ?? "ativo",
+    tipo: tipoFinal,
     updated_at: new Date().toISOString(),
   };
   // Só enviar categoria se a coluna existir (backwards-compatible)
   if (categoria) row.categoria = categoria;
-  // tipo: TRADEIN (default) | CATALOGO | AMBOS
-  if (tipo) row.tipo = tipo;
 
-  const { error } = await supabase.from("precos").upsert(row, { onConflict: "modelo,armazenamento" });
+  const { error } = await supabase.from("precos").upsert(row, { onConflict: "modelo,armazenamento,tipo" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await logActivity(usuario, "Alterou preco", `${modelo} ${armazenamento} -> R$ ${Number(preco_pix).toLocaleString("pt-BR")}`, "precos");
 
   // Notificar design via Telegram (apenas para produtos TRADEIN ou AMBOS)
-  const tipoFinal = tipo ?? "TRADEIN";
   const shouldNotifyTelegram = tipoFinal === "TRADEIN" || tipoFinal === "AMBOS";
   if (shouldNotifyTelegram) try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -188,12 +237,13 @@ export async function PUT(req: NextRequest) {
     preco_pix: p.precoPix,
     status: "ativo",
     categoria: "IPHONE",
+    tipo: "TRADEIN",
     updated_at: new Date().toISOString(),
   }));
 
   const { error } = await supabase
     .from("precos")
-    .upsert(rows, { onConflict: "modelo,armazenamento" });
+    .upsert(rows, { onConflict: "modelo,armazenamento,tipo" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -205,7 +255,7 @@ export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { modelo, armazenamento } = body;
+  const { modelo, armazenamento, tipo } = body;
 
   if (!modelo) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -213,11 +263,16 @@ export async function DELETE(req: NextRequest) {
 
   const { supabase } = await import("@/lib/supabase");
 
+  // tipo distingue LACRADO vs SEMINOVO no unique. Sem ele, deletar iPhone 16
+  // 128GB LACRADO tiraria tambem o SEMINOVO. Default TRADEIN pra frontend que
+  // ainda nao manda tipo (devem sempre mandar apos este fix).
+  const tipoFinal = tipo || "TRADEIN";
   const { error } = await supabase
     .from("precos")
     .delete()
     .eq("modelo", modelo)
-    .eq("armazenamento", armazenamento);
+    .eq("armazenamento", armazenamento)
+    .eq("tipo", tipoFinal);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

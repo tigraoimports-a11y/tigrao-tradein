@@ -9,6 +9,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, MAC_MINI_NUCLEOS, MAC_MINI_RAMS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import BalancoSeminovosSection from "@/components/admin/BalancoSeminovosSection";
@@ -635,6 +636,7 @@ interface ProdutoEstoque {
   encomenda_id: string | null;
   codigo_rastreio: string | null;
   contato: string | null;
+  sku: string | null;
 }
 
 interface ImeiSearchResult {
@@ -1119,7 +1121,14 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
     // pra separar variantes do mesmo modelo (Magic Keyboard 11" != 13")
     const telaMatch = observacao?.match(/\[TELA:([^\]]+)\]/);
     const tela = telaMatch ? ` ${telaMatch[1].trim().replace(/"?$/, '"')}` : "";
-    const nome = produto.replace(/\s*[-–]\s*$/, "").trim();
+    // Stripa cor do final do nome pra agrupar variantes no mesmo card
+    // (ex: "MAGIC KEYBOARD IPAD AIR M3 13\" BRANCO" + "MAGIC KEYBOARD IPAD
+    // AIR M3 13\"" viram o mesmo base — cor fica so na subdivisao).
+    const coresPT = /\b(PRETO|BRANCO|CINZA|AZUL|VERDE|PRATA|DOURAD[OA]?|ROXO|ROSA|LARANJA|AMARELO|VERMELHO|ESTELAR|TIT[AÂ]NIO(?:\s+(?:PRETO|BRANCO|AZUL|DESERTO|NATURAL|PRATA|LARANJA))?|MEIA[-\s]NOITE)$/i;
+    let nome = produto.replace(/\s*[-–]\s*$/, "").trim();
+    while (coresPT.test(nome)) {
+      nome = nome.replace(coresPT, "").trim();
+    }
     return `${nome}${tela}`;
   }
   // Fallback: normalizar trailing dashes/espaços
@@ -1128,6 +1137,7 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
 
 export default function EstoquePage() {
   const { password, user, darkMode } = useAdmin();
+  const skuFilter = useSkuFilter();
   const userName = user?.nome ?? "sistema";
   const isAdmin = user?.role === "admin";
   const dm = darkMode;
@@ -1144,7 +1154,12 @@ export default function EstoquePage() {
   const bgSection = dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]";
   const bgHoverBtn = dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F5F5F7]";
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
-  const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
+  const [estoqueRaw, setEstoque] = useState<ProdutoEstoque[]>([]);
+  // Aplica filtro SKU (se ?sku=X na URL) transparentemente. Todas as filtragens
+  // subsequentes por tipo/status trabalham com ja-filtrado por SKU.
+  const estoque = skuFilter
+    ? estoqueRaw.filter((p) => ((p as unknown as { sku?: string | null }).sku || "").toUpperCase() === skuFilter)
+    : estoqueRaw;
   const [encomendaMap, setEncomendaMap] = useState<Map<string, string>>(new Map()); // estoque_id → cliente
   // Códigos de rastreio por pedido (origem + data) — keyed por `${origem}|${data}` → array de {id, codigo}
   const [rastreiosEnvio, setRastreiosEnvio] = useState<Map<string, { id: string; codigo: string }[]>>(new Map());
@@ -2934,6 +2949,7 @@ export default function EstoquePage() {
   return (
     <div className="space-y-6">
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? (dm ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-700") : (dm ? "bg-green-900/30 text-green-400" : "bg-green-50 text-green-700")}`}>{msg}</div>}
+      <SkuFilterBanner total={estoque.length} />
       {ocrLoading && <div className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-xl bg-orange-500 text-white text-sm font-semibold shadow-lg animate-pulse">Lendo serial da imagem...</div>}
 
       {/* Modal Etiqueta Obrigatória */}

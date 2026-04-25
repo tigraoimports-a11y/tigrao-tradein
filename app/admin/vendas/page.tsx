@@ -10,17 +10,107 @@ import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
 import { corParaPT, normalizarCoresNoTexto } from "@/lib/cor-pt";
-import { getModeloBase } from "@/lib/produto-display";
+import { getModeloBase, produtoComCorGarantida } from "@/lib/produto-display";
+import { maskCpf, maskCnpj, maskTelefone, maskCep } from "@/lib/mask";
+import { confirmar, perguntar, avisar } from "@/lib/confirm-modal";
 import { useVendedores } from "@/lib/vendedores";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
+import { gerarSkuSafe, detectarCategoriaPorTexto, parseSku } from "@/lib/sku";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 const VENDAS_PASSWORD = "tigrao$vendas";
 
+// Display do produto da venda: pega a chave "base" do getModeloBase (que inclui
+// storage/tela/RAM+SSD conforme categoria) e anexa a cor PT. Para acessorios
+// resolve o caso "MAGIC KEYBOARD IPAD PRO M4" vindo puro no v.produto e
+// aparecendo sem tela/cor — aqui enriquece com v.observacao ([TELA:X"]) e cor
+// derivada do SKU canonico (vendas nao tem coluna cor propria).
+function buildProdutoDisplay(v: Venda): string {
+  const base = getModeloBase(v.produto || "", v.categoria || "", v.observacao);
+  // Cascata de fontes de cor (confiabilidade decrescente):
+  //   1. SKU canonico (mais confiavel quando tem cor gravada)
+  //   2. v.cor — copiado do estoque na criacao da venda
+  //   3. v.produto — texto bruto digitado pelo admin (ultima tentativa)
+  const sku = (v as unknown as { sku?: string | null }).sku;
+  return produtoComCorGarantida(base, sku, v.produto, v.cor);
+}
+
+// Formata a resposta de erro do backend quando SKU do estoque selecionado
+// nao bate com o SKU esperado pela venda (cliente pediu produto diferente).
+// Retorna string multilinha pronta pra setMsg.
+interface SkuDivergencia {
+  codigo?: string;
+  error?: string;
+  produto_venda?: string;
+  produto_estoque?: string;
+  diferencas?: Array<{ campo: string; esperado: string; selecionado: string }>;
+  esperado?: string;
+  selecionado?: string;
+}
+
+function formatSkuDivergenciaMsg(json: SkuDivergencia): string {
+  if (json?.codigo !== "SKU_DIVERGENTE") {
+    return json?.error || "erro desconhecido";
+  }
+  const diffs = (json.diferencas || [])
+    .map((d) => `• ${d.campo}: ${d.esperado} → ${d.selecionado}`)
+    .join("\n");
+  // Temporario: texto de ALERTA em vez de "bloqueada" — andre pediu pra liberar
+  // registro via botao "Registrar mesmo assim" ate ajustes finos do sistema SKU
+  // (acessorios cadastrados com categoria errada disparam falso-positivo).
+  return [
+    "⚠️ ALERTA — produto não bate 100% com o pedido",
+    "",
+    `Cliente pediu:    ${json.produto_venda || "?"}`,
+    `Você selecionou:  ${json.produto_estoque || "?"}`,
+    "",
+    "Diverge em:",
+    diffs || `• SKU diferente (${json.esperado} ≠ ${json.selecionado})`,
+    "",
+    "Revise a seleção. Se realmente é o produto certo, clique em “Registrar mesmo assim”.",
+  ].join("\n");
+}
+
+// Formata N divergencias de uma vez quando o carrinho tem multiplos produtos e
+// mais de um diverge. Evita que o admin precise salvar 3x pra ver 3 alertas —
+// lista tudo junto pra ele revisar de uma vez so.
+function formatSkuDivergenciasMultiplas(erros: SkuDivergencia[]): string {
+  if (erros.length === 0) return "";
+  if (erros.length === 1) return formatSkuDivergenciaMsg(erros[0]);
+
+  const linhas = [
+    `⚠️ ALERTA — ${erros.length} produtos não batem 100%`,
+    "",
+  ];
+  erros.forEach((e, idx) => {
+    const diffs = (e.diferencas || [])
+      .map((d) => `   • ${d.campo}: ${d.esperado} → ${d.selecionado}`)
+      .join("\n");
+    linhas.push(
+      `${idx + 1}) ${e.produto_venda || "?"}`,
+      `   → Você vinculou: ${e.produto_estoque || "?"}`,
+      diffs || `   • SKU diferente`,
+      "",
+    );
+  });
+  linhas.push("Revise cada um. Se estiver tudo certo, clique em “Registrar mesmo assim”.");
+  return linhas.join("\n");
+}
+
 export default function VendasPage() {
   const { password, user, darkMode } = useAdmin();
+  const skuFilter = useSkuFilter();
+  // SKU override: quando backend retorna 409 SKU_DIVERGENTE, em vez de bloquear
+  // a venda exibe alerta com botao "Registrar mesmo assim". Se usuario clicar,
+  // seta a ref e chama handleSubmit de novo com flag _sku_override=true.
+  const skuOverrideRef = useRef(false);
+  const [skuAlertaAtivo, setSkuAlertaAtivo] = useState(false);
+  // Escape hatch: se o filtro por SKU nao acha unidades (caso edge), admin
+  // pode clicar "Mostrar todas" pra ver tudo do estoque.
+  const [verTodasUnidadesEstoque, setVerTodasUnidadesEstoque] = useState(false);
   const vendedoresList = useVendedores(password);
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -72,7 +162,11 @@ export default function VendasPage() {
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
   const [showLojistaSuggestions, setShowLojistaSuggestions] = useState(false);
-  const [lojistas, setLojistas] = useState<{ id: string; nome: string; cpf?: string | null; cnpj?: string | null; saldo_credito?: number }[]>([]);
+  const [lojistas, setLojistas] = useState<{
+    id: string; nome: string; cpf?: string | null; cnpj?: string | null; saldo_credito?: number;
+    email?: string | null; telefone?: string | null; endereco?: string | null;
+    cep?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null;
+  }[]>([]);
 
   // Card title overrides (sincronizado com a página de Estoque)
   const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
@@ -327,7 +421,7 @@ export default function VendasPage() {
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null; observacao: string | null; sku: string | null }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -414,11 +508,38 @@ export default function VendasPage() {
 
   const handleQRDetected = useCallback((rawValue: string) => {
     const val = rawValue.trim();
-    const found = estoque.find(p =>
-      (p.serial_no && p.serial_no.toUpperCase() === val.toUpperCase()) ||
-      (p.imei && p.imei.toUpperCase() === val.toUpperCase()) ||
-      p.id === val
-    );
+    // Novo formato das etiquetas (pos-SKU): QR codifica JSON { sku, c: codigo }.
+    // Prefere busca por SKU (100% preciso) + fallback pelo codigo serial/IMEI.
+    // Retrocompat: QR antigo sem JSON continua funcionando (codigo bruto).
+    let sku: string | null = null;
+    let codigo = val;
+    if (val.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(val) as { sku?: string; c?: string };
+        if (parsed.sku) sku = String(parsed.sku).toUpperCase();
+        if (parsed.c) codigo = String(parsed.c);
+      } catch {
+        /* nao e JSON valido — trata val inteiro como codigo */
+      }
+    }
+
+    // Busca no estoque: prioridade SKU, depois serial/imei/id
+    const found = estoque.find(p => {
+      if (sku && p.sku && p.sku.toUpperCase() === sku) {
+        // Match por SKU: se ainda bate por serial/imei tambem, perfeito;
+        // senao aceita qualquer unidade do SKU (mas idealmente deve bater codigo).
+        return (p.serial_no && p.serial_no.toUpperCase() === codigo.toUpperCase()) ||
+               (p.imei && p.imei.toUpperCase() === codigo.toUpperCase()) ||
+               // Se codigo nao bate serial/imei, aceita mesmo assim — pode ser
+               // etiqueta de item sem serial (raro). Usuario pode editar depois.
+               true;
+      }
+      // Fallback: busca por serial/imei/id (comportamento antigo)
+      return (p.serial_no && p.serial_no.toUpperCase() === codigo.toUpperCase()) ||
+             (p.imei && p.imei.toUpperCase() === codigo.toUpperCase()) ||
+             p.id === codigo;
+    });
+
     if (found) {
       const tipoKey = (found.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
       setCatSel(`${found.categoria}__${tipoKey}`);
@@ -429,9 +550,9 @@ export default function VendasPage() {
       if (found.serial_no) { set("serial_no", found.serial_no); setSerialBusca(found.serial_no); }
       if (found.imei) { set("imei", found.imei); if (!found.serial_no) setSerialBusca(found.imei); }
       handleStopQR();
-      setMsg(`✅ Produto encontrado: ${found.produto}`);
+      setMsg(`✅ Produto encontrado: ${found.produto}${sku ? ` (SKU ${sku})` : ""}`);
     } else {
-      setQrScanMsg(`⚠️ Serial não encontrado em estoque: ${val.slice(0, 20)}…`);
+      setQrScanMsg(`⚠️ ${sku ? `SKU ${sku} com ${codigo.slice(0, 16)}…` : `Codigo ${codigo.slice(0, 20)}…`} nao encontrado em estoque`);
     }
   }, [estoque, set, handleStopQR]);
 
@@ -677,10 +798,12 @@ export default function VendasPage() {
     return () => { if (clienteHistoricoTimer.current) clearTimeout(clienteHistoricoTimer.current); };
   }, [form.cliente, fetchClienteHistorico]);
 
-  // Carregar lista de lojistas cadastrados pra autocomplete no modo ATACADO.
-  // Busca uma vez ao entrar em ATACADO e reusa — a lista e pequena (< 100 em geral).
+  // Carregar lista de lojistas cadastrados pra autocomplete. Antes so buscava
+  // quando form.tipo === "ATACADO" — mas o operador pode digitar o nome do
+  // lojista antes de marcar origem=ATACADO. Agora carrega ao montar pra que o
+  // autocomplete responda em qualquer ordem de preenchimento.
   useEffect(() => {
-    if (form.tipo !== "ATACADO" || !password || lojistas.length > 0) return;
+    if (!password || lojistas.length > 0) return;
     fetch("/api/admin/lojistas", {
       headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
     })
@@ -1678,6 +1801,11 @@ export default function VendasPage() {
             || (precisaCriarGrupo ? crypto.randomUUID() : editandoGrupoIds[0]);
 
           let allOk = true;
+          // Acumula divergencias de SKU (nao quebra o loop) — assim o admin
+          // ve TODAS as linhas problematicas de uma vez em vez de salvar
+          // varias vezes descobrindo 1 por vez.
+          const skuDivergencias: SkuDivergencia[] = [];
+          let primeiroErroNaoSku = "";
 
           // 1. PATCH nos produtos que casam com vendas existentes.
           // Se estamos criando grupo novo (venda unica virando multi), propaga grupo_id
@@ -1686,27 +1814,59 @@ export default function VendasPage() {
           for (let i = 0; i < nPatch; i++) {
             const patchBody: Record<string, unknown> = { id: editandoGrupoIds[i], ...groupPayloads[i] };
             if (precisaCriarGrupo) patchBody.grupo_id = grupoIdOriginal;
+            if (skuOverrideRef.current) patchBody._sku_override = true;
             const res = await fetch("/api/vendas", {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "x-admin-password": password },
               body: JSON.stringify(patchBody),
             });
             const json = await res.json();
-            if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido")); break; }
+            if (!json.ok && !json.data) {
+              if (json.codigo === "SKU_DIVERGENTE") {
+                // Coleta e continua — vai reportar tudo no final.
+                skuDivergencias.push(json);
+                allOk = false;
+              } else if (!primeiroErroNaoSku) {
+                // Outros erros (nao SKU): guarda o primeiro e quebra o loop.
+                primeiroErroNaoSku = "Erro ao atualizar: " + (json.error || "erro desconhecido");
+                allOk = false;
+                break;
+              }
+            }
           }
 
           // 2. POST novos produtos (se allProducts.length > editandoGrupoIds.length)
+          // So roda se fase 1 passou 100% — divergencias de SKU em PATCH
+          // existentes impedem avancar pra criar itens novos sem admin revisar.
           if (allOk && allProducts.length > editandoGrupoIds.length) {
             for (let i = editandoGrupoIds.length; i < allProducts.length; i++) {
-              const payload = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
+              const payload: Record<string, unknown> = { ...groupPayloads[i], grupo_id: grupoIdOriginal };
+              if (skuOverrideRef.current) payload._sku_override = true;
               const res = await fetch("/api/vendas", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-admin-password": password },
                 body: JSON.stringify(payload),
               });
               const json = await res.json();
-              if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao criar novo item: " + (json.error || "erro desconhecido")); break; }
+              if (!json.ok && !json.data) {
+                if (json.codigo === "SKU_DIVERGENTE") {
+                  skuDivergencias.push(json);
+                  allOk = false;
+                } else if (!primeiroErroNaoSku) {
+                  primeiroErroNaoSku = "Erro ao criar novo item: " + (json.error || "erro desconhecido");
+                  allOk = false;
+                  break;
+                }
+              }
             }
+          }
+
+          // Se teve divergencia de SKU em qualquer fase, mostra alerta agregado
+          if (skuDivergencias.length > 0) {
+            setMsg(formatSkuDivergenciasMultiplas(skuDivergencias));
+            setSkuAlertaAtivo(true);
+          } else if (primeiroErroNaoSku) {
+            setMsg(primeiroErroNaoSku);
           }
 
           // 3. DELETE vendas removidas (se allProducts.length < editandoGrupoIds.length)
@@ -1726,7 +1886,7 @@ export default function VendasPage() {
               : allProducts.length > editandoGrupoIds.length
                 ? `${editandoGrupoIds.length} atualizadas + ${allProducts.length - editandoGrupoIds.length} novas criadas!`
                 : `${allProducts.length} atualizadas + ${editandoGrupoIds.length - allProducts.length} removidas!`;
-            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -1754,6 +1914,8 @@ export default function VendasPage() {
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
             setMsg(msgFinal);
+            setSkuAlertaAtivo(false);
+            skuOverrideRef.current = false;
             fetchVendas();
             fetchEstoque();
           }
@@ -1761,14 +1923,16 @@ export default function VendasPage() {
           // Edição simples (1 produto)
           const prod = allProducts[0];
           const payload = buildPayload(prod);
+          const body: Record<string, unknown> = { id: editandoVendaId, ...payload };
+          if (skuOverrideRef.current) body._sku_override = true;
           const res = await fetch("/api/vendas", {
             method: "PATCH",
             headers: { "Content-Type": "application/json", "x-admin-password": password },
-            body: JSON.stringify({ id: editandoVendaId, ...payload }),
+            body: JSON.stringify(body),
           });
           const json = await res.json();
           if (json.ok || json.data) {
-            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
+            setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false);
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
@@ -1796,10 +1960,26 @@ export default function VendasPage() {
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
             setMsg("Venda atualizada com sucesso!");
+            // Sucesso — resetar estado do alerta/override
+            setSkuAlertaAtivo(false);
+            skuOverrideRef.current = false;
             fetchVendas();
             fetchEstoque();
           } else {
-            setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido"));
+            // Se backend retornou SKU_DIVERGENTE, mostra mensagem detalhada.
+            // Senao, erro generico.
+            setMsg(
+              json.codigo === "SKU_DIVERGENTE"
+                ? formatSkuDivergenciaMsg(json)
+                : "Erro ao atualizar: " + (json.error || "erro desconhecido"),
+            );
+            if (json.codigo === "SKU_DIVERGENTE") {
+              setSkuAlertaAtivo(true);
+            } else {
+              // Erro diferente → limpa flag pra proximo save nao carregar override
+              setSkuAlertaAtivo(false);
+              skuOverrideRef.current = false;
+            }
           }
         }
       } catch {
@@ -1818,16 +1998,22 @@ export default function VendasPage() {
     let successCount = 0;
     const errors: string[] = [];
     const savedVendaIds: string[] = [];
+    // Acumula divergencias de SKU pra mostrar tudo de uma vez no final
+    // (multi-produto com varios erros SKU = 1 alerta consolidado).
+    const skuDivergenciasPost: SkuDivergencia[] = [];
 
     for (let i = 0; i < payloads.length; i++) {
       const payload = payloads[i];
       const prod = allProducts[i];
 
       try {
+        const bodyFinal = skuOverrideRef.current
+          ? { ...payload, _sku_override: true }
+          : payload;
         const res = await fetch("/api/vendas", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(bodyFinal),
         });
         const json = await res.json();
         if (json.ok) {
@@ -1836,10 +2022,14 @@ export default function VendasPage() {
           if (json.creditoDebitError) {
             errors.push(`⚠️ Crédito lojista: ${json.creditoDebitError}`);
           }
+        } else if (json.codigo === "SKU_DIVERGENTE") {
+          // Alerta: coleta e continua o loop pra reportar TODOS os SKUs
+          // divergentes de uma vez (evita admin salvar varias vezes).
+          skuDivergenciasPost.push(json);
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
-      } catch (err) {
+      } catch {
         // Network error during online attempt — save to offline queue
         addToQueue(payload);
         setOfflineCount(getQueueCount());
@@ -1847,7 +2037,15 @@ export default function VendasPage() {
       }
     }
 
+    // Se teve divergencias SKU, ativa o alerta agregado (setMsg vem depois)
+    if (skuDivergenciasPost.length > 0) {
+      setSkuAlertaAtivo(true);
+    }
+
     if (successCount > 0) {
+      // Sucesso — resetar estado do alerta/override pra nao carregar no proximo save
+      setSkuAlertaAtivo(false);
+      skuOverrideRef.current = false;
       setDuplicadoInfo(null);
       setLastClienteData(null);
       setProdutosCarrinho([]);
@@ -1881,12 +2079,16 @@ export default function VendasPage() {
       localStorage.removeItem("tigrao_venda_draft");
       const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
+      const totalFalhas = errors.length + skuDivergenciasPost.length;
+      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${totalFalhas > 0 ? ` (${totalFalhas} erro${totalFalhas > 1 ? "s" : ""})` : ""}`);
       fetchVendas();
       fetchEstoque();
       // NF é adicionada depois nas vendas pendentes, não no momento do registro
 
       // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
+    } else if (skuDivergenciasPost.length > 0) {
+      // Nenhuma venda registrada + todas bateram SKU_DIVERGENTE → alerta consolidado
+      setMsg(formatSkuDivergenciasMultiplas(skuDivergenciasPost));
     } else {
       setMsg("Erro: " + errors.join("; "));
     }
@@ -1911,12 +2113,12 @@ export default function VendasPage() {
       // CNPJ
       else if (lower.includes("cnpj")) {
         const m = line.match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2}/);
-        if (m) r.cnpj = m[0];
+        if (m) r.cnpj = maskCnpj(m[0]);
       }
       // CPF
       else if (lower.includes("cpf")) {
         const m = line.match(/\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2}/);
-        if (m) r.cpf = m[0];
+        if (m) r.cpf = maskCpf(m[0]);
       }
       // Email
       else if (lower.includes("e-mail") || lower.includes("email")) {
@@ -1926,12 +2128,12 @@ export default function VendasPage() {
       // Telefone
       else if (lower.includes("telefone") || lower.includes("celular") || lower.includes("whatsapp") || lower.includes("contato")) {
         const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/);
-        if (m) r.telefone = m[0];
+        if (m) r.telefone = maskTelefone(m[0]);
       }
       // CEP
       else if (lower.includes("cep")) {
         const m = line.match(/\d{5}[-.\s]?\d{3}/);
-        if (m) r.cep = m[0];
+        if (m) r.cep = maskCep(m[0]);
       }
       // Bairro
       else if (lower.includes("bairro")) {
@@ -2329,7 +2531,7 @@ export default function VendasPage() {
               </div>
               <button
                 onClick={() => {
-                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false);
                   setEditandoGrupoIds([]);
                   setProdutosCarrinho([]);
                   setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
@@ -2375,7 +2577,7 @@ export default function VendasPage() {
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
-                  setProdutosCarrinho([]); setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
+                  setProdutosCarrinho([]); setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
@@ -2493,7 +2695,47 @@ export default function VendasPage() {
             </div>
           )}
 
-          {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+          {msg && (
+            <div className={`px-4 py-3 rounded-xl text-sm whitespace-pre-line ${
+              skuAlertaAtivo
+                ? "bg-amber-50 text-amber-800 border border-amber-300"
+                : msg.includes("Erro") || msg.includes("🚫") || msg.includes("bloqueada")
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-green-50 text-green-700"
+            }`}>
+              <div>{msg}</div>
+              {skuAlertaAtivo && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      // Override: proxima submissao envia _sku_override=true e pula validacao.
+                      // Limpa msg + alerta e re-chama handleSubmit pra retentar o save.
+                      skuOverrideRef.current = true;
+                      setSkuAlertaAtivo(false);
+                      setMsg("");
+                      handleSubmit();
+                    }}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    ⚠️ Registrar mesmo assim
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Usuario quer corrigir a selecao — so limpa o alerta
+                      setSkuAlertaAtivo(false);
+                      skuOverrideRef.current = false;
+                      setMsg("");
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium border border-amber-400 text-amber-800 bg-white hover:bg-amber-50 transition-colors"
+                  >
+                    Corrigir seleção
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          <SkuFilterBanner />
 
           {/* Row 1: Data + Brinde */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2538,10 +2780,70 @@ export default function VendasPage() {
                 />
                 {showLojistaSuggestions && (() => {
                   const term = form.cliente.trim().toLowerCase();
-                  const lista = (term.length === 0
-                    ? lojistas
-                    : lojistas.filter(l => (l.nome || "").toLowerCase().includes(term))
-                  ).slice(0, 8);
+                  type LojistaItem = {
+                    id: string; nome: string;
+                    cpf: string | null; cnpj: string | null;
+                    email: string | null; telefone: string | null;
+                    endereco: string | null; cep: string | null;
+                    bairro: string | null; cidade: string | null; uf: string | null;
+                    saldo_credito: number;
+                    fonte: "lojistas" | "vendas";
+                  };
+                  // Fonte A: tabela `lojistas` (cadastro formal)
+                  const porLojistas: LojistaItem[] = lojistas.map(l => ({
+                    id: l.id,
+                    nome: l.nome,
+                    cpf: l.cpf || null,
+                    cnpj: l.cnpj || null,
+                    email: l.email || null,
+                    telefone: l.telefone || null,
+                    endereco: l.endereco || null,
+                    cep: l.cep || null,
+                    bairro: l.bairro || null,
+                    cidade: l.cidade || null,
+                    uf: l.uf || null,
+                    saldo_credito: l.saldo_credito || 0,
+                    fonte: "lojistas",
+                  }));
+                  // Fonte B: vendas com tipo/origem ATACADO — clientes que compraram
+                  // no atacado mas nao tem cadastro em `lojistas`. Sem isso, nomes
+                  // como JMS IMPORTS (so em vendas) nao apareciam no autocomplete.
+                  const nomesLojistas = new Set(porLojistas.map(p => (p.nome || "").toLowerCase().trim()));
+                  const porVendas = new Map<string, LojistaItem>();
+                  for (const v of vendas) {
+                    const ehAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
+                    if (!ehAtacado || !v.cliente) continue;
+                    const key = v.cliente.toLowerCase().trim();
+                    if (nomesLojistas.has(key) || porVendas.has(key)) continue;
+                    porVendas.set(key, {
+                      id: `venda-${key}`,
+                      nome: v.cliente,
+                      cpf: v.cpf || null,
+                      cnpj: v.cnpj || null,
+                      email: v.email || null,
+                      telefone: v.telefone || null,
+                      endereco: v.endereco || null,
+                      cep: v.cep || null,
+                      bairro: v.bairro || null,
+                      cidade: null,
+                      uf: null,
+                      saldo_credito: 0,
+                      fonte: "vendas",
+                    });
+                  }
+                  const todos = [...porLojistas, ...Array.from(porVendas.values())];
+                  // Filtra + ordena: match startsWith primeiro, depois includes
+                  const filtrados = term.length === 0
+                    ? todos
+                    : todos.filter(l => (l.nome || "").toLowerCase().includes(term));
+                  const ordenados = filtrados.sort((a, b) => {
+                    const aStarts = (a.nome || "").toLowerCase().startsWith(term);
+                    const bStarts = (b.nome || "").toLowerCase().startsWith(term);
+                    if (aStarts && !bStarts) return -1;
+                    if (!aStarts && bStarts) return 1;
+                    return (a.nome || "").localeCompare(b.nome || "");
+                  });
+                  const lista = ordenados.slice(0, 15);
                   if (lista.length === 0) return null;
                   return (
                     <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[220px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
@@ -2553,8 +2855,15 @@ export default function VendasPage() {
                           onMouseDown={(e) => {
                             e.preventDefault();
                             set("cliente", (l.nome || "").toUpperCase());
-                            if (l.cpf) set("cpf", l.cpf);
-                            if (l.cnpj) set("cnpj", l.cnpj);
+                            if (l.cpf) set("cpf", maskCpf(l.cpf));
+                            if (l.cnpj) { set("cnpj", maskCnpj(l.cnpj)); set("pessoa", "PJ"); }
+                            if (l.email) set("email", l.email);
+                            if (l.telefone) set("telefone", maskTelefone(l.telefone));
+                            if (l.endereco) set("endereco", l.endereco);
+                            if (l.cep) set("cep", maskCep(l.cep));
+                            if (l.bairro) set("bairro", l.bairro);
+                            if (l.cidade) set("cidade", l.cidade);
+                            if (l.uf) set("uf", l.uf);
                             setShowLojistaSuggestions(false);
                           }}
                           className="w-full px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors border-b border-[#F5F5F7] last:border-0"
@@ -2687,11 +2996,11 @@ export default function VendasPage() {
                               set("forma", c.forma);
                               set("banco", c.banco);
                               if (c.pessoa) set("pessoa", c.pessoa);
-                              if (c.cpf) set("cpf", c.cpf);
-                              if (c.cnpj) set("cnpj", c.cnpj);
+                              if (c.cpf) set("cpf", maskCpf(c.cpf));
+                              if (c.cnpj) set("cnpj", maskCnpj(c.cnpj));
                               if (c.email) set("email", c.email);
                               if (c.endereco) set("endereco", c.endereco);
-                              if (c.cep) set("cep", c.cep);
+                              if (c.cep) set("cep", maskCep(c.cep));
                               if (c.bairro) set("bairro", c.bairro);
                               if (c.cidade) set("cidade", c.cidade);
                               if (c.uf) set("uf", c.uf);
@@ -2737,12 +3046,12 @@ export default function VendasPage() {
                   )}
                 </div>
                 {form.pessoa === "PJ" ? (
-                  <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputCls} /></div>
+                  <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", maskCnpj(e.target.value))} placeholder="00.000.000/0000-00" className={inputCls} /></div>
                 ) : (
-                  <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
+                  <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", maskCpf(e.target.value))} placeholder="000.000.000-00" className={inputCls} /></div>
                 )}
                 <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
-                <div><p className={labelCls}>WhatsApp</p><input type="tel" value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(21) 99999-9999" className={inputCls} /></div>
+                <div><p className={labelCls}>WhatsApp</p><input type="tel" value={form.telefone} onChange={(e) => set("telefone", maskTelefone(e.target.value))} placeholder="(21) 99999-9999" className={inputCls} /></div>
               </div>
 
               {/* Historico do Cliente */}
@@ -3022,19 +3331,50 @@ export default function VendasPage() {
                     <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{serialBusca.trim() ? "Nenhum produto com esse serial" : "Nenhum produto disponivel nesta categoria"}</div>
                   );
 
-                  // Extrair cor do nome do produto
+                  // Extrair cor do nome do produto.
+                  // Pega o que vem APOS o ULTIMO storage (GB/TB) — em produtos
+                  // com RAM+SSD (MacBook: "8GB 512GB Azul"), o ultimo e o SSD
+                  // que fica imediatamente antes da cor.
+                  // Bug fixado: regex antiga /\d+GB\s+/ exigia espaco depois, entao
+                  // em "MacBook Neo 13 8GB 512GB" (sem cor no nome), split pegava
+                  // so "8GB " como separador e retornava "512GB" como cor.
                   const extractCor = (nome: string) => {
-                    const after = nome.split(/\d+GB\s+/)[1];
+                    const matches = [...nome.matchAll(/\d+(GB|TB)\b/gi)];
+                    if (matches.length === 0) return null;
+                    const last = matches[matches.length - 1];
+                    const after = nome.slice(last.index! + last[0].length).trim();
                     if (!after) return null;
-                    return after.split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]?.trim() || null;
+                    const candidato = after
+                      .split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]
+                      ?.trim() || null;
+                    // Rejeita se o "candidato" ainda parece storage — nome do
+                    // produto nao tem cor cadastrada. Admin deve usar p.cor.
+                    if (candidato && /^\d+(GB|TB)$/i.test(candidato)) return null;
+                    return candidato;
+                  };
+
+                  // Fallback final quando nem p.cor nem nome do produto tem cor:
+                  // extrai dos segmentos nao-classificaveis do SKU canonico.
+                  // Ex: MACBOOK-NEO-13-8GB-512GB-AZUL → cor "AZUL" (Pt: "Azul")
+                  const extractCorSku = (sku: string | null | undefined) => {
+                    if (!sku) return null;
+                    const parsed = parseSku(sku);
+                    if (!parsed) return null;
+                    const isSpec = (s: string) =>
+                      /^\d+(GB|TB|MM)$/.test(s) ||
+                      /^M\d+/.test(s) ||
+                      (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+                      ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
+                    const corSegs = parsed.specs.filter((s) => !isSpec(s));
+                    return corSegs.length > 0 ? corSegs.join("-") : null;
                   };
 
                   // Extrair modelo base (sem cor) pra agrupar cores num card só.
                   // Usa getModeloBase do lib/produto-display (mesma lógica do estoque):
                   // Watch inclui tamanho + conectividade (GPS/GPS+CEL) e corrige SE→Series 11 em 46/49mm;
                   // MacBook inclui RAM+SSD; iPhone/iPad incluem storage.
-                  const extractModeloBase = (nome: string, categoria: string) => {
-                    return getModeloBase(nome, categoria);
+                  const extractModeloBase = (nome: string, categoria: string, observacao?: string | null) => {
+                    return getModeloBase(nome, categoria, observacao);
                   };
 
                   // Reagrupar: modelo base → cores → itens
@@ -3042,8 +3382,12 @@ export default function VendasPage() {
                   for (const key of grupoKeys) {
                     const itens = grupos[key];
                     for (const p of itens) {
-                      const base = extractModeloBase(stripOrigemVendas(p.produto), p.categoria || "");
-                      const cor = p.cor || extractCor(p.produto) || "—";
+                      const base = extractModeloBase(stripOrigemVendas(p.produto), p.categoria || "", p.observacao);
+                      // Cor: ordem de confiabilidade — p.cor > nome > SKU > "—"
+                      const cor = p.cor
+                        || extractCor(p.produto)
+                        || extractCorSku(p.sku)
+                        || "—";
                       if (!porModelo[base]) porModelo[base] = {};
                       if (!porModelo[base][cor]) porModelo[base][cor] = [];
                       porModelo[base][cor].push(p);
@@ -3182,23 +3526,36 @@ export default function VendasPage() {
                     venda sem nome. Agora: sempre que form.produto OU estoqueId OU
                     editandoVendaId, mostra um INPUT editavel pra ver e ajustar o nome
                     manualmente (recuperacao de corrupcao e input manual). */}
-                {(estoqueId || form.produto || editandoVendaId) && (
+                {(estoqueId || form.produto || editandoVendaId) && (() => {
+                  // Se a venda em edicao veio de formulario preenchido, trava o
+                  // produto (cliente ja escolheu o que quer) — admin so deve
+                  // vincular qual UNIDADE FISICA sai, nao trocar o modelo.
+                  const travarProduto = statusPagamentoOriginal === "FORMULARIO_PREENCHIDO";
+                  return (
                   <div className="px-4 py-2.5 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl flex items-center gap-3">
                     <input
                       type="text"
                       value={form.produto}
                       onChange={(e) => {
+                        if (travarProduto) return; // produto do formulario nao edita
                         set("produto", e.target.value);
                         // Se admin edita o nome manualmente, desvincula do estoque
                         // (estoque_id anterior sera devolvido no PATCH via estoqueIdOriginal).
                         if (estoqueId) setEstoqueId("");
                         setProdutoManual(true);
                       }}
+                      readOnly={travarProduto}
                       placeholder="Nome do produto (ou use Buscar Serial acima)"
-                      className="flex-1 bg-transparent text-white text-sm font-medium placeholder-white/30 outline-none border-b border-white/10 focus:border-[#F5A623] pb-0.5"
+                      title={travarProduto ? "Produto escolhido pelo cliente no formulário — só dá pra vincular unidade do estoque" : undefined}
+                      className={`flex-1 bg-transparent text-white text-sm font-medium placeholder-white/30 outline-none border-b pb-0.5 ${
+                        travarProduto ? "border-white/20 cursor-not-allowed" : "border-white/10 focus:border-[#F5A623]"
+                      }`}
                     />
+                    {travarProduto && (
+                      <span title="Travado — produto do formulário do cliente" className="text-[10px] text-white/60 shrink-0">🔒</span>
+                    )}
                     <span className="text-[#F5A623] text-sm font-bold shrink-0">{fmt(parseFloat(form.custo) || 0)}</span>
-                    {form.produto && (
+                    {form.produto && !travarProduto && (
                       <button
                         type="button"
                         onClick={() => {
@@ -3213,7 +3570,209 @@ export default function VendasPage() {
                       </button>
                     )}
                   </div>
-                )}
+                  );
+                })()}
+
+                {/* Unidades disponiveis no estoque com mesmo SKU da venda em
+                    edicao — aparece quando admin esta convertendo formulario
+                    preenchido em venda. Permite clicar pra escolher qual
+                    unidade fisica sai (em vez de digitar/bipar manualmente). */}
+                {statusPagamentoOriginal === "FORMULARIO_PREENCHIDO" && editandoVendaId && (() => {
+                  const vendaEdicao = vendas.find(v => v.id === editandoVendaId);
+                  const skuVendaPersistido = (vendaEdicao as unknown as { sku?: string | null } | undefined)?.sku || null;
+                  // Gera SKU do texto da venda AGORA (pode diferir do persistido
+                  // quando venda e antiga ou quando texto foi editado manualmente).
+                  // Isso garante que o match use o SKU mais atualizado.
+                  const produtoTexto = vendaEdicao?.produto || "";
+                  const skuVendaInferido = gerarSkuSafe({
+                    produto: produtoTexto,
+                    categoria: detectarCategoriaPorTexto(produtoTexto),
+                    cor: null,
+                    observacao: null,
+                    tipo: "NOVO",
+                  });
+                  // Lista de SKUs a tentar (ordenados por confiabilidade)
+                  const skusAlvo = [skuVendaPersistido, skuVendaInferido]
+                    .filter(Boolean)
+                    .map(s => s!.toUpperCase());
+                  if (skusAlvo.length === 0) return null;
+
+                  const unidades = estoque.filter((p) => {
+                    if (p.qnt <= 0 || p.status !== "EM ESTOQUE") return false;
+                    // Escape hatch: admin clicou "Mostrar todas" — ignora filtro
+                    if (verTodasUnidadesEstoque) return true;
+                    // Match A: SKU persistido do estoque (backfill)
+                    const skuEstoquePersistido = (p.sku || "").toUpperCase();
+                    if (skuEstoquePersistido && skusAlvo.includes(skuEstoquePersistido)) return true;
+                    // Match B: gera SKU do texto do estoque e compara — cobre itens
+                    // sem SKU persistido (ex: unidade nova cadastrada depois do
+                    // backfill) ou backfill que falhou pra aquela row.
+                    const skuEstoqueInferido = gerarSkuSafe({
+                      produto: p.produto || "",
+                      categoria: p.categoria || "",
+                      cor: p.cor ?? null,
+                      observacao: null,
+                      tipo: p.tipo === "SEMINOVO" ? "SEMINOVO" : "NOVO",
+                    });
+                    const skuEstoqueFinal = skuEstoqueInferido?.toUpperCase() || skuEstoquePersistido;
+                    if (skuEstoqueFinal && skusAlvo.includes(skuEstoqueFinal)) return true;
+                    // Match C (prefixo): SKU da venda pode estar incompleto (ex:
+                    // "IPHONE-17-256GB" sem cor, de venda legada). Se o SKU do
+                    // estoque comeca com o SKU da venda + "-", considera compativel
+                    // — estoque so tem mais detalhe (cor). Cobre caso reportado:
+                    //   venda: IPHONE-17-256GB
+                    //   estoque: IPHONE-17-256GB-PRETO → ✅ aparece pra escolher
+                    if (skuEstoqueFinal) {
+                      for (const alvo of skusAlvo) {
+                        if (skuEstoqueFinal === alvo) return true;
+                        if (skuEstoqueFinal.startsWith(alvo + "-")) return true;
+                        if (alvo.startsWith(skuEstoqueFinal + "-")) return true;
+                      }
+                    }
+                    // Match D (componentes essenciais): quando SKUs diferem em
+                    // chip/variante mas batem em modelo base + storage + cor,
+                    // considera compativel. Cobre caso reportado:
+                    //   venda: MACBOOK-NEO-13-8GB-512GB-PRATA (formulario simples)
+                    //   estoque: MACBOOK-NEO-A18-PRO-13-8GB-512GB-PRATA (completo)
+                    // Match C nao cobre pq "A18-PRO" ta no meio, nao no fim.
+                    if (skuEstoqueFinal) {
+                      const parsedEst = parseSku(skuEstoqueFinal);
+                      if (parsedEst) {
+                        const isSpecForCor = (s: string) =>
+                          /^\d+(GB|TB|MM)$/.test(s) ||
+                          /^M\d+/.test(s) ||
+                          (/^\d+$/.test(s) && Number(s) >= 10 && Number(s) <= 17) ||
+                          ["GPS", "GPSCEL", "WIFI", "CELL", "SEMINOVO", "ANC"].includes(s);
+                        // Pega o MAIOR storage (SSD em MacBook — diferencial
+                        // comercial). Pegar o primeiro pegaria RAM (8GB) que
+                        // bate em TODOS os MacBooks e daria match falso-positivo.
+                        const getStorage = (specs: string[]) => {
+                          const storages = specs.filter(s => /^\d+(GB|TB)$/.test(s));
+                          if (storages.length === 0) return null;
+                          return storages.sort((a, b) => {
+                            const valA = a.endsWith("TB") ? parseInt(a) * 1024 : parseInt(a);
+                            const valB = b.endsWith("TB") ? parseInt(b) * 1024 : parseInt(b);
+                            return valB - valA;
+                          })[0];
+                        };
+                        const getCor = (specs: string[]) => specs.filter(s => !isSpecForCor(s)).join("-") || null;
+                        const estStorage = getStorage(parsedEst.specs);
+                        const estCor = getCor(parsedEst.specs);
+                        for (const alvo of skusAlvo) {
+                          const parsedAlv = parseSku(alvo);
+                          if (!parsedAlv) continue;
+                          // Categoria tem que bater
+                          if (parsedAlv.categoria !== parsedEst.categoria) continue;
+                          // Modelo base compativel: um e subset do outro (ex:
+                          // MACBOOK-NEO ⊂ MACBOOK-NEO-A18-PRO)
+                          const modeloCompat = parsedAlv.modelo === parsedEst.modelo
+                            || parsedEst.modelo.startsWith(parsedAlv.modelo + "-")
+                            || parsedAlv.modelo.startsWith(parsedEst.modelo + "-");
+                          if (!modeloCompat) continue;
+                          // Storage (SSD) bate (ou um dos lados nao tem)
+                          const alvStorage = getStorage(parsedAlv.specs);
+                          const alvCor = getCor(parsedAlv.specs);
+                          const storageOk = !alvStorage || !estStorage || alvStorage === estStorage;
+                          const corOk = !alvCor || !estCor || alvCor === estCor;
+                          if (storageOk && corOk) return true;
+                        }
+                      }
+                    }
+                    return false;
+                  });
+
+                  if (unidades.length === 0) {
+                    return (
+                      <div className={`mt-2 p-3 rounded-xl text-xs space-y-2 ${dm ? "bg-red-900/20 text-red-300 border border-red-900/40" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                        <p>
+                          ⚠️ Nenhuma unidade desse produto em estoque ainda.
+                          Encomende antes de registrar a venda.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setVerTodasUnidadesEstoque(true)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:bg-[#3A3A3C]" : "bg-white text-[#1D1D1F] border border-[#D2D2D7] hover:border-red-400"}`}
+                        >
+                          🔓 Mostrar todas as unidades do estoque
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className={`mt-2 p-3 rounded-xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-[#FFF8F0] border border-[#E8740E]/30"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className={`text-xs font-bold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>
+                          📦 {unidades.length} {unidades.length === 1 ? "unidade disponível" : verTodasUnidadesEstoque ? "unidades (TODO o estoque)" : "unidades disponíveis"} — clique pra selecionar
+                        </p>
+                        {verTodasUnidadesEstoque && (
+                          <button
+                            type="button"
+                            onClick={() => setVerTodasUnidadesEstoque(false)}
+                            className={`text-[10px] px-2 py-0.5 rounded-lg border ${dm ? "border-[#3A3A3C] text-[#98989D] hover:text-[#F5A623]" : "border-[#D2D2D7] text-[#86868B] hover:text-[#E8740E]"}`}
+                          >
+                            Filtrar só este SKU
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {unidades.map((p) => {
+                          const isSelected = estoqueId === p.id;
+                          const codigo = p.serial_no || p.imei || p.id.slice(0, 8);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                // Vincula essa unidade especifica — preenche estoque_id,
+                                // custo, fornecedor, serial/imei. Nao mexe no produto
+                                // (ta travado em FORMULARIO_PREENCHIDO).
+                                setEstoqueId(p.id);
+                                set("custo", String(Math.round(p.custo_unitario || 0)));
+                                if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                if (p.serial_no) { set("serial_no", p.serial_no); setSerialBusca(p.serial_no); }
+                                if (p.imei) { set("imei", p.imei); if (!p.serial_no) setSerialBusca(p.imei); }
+                              }}
+                              className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                isSelected
+                                  ? "bg-[#E8740E] text-white"
+                                  : dm
+                                    ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:bg-[#3A3A3C]"
+                                    : "bg-white text-[#1D1D1F] border border-[#D2D2D7] hover:border-[#E8740E]"
+                              }`}
+                              title={`Custo: ${fmt(p.custo_unitario || 0)}${p.fornecedor ? ` · Forn: ${p.fornecedor}` : ""}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{isSelected ? "✓" : "📱"}</span>
+                                <div className="flex flex-col items-start gap-0.5">
+                                  {/* Quando admin ve TODAS as unidades, mostra
+                                      produto+cor pra ele identificar (senao
+                                      so o serial e suficiente, todas sao do
+                                      mesmo modelo). */}
+                                  {verTodasUnidadesEstoque && (
+                                    <span className={`text-[10px] font-semibold ${isSelected ? "text-white" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>
+                                      {p.produto}
+                                    </span>
+                                  )}
+                                  <span className="font-mono text-[11px]">{codigo}</span>
+                                  {p.fornecedor && (
+                                    <span className={`text-[9px] ${isSelected ? "text-white/80" : (dm ? "text-[#98989D]" : "text-[#86868B]")}`}>
+                                      {p.fornecedor}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {estoqueId && (
+                        <p className={`text-[10px] mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                          ✓ Unidade vinculada. Pode registrar a venda.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
             {/* Serial No. e IMEI movidos para seção de troca */}
@@ -3249,7 +3808,7 @@ export default function VendasPage() {
                   setProdutosCarrinho([]);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
-                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
+                  setEditandoVendaId(null); setEstoqueIdOriginal(null); setStatusPagamentoOriginal(null); setVerTodasUnidadesEstoque(false); setEditandoGrupoIds([]); setDuplicadoInfo(null);
                   setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada(""); setMultiDatePagamento(false); setPagEntries([]);
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
@@ -3264,8 +3823,8 @@ export default function VendasPage() {
               <button
                 onClick={() => {
                   set("cliente", lastClienteData.cliente);
-                  set("cpf", lastClienteData.cpf);
-                  set("cnpj", lastClienteData.cnpj);
+                  set("cpf", maskCpf(lastClienteData.cpf));
+                  set("cnpj", maskCnpj(lastClienteData.cnpj));
                   set("email", lastClienteData.email);
                   set("endereco", lastClienteData.endereco);
                   set("pessoa", lastClienteData.pessoa);
@@ -4500,8 +5059,9 @@ export default function VendasPage() {
             );
           })()}
 
-          {/* Toggle Programar Venda */}
-          {!editandoVendaId && (
+          {/* Toggle Programar Venda — visivel tambem em edicao pra
+              admin remover/mudar agendamento de venda ja finalizada */}
+          {(
             <div className={`p-3 rounded-xl border space-y-3 ${vendaProgramada ? (dm ? "border-purple-500 bg-purple-900/20" : "border-purple-400 bg-purple-50") : dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -4707,6 +5267,11 @@ export default function VendasPage() {
           ).filter(v => !filtroBrinde || v.is_brinde);
           // Aplicar filtro de pendencia (se ativo)
           const filteredRaw = filteredRawSemPendencia.filter(v => {
+            // Filtro SKU via URL (?sku=X) tem prioridade — restringe tudo
+            if (skuFilter) {
+              const vSku = ((v as unknown as { sku?: string | null }).sku || "").toUpperCase();
+              if (vSku !== skuFilter) return false;
+            }
             if (pendenciaFilter === "nf") return isNFPendente(v);
             if (pendenciaFilter === "termo") return isTermoPendente(v);
             return true;
@@ -5209,7 +5774,7 @@ export default function VendasPage() {
                                 {v.is_brinde && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-pink-100 text-pink-700">BRINDE</span>}
                               </td>
                               <td className="px-3 py-2.5 max-w-[220px] text-xs">
-                                <span className="truncate block whitespace-nowrap">{normalizarCoresNoTexto(v.produto)}</span>
+                                <span className="truncate block whitespace-nowrap">{normalizarCoresNoTexto(buildProdutoDisplay(v))}</span>
                                 {isFirstInGrupo && (
                                   <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E]">📦 {grupoItens.length} itens</span>
                                 )}
@@ -5611,10 +6176,10 @@ export default function VendasPage() {
                                             setForm({
                                               data: primaryVenda.data || hojeBR(),
                                               cliente: primaryVenda.cliente,
-                                              cpf: primaryVenda.cpf || "",
-                                              cnpj: primaryVenda.cnpj || "",
+                                              cpf: maskCpf(primaryVenda.cpf || ""),
+                                              cnpj: maskCnpj(primaryVenda.cnpj || ""),
                                               email: primaryVenda.email || "",
-                                              telefone: primaryVenda.telefone || "",
+                                              telefone: maskTelefone(primaryVenda.telefone || ""),
                                               endereco: primaryVenda.endereco || "",
                                               pessoa: (primaryVenda.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
                                               origem: primaryVenda.origem || "",
@@ -5683,7 +6248,7 @@ export default function VendasPage() {
                                               troca_condicao2: (primaryVenda as unknown as Record<string, string>).troca_condicao2 || "SEMINOVO",
                                               serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
                                               imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
-                                              cep: primaryVenda.cep || "",
+                                              cep: maskCep(primaryVenda.cep || ""),
                                               bairro: primaryVenda.bairro || "",
                                               cidade: primaryVenda.cidade || "",
                                               uf: primaryVenda.uf || "",
@@ -6272,15 +6837,29 @@ export default function VendasPage() {
                                               const qtdProdutos = grupoIds.length;
                                               const pluralTxt = qtdProdutos > 1 ? `de ${qtdProdutos} produtos` : "";
                                               let devolverComoCredito = false;
+                                              const detalhesPadrao = "- Marca como cancelada\n- Devolve produto(s) ao estoque\n- Remove o seminovo (se houver troca)";
                                               if (isLojista) {
                                                 const valorTotal = vendas.filter(gv => grupoIds.includes(gv.id)).reduce((s, gv) => s + Number(gv.preco_vendido || 0), 0);
-                                                const r = confirm(`Cancelar venda ${pluralTxt} de ${v.cliente}?\n\n✅ OK = Manter valor como CRÉDITO para o lojista (R$ ${valorTotal.toLocaleString("pt-BR")})\n❌ Cancelar = apenas cancelar SEM creditar`);
-                                                if (r) devolverComoCredito = true;
-                                                else {
-                                                  if (!confirm(`Cancelar ${pluralTxt} SEM creditar?\n\nIsso vai:\n- Marcar como cancelada\n- Devolver produto(s) ao estoque\n- Remover o seminovo do estoque (se houver troca)`)) return;
-                                                }
+                                                const escolha = await perguntar({
+                                                  title: `Cancelar venda ${pluralTxt} de ${v.cliente}?`,
+                                                  body: `Cliente atacado — o que fazer com o valor?\n\n${detalhesPadrao}`,
+                                                  options: [
+                                                    { label: `Creditar R$ ${valorTotal.toLocaleString("pt-BR")} pro lojista`, value: "creditar", variant: "primary" },
+                                                    { label: "Cancelar sem creditar", value: "sem_credito", variant: "danger" },
+                                                    { label: "Voltar", value: "voltar", variant: "default" },
+                                                  ],
+                                                });
+                                                if (!escolha || escolha === "voltar") return;
+                                                devolverComoCredito = escolha === "creditar";
                                               } else {
-                                                if (!confirm(`Cancelar venda ${pluralTxt} de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Devolver produto(s) ao estoque\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                                const ok = await confirmar({
+                                                  title: `Cancelar venda ${pluralTxt} de ${v.cliente}?`,
+                                                  body: detalhesPadrao,
+                                                  confirmLabel: "Cancelar venda",
+                                                  cancelLabel: "Voltar",
+                                                  variant: "danger",
+                                                });
+                                                if (!ok) return;
                                               }
                                               let allOk = true;
                                               for (const vid of grupoIds) {
@@ -6573,7 +7152,7 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
                                       <div className="text-xs space-y-1">
-                                        <p><strong>Produto:</strong> {normalizarCoresNoTexto(v.produto)}</p>
+                                        <p><strong>Produto:</strong> {normalizarCoresNoTexto(buildProdutoDisplay(v))}</p>
                                         <p>
                                           <strong>Serial No.:</strong>{" "}
                                           {editingId === v.id + "-serial" ? (

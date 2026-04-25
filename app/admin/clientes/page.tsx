@@ -79,6 +79,147 @@ interface Estorno {
   contato_tipo: string | null;
 }
 
+// Form de edicao de contato com state INTERNO — antes cada keypress disparava
+// setEditForm no pai, que re-renderizava a tabela inteira de clientes (200+
+// rows), travando o digitar. Agora o pai so recebe os dados novos quando o
+// operador clica "Salvar".
+const EditContatoFields = React.memo(function EditContatoFields({
+  cliente,
+  mInput,
+  onSubmit,
+  onCancel,
+  saving,
+  totalCompras,
+  totalGasto,
+  saldoCredito,
+  clienteDesde,
+  dm,
+}: {
+  cliente: { nome: string; cpf: string | null; email: string | null; bairro: string | null; cidade: string | null; uf: string | null };
+  mInput: string;
+  onSubmit: (dados: { nome: string; cpf: string; email: string; bairro: string; cidade: string; uf: string }) => void;
+  onCancel: () => void;
+  saving: boolean;
+  totalCompras: number;
+  totalGasto: number;
+  saldoCredito: number | null;
+  clienteDesde: string | null;
+  dm: boolean;
+}) {
+  const [form, setForm] = useState({
+    nome: cliente.nome || "",
+    cpf: cliente.cpf || "",
+    email: cliente.email || "",
+    bairro: cliente.bairro || "",
+    cidade: cliente.cidade || "",
+    uf: cliente.uf || "",
+  });
+  const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+  const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+  return (
+    <>
+      <div className={`mx-5 mt-4 p-4 rounded-xl border ${mSec}`}>
+        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Nome do Contato</p>
+        <input value={form.nome} onChange={(e) => setForm(f => ({ ...f, nome: e.target.value }))} className={mInput} />
+      </div>
+      <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+        <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes de Contato</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Documento</p>
+            <input value={form.cpf} onChange={(e) => setForm(f => ({ ...f, cpf: e.target.value }))} className={mInput} placeholder="CPF ou CNPJ" />
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Email</p>
+            <input value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} className={mInput} placeholder="email@exemplo.com" />
+          </div>
+        </div>
+      </div>
+      <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+        <p className={`text-xs font-bold ${mP} mb-3`}>Endereco</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Estado</p>
+            <input value={form.uf} onChange={(e) => setForm(f => ({ ...f, uf: e.target.value }))} className={mInput} placeholder="UF" />
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cidade</p>
+            <input value={form.cidade} onChange={(e) => setForm(f => ({ ...f, cidade: e.target.value }))} className={mInput} placeholder="Cidade" />
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bairro</p>
+            <input value={form.bairro} onChange={(e) => setForm(f => ({ ...f, bairro: e.target.value }))} className={mInput} placeholder="Bairro" />
+          </div>
+        </div>
+      </div>
+      <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+        <p className={`text-xs font-bold ${mP} mb-3`}>Resumo Financeiro</p>
+        <div className={`grid ${saldoCredito !== null ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Compras</p>
+            <p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{totalCompras}</p>
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Gasto</p>
+            <p className="text-[14px] font-bold text-green-600 mt-0.5">{fmt(totalGasto)}</p>
+          </div>
+          {saldoCredito !== null && (
+            <div>
+              <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Saldo Credito</p>
+              <p className={`text-[14px] font-bold mt-0.5 ${saldoCredito > 0 ? "text-blue-600" : mS}`}>
+                {saldoCredito > 0 ? fmt(saldoCredito) : "R$ 0"}
+              </p>
+            </div>
+          )}
+          {clienteDesde && (
+            <div>
+              <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cliente Desde</p>
+              <p className={`text-[13px] font-semibold ${mP} mt-0.5`}>{clienteDesde}</p>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mx-5 mt-4 flex gap-3">
+        <button onClick={() => onSubmit(form)} disabled={saving} className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] disabled:opacity-50">
+          {saving ? "Salvando..." : "Salvar Alteracoes"}
+        </button>
+        <button onClick={onCancel} className={`flex-1 py-3 rounded-xl text-sm font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"}`}>
+          Cancelar
+        </button>
+      </div>
+    </>
+  );
+});
+
+// Lista memoizada de vendas no modal de detalhes — so re-renderiza quando
+// detailVendas muda. Antes o map inline renderizava 85+ divs a cada keypress
+// em qualquer input do form, travando o digitar.
+const UltimasOperacoesList = React.memo(function UltimasOperacoesList({
+  detailVendas,
+  dm,
+}: { detailVendas: VendaResumo[]; dm: boolean }) {
+  const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+  return (
+    <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+      {detailVendas.map((v) => (
+        <div key={v.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E] hover:bg-[#252525]" : "bg-white hover:bg-[#F5F5F7]"} transition-colors`}>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <span className={`shrink-0 ${mS}`}>{fmtDate(v.data)}</span>
+            <span className={`font-medium truncate ${mP}`}>{v.produto}</span>
+            {v.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {v.serial_no}</span>}
+          </div>
+          <div className="flex items-center gap-3 shrink-0 ml-2">
+            <span className={mS}>{v.forma} · {v.banco}</span>
+            <span className="font-bold text-green-600 w-20 text-right">{fmt(v.preco_vendido)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
+
 function EstornosSection({ contatoNome, apiHeaders, dm }: { contatoNome: string; apiHeaders: () => HeadersInit; dm: boolean }) {
   const [estornos, setEstornos] = useState<Estorno[]>([]);
   const [loading, setLoading] = useState(false);
@@ -160,7 +301,6 @@ export default function ClientesPage() {
   const [detailVendas, setDetailVendas] = useState<VendaResumo[]>([]);
   const [loadingVendas, setLoadingVendas] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ nome: "", cpf: "", email: "", bairro: "", cidade: "", uf: "", cep: "", endereco: "" });
   const [savingClient, setSavingClient] = useState(false);
   const [totals, setTotals] = useState({ total: 0, total_gasto: 0, total_compras: 0, total_investido: 0, total_em_estoque: 0, total_produtos: 0 });
   const [sortBy, setSortBy] = useState<"gasto" | "compras" | "nome" | "recente">("gasto");
@@ -1134,41 +1274,39 @@ export default function ClientesPage() {
         const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
         const mInput = `w-full px-3 py-2 rounded-lg border text-sm ${dm ? "bg-[#3A3A3C] border-[#4A4A4C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:outline-none focus:border-[#E8740E]`;
 
-        const openEdit = () => {
-          setEditForm({
-            nome: c.nome || "", cpf: c.cpf || "", email: c.email || "",
-            bairro: c.bairro || "", cidade: c.cidade || "", uf: c.uf || "",
-            cep: "", endereco: "",
-          });
-          setEditing(true);
-        };
+        const openEdit = () => { setEditing(true); };
 
-        const saveEdit = async () => {
+        // Recebe os dados do form filho (state local do EditContatoFields).
+        // Antes tinha state editForm no pai e cada keypress disparava re-render
+        // da tabela inteira de clientes, travando o digitar.
+        const saveEditFromForm = async (dados: { nome: string; cpf: string; email: string; bairro: string; cidade: string; uf: string }) => {
+          const camposMudados: Record<string, string | null> = {};
+          if (dados.cpf !== (c.cpf || "")) camposMudados.cpf = dados.cpf || null;
+          if (dados.email !== (c.email || "")) camposMudados.email = dados.email || null;
+          if (dados.bairro !== (c.bairro || "")) camposMudados.bairro = dados.bairro || null;
+          if (dados.cidade !== (c.cidade || "")) camposMudados.cidade = dados.cidade || null;
+          if (dados.uf !== (c.uf || "")) camposMudados.uf = dados.uf || null;
+          const renomeou = dados.nome && dados.nome.toUpperCase() !== (c.nome || "").toUpperCase();
+          if (Object.keys(camposMudados).length === 0 && !renomeou) {
+            setEditing(false); setDetailClient(null); return;
+          }
           setSavingClient(true);
-          for (const v of detailVendas) {
-            const updates: Record<string, string | null> = {};
-            if (editForm.nome && editForm.nome !== c.nome) updates.cliente = editForm.nome.toUpperCase();
-            if (editForm.cpf !== (c.cpf || "")) updates.cpf = editForm.cpf || null;
-            if (editForm.email !== (c.email || "")) updates.email = editForm.email || null;
-            if (editForm.bairro !== (c.bairro || "")) updates.bairro = editForm.bairro || null;
-            if (editForm.cidade !== (c.cidade || "")) updates.cidade = editForm.cidade || null;
-            if (editForm.uf !== (c.uf || "")) updates.uf = editForm.uf || null;
-            if (Object.keys(updates).length > 0) {
-              await fetch("/api/estoque", {
-                method: "PATCH",
-                headers: { ...apiHeaders(), "Content-Type": "application/json" },
-                body: JSON.stringify({ table: "vendas", id: v.id, ...updates }),
-              }).catch(() => {});
-              await fetch(`https://fohhlehrqtwruzxjzrql.supabase.co/rest/v1/vendas?id=eq.${v.id}`, {
-                method: "PATCH",
-                headers: {
-                  "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvaGhsZWhycXR3cnV6eGp6cnFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzg1OTI1MiwiZXhwIjoyMDg5NDM1MjUyfQ.l0655fvNwRljhyDZl8ODW5H2HS3PH7rZb1Kjx5TJXvg",
-                  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvaGhsZWhycXR3cnV6eGp6cnFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzg1OTI1MiwiZXhwIjoyMDg5NDM1MjUyfQ.l0655fvNwRljhyDZl8ODW5H2HS3PH7rZb1Kjx5TJXvg",
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(updates),
-              }).catch(() => {});
+          try {
+            const res = await fetch("/api/admin/clientes/rename", {
+              method: "POST",
+              headers: { ...apiHeaders(), "Content-Type": "application/json" },
+              body: JSON.stringify({
+                nomeAntigo: c.nome,
+                ...(renomeou ? { nomeNovo: dados.nome } : {}),
+                ...camposMudados,
+              }),
+            });
+            if (!res.ok) {
+              const j = await res.json().catch(() => ({}));
+              alert(`Erro ao salvar: ${j.error || res.status}`);
             }
+          } catch (err) {
+            alert(`Erro ao salvar: ${String(err)}`);
           }
           setSavingClient(false);
           setEditing(false);
@@ -1192,12 +1330,26 @@ export default function ClientesPage() {
                 </div>
               </div>
 
+              {editing ? (
+                <EditContatoFields
+                  cliente={{ nome: c.nome, cpf: c.cpf, email: c.email, bairro: c.bairro, cidade: c.cidade, uf: c.uf }}
+                  mInput={mInput}
+                  onSubmit={saveEditFromForm}
+                  onCancel={() => setEditing(false)}
+                  saving={savingClient}
+                  totalCompras={c.total_compras}
+                  totalGasto={c.total_gasto}
+                  saldoCredito={c.is_lojista ? (saldosLojistas[lojistaKey(c)] || 0) : null}
+                  clienteDesde={fmtDate(c.cliente_desde)}
+                  dm={dm}
+                />
+              ) : (
+              <>
               <div className={`mx-5 mt-4 p-4 rounded-xl border ${mSec}`}>
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Nome do Contato</p>
-                    {editing ? <input value={editForm.nome} onChange={(e) => setEditForm(f => ({ ...f, nome: e.target.value }))} className={mInput} />
-                    : <p className={`text-[15px] font-bold ${mP}`}>{c.nome}</p>}
+                    <p className={`text-[15px] font-bold ${mP}`}>{c.nome}</p>
                   </div>
                   <div className="text-right">
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tipo</p>
@@ -1213,13 +1365,11 @@ export default function ClientesPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Documento</p>
-                    {editing ? <input value={editForm.cpf} onChange={(e) => setEditForm(f => ({ ...f, cpf: e.target.value }))} className={mInput} placeholder="CPF ou CNPJ" />
-                    : <p className={`text-[13px] font-mono ${mP} mt-0.5`}>{c.cpf || "—"}</p>}
+                    <p className={`text-[13px] font-mono ${mP} mt-0.5`}>{c.cpf || "—"}</p>
                   </div>
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Email</p>
-                    {editing ? <input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} className={mInput} placeholder="email@exemplo.com" />
-                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.email || "—"}</p>}
+                    <p className={`text-[13px] ${mP} mt-0.5`}>{c.email || "—"}</p>
                   </div>
                 </div>
               </div>
@@ -1229,18 +1379,15 @@ export default function ClientesPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Estado</p>
-                    {editing ? <input value={editForm.uf} onChange={(e) => setEditForm(f => ({ ...f, uf: e.target.value }))} className={mInput} placeholder="UF" />
-                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.uf || "—"}</p>}
+                    <p className={`text-[13px] ${mP} mt-0.5`}>{c.uf || "—"}</p>
                   </div>
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cidade</p>
-                    {editing ? <input value={editForm.cidade} onChange={(e) => setEditForm(f => ({ ...f, cidade: e.target.value }))} className={mInput} placeholder="Cidade" />
-                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.cidade || "—"}</p>}
+                    <p className={`text-[13px] ${mP} mt-0.5`}>{c.cidade || "—"}</p>
                   </div>
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bairro</p>
-                    {editing ? <input value={editForm.bairro} onChange={(e) => setEditForm(f => ({ ...f, bairro: e.target.value }))} className={mInput} placeholder="Bairro" />
-                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.bairro || "—"}</p>}
+                    <p className={`text-[13px] ${mP} mt-0.5`}>{c.bairro || "—"}</p>
                   </div>
                 </div>
               </div>
@@ -1274,14 +1421,7 @@ export default function ClientesPage() {
                   </div>
                 </div>
               </div>
-
-              {editing && (
-                <div className="mx-5 mt-3 flex gap-2">
-                  <button onClick={saveEdit} disabled={savingClient} className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] disabled:opacity-50">
-                    {savingClient ? "Salvando..." : "Salvar Alteracoes"}
-                  </button>
-                  <button onClick={() => setEditing(false)} className={`px-4 py-3 rounded-xl border text-sm font-semibold ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"}`}>Cancelar</button>
-                </div>
+              </>
               )}
 
               <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
@@ -1291,21 +1431,7 @@ export default function ClientesPage() {
                 ) : detailVendas.length === 0 ? (
                   <p className={`text-sm text-center py-4 ${mS}`}>Nenhuma operacao encontrada</p>
                 ) : (
-                  <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-                    {detailVendas.map((v) => (
-                      <div key={v.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E] hover:bg-[#252525]" : "bg-white hover:bg-[#F5F5F7]"} transition-colors`}>
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className={`shrink-0 ${mS}`}>{fmtDate(v.data)}</span>
-                          <span className={`font-medium truncate ${mP}`}>{v.produto}</span>
-                          {v.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {v.serial_no}</span>}
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0 ml-2">
-                          <span className={mS}>{v.forma} · {v.banco}</span>
-                          <span className="font-bold text-green-600 w-20 text-right">{fmt(v.preco_vendido)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <UltimasOperacoesList detailVendas={detailVendas} dm={dm} />
                 )}
               </div>
 

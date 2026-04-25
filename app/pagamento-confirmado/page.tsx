@@ -231,6 +231,15 @@ function buildPedidoData(
       vendedor: snEntrega.vendedor || (link.vendedor as string | undefined),
       origem: snEntrega.origem,
     },
+    // Encomenda — flag organizacional vinda do link_compras (operador
+    // marcou no /admin/gerar-link). formatPedidoMessage renderiza um
+    // bloco "📦 PEDIDO SOB ENCOMENDA" no topo da mensagem WhatsApp.
+    encomenda: link.tipo === "ENCOMENDA"
+      ? {
+          previsaoChegada: (link.previsao_chegada as string | undefined) || undefined,
+          sinalPct: Number(link.sinal_pct ?? 0) || 0,
+        }
+      : undefined,
     isFromTradeIn: !!snapshot.isFromTradeIn,
   };
 }

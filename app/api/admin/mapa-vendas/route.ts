@@ -687,6 +687,65 @@ export async function GET(req: NextRequest) {
       })
       .sort((a, b) => b.qty - a.qty);
 
+    // --- Crescimento mes-a-mes por regiao ---
+    // Usa rawVendas (nao filtrado por range) pra ter acesso aos ultimos 60 dias
+    // e comparar "mes atual" vs "mes anterior". Ignora filtro de periodo do usuario —
+    // essa secao sempre compara 30d atuais vs 30d anteriores.
+    const hoje = new Date();
+    const inicioMesAtual = new Date(hoje); inicioMesAtual.setDate(inicioMesAtual.getDate() - 30);
+    const inicioMesAnterior = new Date(hoje); inicioMesAnterior.setDate(inicioMesAnterior.getDate() - 60);
+    const hojeStr = hoje.toISOString().split("T")[0];
+    const inicioMesAtualStr = inicioMesAtual.toISOString().split("T")[0];
+    const inicioMesAnteriorStr = inicioMesAnterior.toISOString().split("T")[0];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vendasComparaveis = (rawVendas ?? []).filter((v: any) => {
+      if (v.status_pagamento === "CANCELADO") return false;
+      if (v.tipo === "ATACADO") return false;
+      const cep = (v.cep || "").replace(/\D/g, "");
+      if (cep === "00000000") return false;
+      return v.data >= inicioMesAnteriorStr && v.data <= hojeStr;
+    });
+
+    interface BucketMoM { qty: number; receita: number; lucro: number; bairro: string; cidade: string }
+    const bucketAtual: Record<string, BucketMoM> = {};
+    const bucketAnterior: Record<string, BucketMoM> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const v of vendasComparaveis as any[]) {
+      const b = (v.bairro || "").trim() || "Nao informado";
+      const cidade = (v.cidade || "").trim();
+      const key = b === "Nao informado" ? "Nao informado" : `${b}|${cidade || "RJ"}`;
+      const bucket = v.data >= inicioMesAtualStr ? bucketAtual : bucketAnterior;
+      if (!bucket[key]) bucket[key] = { qty: 0, receita: 0, lucro: 0, bairro: b, cidade };
+      bucket[key].qty++;
+      bucket[key].receita += Number(v.preco_vendido || 0);
+      bucket[key].lucro += Number(v.lucro || 0);
+    }
+
+    // Junta as duas e calcula delta
+    const todasChaves = new Set<string>([...Object.keys(bucketAtual), ...Object.keys(bucketAnterior)]);
+    const crescimentoRegiao = Array.from(todasChaves).map(key => {
+      const atual = bucketAtual[key] || { qty: 0, receita: 0, lucro: 0, bairro: "", cidade: "" };
+      const anterior = bucketAnterior[key] || { qty: 0, receita: 0, lucro: 0, bairro: "", cidade: "" };
+      const base = atual.bairro || anterior.bairro;
+      const cid = atual.cidade || anterior.cidade;
+      const nome = cid && cid !== "Rio de Janeiro" && base !== "Nao informado" ? `${base}, ${cid}` : base;
+      const deltaQty = anterior.qty > 0 ? ((atual.qty - anterior.qty) / anterior.qty) * 100 : (atual.qty > 0 ? 100 : 0);
+      const deltaReceita = anterior.receita > 0 ? ((atual.receita - anterior.receita) / anterior.receita) * 100 : (atual.receita > 0 ? 100 : 0);
+      return {
+        nome,
+        cidade: cid,
+        atual: { qty: atual.qty, receita: atual.receita, lucro: atual.lucro },
+        anterior: { qty: anterior.qty, receita: anterior.receita, lucro: anterior.lucro },
+        deltaQty: Math.round(deltaQty),
+        deltaReceita: Math.round(deltaReceita),
+        // "Score" simples pra ordenar: prioriza regioes com atividade atual E crescimento
+        score: atual.qty * (1 + (deltaQty / 100)),
+      };
+    }).filter(r => r.nome && r.nome !== "Nao informado" && (r.atual.qty > 0 || r.anterior.qty > 0))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+
     // --- Totals ---
     const totalVendas = rows.length;
     const totalReceita = rows.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
@@ -704,6 +763,9 @@ export async function GET(req: NextRequest) {
       topClientes,
       porDiaSemana,
       campanhas,
+      crescimentoRegiao,
+      crescimentoInicioAtual: inicioMesAtualStr,
+      crescimentoInicioAnterior: inicioMesAnteriorStr,
     });
   } catch (err) {
     console.error("Erro mapa-vendas:", err);

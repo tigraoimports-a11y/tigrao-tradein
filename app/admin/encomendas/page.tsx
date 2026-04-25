@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { SkuFilterBanner, useSkuFilter } from "@/components/admin/SkuFilterBanner";
 import { corParaPT } from "@/lib/cor-pt";
 import { hojeBR } from "@/lib/date-utils";
 import ProdutoSpecFields, {
@@ -15,6 +16,9 @@ import ProdutoSpecFields, {
 interface Encomenda {
   id: string;
   created_at: string;
+  // short_code do link_compras associado (quando a encomenda veio via /compra).
+  // Permite reenviar o link pro cliente pelo botao "Copiar link".
+  short_code: string | null;
   cliente: string;
   whatsapp: string | null;
   cpf: string | null;
@@ -145,7 +149,12 @@ const fmt = (v: number) => "R$ " + Math.round(v).toLocaleString("pt-BR");
 
 export default function EncomendasPage() {
   const { password, user, darkMode: dm } = useAdmin();
-  const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
+  const skuFilter = useSkuFilter();
+  const [encomendasRaw, setEncomendas] = useState<Encomenda[]>([]);
+  // Aplica filtro por SKU (?sku=X) transparentemente
+  const encomendas = skuFilter
+    ? encomendasRaw.filter((e) => ((e as unknown as { sku?: string | null }).sku || "").toUpperCase() === skuFilter)
+    : encomendasRaw;
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"lista" | "nova">("lista");
   const [msg, setMsg] = useState("");
@@ -793,6 +802,7 @@ export default function EncomendasPage() {
 
   return (
     <div className="space-y-6">
+      <SkuFilterBanner total={encomendas.length} />
       {msg && (
         <div
           className={`px-4 py-3 rounded-xl text-sm ${
@@ -2120,6 +2130,25 @@ export default function EncomendasPage() {
                         >
                           Vincular Produto A Caminho
                         </button>
+
+                        {enc.short_code && (
+                          <button
+                            onClick={async () => {
+                              const url = `${window.location.origin}/c/${enc.short_code}`;
+                              try {
+                                await navigator.clipboard.writeText(url);
+                                setMsg(`Link copiado: ${url}`);
+                                setTimeout(() => setMsg(""), 3000);
+                              } catch {
+                                setMsg(`Copie manualmente: ${url}`);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                            title="Copiar link do formulario pra reenviar ao cliente"
+                          >
+                            📋 Copiar link
+                          </button>
+                        )}
 
                         <button
                           onClick={() => handleDelete(enc)}

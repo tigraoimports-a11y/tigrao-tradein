@@ -75,6 +75,18 @@ function CompraForm() {
   const whatsapp = searchParams.get("whatsapp") || "";
   const shortCode = searchParams.get("short") || "";
 
+  // Encomenda — flag organizacional controlada pelo operador no gerar-link.
+  // Cliente nao pode desligar via URL; o backend valida com link_compras.tipo.
+  // sinal_pct=0 (ou nao setado) = pagamento integral. >0 = cobrou so esse %
+  // no link, com restante combinado na entrega.
+  const encomendaParam = searchParams.get("encomenda") === "1";
+  const previsaoChegadaParam = searchParams.get("previsao_chegada") || "";
+  const sinalPctParam = Math.max(0, Math.min(100, Number(searchParams.get("sinal_pct") || "0") || 0));
+  // Cobranca extra opcional — capa, pelicula, brinde, etc. Ja esta somada no
+  // valor cobrado (preco param). Aqui so pra mostrar breakdown ao cliente.
+  const extraDescricaoParam = searchParams.get("extra_descricao") || "";
+  const extraValorParam = Number(searchParams.get("extra_valor") || "0") || 0;
+
   // Trade-in params (vindos do StepQuote)
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
   const trocaValorParam = searchParams.get("troca_valor") || "";
@@ -410,7 +422,9 @@ function CompraForm() {
       : "Loja"
   );
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia" | "Outro">(
-    localParam === "shopping" ? "Shopping"
+    // Encomenda nao aceita Shopping — derruba pra Residencia se o link veio com shopping
+    encomendaParam && localParam === "shopping" ? "Residencia"
+      : localParam === "shopping" ? "Shopping"
       : localParam === "outro" ? "Outro"
       : "Residencia"
   );
@@ -460,6 +474,37 @@ function CompraForm() {
   const [printsErro, setPrintsErro] = useState<Record<string, string>>({});
   const temSegundoAparelho = !!trocaProduto2Param;
 
+  // Apenas iPhone tem IMEI — iPad, Apple Watch e MacBook so tem Nº de Serie.
+  // Quando o cliente da um desses na troca, nao exigimos IMEI (nem print
+  // nem campo de texto). Mantem validacao rigida pra iPhone (2 prints).
+  //
+  // Detecta pelo nome do produto (texto livre vindo do simulador ou do link
+  // gerado pelo admin). Fallback pro antigo comportamento (exige IMEI) quando
+  // nome vazio — mais seguro do que pular a validacao por engano.
+  const produtoTemImei = (produto: string | null | undefined): boolean => {
+    const p = (produto || "").toUpperCase();
+    if (!p) return true; // sem info → exige IMEI (comportamento original)
+    if (/\bIPAD\b/.test(p)) return false;
+    if (/\bMACBOOK\b|\bMAC\s*MINI\b|\bMAC\s*BOOK\b/.test(p)) return false;
+    if (/\bAPPLE\s*WATCH\b|\bWATCH\b/.test(p)) return false;
+    if (/\bAIRPODS\b/.test(p)) return false;
+    return true; // default (iPhone, seminovo, outros celulares) exige IMEI
+  };
+  const aparelho1TemImei = produtoTemImei(trocaProdutoParam);
+  const aparelho2TemImei = produtoTemImei(trocaProduto2Param);
+
+  // Detecta tipo de aparelho pelo nome (pra exibir caminho correto de Ajustes
+  // no texto de instrucao). Se nao identificar, retorna "aparelho" generico.
+  const detectarTipoAparelho = (produto: string | null | undefined): string => {
+    const p = (produto || "").toUpperCase();
+    if (/\bIPHONE\b/.test(p)) return "iPhone";
+    if (/\bIPAD\b/.test(p)) return "iPad";
+    if (/\bMACBOOK\b|\bMAC\s*BOOK\b|\bMAC\s*MINI\b/.test(p)) return "MacBook";
+    if (/\bAPPLE\s*WATCH\b|\bWATCH\b/.test(p)) return "Apple Watch";
+    if (/\bAIRPODS\b/.test(p)) return "AirPods";
+    return "aparelho";
+  };
+
   // IMEI e Nº de Série dos aparelhos na troca.
   // Fluxo: cliente anexa o print → backend usa Claude Vision pra ler o
   // número automaticamente → valor aparece preenchido aqui (read-only por
@@ -508,6 +553,8 @@ function CompraForm() {
       if (whatsappClienteParam) fd.append("cliente_telefone", whatsappClienteParam);
       if (trocaProdutoParam) fd.append("troca_produto", trocaProdutoParam);
       if (trocaValorParam) fd.append("troca_valor", trocaValorParam);
+      if (trocaCorParam) fd.append("troca_cor", trocaCorParam);
+      if (trocaCondParam) fd.append("troca_condicao", trocaCondParam);
       const res = await fetch("/api/link-compras/upload-print", { method: "POST", body: fd });
       const json = await res.json();
       if (json.ok) {
@@ -592,7 +639,9 @@ function CompraForm() {
   const [erroMp, setErroMp] = useState("");
 
   // Janela de agendamento (hoje a D+2 de calendário, pulando domingos).
-  const agendamentoBounds = useMemo(() => getAgendamentoBounds(), []);
+  // Encomenda: orcamento dura 24h — janela de agendamento encolhe pra
+  // hoje + amanha (em vez de hoje + 2 dias).
+  const agendamentoBounds = useMemo(() => getAgendamentoBounds(new Date(), { encomenda: encomendaParam }), [encomendaParam]);
 
   // Installment calculations
   const descontoNum = parseFloat(String(descontoParam)) || 0;
@@ -657,20 +706,22 @@ function CompraForm() {
     }
 
     // Valida prints do aparelho na troca (obrigatorios quando ha troca + link de compra)
+    // IMEI so e exigido pra iPhone — iPad/Watch/MacBook so tem Nº de Serie.
     if (temTroca && shortCode) {
-      const faltaAparelho1 = !printsUrls.serial1 || !printsUrls.imei1;
-      const faltaAparelho2 = temSegundoAparelho && (!printsUrls.serial2 || !printsUrls.imei2);
-      if (faltaAparelho1 || faltaAparelho2) {
+      const faltaSerial1 = !printsUrls.serial1;
+      const faltaImei1 = aparelho1TemImei && !printsUrls.imei1;
+      const faltaSerial2 = temSegundoAparelho && !printsUrls.serial2;
+      const faltaImei2 = temSegundoAparelho && aparelho2TemImei && !printsUrls.imei2;
+      if (faltaSerial1 || faltaImei1 || faltaSerial2 || faltaImei2) {
         // Scroll pra area de prints e destaca (em vez de alert que fecha)
         const el = document.getElementById("prints-troca");
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           el.classList.add("ring-4", "ring-red-500", "animate-pulse");
           setTimeout(() => el.classList.remove("ring-4", "ring-red-500", "animate-pulse"), 3000);
-          // Tenta abrir a galeria do primeiro print faltante (funciona em iOS/Android quando
-          // invocado dentro de evento do submit, alguns browsers exigem gesture separado)
+          // Tenta abrir a galeria do primeiro print faltante
           setTimeout(() => {
-            const key = !printsUrls.serial1 ? "serial1" : !printsUrls.imei1 ? "imei1" : !printsUrls.serial2 ? "serial2" : "imei2";
+            const key = faltaSerial1 ? "serial1" : faltaImei1 ? "imei1" : faltaSerial2 ? "serial2" : "imei2";
             const input = document.getElementById(`print-input-${key}`) as HTMLInputElement | null;
             input?.click();
           }, 400);
@@ -681,11 +732,12 @@ function CompraForm() {
       // Valida que o IMEI e Nº de Série foram extraídos com sucesso (via OCR
       // ou preenchidos manualmente quando OCR falha). Serial mínimo 6 chars,
       // IMEI mínimo 14 dígitos (IMEI tem 15, aceita 14+ pra tolerar 1 falha do OCR).
+      // IMEI so e exigido pra iPhone.
       const soDigitos = (s: string) => s.replace(/\D/g, "");
       const serial1Ok = trocaSerial1.trim().length >= 6;
-      const imei1Ok = soDigitos(trocaImei1).length >= 14;
+      const imei1Ok = !aparelho1TemImei || soDigitos(trocaImei1).length >= 14;
       const serial2Ok = !temSegundoAparelho || trocaSerial2.trim().length >= 6;
-      const imei2Ok = !temSegundoAparelho || soDigitos(trocaImei2).length >= 14;
+      const imei2Ok = !temSegundoAparelho || !aparelho2TemImei || soDigitos(trocaImei2).length >= 14;
       if (!serial1Ok || !imei1Ok || !serial2Ok || !imei2Ok) {
         const el = document.getElementById("prints-troca");
         if (el) {
@@ -693,7 +745,12 @@ function CompraForm() {
           el.classList.add("ring-4", "ring-red-500", "animate-pulse");
           setTimeout(() => el.classList.remove("ring-4", "ring-red-500", "animate-pulse"), 3000);
         }
-        alert("Não conseguimos ler o Nº de Série ou o IMEI em algum dos prints. Tire novos prints mais nítidos (tela do iPhone em Ajustes > Geral > Sobre) ou use o botão 'Corrigir' pra digitar manualmente.");
+        const semImei = !aparelho1TemImei && (!temSegundoAparelho || !aparelho2TemImei);
+        alert(
+          semImei
+            ? "Não conseguimos ler o Nº de Série em algum dos prints. Tire novos prints mais nítidos ou use o botão 'Corrigir' pra digitar manualmente."
+            : "Não conseguimos ler o Nº de Série ou o IMEI em algum dos prints. Tire novos prints mais nítidos (tela do iPhone em Ajustes > Geral > Sobre) ou use o botão 'Corrigir' pra digitar manualmente.",
+        );
         return;
       }
     }
@@ -784,11 +841,40 @@ function CompraForm() {
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
     const enderecoFull = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
-    const pagEntrega = pagamentoPagoParam ? "" : local === "Correios" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" ? "PAGAR NA ENTREGA" : "";
+    // Encomenda: sempre antecipado (cliente paga sinal ou integral pelo link
+    // antes do produto chegar — recolhimento da troca/diferenca fica pra
+    // retirada). Sem encomenda: residencia/correios = antecipado, resto = na entrega.
+    const pagEntrega = pagamentoPagoParam ? ""
+      : encomendaParam ? "! PAGAMENTO ANTECIPADO"
+      : local === "Correios" ? "! PAGAMENTO ANTECIPADO"
+      : local === "Entrega" && tipoEntrega === "Residencia" ? "! PAGAMENTO ANTECIPADO"
+      : local === "Entrega" ? "PAGAR NA ENTREGA"
+      : "";
+
+    // Bloco encomenda — vai logo no topo da mensagem pra equipe ver na
+    // primeira linha que e pedido sob encomenda. Inclui prazo, valor pago
+    // agora (sinal ou integral) e restante na entrega quando aplicavel.
+    const encomendaLines: string[] = [];
+    if (encomendaParam) {
+      const temSinalEnc = sinalPctParam > 0 && sinalPctParam < 100;
+      const valorSinalEnc = temSinalEnc ? Math.round((valorBaseFinal * sinalPctParam) / 100) : valorBaseFinal;
+      const valorRestanteEnc = temSinalEnc ? Math.max(valorBaseFinal - valorSinalEnc, 0) : 0;
+      encomendaLines.push(`*━━━ 📦 PEDIDO SOB ENCOMENDA ━━━*`);
+      if (previsaoChegadaParam) encomendaLines.push(`*Prazo de entrega:* ${previsaoChegadaParam} após pagamento`);
+      if (temSinalEnc) {
+        encomendaLines.push(`*Pagamento agora:* Sinal ${sinalPctParam}% — R$ ${fmt(valorSinalEnc)}`);
+        if (valorRestanteEnc > 0) encomendaLines.push(`*Restante na entrega:* R$ ${fmt(valorRestanteEnc)}`);
+      } else {
+        encomendaLines.push(`*Pagamento agora:* Integral — R$ ${fmt(valorBaseFinal)}`);
+      }
+      if (temTroca) encomendaLines.push(`*Aparelho na troca:* avaliação e coleta no dia da retirada`);
+      encomendaLines.push("");
+    }
 
     const lines = [
       `Olá, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliação de troca no site e preenchi o formulário de compra." : "Vim pelo formulário de compra!"}`,
       "",
+      ...encomendaLines,
       `*━━━ DADOS DA COMPRA — Tigrão Imports ━━━*`,
       "",
       `*▸ DADOS PESSOAIS*`,
@@ -976,6 +1062,11 @@ function CompraForm() {
         trocaImei2: temTroca && temSegundoAparelho ? trocaImei2.trim() : undefined,
         localEntrega: localStr, dataEntrega, horarioEntrega: horario,
         vendedor, origem,
+        // Encomenda: backend confere o tipo do link_compras antes de criar
+        // em `encomendas` em vez de `vendas`. URL param sozinho nao confia.
+        encomenda: encomendaParam,
+        previsaoChegada: encomendaParam ? previsaoChegadaParam : undefined,
+        sinalPct: encomendaParam ? sinalPctParam : undefined,
         website: honeypot,
       }));
       const vendaUrl = "/api/vendas/from-formulario";
@@ -1058,13 +1149,22 @@ function CompraForm() {
 
     // Calcula valor a cobrar no MP. Se há entrada PIX (pagamento dividido),
     // o MP cobra só o valor parcelar (o PIX fica pendente pra retirada).
+    // IMPORTANTE: aplica a taxa do cartao/link nas parcelas — o operador
+    // define "Link 12x" esperando cobrar R$ com taxa repassada (ex: 5497
+    // base + 13% = 6212 em 12x de 517,67). Antes o MP cobrava so R$ 5497
+    // (sem taxa), ficava 12x de 458,08 e a loja nao recebia o repasse.
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
     // `precoFinal` ja e o total somado — gerar-link envia `v = total`. Nao
     // somar extras aqui (double count).
     const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
-    const valorMpCobrado =
+    const valorSemTaxa =
       entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
+    const nParcelasMp = parseInt(parcelas || "1") || 1;
+    const taxaParcelasMp = nParcelasMp > 1 ? (TAXAS[nParcelasMp] ?? 0) : 0;
+    const valorMpCobrado = taxaParcelasMp > 0
+      ? Math.round(valorSemTaxa * (1 + taxaParcelasMp / 100))
+      : valorSemTaxa;
 
     if (valorMpCobrado <= 0) {
       setErroMp("Valor a pagar via Mercado Pago inválido (R$ 0).");
@@ -1221,11 +1321,77 @@ function CompraForm() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
-      {/* Header */}
-      <div className="bg-[#E8740E] text-white px-4 py-4 text-center">
+      {/* Header — fica AZUL quando encomenda pra diferenciar visualmente do
+          fluxo de compra normal (laranja). Cliente entende ja no topo que
+          esta num pedido sob encomenda. */}
+      <div className={`${encomendaParam ? "bg-blue-600" : "bg-[#E8740E]"} text-white px-4 py-4 text-center`}>
         <p className="text-lg font-bold">&#x1F42F; TigraoImports</p>
-        <p className="text-sm opacity-90">Formulario de Compra</p>
+        <p className="text-sm opacity-90">{encomendaParam ? "📦 ENCOMENDA — Reserva do seu produto" : "Formulario de Compra"}</p>
       </div>
+
+      {/* Banner de encomenda — mini-timeline em 3 passos. Substitui o texto
+          seco anterior por uma visualizacao clara: pagar agora -> aguardar
+          chegada -> retirar (e entregar troca, se houver). Mostra valores em
+          R$ pra o cliente nao precisar calcular ou rolar pro resumo. */}
+      {encomendaParam && (() => {
+        const temSinal = sinalPctParam > 0 && sinalPctParam < 100;
+        const temTrocaEnc = !!trocaProdutoParam;
+        const valorTotalEnc = preco;
+        const valorAposTrocaEnc = Math.max(valorTotalEnc - trocaNum, 0);
+        const valorSinalEnc = temSinal ? Math.round((valorAposTrocaEnc * sinalPctParam) / 100) : valorAposTrocaEnc;
+        const valorRestanteEnc = temSinal ? Math.max(valorAposTrocaEnc - valorSinalEnc, 0) : 0;
+        return (
+          <div className="mx-4 mt-4 rounded-2xl p-5 border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 shadow-sm">
+            <p className="text-sm font-bold text-blue-900 mb-4 flex items-center gap-1.5">
+              <span>📦</span><span>Como funciona sua encomenda</span>
+            </p>
+            <div className="grid grid-cols-3 gap-2 relative">
+              {/* Linha conectora horizontal — atras dos circulos */}
+              <div className="absolute top-4 left-[16.67%] right-[16.67%] h-0.5 bg-blue-300" aria-hidden="true" />
+              {/* Passo 1: Pagar agora */}
+              <div className="relative flex flex-col items-center text-center">
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-md">1</div>
+                <p className="text-[11px] font-bold text-blue-900 leading-tight">Pagar agora</p>
+                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{temSinal ? `Sinal ${sinalPctParam}%` : "Integral"}</p>
+                {valorSinalEnc > 0 && (
+                  <p className="text-xs font-bold text-blue-900 mt-1">R$ {fmt(valorSinalEnc)}</p>
+                )}
+              </div>
+              {/* Passo 2: Aguardar chegada */}
+              <div className="relative flex flex-col items-center text-center">
+                <div className="w-8 h-8 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-sm">2</div>
+                <p className="text-[11px] font-bold text-blue-900 leading-tight">Aguardar</p>
+                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{previsaoChegadaParam || "em breve"}</p>
+                <p className="text-[10px] text-blue-700 mt-1">📦 chegada</p>
+              </div>
+              {/* Passo 3: Retirar (+ entregar troca se houver) */}
+              <div className="relative flex flex-col items-center text-center">
+                <div className="w-8 h-8 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-sm">3</div>
+                <p className="text-[11px] font-bold text-blue-900 leading-tight">Retirar</p>
+                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{temTrocaEnc ? "+ entregar troca" : "na loja"}</p>
+                {valorRestanteEnc > 0 && (
+                  <p className="text-xs font-bold text-blue-900 mt-1">R$ {fmt(valorRestanteEnc)}</p>
+                )}
+              </div>
+            </div>
+            {temTrocaEnc && (
+              <p className="text-[11px] text-blue-800 mt-4 pt-3 border-t border-blue-200 leading-relaxed">
+                <span className="font-semibold">💱 Sobre sua troca:</span> seu aparelho usado sera avaliado e recolhido na data da retirada — voce nao precisa entregar antes.
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Cobranca extra — capa, pelicula, brinde, etc. Ja esta somada no total
+          cobrado, aqui so avisa ao cliente que esta incluido. */}
+      {extraDescricaoParam && extraValorParam > 0 && (
+        <div className="mx-4 mt-4 rounded-xl p-3 border border-amber-300 bg-amber-50">
+          <p className="text-xs text-amber-900">
+            <span className="font-semibold">➕ Inclui:</span> {extraDescricaoParam} — R$ {fmt(extraValorParam)}
+          </p>
+        </div>
+      )}
 
       {/* Product info */}
       <div className="mx-4 mt-4 bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED]">
@@ -1840,14 +2006,44 @@ function CompraForm() {
 
         {/* Prints da troca — card independente, aparece tanto no fluxo do simulador
             quanto quando o cliente marca troca manualmente */}
-        {temTroca && shortCode && (
+        {temTroca && shortCode && (() => {
+          // Texto do titulo/instrucao muda conforme o tipo de aparelho:
+          //   iPhone → "Nº de Série e IMEI" (pede ambos)
+          //   iPad/Watch/MacBook → "Nº de Série" (sem IMEI)
+          //   Mix (iPhone + iPad na mesma troca) → "Nº de Série" no geral,
+          //   IMEI so aparece pro iPhone na lista de slots
+          const algumTemImei = aparelho1TemImei || (temSegundoAparelho && aparelho2TemImei);
+          const tituloCard = algumTemImei
+            ? "📸 Nº de Série e IMEI do seu aparelho (obrigatório)"
+            : "📸 Nº de Série do seu aparelho (obrigatório)";
+          // Instrucao: especifica localizacao por tipo de aparelho. Se mix,
+          // usa genérico.
+          const instrucaoPath = (() => {
+            const tipo1 = aparelho1TemImei ? "iPhone" : detectarTipoAparelho(trocaProdutoParam);
+            const tipo2 = temSegundoAparelho
+              ? (aparelho2TemImei ? "iPhone" : detectarTipoAparelho(trocaProduto2Param))
+              : tipo1;
+            // Ajustes > Geral > Sobre funciona em iPhone/iPad/iPod. Watch/Mac tem path diferente.
+            if (tipo1 === tipo2) {
+              if (tipo1 === "Apple Watch") return "No seu Apple Watch, vá em **Ajustes → Geral → Sobre**";
+              if (tipo1 === "MacBook") return "No seu MacBook, vá em **Menu Apple () → Sobre este Mac**";
+              return "No seu aparelho, vá em **Ajustes → Geral → Sobre**";
+            }
+            return "Em cada aparelho, acesse **Ajustes → Geral → Sobre** (no Mac: **Menu Apple → Sobre este Mac**)";
+          })();
+          return (
           <div className={cardCls}>
-            <p className={sectionTitle}>📸 Nº de Série e IMEI do seu aparelho (obrigatório)</p>
+            <p className={sectionTitle}>{tituloCard}</p>
             <div id="prints-troca" className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 transition-all">
               <p className="text-xs text-[#6E6E73] mb-3">
-                No seu iPhone, vá em <strong>Ajustes → Geral → Sobre</strong> e tire <strong>2 prints</strong>:
-                um mostrando o <strong>Nº de Série</strong> e outro o <strong>IMEI</strong>. Nosso sistema lê
-                os números automaticamente — você só precisa anexar os prints.
+                {instrucaoPath.split("**").map((parte, i) =>
+                  i % 2 === 1 ? <strong key={i}>{parte}</strong> : <span key={i}>{parte}</span>,
+                )}
+                {" "}e tire {algumTemImei ? <strong>os prints pedidos</strong> : <strong>1 print</strong>}:
+                {algumTemImei
+                  ? <> mostrando o <strong>Nº de Série</strong>{algumTemImei ? <> e, se for iPhone, o <strong>IMEI</strong></> : null}.</>
+                  : <> mostrando o <strong>Nº de Série</strong>.</>}
+                {" "}Nosso sistema lê o número automaticamente — você só precisa anexar.
               </p>
 
               {/* Explicação do POR QUE pedimos essa info — passa segurança ao cliente */}
@@ -1862,11 +2058,14 @@ function CompraForm() {
               </div>
 
               {([
-                { tipo: "serial", aparelho: 1, label: "Nº de Série (aparelho 1)" },
-                { tipo: "imei", aparelho: 1, label: "IMEI (aparelho 1)" },
+                { tipo: "serial", aparelho: 1, label: `Nº de Série${temSegundoAparelho ? " (aparelho 1)" : ""}` },
+                // IMEI so aparece pra iPhone — iPad/Watch/MacBook nao tem
+                ...(aparelho1TemImei ? [
+                  { tipo: "imei", aparelho: 1, label: `IMEI${temSegundoAparelho ? " (aparelho 1)" : ""}` },
+                ] : []),
                 ...(temSegundoAparelho ? [
-                  { tipo: "serial", aparelho: 2, label: "Nº de Série (aparelho 2)" },
-                  { tipo: "imei", aparelho: 2, label: "IMEI (aparelho 2)" },
+                  { tipo: "serial", aparelho: 2, label: "Nº de Série (aparelho 2)" } as PrintSlot,
+                  ...(aparelho2TemImei ? [{ tipo: "imei", aparelho: 2, label: "IMEI (aparelho 2)" } as PrintSlot] : []),
                 ] : []),
               ] as PrintSlot[]).map((slot) => {
                 const key = `${slot.tipo}${slot.aparelho}`;
@@ -1968,12 +2167,17 @@ function CompraForm() {
 
               {/* Aviso sobre o Termo de Procedência (aparece quando todos os prints + textos foram preenchidos) */}
               {(() => {
-                const textosOk1 = trocaSerial1.trim().length >= 6 && trocaImei1.replace(/\D/g, "").length >= 14;
-                const textosOk2 = !temSegundoAparelho || (trocaSerial2.trim().length >= 6 && trocaImei2.replace(/\D/g, "").length >= 14);
-                const printsOk = temSegundoAparelho
-                  ? !!(printsUrls.serial1 && printsUrls.imei1 && printsUrls.serial2 && printsUrls.imei2)
-                  : !!(printsUrls.serial1 && printsUrls.imei1);
-                const todosEnviados = printsOk && textosOk1 && textosOk2;
+                // IMEI so conta se o aparelho tem IMEI (iPhone). Sem isso,
+                // iPad/Watch/MacBook nunca mostrariam o aviso de conclusao.
+                const textosOk1 = trocaSerial1.trim().length >= 6
+                  && (!aparelho1TemImei || trocaImei1.replace(/\D/g, "").length >= 14);
+                const textosOk2 = !temSegundoAparelho
+                  || (trocaSerial2.trim().length >= 6
+                      && (!aparelho2TemImei || trocaImei2.replace(/\D/g, "").length >= 14));
+                const printsOk1 = !!printsUrls.serial1 && (!aparelho1TemImei || !!printsUrls.imei1);
+                const printsOk2 = !temSegundoAparelho
+                  || (!!printsUrls.serial2 && (!aparelho2TemImei || !!printsUrls.imei2));
+                const todosEnviados = printsOk1 && printsOk2 && textosOk1 && textosOk2;
                 if (!todosEnviados) return null;
                 return (
                   <div className="mt-4 p-3 rounded-lg bg-green-50 border-2 border-green-300">
@@ -1993,7 +2197,8 @@ function CompraForm() {
               })()}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Entrega */}
         <div className={cardCls}>
@@ -2044,14 +2249,20 @@ function CompraForm() {
                   iso = `${y}-${m}-${day}`;
                 }
                 if (iso !== raw) {
-                  alert("Agendamento disponivel apenas para hoje, amanha ou depois de amanha (sem domingo).");
+                  alert(encomendaParam
+                    ? "Encomenda: agendamento so pode ser hoje ou amanha (orcamento expira em 24h)."
+                    : "Agendamento disponivel apenas para hoje, amanha ou depois de amanha (sem domingo).");
                 }
                 setDataEntrega(iso);
               }}
               min={agendamentoBounds.min}
               max={agendamentoBounds.max}
               className={inputCls} />
-            <p className="text-[11px] text-[#86868B] mt-1">Agendamento disponivel para hoje, amanha ou depois de amanha. Domingo indisponivel.</p>
+            <p className={`text-[11px] mt-1 ${encomendaParam ? "text-blue-700 font-medium" : "text-[#86868B]"}`}>
+              {encomendaParam
+                ? "📦 Encomenda: agendamento até amanhã (orçamento válido por 24h)."
+                : "Agendamento disponivel para hoje, amanha ou depois de amanha. Domingo indisponivel."}
+            </p>
           </div>)}
 
           {/* Horário — dinâmico conforme tipo + dia da semana (não mostra pra Correios) */}
@@ -2076,17 +2287,24 @@ function CompraForm() {
           {local === "Entrega" && (
             <div className="space-y-3">
               <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Local de entrega *</label>
-              {/* "Outro" só aparece com localParam=outro (exceção liberada pelo operador). */}
-              <div className={`grid gap-3 ${localOutroHabilitado ? "grid-cols-3" : "grid-cols-2"}`}>
+              {/* "Outro" só aparece com localParam=outro (exceção liberada pelo operador).
+                  Encomenda nao aceita Shopping — operador combina entrega em residencia
+                  ou outro local quando o produto chegar. */}
+              <div className={`grid gap-3 ${(() => {
+                const c = 1 + (encomendaParam ? 0 : 1) + (localOutroHabilitado || encomendaParam ? 1 : 0);
+                return c === 1 ? "grid-cols-1" : c === 2 ? "grid-cols-2" : "grid-cols-3";
+              })()}`}>
                 <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Residencia" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                   <input type="radio" name="tipoEntrega" value="Residencia" checked={tipoEntrega === "Residencia"} onChange={() => { setTipoEntrega("Residencia"); setShopping(""); }} className="sr-only" />
                   &#x1F3E0; <span className="font-medium text-sm">Residência</span>
                 </label>
-                <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
-                  <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
-                  &#x1F3EC; <span className="font-medium text-sm">Shopping</span>
-                </label>
-                {localOutroHabilitado && (
+                {!encomendaParam && (
+                  <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                    <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
+                    &#x1F3EC; <span className="font-medium text-sm">Shopping</span>
+                  </label>
+                )}
+                {(localOutroHabilitado || encomendaParam) && (
                   <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Outro" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                     <input type="radio" name="tipoEntrega" value="Outro" checked={tipoEntrega === "Outro"} onChange={() => setTipoEntrega("Outro")} className="sr-only" />
                     &#x1F4CD; <span className="font-medium text-sm">Outro local</span>
@@ -2094,8 +2312,8 @@ function CompraForm() {
                 )}
               </div>
               {!pagamentoPagoParam && (
-                <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
-                  {tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
+                <div className={`p-3 rounded-lg text-sm font-semibold text-center ${(encomendaParam || tipoEntrega === "Residencia") ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
+                  {(encomendaParam || tipoEntrega === "Residencia") ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
                 </div>
               )}
               {tipoEntrega === "Shopping" && (
