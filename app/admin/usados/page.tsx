@@ -793,31 +793,78 @@ export function UsadosContent() {
     }
   }
 
-  // Ordena os nomes de modelo dentro do grupo. Pra MacBook agrupa por linha
-  // (Air antes de Pro), depois geracao do chip (M1 < M1 Pro < M1 Max < M2 ...),
-  // e por fim tela (13" < 14" < 15" < 16"). Pra outras categorias, cai pra
-  // alfabetico estavel — todos com chipNum 0 dao o mesmo peso.
+  // Ordena os nomes de modelo dentro do grupo. Cada categoria usa uma chave
+  // diferente:
+  //   iPhone:  [num, varianteOrd, name]   (15 Pro Max, 16e, etc — variantes em IPHONE_VARIANTES)
+  //   iPad:    [linha, hasMChip?, gen, name]  (entrada → Air → Pro → mini, gens numericas antes do M-chip)
+  //   MacBook: [linha, chip, variantOrd, tela, name]  (Air → Pro, M1<M1 Pro<M1 Max<M2, 13<14<15<16)
+  //   Watch:   [linha, gen, name]  (SE → Series → Ultra, depois numero da geracao)
+  //   default: alfabetico
   //
-  // Chave: [linha, chipNum, variantOrd, screen, name].
-  const modelSortKey = (name: string): [number, number, number, number, string] => {
-    let lineOrd = 0;
-    if (/MacBook Pro/i.test(name)) lineOrd = 1;
-    else if (/MacBook Air/i.test(name)) lineOrd = 0;
-    const screenMatch = name.match(/(\d+(?:\.\d+)?)\s*"/);
-    const screen = screenMatch ? parseFloat(screenMatch[1]) : 0;
-    const chipMatch = name.match(/\bM(\d+)(?:\s+(Pro|Max))?\b/i);
-    const chipNum = chipMatch ? parseInt(chipMatch[1]) : 0;
-    const variant = (chipMatch?.[2] || "").toLowerCase();
-    const variantOrd = variant === "" ? 0 : variant === "pro" ? 1 : variant === "max" ? 2 : 3;
-    return [lineOrd, chipNum, variantOrd, screen, name];
+  // Sem isso, listagem ficava ordenada alfabeticamente — confuso pra achar
+  // modelos especificos quando misturava linhas (ex: Air e Pro intercalados).
+  const modelSortKey = (name: string): (number | string)[] => {
+    if (catFilter === "iphone") {
+      const m = name.match(/iPhone\s+(\d+)(e)?\s*(Plus|Air|Pro\s+Max|Pro)?/i);
+      if (!m) return [999, 99, name];
+      const num = parseInt(m[1]);
+      let v = "";
+      if (m[2]) v = "E";
+      else if (m[3]) v = m[3].toUpperCase().replace(/\s+/g, " ");
+      const variantOrder = ["", "E", "PLUS", "AIR", "PRO", "PRO MAX"];
+      const vOrd = variantOrder.indexOf(v);
+      return [num, vOrd < 0 ? 99 : vOrd, name];
+    }
+    if (catFilter === "ipad") {
+      // Linha: Entrada (sem Air/Pro/mini) < Air < Pro < mini (mesma ordem do
+      // selector LINHAS_BY_CAT).
+      let line = 0;
+      if (/iPad\s+Air/i.test(name)) line = 1;
+      else if (/iPad\s+Pro/i.test(name)) line = 2;
+      else if (/iPad\s+(?:m|M)ini/i.test(name)) line = 3;
+      const hasMChip = /\bM\d+/.test(name) ? 1 : 0;
+      // Gen: numero da geracao ("9", "10", "11") ou numero do chip ("M2"→2)
+      let gen = 0;
+      const mChip = name.match(/\bM(\d+)/);
+      const numGen = name.match(/(\d+)\s*[ºo°ª]/);
+      if (mChip) gen = parseInt(mChip[1]);
+      else if (numGen) gen = parseInt(numGen[1]);
+      return [line, hasMChip, gen, name];
+    }
+    if (catFilter === "macbook") {
+      let line = 0;
+      if (/MacBook\s+Pro/i.test(name)) line = 1;
+      else if (/MacBook\s+Air/i.test(name)) line = 0;
+      const screenMatch = name.match(/(\d+(?:\.\d+)?)\s*"/);
+      const screen = screenMatch ? parseFloat(screenMatch[1]) : 0;
+      const chipMatch = name.match(/\bM(\d+)(?:\s+(Pro|Max))?\b/i);
+      const chipNum = chipMatch ? parseInt(chipMatch[1]) : 0;
+      const variant = (chipMatch?.[2] || "").toLowerCase();
+      const variantOrd = variant === "" ? 0 : variant === "pro" ? 1 : variant === "max" ? 2 : 3;
+      return [line, chipNum, variantOrd, screen, name];
+    }
+    if (catFilter === "watch") {
+      let line = 0;
+      if (/Apple\s+Watch\s+SE/i.test(name)) line = 0;
+      else if (/Apple\s+Watch\s+Ultra/i.test(name)) line = 2;
+      else if (/Apple\s+Watch\s+(?:Series\s+)?\d+/i.test(name)) line = 1;
+      // Gen: numero direto (SE 2/3, Series 8-11, Ultra 1-3).
+      const numMatch = name.match(/(\d+)/);
+      const gen = numMatch ? parseInt(numMatch[1]) : 0;
+      return [line, gen, name];
+    }
+    return [name];
   };
   const sortedModelos = Object.keys(grouped).sort((a, b) => {
     const ka = modelSortKey(a);
     const kb = modelSortKey(b);
-    for (let i = 0; i < 4; i++) {
-      if (ka[i] !== kb[i]) return Number(ka[i]) - Number(kb[i]);
+    const len = Math.min(ka.length, kb.length);
+    for (let i = 0; i < len - 1; i++) {
+      const va = ka[i] as number;
+      const vb = kb[i] as number;
+      if (va !== vb) return va - vb;
     }
-    return String(ka[4]).localeCompare(String(kb[4]));
+    return String(ka[ka.length - 1]).localeCompare(String(kb[kb.length - 1]));
   });
 
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
