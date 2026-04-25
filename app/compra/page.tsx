@@ -422,7 +422,9 @@ function CompraForm() {
       : "Loja"
   );
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia" | "Outro">(
-    localParam === "shopping" ? "Shopping"
+    // Encomenda nao aceita Shopping — derruba pra Residencia se o link veio com shopping
+    encomendaParam && localParam === "shopping" ? "Residencia"
+      : localParam === "shopping" ? "Shopping"
       : localParam === "outro" ? "Outro"
       : "Residencia"
   );
@@ -637,7 +639,9 @@ function CompraForm() {
   const [erroMp, setErroMp] = useState("");
 
   // Janela de agendamento (hoje a D+2 de calendário, pulando domingos).
-  const agendamentoBounds = useMemo(() => getAgendamentoBounds(), []);
+  // Encomenda: orcamento dura 24h — janela de agendamento encolhe pra
+  // hoje + amanha (em vez de hoje + 2 dias).
+  const agendamentoBounds = useMemo(() => getAgendamentoBounds(new Date(), { encomenda: encomendaParam }), [encomendaParam]);
 
   // Installment calculations
   const descontoNum = parseFloat(String(descontoParam)) || 0;
@@ -837,7 +841,15 @@ function CompraForm() {
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
     const enderecoFull = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
-    const pagEntrega = pagamentoPagoParam ? "" : local === "Correios" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "! PAGAMENTO ANTECIPADO" : local === "Entrega" ? "PAGAR NA ENTREGA" : "";
+    // Encomenda: sempre antecipado (cliente paga sinal ou integral pelo link
+    // antes do produto chegar — recolhimento da troca/diferenca fica pra
+    // retirada). Sem encomenda: residencia/correios = antecipado, resto = na entrega.
+    const pagEntrega = pagamentoPagoParam ? ""
+      : encomendaParam ? "! PAGAMENTO ANTECIPADO"
+      : local === "Correios" ? "! PAGAMENTO ANTECIPADO"
+      : local === "Entrega" && tipoEntrega === "Residencia" ? "! PAGAMENTO ANTECIPADO"
+      : local === "Entrega" ? "PAGAR NA ENTREGA"
+      : "";
 
     // Bloco encomenda — vai logo no topo da mensagem pra equipe ver na
     // primeira linha que e pedido sob encomenda. Inclui prazo, valor pago
@@ -2237,14 +2249,20 @@ function CompraForm() {
                   iso = `${y}-${m}-${day}`;
                 }
                 if (iso !== raw) {
-                  alert("Agendamento disponivel apenas para hoje, amanha ou depois de amanha (sem domingo).");
+                  alert(encomendaParam
+                    ? "Encomenda: agendamento so pode ser hoje ou amanha (orcamento expira em 24h)."
+                    : "Agendamento disponivel apenas para hoje, amanha ou depois de amanha (sem domingo).");
                 }
                 setDataEntrega(iso);
               }}
               min={agendamentoBounds.min}
               max={agendamentoBounds.max}
               className={inputCls} />
-            <p className="text-[11px] text-[#86868B] mt-1">Agendamento disponivel para hoje, amanha ou depois de amanha. Domingo indisponivel.</p>
+            <p className={`text-[11px] mt-1 ${encomendaParam ? "text-blue-700 font-medium" : "text-[#86868B]"}`}>
+              {encomendaParam
+                ? "📦 Encomenda: agendamento até amanhã (orçamento válido por 24h)."
+                : "Agendamento disponivel para hoje, amanha ou depois de amanha. Domingo indisponivel."}
+            </p>
           </div>)}
 
           {/* Horário — dinâmico conforme tipo + dia da semana (não mostra pra Correios) */}
@@ -2269,17 +2287,24 @@ function CompraForm() {
           {local === "Entrega" && (
             <div className="space-y-3">
               <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Local de entrega *</label>
-              {/* "Outro" só aparece com localParam=outro (exceção liberada pelo operador). */}
-              <div className={`grid gap-3 ${localOutroHabilitado ? "grid-cols-3" : "grid-cols-2"}`}>
+              {/* "Outro" só aparece com localParam=outro (exceção liberada pelo operador).
+                  Encomenda nao aceita Shopping — operador combina entrega em residencia
+                  ou outro local quando o produto chegar. */}
+              <div className={`grid gap-3 ${(() => {
+                const c = 1 + (encomendaParam ? 0 : 1) + (localOutroHabilitado || encomendaParam ? 1 : 0);
+                return c === 1 ? "grid-cols-1" : c === 2 ? "grid-cols-2" : "grid-cols-3";
+              })()}`}>
                 <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Residencia" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                   <input type="radio" name="tipoEntrega" value="Residencia" checked={tipoEntrega === "Residencia"} onChange={() => { setTipoEntrega("Residencia"); setShopping(""); }} className="sr-only" />
                   &#x1F3E0; <span className="font-medium text-sm">Residência</span>
                 </label>
-                <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
-                  <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
-                  &#x1F3EC; <span className="font-medium text-sm">Shopping</span>
-                </label>
-                {localOutroHabilitado && (
+                {!encomendaParam && (
+                  <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                    <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
+                    &#x1F3EC; <span className="font-medium text-sm">Shopping</span>
+                  </label>
+                )}
+                {(localOutroHabilitado || encomendaParam) && (
                   <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Outro" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                     <input type="radio" name="tipoEntrega" value="Outro" checked={tipoEntrega === "Outro"} onChange={() => setTipoEntrega("Outro")} className="sr-only" />
                     &#x1F4CD; <span className="font-medium text-sm">Outro local</span>
@@ -2287,8 +2312,8 @@ function CompraForm() {
                 )}
               </div>
               {!pagamentoPagoParam && (
-                <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
-                  {tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
+                <div className={`p-3 rounded-lg text-sm font-semibold text-center ${(encomendaParam || tipoEntrega === "Residencia") ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
+                  {(encomendaParam || tipoEntrega === "Residencia") ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
                 </div>
               )}
               {tipoEntrega === "Shopping" && (
