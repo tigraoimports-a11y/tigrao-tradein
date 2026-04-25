@@ -519,18 +519,28 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     // catalogo "casa" com alguma canonica.
     const canonicaBuckets = opt.cores.map((c) => ({ name: c, bucket: bucketOf(c) }));
 
-    // Mostra cores na ordem do hardcoded (Apple oficial). Pra cada canonica,
-    // pega A PRIMEIRA cor do catalogo cujo bucket sobrepoe — as outras do mesmo
-    // bucket (aliases) sao ignoradas, garantindo dedup.
+    // Mostra o nome CANONICO Apple (ex: "Ardósia") quando ha match, em vez do
+    // nome generico do catalogo (ex: "Cinza"). Mas se o catalogo cadastrou
+    // uma variacao mais especifica (ex: "Cinza-espacial" exato), preserva
+    // esse nome — o catalogo vence quando tem nome exato.
     const filtered: string[] = [];
-    const usedBuckets: Set<string>[] = []; // buckets ja consumidos
+    const usedBuckets: Set<string>[] = [];
     for (const cb of canonicaBuckets) {
-      // Skip se o bucket dessa canonica ja foi consumido (cores 9/10/11 podem
-      // ter overlap entre materiais — ex: "Prateado" em Aluminio e Aco).
       if (usedBuckets.some((u) => overlaps(u, cb.bucket))) continue;
-      const match = coresModeloRaw.find((cor) => overlaps(bucketOf(cor), cb.bucket));
-      if (match) {
-        filtered.push(match);
+      // Tenta match EXATO primeiro (mesmo nome normalizado) — se o catalogo
+      // ja tem o nome canonico (ou variacao com mesma normalizacao), usa esse.
+      const exact = coresModeloRaw.find((cor) => normalizeCor(cor) === normalizeCor(cb.name));
+      if (exact) {
+        filtered.push(exact);
+        usedBuckets.push(cb.bucket);
+        continue;
+      }
+      // Fallback: se ha alguma cor no catalogo cujo bucket overlapa, mostra
+      // o NOME CANONICO (cb.name) em vez do nome generico do catalogo. Pra
+      // o operador ler "Ardósia" no resumo em vez de "Cinza".
+      const hasAlias = coresModeloRaw.some((cor) => overlaps(bucketOf(cor), cb.bucket));
+      if (hasAlias) {
+        filtered.push(cb.name);
         usedBuckets.push(cb.bucket);
       }
     }
