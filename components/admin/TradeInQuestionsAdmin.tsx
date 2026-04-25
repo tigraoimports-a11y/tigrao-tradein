@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoCategoria, getSeminovoVariantes, consolidateSeminovos } from "@/lib/types";
+import { useConfirmModal } from "@/components/admin/ConfirmModal";
 
 interface Props {
   password: string;
@@ -36,6 +37,7 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [deviceTab, setDeviceTab] = useState("iphone");
+  const { confirm: confirmModal, prompt: promptModal, modal } = useConfirmModal();
 
   function getHeaders() {
     return { "x-admin-password": password, "Content-Type": "application/json" };
@@ -169,6 +171,7 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
 
   return (
     <div className="space-y-4">
+      {modal}
       {/* Device type tabs */}
       <div className="flex gap-2 flex-wrap items-center">
         {DEVICE_TABS.map(t => (
@@ -237,9 +240,18 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
         </div>
         <button
           onClick={async () => {
-            const titulo = prompt("Titulo da nova pergunta:");
+            const titulo = await promptModal({
+              title: "Nova pergunta",
+              description: "Informe o titulo da pergunta que o cliente vai ver.",
+              placeholder: "Ex: Possui o carregador original?",
+            });
             if (!titulo) return;
-            const tipo = prompt("Tipo (yesno, selection, numeric, multiselect, conditional_date):", "yesno");
+            const tipo = await promptModal({
+              title: "Tipo da pergunta",
+              description: "yesno | selection | numeric | multiselect | conditional_date",
+              placeholder: "yesno",
+              defaultValue: "yesno",
+            });
             if (!tipo) return;
             const slug = titulo.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 30);
             const ordem = questions.length + 1;
@@ -326,7 +338,13 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
               <div onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={async () => {
-                    if (!confirm(`Excluir pergunta "${q.titulo}"?`)) return;
+                    const ok = await confirmModal({
+                      title: "Excluir pergunta",
+                      description: `"${q.titulo}" vai sumir do formulario. Nao afeta respostas ja coletadas.`,
+                      confirmLabel: "Excluir",
+                      variant: "danger",
+                    });
+                    if (!ok) return;
                     const isUUID = /^[0-9a-f]{8}-/i.test(q.id);
                     if (isUUID) {
                       try {
@@ -580,10 +598,19 @@ const DEFAULT_SEMINOVOS: SeminovoOption[] = [
 
 const DEFAULT_ORIGENS = ["Anúncio", "Story", "Direct", "WhatsApp", "Indicação", "Já sou cliente"];
 
-const LABEL_GROUPS: { title: string; keys: { key: string; label: string }[] }[] = [
+const LABEL_GROUPS: { title: string; keys: { key: string; label: string; multiline?: boolean }[] }[] = [
   {
     title: "Etapa 1 — Aparelho Usado",
     keys: [{ key: "step1_titulo", label: "Título da etapa" }],
+  },
+  {
+    title: "Help texts da bateria (por categoria)",
+    keys: [
+      { key: "help_battery_iphone", label: "iPhone — passo a passo", multiline: true },
+      { key: "help_battery_ipad", label: "iPad — passo a passo", multiline: true },
+      { key: "help_battery_macbook", label: "MacBook — passo a passo (ciclos)", multiline: true },
+      { key: "help_battery_watch", label: "Apple Watch — passo a passo", multiline: true },
+    ],
   },
   {
     title: "Etapa 2 — Aparelho Novo",
@@ -802,14 +829,24 @@ function TradeInConfigAdmin({ password, deviceTab: _deviceTab }: { password: str
                 {group.title}
               </div>
               <div className="space-y-2">
-                {group.keys.map(({ key, label }) => (
+                {group.keys.map(({ key, label, multiline }) => (
                   <div key={key}>
                     <label className="text-[11px] text-[#86868B] mb-0.5 block">{label}</label>
-                    <input
-                      value={labels[key] || ""}
-                      onChange={(e) => setLabels({ ...labels, [key]: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                    />
+                    {multiline ? (
+                      <textarea
+                        value={labels[key] || ""}
+                        onChange={(e) => setLabels({ ...labels, [key]: e.target.value })}
+                        rows={6}
+                        placeholder="Markdown suportado: **negrito** · *italico* · ## Titulo"
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E] font-mono"
+                      />
+                    ) : (
+                      <input
+                        value={labels[key] || ""}
+                        onChange={(e) => setLabels({ ...labels, [key]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                      />
+                    )}
                   </div>
                 ))}
               </div>

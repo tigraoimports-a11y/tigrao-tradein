@@ -564,6 +564,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               modelDiscounts={usedData.modelDiscounts}
               questionsConfig={questionsConfig}
               deviceType={selectedDeviceType}
+              labels={tradeinConfig?.labels}
               onNext={handleStep1Complete}
               onTrackQuestion={trackQuestion}
             />
@@ -611,6 +612,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
                 modelDiscounts={usedData.modelDiscounts}
                 questionsConfig={questionsConfig}
                 deviceType={selectedDeviceType}
+                labels={tradeinConfig?.labels}
                 onNext={handleStep1Complete}
                 onTrackQuestion={trackQuestion}
               />

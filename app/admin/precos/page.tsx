@@ -6,6 +6,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { getCategoriasPrecos, addCategoriaPrecos, removeCategoriaPrecos, EMOJI_OPTIONS, DEFAULT_CATEGORIAS_SEMINOVOS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
 import { corParaPT } from "@/lib/cor-pt";
+import { useConfirmModal } from "@/components/admin/ConfirmModal";
 
 const UsadosContent = lazy(() => import("@/app/admin/usados/page").then(m => ({ default: m.UsadosContent })));
 
@@ -49,6 +50,7 @@ function applyOrder(rows: PrecoProduto[], catKey: string): PrecoProduto[] {
 
 function PrecosContent() {
   const { password, user } = useAdmin();
+  const { confirm: confirmModal, modal: confirmModalUI } = useConfirmModal();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PrecoProduto[] | null>(null);
   const [editing, setEditing] = useState<Record<string, string>>({});
@@ -178,8 +180,14 @@ function PrecosContent() {
     setShowNewCat(false);
   }
 
-  function handleRemoveCategoria(key: string) {
-    if (!confirm(`Remover categoria "${categorias.find((c) => c.key === key)?.label}"?`)) return;
+  async function handleRemoveCategoria(key: string) {
+    const label = categorias.find((c) => c.key === key)?.label;
+    const ok = await confirmModal({
+      title: `Remover categoria "${label}"?`,
+      confirmLabel: "Remover",
+      variant: "danger",
+    });
+    if (!ok) return;
     const updated = removeCategoriaPrecos(key);
     setCategorias(updated);
     if (tab === key) setTab("IPHONE");
@@ -269,7 +277,12 @@ function PrecosContent() {
   }
 
   async function handleDelete(row: PrecoProduto) {
-    if (!confirm(`Remover ${row.modelo} ${row.armazenamento}?`)) return;
+    const ok = await confirmModal({
+      title: `Remover ${row.modelo} ${row.armazenamento}?`,
+      confirmLabel: "Remover",
+      variant: "danger",
+    });
+    if (!ok) return;
     await fetch("/api/admin/precos", {
       method: "DELETE",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
@@ -462,6 +475,7 @@ function PrecosContent() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
+      {confirmModalUI}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-bold text-[#1D1D1F]">Painel de Precos</h2>

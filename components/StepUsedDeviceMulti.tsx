@@ -18,6 +18,10 @@ interface StepUsedDeviceMultiProps {
   modelDiscounts?: Record<string, ModelDiscounts>;
   questionsConfig?: TradeInQuestion[] | null;
   deviceType: MultiDeviceType;
+  /** Labels editaveis cadastrados via /admin/simulacoes. Hoje usado pros help
+   *  texts do campo bateria (1 por device_type). Se vazio, cai nos valores
+   *  hardcoded pra nao quebrar clientes sem admin configurado. */
+  labels?: Record<string, string>;
   onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType; extraAnswers?: Record<string, unknown> }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
 }
@@ -213,7 +217,7 @@ function toCalcDeviceType(dt: MultiDeviceType): DeviceType {
   return dt;
 }
 
-export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelDiscounts, questionsConfig, deviceType, onNext, onTrackQuestion }: StepUsedDeviceMultiProps) {
+export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelDiscounts, questionsConfig, deviceType, labels, onNext, onTrackQuestion }: StepUsedDeviceMultiProps) {
   // Normaliza slugs: alguns cadastros no admin foram criados com sufixo de
   // device_type (ex: `hasDamage_ipad`, `battery_macbook`). O codigo usa os
   // slugs puros (`hasDamage`, `battery`), entao strip do sufixo `_${deviceType}`
@@ -1009,51 +1013,34 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   Não sei os ciclos — bateria normal
                 </button>
               )}
-              {deviceType === "iphone" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. Abra <strong style={{ color: "var(--ti-text)" }}>Ajustes</strong> no seu iPhone</p>
-                    <p>2. Toque em <strong style={{ color: "var(--ti-text)" }}>Bateria</strong></p>
-                    <p>3. Toque em <strong style={{ color: "var(--ti-text)" }}>Saude e Carregamento da Bateria</strong></p>
-                    <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Maxima</strong></p>
-                  </div>
-                </details>
-              )}
-              {deviceType === "ipad" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. Abra <strong style={{ color: "var(--ti-text)" }}>Ajustes</strong> no seu iPad</p>
-                    <p>2. Toque em <strong style={{ color: "var(--ti-text)" }}>Bateria</strong></p>
-                    <p>3. Toque em <strong style={{ color: "var(--ti-text)" }}>Saude da Bateria</strong></p>
-                    <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Maxima</strong></p>
-                  </div>
-                </details>
-              )}
-              {deviceType === "macbook" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir os ciclos de bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. Clique no menu <strong style={{ color: "var(--ti-text)" }}>Apple</strong> {">"} <strong style={{ color: "var(--ti-text)" }}>Sobre Este Mac</strong></p>
-                    <p>2. Clique em <strong style={{ color: "var(--ti-text)" }}>Mais Informacoes</strong></p>
-                    <p>3. Role ate o final e clique em <strong style={{ color: "var(--ti-text)" }}>Relatorio do Sistema</strong></p>
-                    <p>4. Na barra lateral, clique em <strong style={{ color: "var(--ti-text)" }}>Energia</strong></p>
-                    <p>5. Veja <strong style={{ color: "var(--ti-text)" }}>Contagem de Ciclos</strong></p>
-                  </div>
-                </details>
-              )}
-              {deviceType === "watch" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. No Apple Watch, abra <strong style={{ color: "var(--ti-text)" }}>Ajustes</strong></p>
-                    <p>2. Toque em <strong style={{ color: "var(--ti-text)" }}>Bateria</strong></p>
-                    <p>3. Toque em <strong style={{ color: "var(--ti-text)" }}>Saude da Bateria</strong></p>
-                    <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Maxima</strong></p>
-                  </div>
-                </details>
-              )}
+              {/* Ajuda "Como descobrir a saude/ciclos da bateria?" — texto padrao
+                  por device_type, sobrescrivel via labels.help_battery_{device}
+                  em /admin/simulacoes. Suporta markdown (negrito, italico, ## titulo). */}
+              {(() => {
+                const defaults: Record<string, string> = {
+                  iphone: "## Como descobrir a saúde da bateria?\n\n1. Abra **Ajustes** no seu iPhone\n2. Toque em **Bateria**\n3. Toque em **Saúde e Carregamento da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
+                  ipad: "## Como descobrir a saúde da bateria?\n\n1. Abra **Ajustes** no seu iPad\n2. Toque em **Bateria**\n3. Toque em **Saúde da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
+                  macbook: "## Como descobrir os ciclos de bateria?\n\n1. Clique no menu **Apple** > **Sobre Este Mac**\n2. Clique em **Mais Informações**\n3. Role até o final e clique em **Relatório do Sistema**\n4. Na barra lateral, clique em **Energia**\n5. Veja **Contagem de Ciclos**",
+                  watch: "## Como descobrir a saúde da bateria?\n\n1. No Apple Watch, abra **Ajustes**\n2. Toque em **Bateria**\n3. Toque em **Saúde da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
+                };
+                const key = `help_battery_${deviceType}`;
+                const raw = labels?.[key]?.trim() || defaults[deviceType] || "";
+                if (!raw) return null;
+                // Extrai primeiro `## Titulo` como summary; resto vai no body.
+                const headerMatch = raw.match(/^## (.+)$/m);
+                const title = headerMatch ? headerMatch[1] : "Como descobrir a saúde da bateria?";
+                const body = headerMatch ? raw.replace(/^## .+$/m, "").trim() : raw;
+                return (
+                  <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+                    <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>{title}</summary>
+                    <div
+                      className="text-[11px] mt-2 whitespace-pre-wrap leading-relaxed"
+                      style={{ color: "var(--ti-muted)" }}
+                      dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(body) }}
+                    />
+                  </details>
+                );
+              })()}
               {batteryRejected && batteryRejectMessage && (
                 <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
                   <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{batteryRejectMessage}</p>
