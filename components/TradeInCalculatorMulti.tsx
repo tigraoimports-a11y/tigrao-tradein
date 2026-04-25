@@ -41,16 +41,13 @@ const DEVICE_OPTIONS: { type: MultiDeviceType; emoji: string; label: string }[] 
 
 // Influencers que ja compraram na TigraoImports — exibidos como social proof
 // na landing inicial. Andre tem fotos pessoais COM eles (no momento da compra)
-// + autorizacao verbal de uso. PRA ATIVAR A SECAO:
-//   1. Subir fotos em /public/images/influencer-1.jpg, influencer-2.jpg, etc
-//   2. Preencher o array abaixo com handle + path da foto
-//   3. Deploy (a secao aparece automaticamente)
-// Enquanto array vazio, secao fica escondida na landing (sem placeholder feio).
+// + autorizacao verbal de uso. Cada @ vira link clicavel pro perfil do Insta.
+// Pra adicionar mais: subir foto em /public/images/influencer-N.jpg e
+// adicionar item no array.
 const INFLUENCERS_LANDING: { handle: string; foto: string }[] = [
-  // Exemplo (descomentar quando tiver foto + autorizacao escrita):
-  // { handle: "@influenciador1", foto: "/images/influencer-1.jpg" },
-  // { handle: "@influenciador2", foto: "/images/influencer-2.jpg" },
-  // { handle: "@influenciador3", foto: "/images/influencer-3.jpg" },
+  { handle: "@leostronda", foto: "/images/influencer-1.jpg" },
+  { handle: "@euxama", foto: "/images/influencer-2.jpg" },
+  { handle: "@diegocruz_", foto: "/images/influencer-3.jpg" },
 ];
 
 export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaParam, previewMode = false }: { vendedor?: string | null; temaParam?: string | null; previewMode?: boolean }) {
@@ -412,8 +409,9 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
             <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-[28px]"
               style={{ backgroundColor: "var(--ti-accent-light, #FFF5EC)", border: "2px solid var(--ti-accent, #E8740E)" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/andre.jpg" alt="TigrãoImports"
+              <img src="/images/andre.png" alt="TigrãoImports"
                 className="w-full h-full object-cover"
+                style={{ objectPosition: "center 15%" }}
                 onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement!.innerHTML = "🐯"; }} />
             </div>
             <div className="text-left">
@@ -465,12 +463,12 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               <div className="flex justify-center gap-3">
                 {INFLUENCERS_LANDING.map((inf) => (
                   <a key={inf.handle} href={`https://instagram.com/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-1 transition-opacity hover:opacity-80">
-                    <div className="w-16 h-16 rounded-full overflow-hidden" style={{ border: "2px solid var(--ti-accent, #E8740E)" }}>
+                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-80">
+                    <div className="w-20 h-20 rounded-full overflow-hidden" style={{ border: "2px solid var(--ti-accent, #E8740E)" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={inf.foto} alt={inf.handle} className="w-full h-full object-cover" />
                     </div>
-                    <span className="text-[11px] font-medium" style={{ color: tema.textMuted }}>{inf.handle}</span>
+                    <span className="text-[12px] font-medium" style={{ color: tema.textMuted }}>{inf.handle}</span>
                   </a>
                 ))}
               </div>
