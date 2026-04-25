@@ -49,9 +49,9 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
 
 // Material da caixa do Apple Watch por geracao Series. Hardcoded porque nao
 // vem do catalogo hoje — admin nao tem dimensao separada pra isso. Usado pra
-// (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Titanio.
-// Cores da Apple oficiais por geracao + material (BR). Aco Inox e Titanio
-// sempre vem GPS+Cel de fabrica.
+// (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Aco/Titanio.
+// Cores oficiais Apple por geracao + material (BR). Aco Inox e Titanio sempre
+// vem GPS+Cel de fabrica.
 const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; forceGPSCel?: boolean }[]> = {
   "9": [
     { material: "Alumínio", cores: ["Estelar", "Meia-noite", "Prateado", "Vermelho", "Rosa"] },
@@ -67,23 +67,74 @@ const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; fo
   ],
 };
 
-// Aliases comuns no catalogo brasileiro vs nomenclatura Apple. "Prata" e
-// equivalente a "Prateado", "Preto" sozinho costuma ser "Preto Brilhante" do
-// Aluminio etc. Usado no filtro de cores por material pra nao deixar cor
-// cadastrada de fora so por causa de variacao no nome.
+// Aliases bidirecionais entre o catalogo do admin e a nomenclatura Apple
+// oficial. Catalogo costuma usar nomes PT genericos ("Preto", "Dourado",
+// "Cinza") que mapeiam pra varias cores Apple especificas dependendo do
+// modelo + material. Os aliases tem que ser permissivos pra nao deixar cor
+// cadastrada de fora — o filtro por material da o contexto pra resolver.
+//
+// Chaves e valores normalizados (lowercase, sem acento, hifen→espaco).
 const COR_ALIASES: Record<string, string[]> = {
-  prata: ["prateado"],
-  prateado: ["prata"],
-  preto: ["preto brilhante"],
-  "preto brilhante": ["preto"],
-  natural: ["titanio natural", "titânio natural"],
-  "titanio natural": ["natural", "titânio natural"],
-  "titânio natural": ["natural", "titanio natural"],
+  // Prateado / Prata / Silver
+  "prata": ["prateado", "silver"],
+  "prateado": ["prata", "silver"],
+  "silver": ["prata", "prateado"],
+  // Preto generico → cobre Midnight (Series 9 Al), Jet Black (Series 10/11 Al),
+  // Black Titanium etc. Catalogo usa so "Preto" pra todos.
+  "preto": ["preto brilhante", "jet black", "meia noite", "midnight", "titanio preto", "black titanium"],
+  "preto brilhante": ["preto", "jet black"],
+  "jet black": ["preto", "preto brilhante"],
+  "meia noite": ["midnight", "preto"],
+  "midnight": ["meia noite", "preto"],
+  "titanio preto": ["preto", "black titanium"],
+  "black titanium": ["preto", "titanio preto"],
+  // Natural / Titanio Natural
+  "natural": ["titanio natural"],
+  "titanio natural": ["natural"],
+  // Ardosia / Slate (Titanium); cinza tb pode ser slate
+  "ardosia": ["slate", "slate titanium"],
+  "slate": ["ardosia", "slate titanium"],
+  "slate titanium": ["ardosia", "slate"],
+  // Estelar / Starlight
+  "estelar": ["starlight"],
+  "starlight": ["estelar"],
+  // Cinza generico → cobre Graphite (Series 9 Aço), Space Gray (Al), Slate
+  // (Titanium). Quando o catalogo so cadastrou "Cinza", deixa ele matchear
+  // qualquer um — o filtro do material restringe pelo allow-list.
+  "cinza": ["grafite", "graphite", "space gray", "space grey", "cinza espacial", "slate", "ardosia"],
+  "cinza espacial": ["space gray", "space grey", "cinza"],
+  "space gray": ["cinza espacial", "cinza"],
+  "space grey": ["cinza espacial", "cinza"],
+  "grafite": ["graphite", "cinza"],
+  "graphite": ["grafite", "cinza"],
+  // Dourado generico → cobre Gold (Series 9 Aço), Rose Gold (Series 10/11 Al),
+  // Gold Titanium (Series 10/11 Ti). Catalogo usa so "Dourado" pra todos.
+  "dourado": ["gold", "ouro", "ouro rosa", "rose gold", "rose", "gold titanium"],
+  "gold": ["dourado", "ouro"],
+  "ouro": ["dourado", "gold"],
+  "ouro rosa": ["rose gold", "rose", "dourado"],
+  "rose gold": ["ouro rosa", "dourado"],
+  "rose": ["ouro rosa", "dourado"],
+  "gold titanium": ["dourado", "gold"],
+  // Vermelho / Red / Product RED
+  "vermelho": ["red", "product red"],
+  "red": ["vermelho"],
+  "product red": ["vermelho"],
+  // Rosa / Pink
+  "rosa": ["pink"],
+  "pink": ["rosa"],
 };
 
-// Normaliza string pra comparacao de cor: lowercase, sem acento, trim.
+// Normaliza string pra comparacao de cor: lowercase, sem acento, hifen vira
+// espaco (Cinza-espacial vs Cinza espacial), espacos colapsados, trim.
 function normalizeCor(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // Markdown seguro pra helpText: escape HTML primeiro, depois aplica formatacao.
@@ -446,37 +497,51 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     if (!requiresWatchCase || !watchCase) return coresModeloRaw;
     const opt = watchCaseOptions.find((o) => o.material === watchCase);
     if (!opt || opt.cores.length === 0) return coresModeloRaw;
-    const allowed = new Set(opt.cores.map(normalizeCor));
-    const matchAllowed = (cor: string): boolean => {
+
+    // Resolve "canonical bucket" pra uma cor: pega o nome normalizado dela e
+    // todas as suas aliases (transitivo de profundidade 1 — suficiente pra
+    // grafo plano que temos), retorna como Set. Duas cores estao no mesmo
+    // bucket se Set.intersection nao for vazia. Usamos isso pra dedup:
+    // "Preto" e "Preto Brilhante" caem no mesmo bucket {preto, preto brilhante,
+    // jet black} e so o primeiro a aparecer entra na lista.
+    const bucketOf = (cor: string): Set<string> => {
       const n = normalizeCor(cor);
-      if (allowed.has(n)) return true;
-      const aliases = COR_ALIASES[n] || [];
-      return aliases.some((a) => allowed.has(normalizeCor(a)));
+      const bucket = new Set<string>([n]);
+      for (const alias of COR_ALIASES[n] || []) bucket.add(normalizeCor(alias));
+      return bucket;
     };
-    // Mostra cores na ordem do hardcoded (Apple oficial), nao na ordem alfabetica
-    // do catalogo. Cor cadastrada que nao bate no allow-list e descartada.
+    const overlaps = (a: Set<string>, b: Set<string>) => {
+      for (const x of a) if (b.has(x)) return true;
+      return false;
+    };
+
+    // Bucket de cada cor canonica do material — usado pra ver se uma cor do
+    // catalogo "casa" com alguma canonica.
+    const canonicaBuckets = opt.cores.map((c) => ({ name: c, bucket: bucketOf(c) }));
+
+    // Mostra o nome CANONICO Apple (ex: "Ardósia") quando ha match, em vez do
+    // nome generico do catalogo (ex: "Cinza"). Mas se o catalogo cadastrou
+    // uma variacao mais especifica (ex: "Cinza-espacial" exato), preserva
+    // esse nome — o catalogo vence quando tem nome exato.
     const filtered: string[] = [];
-    const seen = new Set<string>();
-    for (const canonica of opt.cores) {
-      const match = coresModeloRaw.find((cor) => {
-        const n = normalizeCor(cor);
-        if (seen.has(n)) return false;
-        if (n === normalizeCor(canonica)) return true;
-        const aliases = COR_ALIASES[n] || [];
-        return aliases.some((a) => normalizeCor(a) === normalizeCor(canonica));
-      });
-      if (match) {
-        filtered.push(match);
-        seen.add(normalizeCor(match));
+    const usedBuckets: Set<string>[] = [];
+    for (const cb of canonicaBuckets) {
+      if (usedBuckets.some((u) => overlaps(u, cb.bucket))) continue;
+      // Tenta match EXATO primeiro (mesmo nome normalizado) — se o catalogo
+      // ja tem o nome canonico (ou variacao com mesma normalizacao), usa esse.
+      const exact = coresModeloRaw.find((cor) => normalizeCor(cor) === normalizeCor(cb.name));
+      if (exact) {
+        filtered.push(exact);
+        usedBuckets.push(cb.bucket);
+        continue;
       }
-    }
-    // Inclui qualquer cor do catalogo que casa com allow-list mas nao foi pega
-    // no loop acima (ordem fora da Apple) — defensivo.
-    for (const cor of coresModeloRaw) {
-      const n = normalizeCor(cor);
-      if (!seen.has(n) && matchAllowed(cor)) {
-        filtered.push(cor);
-        seen.add(n);
+      // Fallback: se ha alguma cor no catalogo cujo bucket overlapa, mostra
+      // o NOME CANONICO (cb.name) em vez do nome generico do catalogo. Pra
+      // o operador ler "Ardósia" no resumo em vez de "Cinza".
+      const hasAlias = coresModeloRaw.some((cor) => overlaps(bucketOf(cor), cb.bucket));
+      if (hasAlias) {
+        filtered.push(cb.name);
+        usedBuckets.push(cb.bucket);
       }
     }
     return filtered.length > 0 ? filtered : coresModeloRaw;
