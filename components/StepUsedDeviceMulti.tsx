@@ -50,23 +50,41 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
 // Material da caixa do Apple Watch por geracao Series. Hardcoded porque nao
 // vem do catalogo hoje — admin nao tem dimensao separada pra isso. Usado pra
 // (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Titanio.
-// Series 9: Aluminio (cores standard) + Aco Inoxidavel (Grafite/Prateado/Dourado).
-// Series 10/11: Aluminio + Titanio (Natural/Dourado/Ardosia, sempre GPS+Cel).
-const WATCH_SERIES_CASES: Record<string, { material: string; forceGPSCel?: boolean }[]> = {
+// Cores da Apple oficiais por geracao + material (BR). Aco Inox e Titanio
+// sempre vem GPS+Cel de fabrica.
+const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; forceGPSCel?: boolean }[]> = {
   "9": [
-    { material: "Alumínio" },
-    // Series 9 Aco Inox so vem GPS+Cel de fabrica.
-    { material: "Aço Inoxidável", forceGPSCel: true },
+    { material: "Alumínio", cores: ["Estelar", "Meia-noite", "Prateado", "Vermelho", "Rosa"] },
+    { material: "Aço Inoxidável", cores: ["Grafite", "Prateado", "Dourado"], forceGPSCel: true },
   ],
   "10": [
-    { material: "Alumínio" },
-    { material: "Titânio", forceGPSCel: true },
+    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
+    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
   ],
   "11": [
-    { material: "Alumínio" },
-    { material: "Titânio", forceGPSCel: true },
+    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
+    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
   ],
 };
+
+// Aliases comuns no catalogo brasileiro vs nomenclatura Apple. "Prata" e
+// equivalente a "Prateado", "Preto" sozinho costuma ser "Preto Brilhante" do
+// Aluminio etc. Usado no filtro de cores por material pra nao deixar cor
+// cadastrada de fora so por causa de variacao no nome.
+const COR_ALIASES: Record<string, string[]> = {
+  prata: ["prateado"],
+  prateado: ["prata"],
+  preto: ["preto brilhante"],
+  "preto brilhante": ["preto"],
+  natural: ["titanio natural", "titânio natural"],
+  "titanio natural": ["natural", "titânio natural"],
+  "titânio natural": ["natural", "titanio natural"],
+};
+
+// Normaliza string pra comparacao de cor: lowercase, sem acento, trim.
+function normalizeCor(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
 
 // Markdown seguro pra helpText: escape HTML primeiro, depois aplica formatacao.
 // Suporta:
@@ -416,11 +434,53 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   }, [deviceType, line, subLine]);
   const requiresWatchCase = watchCaseOptions.length > 0;
 
-  // Cores: usa direto o catalogo cadastrado em /admin/usados (sem filtro por
-  // material). O admin gerencia a lista de cores por modelo, e o material da
-  // caixa fica capturado via watchCase no resumo. Antes filtrava por uma lista
-  // hardcoded que escondia cores cadastradas — operador cobrou pra mostrar todas.
-  const coresModelo = coresModeloRaw;
+  // Cores: filtra pelo material da caixa (Watch Series). O catalogo guarda
+  // cores por MODELO sem dimensao de material, entao usamos a lista hardcoded
+  // de WATCH_SERIES_CASES como allow-list — match e tolerante (case+acento
+  // insensitive + aliases comuns "Prata" <=> "Prateado", "Preto" <=> "Preto
+  // Brilhante"). Cores duplicadas no catalogo (ex: "Preto" e "Preto Brilhante"
+  // pra Aluminio) colapsam pelo alias, mostrando so o nome canonico Apple.
+  // Quando intersecao fica vazia (catalogo desalinhado), cai pra raw pra
+  // nao travar o cliente.
+  const coresModelo = useMemo(() => {
+    if (!requiresWatchCase || !watchCase) return coresModeloRaw;
+    const opt = watchCaseOptions.find((o) => o.material === watchCase);
+    if (!opt || opt.cores.length === 0) return coresModeloRaw;
+    const allowed = new Set(opt.cores.map(normalizeCor));
+    const matchAllowed = (cor: string): boolean => {
+      const n = normalizeCor(cor);
+      if (allowed.has(n)) return true;
+      const aliases = COR_ALIASES[n] || [];
+      return aliases.some((a) => allowed.has(normalizeCor(a)));
+    };
+    // Mostra cores na ordem do hardcoded (Apple oficial), nao na ordem alfabetica
+    // do catalogo. Cor cadastrada que nao bate no allow-list e descartada.
+    const filtered: string[] = [];
+    const seen = new Set<string>();
+    for (const canonica of opt.cores) {
+      const match = coresModeloRaw.find((cor) => {
+        const n = normalizeCor(cor);
+        if (seen.has(n)) return false;
+        if (n === normalizeCor(canonica)) return true;
+        const aliases = COR_ALIASES[n] || [];
+        return aliases.some((a) => normalizeCor(a) === normalizeCor(canonica));
+      });
+      if (match) {
+        filtered.push(match);
+        seen.add(normalizeCor(match));
+      }
+    }
+    // Inclui qualquer cor do catalogo que casa com allow-list mas nao foi pega
+    // no loop acima (ordem fora da Apple) — defensivo.
+    for (const cor of coresModeloRaw) {
+      const n = normalizeCor(cor);
+      if (!seen.has(n) && matchAllowed(cor)) {
+        filtered.push(cor);
+        seen.add(n);
+      }
+    }
+    return filtered.length > 0 ? filtered : coresModeloRaw;
+  }, [coresModeloRaw, requiresWatchCase, watchCase, watchCaseOptions]);
 
   // Se o chip selecionado tem só 1 modelo, auto-selecionar
   const needsScreenSize = modelsForChip.length > 1;
