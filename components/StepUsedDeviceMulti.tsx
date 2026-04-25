@@ -370,13 +370,41 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const chipList = useMemo(() => {
     if (!chipGroups) return [];
     const keys = Object.keys(chipGroups);
-    const extractNum = (s: string) => {
-      const m = s.match(/(\d+)/);
-      return m ? Number(m[1]) : 999;
+    // Pra MacBook/iPad: ordena por chip M-num e variante (plain < Pro < Max).
+    // Sem isso, "M1" e "M1 Pro" empatavam no number sort e ficavam fora de
+    // ordem (M1 Pro antes de M1). Pra Apple Watch (chip e so a geracao tipo
+    // "9", "10"), sem variante — extractKey retorna [9,0] e funciona igual.
+    const extractKey = (s: string): [number, number] => {
+      const m = s.match(/M(\d+)(?:\s+(Pro|Max))?/i);
+      if (m) {
+        const num = Number(m[1]);
+        const variant = (m[2] || "").toLowerCase();
+        const ord = variant === "" ? 0 : variant === "pro" ? 1 : variant === "max" ? 2 : 3;
+        return [num, ord];
+      }
+      // Fallback: extrai primeiro numero (Watch geracao "9", "10", etc).
+      const n = s.match(/(\d+)/);
+      return [n ? Number(n[1]) : 999, 0];
     };
-    return keys.sort((a, b) => extractNum(a) - extractNum(b));
+    return keys.sort((a, b) => {
+      const ka = extractKey(a);
+      const kb = extractKey(b);
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      return ka[1] - kb[1];
+    });
   }, [chipGroups]);
-  const modelsForChip = useMemo(() => chipGroups && subLine ? (chipGroups[subLine] || []) : [], [chipGroups, subLine]);
+  const modelsForChip = useMemo(() => {
+    const list = chipGroups && subLine ? (chipGroups[subLine] || []) : [];
+    // Ordena por tamanho de tela (14" antes de 16"). Sem isso, modelos podem
+    // chegar do banco em qualquer ordem — antes "16\"" aparecia antes de "14\""
+    // pra MacBook Pro M2 Pro porque a string "16" e maior que "14" no sort
+    // alfabetico padrao do Object.keys.
+    const screenInches = (m: string): number => {
+      const match = m.match(/(\d+)[""]/);
+      return match ? Number(match[1]) : 999;
+    };
+    return [...list].sort((a, b) => screenInches(a) - screenInches(b));
+  }, [chipGroups, subLine]);
 
   // Opcoes de caixa pro Apple Watch Series, determinadas pela geracao (subLine).
   // Watch Series 9 → [Aluminio, Aco Inox]; Series 10/11 → [Aluminio, Titanio].
