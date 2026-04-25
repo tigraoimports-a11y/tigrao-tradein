@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Script from "next/script";
+import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 // Item #28 — gerenciar conexoes Pluggy/Open Finance pra puxar saldos
 // automaticos de Itau, Inter, MP, Nubank, etc.
+//
+// Pluggy Connect Widget via SDK oficial React (em vez de script tag CDN
+// que estava com problema de loading). Lazy import porque carrega ~100KB
+// e so e usado quando admin clica "Conectar banco".
+const PluggyConnect = dynamic(
+  () => import("react-pluggy-connect").then((m) => m.PluggyConnect),
+  { ssr: false }
+);
 
 interface Conta {
   accountId: string;
@@ -38,10 +46,6 @@ interface ConexoesResp {
   saldoTotal: number;
 }
 
-// Pluggy Connect Widget global (carregado via script tag)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare global { interface Window { PluggyConnect: any } }
-
 const fmtBRL = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const fmtData = (iso: string | null): string => {
@@ -71,7 +75,12 @@ export default function BancosPage() {
   const [syncing, setSyncing] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
-  const [scriptReady, setScriptReady] = useState(false);
+  // Pluggy Connect Widget — armazena o connect token quando admin clica
+  // "Conectar banco". Quando setado, o componente <PluggyConnect/> e
+  // renderizado e abre o modal nativo. itemIdParaAtualizar e usado quando
+  // estamos reconectando (status LOGIN_ERROR).
+  const [pluggyToken, setPluggyToken] = useState<string | null>(null);
+  const [itemIdParaAtualizar, setItemIdParaAtualizar] = useState<string | undefined>(undefined);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,16 +102,19 @@ export default function BancosPage() {
     if (password) load();
   }, [password, load]);
 
-  // Abre o Pluggy Connect Widget pra adicionar nova conexao
-  const conectarBanco = async (itemIdParaAtualizar?: string) => {
+  // Abre o Pluggy Connect Widget pra adicionar nova conexao.
+  // 1. Backend gera connect token efemero
+  // 2. Setamos pluggyToken → componente <PluggyConnect/> e renderizado
+  //    e abre modal nativo automatico
+  // 3. Callbacks (onSuccess/onError/onClose) tratam o resultado
+  const conectarBanco = async (itemId?: string) => {
     setConnecting(true);
     setMsg(null);
     try {
-      // 1. Pega connect token efemero do backend
       const tokenRes = await fetch("/api/admin/bancos/connect-token", {
         method: "POST",
         headers: apiHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(itemIdParaAtualizar ? { itemId: itemIdParaAtualizar } : {}),
+        body: JSON.stringify(itemId ? { itemId } : {}),
       });
       const tokenJson = await tokenRes.json();
       if (!tokenRes.ok) {
@@ -110,53 +122,60 @@ export default function BancosPage() {
         setConnecting(false);
         return;
       }
-
-      // 2. Abre o widget Pluggy
-      if (!window.PluggyConnect) {
-        setMsg({ tipo: "erro", texto: "Widget Pluggy nao carregou. Recarregue a pagina." });
-        setConnecting(false);
-        return;
-      }
-
-      const pluggy = new window.PluggyConnect({
-        connectToken: tokenJson.accessToken,
-        includeSandbox: false,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onSuccess: async (itemData: any) => {
-          // 3. Quando admin termina, registra a conexao no nosso banco
-          const itemId = itemData?.item?.id;
-          if (!itemId) {
-            setMsg({ tipo: "erro", texto: "Pluggy nao retornou itemId" });
-            setConnecting(false);
-            return;
-          }
-          const regRes = await fetch("/api/admin/bancos/connections", {
-            method: "POST",
-            headers: apiHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ itemId }),
-          });
-          const regJson = await regRes.json();
-          if (regRes.ok) {
-            setMsg({ tipo: "ok", texto: `Conectado! ${regJson.contasSync || 0} contas sincronizadas.` });
-            load();
-          } else {
-            setMsg({ tipo: "erro", texto: regJson.error || "Erro ao registrar" });
-          }
-          setConnecting(false);
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onError: (err: any) => {
-          setMsg({ tipo: "erro", texto: err?.message || "Erro no widget Pluggy" });
-          setConnecting(false);
-        },
-        onClose: () => setConnecting(false),
-      });
-      pluggy.init();
+      setItemIdParaAtualizar(itemId);
+      setPluggyToken(tokenJson.accessToken);
+      // setConnecting fica true ate o widget fechar (onClose ou onSuccess)
     } catch (e) {
       setMsg({ tipo: "erro", texto: e instanceof Error ? e.message : "Erro" });
       setConnecting(false);
     }
   };
+
+  // Handler quando o widget Pluggy retorna sucesso
+  const onPluggySuccess = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async (itemData: any) => {
+      const itemId = itemData?.item?.id;
+      if (!itemId) {
+        setMsg({ tipo: "erro", texto: "Pluggy nao retornou itemId" });
+        setPluggyToken(null);
+        setConnecting(false);
+        return;
+      }
+      try {
+        const regRes = await fetch("/api/admin/bancos/connections", {
+          method: "POST",
+          headers: apiHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ itemId }),
+        });
+        const regJson = await regRes.json();
+        if (regRes.ok) {
+          setMsg({ tipo: "ok", texto: `Conectado! ${regJson.contasSync || 0} contas sincronizadas.` });
+          load();
+        } else {
+          setMsg({ tipo: "erro", texto: regJson.error || "Erro ao registrar" });
+        }
+      } catch (e) {
+        setMsg({ tipo: "erro", texto: e instanceof Error ? e.message : "Erro de rede" });
+      }
+      setPluggyToken(null);
+      setConnecting(false);
+    },
+    [apiHeaders, load]
+  );
+
+  // Handler quando widget fecha sem completar (admin clicou X ou ESC)
+  const onPluggyClose = useCallback(() => {
+    setPluggyToken(null);
+    setConnecting(false);
+  }, []);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onPluggyError = useCallback((err: any) => {
+    setMsg({ tipo: "erro", texto: err?.message || "Erro no widget Pluggy" });
+    setPluggyToken(null);
+    setConnecting(false);
+  }, []);
 
   // Sync manual: atualiza saldos de todas conexoes (ou de uma especifica)
   const syncAll = async (conexao_id?: number) => {
@@ -201,12 +220,18 @@ export default function BancosPage() {
 
   return (
     <div className="space-y-4 max-w-5xl">
-      {/* SDK do Pluggy Connect Widget. Carregado uma unica vez por pagina. */}
-      <Script
-        src="https://cdn.pluggy.ai/web-connect/v2.10.0/pluggy-connect.js"
-        strategy="lazyOnload"
-        onReady={() => setScriptReady(true)}
-      />
+      {/* Pluggy Connect Widget — renderiza so quando tem token (clica em
+          conectar). Componente abre modal nativo e dispara callbacks. */}
+      {pluggyToken && (
+        <PluggyConnect
+          connectToken={pluggyToken}
+          includeSandbox={false}
+          updateItem={itemIdParaAtualizar}
+          onSuccess={onPluggySuccess}
+          onError={onPluggyError}
+          onClose={onPluggyClose}
+        />
+      )}
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -225,10 +250,10 @@ export default function BancosPage() {
           </button>
           <button
             onClick={() => conectarBanco()}
-            disabled={connecting || !scriptReady}
+            disabled={connecting}
             className="px-4 py-1.5 rounded-lg bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] disabled:opacity-50 transition-colors"
           >
-            {connecting ? "Aguardando..." : !scriptReady ? "Carregando..." : "+ Conectar banco"}
+            {connecting ? "Aguardando..." : "+ Conectar banco"}
           </button>
         </div>
       </div>
