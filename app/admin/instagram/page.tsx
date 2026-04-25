@@ -27,6 +27,14 @@ interface Post {
   created_at: string;
   agendado_para: string | null;
   postado_em: string | null;
+  // Item #25: metricas pos-publicacao (so preenchidas em posts POSTADO)
+  metricas_likes?: number | null;
+  metricas_comments?: number | null;
+  metricas_reach?: number | null;
+  metricas_saves?: number | null;
+  metricas_shares?: number | null;
+  metricas_views?: number | null;
+  metricas_atualizado_em?: string | null;
 }
 
 const STATUS_LABEL: Record<Post["status"], string> = {
@@ -68,6 +76,9 @@ export default function InstagramListPage() {
   const [refinando, setRefinando] = useState(false);
   const [motivoRefino, setMotivoRefino] = useState("");
   const [msg, setMsg] = useState("");
+  // Item #25: estado do botao de sincronizar metricas
+  const [syncingMetricas, setSyncingMetricas] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
 
   const fetchPosts = useCallback(async () => {
     if (!password) return;
@@ -141,6 +152,31 @@ export default function InstagramListPage() {
     fetchPosts();
   };
 
+  // Item #25: sincroniza metricas de todos posts POSTADO nos ultimos 30 dias
+  const syncMetricas = async () => {
+    setSyncingMetricas(true);
+    setSyncMsg("");
+    try {
+      const res = await fetch("/api/admin/instagram-metricas", {
+        method: "POST",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ sync_all: true, days: 30 }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setSyncMsg(`Erro: ${j.error || res.statusText}`);
+      } else if (j.atualizados === 0 && j.erros === 0) {
+        setSyncMsg(j.message || "Nenhum post nos ultimos 30 dias");
+      } else {
+        setSyncMsg(`✓ ${j.atualizados} posts atualizados${j.erros > 0 ? ` · ${j.erros} erro(s)` : ""}`);
+        fetchPosts();
+      }
+    } catch (e) {
+      setSyncMsg(`Falha de rede: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setSyncingMetricas(false);
+  };
+
   const filtrados = filtro === "TODOS" ? posts : posts.filter(p => p.status === filtro);
   const contagem: Record<string, number> = {
     TODOS: posts.length,
@@ -160,6 +196,15 @@ export default function InstagramListPage() {
           <p className="text-sm text-[#86868B] mt-1">Posts automatizados em carrossel com pesquisa + fact-check</p>
         </div>
         <div className="flex gap-2">
+          {/* Item #25 — sincroniza metricas dos posts POSTADO */}
+          <button
+            onClick={syncMetricas}
+            disabled={syncingMetricas}
+            className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-sm text-[#6E6E73] hover:bg-[#F5F5F7] transition-colors disabled:opacity-50"
+            title="Puxa likes, alcance, comentarios da Graph API pra todos posts publicados nos ultimos 30 dias"
+          >
+            {syncingMetricas ? "🔄 Atualizando..." : "📊 Atualizar metricas"}
+          </button>
           <Link
             href="/admin/instagram/configuracoes"
             className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-sm text-[#6E6E73] hover:bg-[#F5F5F7] transition-colors"
@@ -174,6 +219,12 @@ export default function InstagramListPage() {
           </button>
         </div>
       </div>
+
+      {syncMsg && (
+        <div className={`mb-3 px-3 py-2 rounded-lg text-xs ${syncMsg.startsWith("Erro") || syncMsg.startsWith("Falha") ? "bg-[#FFF5F5] text-[#E74C3C]" : "bg-[#F0FFF4] text-[#27AE60]"}`}>
+          {syncMsg}
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -347,6 +398,7 @@ export default function InstagramListPage() {
                 <th className="text-left px-4 py-3">Tipo</th>
                 <th className="text-left px-4 py-3">Tema</th>
                 <th className="text-left px-4 py-3">Status</th>
+                <th className="text-left px-4 py-3">Métricas</th>
                 <th className="text-left px-4 py-3">Criado</th>
                 <th className="text-right px-4 py-3"></th>
               </tr>
@@ -367,6 +419,26 @@ export default function InstagramListPage() {
                     {p.erro && <div className="text-xs text-[#E74C3C] mt-1 truncate max-w-md" title={p.erro}>{p.erro}</div>}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-xs">{STATUS_LABEL[p.status]}</td>
+                  {/* Item #25 — coluna de metricas. So mostra valores em posts POSTADO. */}
+                  <td className="px-4 py-3 whitespace-nowrap text-xs">
+                    {p.status === "POSTADO" ? (
+                      p.metricas_atualizado_em ? (
+                        <div
+                          className="flex items-center gap-2 text-[#6E6E73]"
+                          title={`Atualizado em ${new Date(p.metricas_atualizado_em).toLocaleString("pt-BR")}`}
+                        >
+                          <span title="Curtidas">❤️ {p.metricas_likes ?? 0}</span>
+                          <span title="Comentarios">💬 {p.metricas_comments ?? 0}</span>
+                          <span title="Alcance">👁️ {p.metricas_reach ?? 0}</span>
+                          <span title="Salvamentos">🔖 {p.metricas_saves ?? 0}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#86868B] italic">Sem dados</span>
+                      )
+                    ) : (
+                      <span className="text-[#D2D2D7]">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-xs text-[#86868B]">
                     {new Date(p.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     {p.criado_por && <span className="ml-1">· {p.criado_por}</span>}
