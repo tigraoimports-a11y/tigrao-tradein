@@ -1717,10 +1717,11 @@ export default function AdminPage() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${
                           row.status === "GOSTEI" ? "bg-green-100 text-green-700" :
+                          row.status === "AVALIACAO_MANUAL" ? "bg-blue-100 text-blue-700" :
                           row.status === "INVALIDO" ? "bg-gray-200 text-gray-700" :
                           "bg-red-100 text-red-600"
                         }`} title={row.status === "INVALIDO" && row.motivo_invalido ? `Motivo: ${row.motivo_invalido}` : undefined}>
-                          {row.status === "GOSTEI" ? "Fechou" : row.status === "INVALIDO" ? "🚫 Inválido" : "Saiu"}
+                          {row.status === "GOSTEI" ? "Fechou" : row.status === "AVALIACAO_MANUAL" ? "📝 Avaliação Manual" : row.status === "INVALIDO" ? "🚫 Inválido" : "Saiu"}
                         </span>
                         {user?.role === "admin" && row.status !== "INVALIDO" && (
                           <button
@@ -1912,10 +1913,11 @@ export default function AdminPage() {
               <div>
                 <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
                   modalRow.status === "GOSTEI" ? "bg-green-100 text-green-700" :
+                  modalRow.status === "AVALIACAO_MANUAL" ? "bg-blue-100 text-blue-700" :
                   modalRow.status === "INVALIDO" ? "bg-gray-200 text-gray-700" :
                   "bg-red-100 text-red-600"
                 }`}>
-                  {modalRow.status === "GOSTEI" ? "Fechou pedido" : modalRow.status === "INVALIDO" ? "🚫 Inválido" : "Saiu sem fechar"}
+                  {modalRow.status === "GOSTEI" ? "Fechou pedido" : modalRow.status === "AVALIACAO_MANUAL" ? "📝 Avaliação Manual" : modalRow.status === "INVALIDO" ? "🚫 Inválido" : "Saiu sem fechar"}
                 </span>
                 {modalRow.vendedor && (
                   <span className="ml-2 px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{modalRow.vendedor}</span>
