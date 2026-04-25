@@ -14,12 +14,24 @@ function getSessionId(): string {
 
 // Endpoint /api/funnel (e nao /api/analytics) — adblockers bloqueiam URLs com
 // "analytics" e isso fazia 99% dos eventos sumirem em produ
+//
+// Usa navigator.sendBeacon como prioridade — survives navegacao (cliente
+// clica "Submeter" e o browser pula pro wa.me/MercadoPago, fetch normal e
+// CANCELADO; sendBeacon e garantido pelo browser ate completar).
+// Fallback: fetch com keepalive:true (mesma garantia em browsers modernos).
 function fire(payload: Record<string, unknown>) {
   try {
+    const body = JSON.stringify(payload);
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      const blob = new Blob([body], { type: "application/json" });
+      const ok = navigator.sendBeacon("/api/funnel", blob);
+      if (ok) return;
+    }
     fetch("/api/funnel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body,
+      keepalive: true,
     }).catch(() => {
       /* silent — tracking should never break UX */
     });
