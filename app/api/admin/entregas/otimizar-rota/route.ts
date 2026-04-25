@@ -13,21 +13,29 @@ import { findCoords, haversineKm, type Coords } from "@/lib/bairro-coords";
 // ordem razoavel. O motoboy depois ajusta no Google Maps com transito real.
 //
 // POST /api/admin/entregas/otimizar-rota
-// Body: { date?: "2026-04-25", ids?: string[], origem?: { lat, lng } }
+// Body: {
+//   date?: "2026-04-25",
+//   ids?: string[],
+//   entregador?: string,    // filtra so entregas desse motoboy (Igor, Leandro, etc)
+//   origem?: { lat, lng }
+// }
 //   - date: filtra entregas dessa data com status=PENDENTE ou SAIU
 //   - ids: lista explicita de IDs de entregas (sobrescreve date+filtro)
-//   - origem: ponto de partida (default: loja TigraoImports na Barra)
+//   - entregador: filtra entregas atribuidas a esse motoboy (case-insensitive)
+//                 → cada motoboy tem rota propria, faz sentido otimizar separado
+//   - origem: ponto de partida (default: escritorio TigraoImports na Barra)
 //
 // Retorna:
 //   - waypoints: array ORDENADO de entregas com ordem visita + lat/lng
-//   - distanciaTotalKm: soma das pernas (loja → 1 → 2 → ... → ultima)
+//   - distanciaTotalKm: soma das pernas (origem → 1 → 2 → ... → ultima)
 //   - semCoords: entregas que ficaram FORA porque nao temos coordenadas
 //                pra elas (sem bairro reconhecido) — equipe trata manual
 //   - origem: o ponto de partida usado
+//   - entregadores: lista de motoboys com entregas no dia (pra UI montar dropdown)
 //
 // Auth: header x-admin-password === ADMIN_PASSWORD
 
-// Loja TigraoImports — Av. Ator Jose Wilker 400, Barra Olimpica.
+// Escritorio TigraoImports — Av. Ator Jose Wilker 605, Barra Olimpica.
 // Ponto de partida default das rotas. Pode ser sobrescrito via body.origem.
 const ORIGEM_LOJA: Coords = { lat: -22.9792, lng: -43.3947 };
 
@@ -43,6 +51,7 @@ interface Entrega {
   status: string;
   produto: string | null;
   vendedor: string | null;
+  entregador: string | null;
 }
 
 interface Waypoint extends Entrega {
@@ -58,7 +67,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { date?: string; ids?: string[]; origem?: Coords };
+  let body: { date?: string; ids?: string[]; entregador?: string; origem?: Coords };
   try {
     body = await req.json();
   } catch {
@@ -66,11 +75,12 @@ export async function POST(req: NextRequest) {
   }
 
   const origem: Coords = body.origem ?? ORIGEM_LOJA;
+  const filtroEntregador = (body.entregador || "").trim();
 
   // Carrega entregas — por IDs explicitos OU por data+status
   let entregasQuery = supabase
     .from("entregas")
-    .select("id, cliente, telefone, endereco, bairro, regiao, data_entrega, horario, status, produto, vendedor");
+    .select("id, cliente, telefone, endereco, bairro, regiao, data_entrega, horario, status, produto, vendedor, entregador");
 
   if (body.ids && body.ids.length > 0) {
     entregasQuery = entregasQuery.in("id", body.ids);
@@ -93,16 +103,36 @@ export async function POST(req: NextRequest) {
       waypoints: [],
       distanciaTotalKm: 0,
       semCoords: [],
+      entregadores: [],
       origem,
       message: "Nenhuma entrega encontrada com os criterios",
     });
   }
 
+  // Lista unica de entregadores ATRIBUIDOS no dia, com contagem.
+  // Calcula ANTES de filtrar pra UI mostrar todos motoboys disponiveis no
+  // dropdown — filtro restringe os waypoints, nao a lista de motoboys.
+  const entregadoresMap: Record<string, number> = {};
+  for (const e of entregas) {
+    const nome = (e.entregador || "").trim();
+    if (nome) {
+      entregadoresMap[nome] = (entregadoresMap[nome] || 0) + 1;
+    }
+  }
+  const entregadores = Object.entries(entregadoresMap)
+    .map(([nome, qtd]) => ({ nome, qtd }))
+    .sort((a, b) => b.qtd - a.qtd);
+
+  // Filtra por entregador se solicitado (case-insensitive)
+  const entregasFiltradas = filtroEntregador
+    ? entregas.filter((e) => (e.entregador || "").trim().toLowerCase() === filtroEntregador.toLowerCase())
+    : entregas;
+
   // Geocodifica cada entrega via lookup de bairro/cidade
   const comCoords: Array<Entrega & { coords: Coords }> = [];
   const semCoords: Entrega[] = [];
 
-  for (const e of entregas) {
+  for (const e of entregasFiltradas) {
     const coords = findCoords({ bairro: e.bairro, cidade: e.regiao });
     if (coords) {
       comCoords.push({ ...e, coords });
@@ -149,6 +179,7 @@ export async function POST(req: NextRequest) {
       status: proximo.status,
       produto: proximo.produto,
       vendedor: proximo.vendedor,
+      entregador: proximo.entregador,
       ordem,
       lat: proximo.coords.lat,
       lng: proximo.coords.lng,
@@ -168,7 +199,9 @@ export async function POST(req: NextRequest) {
       bairro: e.bairro,
       regiao: e.regiao,
       endereco: e.endereco,
+      entregador: e.entregador,
     })),
+    entregadores,
     origem,
   });
 }

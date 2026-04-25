@@ -195,6 +195,26 @@ export const BAIRRO_COORDS: Record<string, Coords> = {
   "Maracanã": { lat: -22.9116, lng: -43.2302 },
   "Grajaú": { lat: -22.9204, lng: -43.2598 },
   "Andaraí": { lat: -22.9232, lng: -43.2467 },
+  // Bairros adicionados em Abr/2026 — apareceram em entregas reais do dia
+  "Senador Vasconcelos": { lat: -22.8794, lng: -43.5158 },
+  "Vila Kennedy": { lat: -22.8631, lng: -43.4475 },
+  "Jardim Bangu": { lat: -22.8782, lng: -43.4711 },
+  "Vila Militar": { lat: -22.8628, lng: -43.4061 },
+  "Higienópolis": { lat: -22.8731, lng: -43.2649 },
+  "Maria da Graça": { lat: -22.8886, lng: -43.2692 },
+  "Inhaúma": { lat: -22.8714, lng: -43.2744 },
+  "Tomás Coelho": { lat: -22.8758, lng: -43.3098 },
+  "Engenheiro Leal": { lat: -22.8908, lng: -43.3225 },
+  "Vaz Lobo": { lat: -22.8716, lng: -43.3408 },
+  "Costa Barros": { lat: -22.8298, lng: -43.3654 },
+  "Anchieta": { lat: -22.8254, lng: -43.4077 },
+  "Parque Anchieta": { lat: -22.8256, lng: -43.4099 },
+  "Parada de Lucas": { lat: -22.8294, lng: -43.3148 },
+  "Vigário Geral": { lat: -22.8133, lng: -43.3094 },
+  "Jardim América": { lat: -22.8231, lng: -43.3279 },
+  "Vista Alegre": { lat: -22.8295, lng: -43.3402 },
+  "Cordovil": { lat: -22.8344, lng: -43.2880 },
+  "Cidade Universitaria": { lat: -22.8514, lng: -43.2342 },
 };
 
 export const CIDADE_COORDS: Record<string, Coords> = {
@@ -275,9 +295,14 @@ const BAIRRO_INDEX: Record<string, Coords> = (() => {
  * mostrar erro, etc).
  *
  * Estrategia:
- * 1. Match por bairro normalizado (case+acento-insensitive)
- * 2. Match por cidade normalizada
- * 3. Null
+ * 1. Match exato por bairro normalizado (case+acento-insensitive)
+ * 2. Match parcial: bairro do banco contido NA chave do lookup (ex: "Senador
+ *    Vasconcelos II" → bate com "Senador Vasconcelos"), ou vice-versa
+ * 3. Match por cidade normalizada
+ * 4. Null
+ *
+ * Partial match foi adicionado em Abr/2026 depois que entregas reais
+ * apareceram com sufixos tipo "Bairro X (Detalhe)", "Vila Kennedy II", etc.
  */
 export function findCoords(input: { bairro?: string | null; cidade?: string | null }): Coords | null {
   const { bairro, cidade } = input;
@@ -285,6 +310,17 @@ export function findCoords(input: { bairro?: string | null; cidade?: string | nu
     const key = normalizeName(bairro);
     const direct = BAIRRO_INDEX[key];
     if (direct) return direct;
+
+    // Partial match: tenta achar bairro conhecido contido OU contendo o nome.
+    // Importante: so bate se o token tem >= 5 chars pra evitar false positives
+    // (ex: "Sao" bate com "Sao Conrado", "Sao Cristovao", "Sao Joao..." etc).
+    if (key.length >= 5) {
+      for (const [knownKey, coords] of Object.entries(BAIRRO_INDEX)) {
+        if (knownKey.includes(key) || key.includes(knownKey)) {
+          return coords;
+        }
+      }
+    }
   }
   if (cidade) {
     const key = normalizeName(cidade);
