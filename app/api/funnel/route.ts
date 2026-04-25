@@ -97,6 +97,11 @@ export async function GET(req: NextRequest) {
     const whatsappSessions = new Set<string>();
     const exitSessions = new Set<string>();
     const cotarOutroSessions = new Set<string>();
+    // Etapa 5 do funil — formulario /compra (preenchimento de dados pessoais).
+    // Mede drop-off depois do orcamento aceito → quem chega no formulario e
+    // quem completa de fato.
+    const compraViewSessions = new Set<string>();
+    const compraSubmitSessions = new Set<string>();
 
     for (const row of rows) {
       sessions.add(row.session_id);
@@ -123,6 +128,8 @@ export async function GET(req: NextRequest) {
       if (row.event === "quote_whatsapp") whatsappSessions.add(row.session_id);
       if (row.event === "quote_exit") exitSessions.add(row.session_id);
       if (row.event === "quote_cotar_outro") cotarOutroSessions.add(row.session_id);
+      if (row.event === "compra_view") compraViewSessions.add(row.session_id);
+      if (row.event === "compra_submit") compraSubmitSessions.add(row.session_id);
     }
 
     // Visitas: prefer site_view, mas se ainda nao tem (deploy recente),
@@ -138,6 +145,18 @@ export async function GET(req: NextRequest) {
         completes,
         droppedHere: Math.max(views - completes, 0),
       };
+    });
+
+    // Etapa 5: formulario /compra. Diferente das etapas 1-4 (que sao
+    // sub-passos do simulador), esta e uma pagina nova com seu proprio
+    // pageview e submit. View = chegou no /compra, complete = submeteu.
+    const compraView = compraViewSessions.size;
+    const compraSubmit = compraSubmitSessions.size;
+    funnel.push({
+      step: 5,
+      views: compraView,
+      completes: compraSubmit,
+      droppedHere: Math.max(compraView - compraSubmit, 0),
     });
 
     const questionBreakdown = Object.entries(questionAnswers)
@@ -164,11 +183,17 @@ export async function GET(req: NextRequest) {
       whatsappCount: whatsappSessions.size,
       exitCount: exitSessions.size,
       cotarOutroCount: cotarOutroSessions.size,
+      compraViewCount: compraView,
+      compraSubmitCount: compraSubmit,
       funnel,
       questionBreakdown,
       daily,
       conversionRate: visits > 0
         ? ((whatsappSessions.size / visits) * 100).toFixed(1)
+        : "0",
+      // Conversao final ate submit do /compra (etapa 5)
+      conversionRateFinal: visits > 0
+        ? ((compraSubmit / visits) * 100).toFixed(1)
         : "0",
     });
   } catch (err) {
