@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoCategoria, getSeminovoVariantes, consolidateSeminovos } from "@/lib/types";
 import { useConfirmModal } from "@/components/admin/ConfirmModal";
 
@@ -142,6 +143,25 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
     if (swapIdx < 0 || swapIdx >= newList.length) return;
 
     [newList[index], newList[swapIdx]] = [newList[swapIdx], newList[index]];
+    await persistReorder(newList);
+  }
+
+  // Drag-and-drop handler — chamado quando admin solta uma pergunta arrastada.
+  // Reusa persistReorder (mesma logica do botoes ▲▼). source.index e
+  // destination.index sao do @hello-pangea/dnd. Se admin soltou fora ou no
+  // mesmo lugar, ignora.
+  async function handleDragEnd(result: DropResult) {
+    if (!result.destination) return;
+    const fromIdx = result.source.index;
+    const toIdx = result.destination.index;
+    if (fromIdx === toIdx) return;
+    const newList = [...questions];
+    const [moved] = newList.splice(fromIdx, 1);
+    newList.splice(toIdx, 0, moved);
+    await persistReorder(newList);
+  }
+
+  async function persistReorder(newList: TradeInQuestion[]) {
     const reorderItems = newList.map((q, i) => ({ id: q.id, ordem: i + 1 }));
     setQuestions(newList.map((q, i) => ({ ...q, ordem: i + 1 })));
 
@@ -299,21 +319,41 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
         </button>
       </div>
 
-      {questions.map((q, idx) => {
-        const isExpanded = expandedId === q.id;
-        return (
-          <div
-            key={q.id}
-            className={`border rounded-xl overflow-hidden transition-all ${
-              q.ativo ? "border-[#D2D2D7] bg-white" : "border-[#D2D2D7] bg-[#F5F5F7] opacity-60"
-            }`}
-          >
+      {/* Drag-and-drop visual via @hello-pangea/dnd. Cada pergunta vira um
+          <Draggable> e a lista um <Droppable>. O drag handle (⋮⋮) fica antes
+          dos botoes ▲▼ — botoes mantidos como fallback pra mobile/teclado. */}
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="questions-list">
+          {(droppableProvided) => (
+            <div ref={droppableProvided.innerRef} {...droppableProvided.droppableProps} className="space-y-3">
+              {questions.map((q, idx) => {
+                const isExpanded = expandedId === q.id;
+                return (
+                  <Draggable key={q.id} draggableId={q.id} index={idx}>
+                    {(dragProvided, dragSnapshot) => (
+                      <div
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        className={`border rounded-xl overflow-hidden transition-all ${
+                          q.ativo ? "border-[#D2D2D7] bg-white" : "border-[#D2D2D7] bg-[#F5F5F7] opacity-60"
+                        } ${dragSnapshot.isDragging ? "shadow-2xl ring-2 ring-[#E8740E] bg-[#FFF5EB]" : ""}`}
+                      >
             {/* Header */}
             <div
               className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-[#F5F5F7] transition-colors"
               onClick={() => setExpandedId(isExpanded ? null : q.id)}
             >
-              {/* Reorder arrows */}
+              {/* Drag handle — apenas desktop (mouse). Mobile/teclado usa ▲▼. */}
+              <div
+                {...dragProvided.dragHandleProps}
+                onClick={(e) => e.stopPropagation()}
+                className="cursor-grab active:cursor-grabbing text-[#86868B] hover:text-[#E8740E] text-base leading-none select-none px-1.5 hidden sm:flex flex-col gap-0.5"
+                title="Arraste pra reordenar"
+              >
+                <span className="block leading-none">⋮⋮</span>
+                <span className="block leading-none">⋮⋮</span>
+              </div>
+              {/* Reorder arrows (fallback mobile/teclado/acessibilidade) */}
               <div className="flex flex-col gap-0" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleReorder(idx, "up")}
@@ -653,9 +693,16 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                 </div>
               </div>
             )}
-          </div>
-        );
-      })}
+                      </div>
+                    )}
+                  </Draggable>
+                );
+              })}
+              {droppableProvided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
     </div>
   );
 }

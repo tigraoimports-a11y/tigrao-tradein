@@ -34,6 +34,25 @@ export default function ConfiguracoesSitePage() {
       </div>
 
       <SiteConfigEditor />
+
+      {/* Pointer pra editor de perguntas — TradeInQuestionsAdmin vive em
+          /admin/simulacoes desde antes do CMS, mantemos la (compativel com
+          quem ja conhecia). Aqui so apontamos pra usuario achar. */}
+      <section className="bg-[#FFF5EB] rounded-xl p-5 border border-[#E8740E]/30">
+        <h2 className="text-[16px] font-semibold text-[#1D1D1F] mb-2">
+          🔧 Editar perguntas do simulador (modelo, GB, cor, bateria, etc)
+        </h2>
+        <p className="text-[13px] text-[#86868B] mb-3">
+          As perguntas do simulador (etapa 2 — &ldquo;Qual iPhone você tem?&rdquo;) são editadas em outra
+          tela. Você pode <strong>arrastar e soltar pra reordenar</strong>, criar novas perguntas,
+          ativar/desativar e mudar opções.
+        </p>
+        <Link href="/admin/simulacoes"
+          className="inline-flex items-center px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-colors"
+          style={{ backgroundColor: "#E8740E" }}>
+          Ir para Editor de Perguntas →
+        </Link>
+      </section>
     </main>
   );
 }
