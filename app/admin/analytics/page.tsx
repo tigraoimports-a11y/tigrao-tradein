@@ -22,6 +22,28 @@ interface DailyData {
   sessions: number;
 }
 
+interface DimRow {
+  key: string;
+  sessions: number;
+  started: number;
+  whatsapp: number;
+  submit: number;
+  conversion: number;
+}
+
+interface SessionDetail {
+  sessionId: string;
+  startedAt: string;
+  lastEventAt: string;
+  lastStep: number | null;
+  lastQuestion: string | null;
+  utmSource: string | null;
+  deviceType: string | null;
+  completedWhatsapp: boolean;
+  completedSubmit: boolean;
+  eventCount: number;
+}
+
 interface AnalyticsData {
   visits: number;
   startedCount: number;
@@ -36,7 +58,18 @@ interface AnalyticsData {
   daily: DailyData[];
   conversionRate: string;
   conversionRateFinal?: string;
+  byUtmSource?: DimRow[];
+  byDeviceType?: DimRow[];
+  sessionsList?: SessionDetail[];
+  filters?: { utm_source: string | null; device_type: string | null };
 }
+
+const DEVICE_LABELS: Record<string, string> = {
+  iphone: "iPhone",
+  ipad: "iPad",
+  macbook: "MacBook",
+  watch: "Apple Watch",
+};
 
 const STEP_LABELS: Record<number, string> = {
   1: "Seu Aparelho",
@@ -65,11 +98,18 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<"7d" | "30d" | "all">("7d");
+  // Filtros adicionados pra item #20: drilldown por canal e dispositivo.
+  // Quando ativos, todos numeros da tela viram da subset filtrado.
+  const [filterUtm, setFilterUtm] = useState<string>("");
+  const [filterDevice, setFilterDevice] = useState<string>("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/funnel?range=${range}`, {
+      const params = new URLSearchParams({ range });
+      if (filterUtm) params.set("utm_source", filterUtm);
+      if (filterDevice) params.set("device_type", filterDevice);
+      const res = await fetch(`/api/funnel?${params.toString()}`, {
         headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
       if (res.ok) {
@@ -80,11 +120,11 @@ export default function AnalyticsPage() {
       /* ignore */
     }
     setLoading(false);
-  }, [password, range]);
+  }, [password, range, filterUtm, filterDevice, user?.nome]);
 
   useEffect(() => {
     if (password) fetchData();
-  }, [password, range, fetchData]);
+  }, [password, range, filterUtm, filterDevice, fetchData]);
 
   if (loading) {
     return (
@@ -136,6 +176,49 @@ export default function AnalyticsPage() {
           </button>
         </div>
       </div>
+
+      {/* Filtros — item #20 (drop-off por canal/dispositivo).
+          Quando algum filtro tá ativo, todos numeros da pagina ficam restritos
+          ao subset (ex: so sessoes que vieram de Meta Ads + escolheram iPhone). */}
+      {data && (data.byUtmSource || data.byDeviceType) && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-3 sm:p-4 shadow-sm flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium text-[#86868B] uppercase tracking-wide">Filtrar por:</span>
+          <select
+            value={filterUtm}
+            onChange={(e) => setFilterUtm(e.target.value)}
+            className="px-3 py-1.5 rounded-lg text-xs border border-[#D2D2D7] bg-white text-[#1D1D1F] focus:border-[#E8740E] focus:outline-none"
+          >
+            <option value="">Todos os canais</option>
+            {(data.byUtmSource || []).map((u) => (
+              <option key={u.key} value={u.key === "(direto/sem origem)" ? "" : u.key}>
+                {u.key} ({u.sessions})
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterDevice}
+            onChange={(e) => setFilterDevice(e.target.value)}
+            className="px-3 py-1.5 rounded-lg text-xs border border-[#D2D2D7] bg-white text-[#1D1D1F] focus:border-[#E8740E] focus:outline-none"
+          >
+            <option value="">Todos os dispositivos</option>
+            {(data.byDeviceType || [])
+              .filter((d) => d.key !== "(direto/sem origem)")
+              .map((d) => (
+                <option key={d.key} value={d.key}>
+                  {DEVICE_LABELS[d.key] || d.key} ({d.sessions})
+                </option>
+              ))}
+          </select>
+          {(filterUtm || filterDevice) && (
+            <button
+              onClick={() => { setFilterUtm(""); setFilterDevice(""); }}
+              className="text-xs px-2 py-1 rounded text-[#E74C3C] hover:bg-[#FFF5F5] transition-colors"
+            >
+              ✕ Limpar
+            </button>
+          )}
+        </div>
+      )}
 
       {/* KPI Cards — top of funnel */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -355,6 +438,51 @@ export default function AnalyticsPage() {
         );
       })()}
 
+      {/* === NOVO (#20): Drop-off por CANAL DE AQUISICAO (UTM source) === */}
+      {data.byUtmSource && data.byUtmSource.length > 0 && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
+            Por canal de aquisicao
+          </h2>
+          <p className="text-xs text-[#86868B] mb-4">
+            Conversao de cada origem (Meta Ads, Instagram, direto, etc) — clique no filtro acima pra ver o funil completo desse canal
+          </p>
+          <DimTable rows={data.byUtmSource} labelHeader="Canal" />
+        </div>
+      )}
+
+      {/* === NOVO (#20): Drop-off por TIPO DE DISPOSITIVO === */}
+      {data.byDeviceType && data.byDeviceType.length > 0 && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
+            Por tipo de dispositivo
+          </h2>
+          <p className="text-xs text-[#86868B] mb-4">
+            Conversao por categoria — Apple Watch costuma ter taxa diferente de iPhone, indica onde refinar UX
+          </p>
+          <DimTable
+            rows={data.byDeviceType.map((r) => ({
+              ...r,
+              key: DEVICE_LABELS[r.key] || r.key,
+            }))}
+            labelHeader="Dispositivo"
+          />
+        </div>
+      )}
+
+      {/* === NOVO (#20): SESSOES INDIVIDUAIS (ultimas 50) — debug fino === */}
+      {data.sessionsList && data.sessionsList.length > 0 && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
+            Ultimas {data.sessionsList.length} sessoes
+          </h2>
+          <p className="text-xs text-[#86868B] mb-4">
+            Cada linha e uma pessoa que entrou. Mostra ate qual etapa avancou e em qual pergunta parou — util pra investigar abandono
+          </p>
+          <SessionsTable rows={data.sessionsList} />
+        </div>
+      )}
+
       {/* Top SKUs (vendas/simulacoes/encomendas por SKU canonico) */}
       <TopSkusSection password={password} range={range} />
 
@@ -393,6 +521,146 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Tabela compacta usada pra "Por canal" e "Por dispositivo".
+// Mostra cada dimensao com KPIs lado a lado e barra visual da conversao final.
+function DimTable({ rows, labelHeader }: { rows: DimRow[]; labelHeader: string }) {
+  if (rows.length === 0) return <p className="text-xs text-[#86868B]">Sem dados ainda.</p>;
+  const maxSessions = Math.max(...rows.map((r) => r.sessions), 1);
+  return (
+    <div className="overflow-x-auto -mx-4 sm:mx-0">
+      <table className="w-full text-xs sm:text-sm">
+        <thead>
+          <tr className="text-left text-[#86868B] border-b border-[#D2D2D7]">
+            <th className="px-2 sm:px-3 py-2 font-medium">{labelHeader}</th>
+            <th className="px-2 sm:px-3 py-2 font-medium text-right">Sessoes</th>
+            <th className="px-2 sm:px-3 py-2 font-medium text-right hidden sm:table-cell">Iniciaram</th>
+            <th className="px-2 sm:px-3 py-2 font-medium text-right">WhatsApp</th>
+            <th className="px-2 sm:px-3 py-2 font-medium text-right hidden sm:table-cell">Submeteu</th>
+            <th className="px-2 sm:px-3 py-2 font-medium text-right">Conv.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const widthPct = (r.sessions / maxSessions) * 100;
+            return (
+              <tr key={r.key} className="border-b border-[#F5F5F7] hover:bg-[#FFF5EB]/30">
+                <td className="px-2 sm:px-3 py-2.5 font-medium text-[#1D1D1F]">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate max-w-[140px]">{r.key}</span>
+                  </div>
+                  <div className="h-1 bg-[#F5F5F7] rounded mt-1 overflow-hidden">
+                    <div
+                      className="h-full bg-[#E8740E]/60 rounded"
+                      style={{ width: `${Math.max(widthPct, 2)}%` }}
+                    />
+                  </div>
+                </td>
+                <td className="px-2 sm:px-3 py-2.5 text-right text-[#1D1D1F]">{r.sessions}</td>
+                <td className="px-2 sm:px-3 py-2.5 text-right text-[#6E6E73] hidden sm:table-cell">{r.started}</td>
+                <td className="px-2 sm:px-3 py-2.5 text-right text-[#2ECC71] font-medium">{r.whatsapp}</td>
+                <td className="px-2 sm:px-3 py-2.5 text-right text-[#E8740E] font-medium hidden sm:table-cell">{r.submit}</td>
+                <td className="px-2 sm:px-3 py-2.5 text-right">
+                  <span
+                    className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      r.conversion >= 5
+                        ? "bg-[#F0FFF4] text-[#27AE60]"
+                        : r.conversion >= 2
+                        ? "bg-[#FFF5EB] text-[#E8740E]"
+                        : "bg-[#FFF5F5] text-[#E74C3C]"
+                    }`}
+                  >
+                    {r.conversion}%
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Tabela das ultimas 50 sessoes — pra debugar onde cliente especifico abandonou.
+// Mostra: quando entrou, ultima etapa vista, ultima pergunta respondida, canal,
+// dispositivo, status final (completo/abandonou).
+function SessionsTable({ rows }: { rows: SessionDetail[] }) {
+  function fmtDate(iso: string): string {
+    try {
+      const d = new Date(iso);
+      const dia = String(d.getDate()).padStart(2, "0");
+      const mes = String(d.getMonth() + 1).padStart(2, "0");
+      const hora = String(d.getHours()).padStart(2, "0");
+      const min = String(d.getMinutes()).padStart(2, "0");
+      return `${dia}/${mes} ${hora}:${min}`;
+    } catch {
+      return iso.slice(0, 16);
+    }
+  }
+  function fmtDuration(start: string, end: string): string {
+    try {
+      const ms = new Date(end).getTime() - new Date(start).getTime();
+      if (ms < 1000) return "<1s";
+      const s = Math.floor(ms / 1000);
+      if (s < 60) return `${s}s`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m}min`;
+      return `${Math.floor(m / 60)}h${m % 60}min`;
+    } catch {
+      return "—";
+    }
+  }
+  function statusBadge(s: SessionDetail): { text: string; cls: string } {
+    if (s.completedSubmit) return { text: "✓ Submeteu", cls: "bg-[#F0FFF4] text-[#27AE60]" };
+    if (s.completedWhatsapp) return { text: "→ WhatsApp", cls: "bg-[#FFF5EB] text-[#E8740E]" };
+    if (s.lastStep != null) return { text: `Parou Etapa ${s.lastStep}`, cls: "bg-[#FFF5F5] text-[#E74C3C]" };
+    return { text: "So visitou", cls: "bg-[#F5F5F7] text-[#86868B]" };
+  }
+  return (
+    <div className="overflow-x-auto -mx-4 sm:mx-0">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-[#86868B] border-b border-[#D2D2D7]">
+            <th className="px-2 sm:px-3 py-2 font-medium">Quando</th>
+            <th className="px-2 sm:px-3 py-2 font-medium hidden sm:table-cell">Duracao</th>
+            <th className="px-2 sm:px-3 py-2 font-medium">Status</th>
+            <th className="px-2 sm:px-3 py-2 font-medium hidden md:table-cell">Ultima pergunta</th>
+            <th className="px-2 sm:px-3 py-2 font-medium">Canal</th>
+            <th className="px-2 sm:px-3 py-2 font-medium hidden sm:table-cell">Dispositivo</th>
+            <th className="px-2 sm:px-3 py-2 font-medium text-right hidden md:table-cell">Eventos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s) => {
+            const badge = statusBadge(s);
+            return (
+              <tr key={s.sessionId} className="border-b border-[#F5F5F7] hover:bg-[#FFF5EB]/30">
+                <td className="px-2 sm:px-3 py-2 text-[#1D1D1F] whitespace-nowrap">{fmtDate(s.startedAt)}</td>
+                <td className="px-2 sm:px-3 py-2 text-[#6E6E73] hidden sm:table-cell">{fmtDuration(s.startedAt, s.lastEventAt)}</td>
+                <td className="px-2 sm:px-3 py-2">
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${badge.cls}`}>
+                    {badge.text}
+                  </span>
+                </td>
+                <td className="px-2 sm:px-3 py-2 text-[#6E6E73] hidden md:table-cell truncate max-w-[140px]">
+                  {s.lastQuestion || "—"}
+                </td>
+                <td className="px-2 sm:px-3 py-2 text-[#6E6E73] truncate max-w-[100px]">
+                  {s.utmSource || "(direto)"}
+                </td>
+                <td className="px-2 sm:px-3 py-2 text-[#6E6E73] hidden sm:table-cell">
+                  {s.deviceType ? (DEVICE_LABELS[s.deviceType] || s.deviceType) : "—"}
+                </td>
+                <td className="px-2 sm:px-3 py-2 text-right text-[#86868B] hidden md:table-cell">{s.eventCount}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
