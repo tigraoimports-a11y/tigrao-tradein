@@ -33,6 +33,13 @@ export async function GET(req: NextRequest) {
   if (labels._whatsapp_vendedores_nomes) result.whatsapp_vendedores_nomes = labels._whatsapp_vendedores_nomes;
   if (labels._whatsapp_vendedores_recebe_links) result.whatsapp_vendedores_recebe_links = labels._whatsapp_vendedores_recebe_links;
   if (labels._whatsapp_vendedores_ativo) result.whatsapp_vendedores_ativo = labels._whatsapp_vendedores_ativo;
+  // Configuracao do SITE (landing /troca) — logo, influencers, posicionamento.
+  // Mesmo padrao do _whatsapp_*: armazenado dentro de labels JSONB pra evitar
+  // migrations. Veja /admin/configuracoes/site (Abr/2026).
+  if (labels._site_logo_url !== undefined) result.site_logo_url = labels._site_logo_url;
+  if (labels._site_logo_position !== undefined) result.site_logo_position = labels._site_logo_position;
+  if (labels._site_influencers_enabled !== undefined) result.site_influencers_enabled = labels._site_influencers_enabled;
+  if (labels._site_influencers !== undefined) result.site_influencers = labels._site_influencers;
 
   return NextResponse.json({ data: result });
 }
@@ -61,13 +68,25 @@ export async function PUT(req: NextRequest) {
     "whatsapp_vendedores_recebe_links",
     "whatsapp_vendedores_ativo",
   ] as const;
+  // Chaves de configuracao do SITE — mesmo padrao dos whatsapp_*. Salvas com
+  // prefixo "_site_" dentro de labels JSONB (sem migration).
+  const siteFields = [
+    "site_logo_url",
+    "site_logo_position",
+    "site_influencers_enabled",
+    "site_influencers",
+  ] as const;
   const hasAnyWaField = whatsappFields.some((k) => body[k] !== undefined);
-  if (hasAnyWaField || body.labels !== undefined) {
+  const hasAnySiteField = siteFields.some((k) => body[k] !== undefined);
+  if (hasAnyWaField || hasAnySiteField || body.labels !== undefined) {
     const { data: current } = await supabase.from("tradein_config").select("labels").limit(1).single();
     const currentLabels = (current?.labels && typeof current.labels === "object") ? current.labels as Record<string, unknown> : {};
     const newLabels = { ...currentLabels };
     if (body.labels !== undefined) Object.assign(newLabels, body.labels);
     for (const k of whatsappFields) {
+      if (body[k] !== undefined) newLabels[`_${k}`] = body[k];
+    }
+    for (const k of siteFields) {
       if (body[k] !== undefined) newLabels[`_${k}`] = body[k];
     }
     updates.labels = newLabels;
