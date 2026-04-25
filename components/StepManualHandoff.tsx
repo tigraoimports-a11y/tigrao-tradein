@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getAnyConditionLines, type AnyConditionData, type DeviceType } from "@/lib/calculations";
+import { getAnyConditionEntries, type AnyConditionData, type DeviceType } from "@/lib/calculations";
 import type { TradeInQuestion } from "@/lib/types";
 import { getHoneypotValue } from "@/lib/honeypot-client";
 
@@ -24,6 +24,11 @@ interface StepManualHandoffProps {
   deviceType2?: DeviceType;
   extraAnswers2?: Record<string, unknown>;
   extraQuestions2?: TradeInQuestion[];
+  // Configuracao completa de perguntas (admin) — usada pra ordenar a mistura de
+  // condicoes hardcoded + perguntas dinamicas no resumo, respeitando o `ordem`
+  // que o operador definiu. Sem isso, condLines aparecem antes e o admin nao
+  // consegue intercalar (ex: bateria entre garantia e arranhoes).
+  questionsConfig?: TradeInQuestion[];
   // Produto novo escolhido
   newModel: string;
   newStorage: string;
@@ -38,6 +43,24 @@ interface StepManualHandoffProps {
   vendedor?: string | null;
   onReset: () => void;
   onGoToStep?: (step: number) => void;
+}
+
+// Ordem fallback dos slugs hardcoded (espelha StepUsedDeviceMulti). Usado
+// quando o admin nao definiu ordem pra um slug — ex: hardcoded sem entrada no qc.
+const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
+  hasDamage: 1, battery: 2, hasWearMarks: 3, wearMarks: 4,
+  screenScratch: 4.1, sideScratch: 4.2, peeling: 4.3,
+  bodyScratch: 4.4, keyboardCondition: 4.5,
+  partsReplaced: 5, hasCharger: 5.5, hasWarranty: 6, warrantyMonth: 7,
+  hasApplePencil: 7.5, hasOriginalBox: 8,
+};
+
+const SLUG_SUFFIXES = ["_iphone", "_ipad", "_macbook", "_watch"];
+function normalizeSlug(slug: string): string {
+  for (const suf of SLUG_SUFFIXES) {
+    if (slug.endsWith(suf)) return slug.slice(0, -suf.length);
+  }
+  return slug;
 }
 
 /** Resolve a opcao escolhida pelo cliente. Aceita boolean (yes/no) ou string. */
@@ -61,32 +84,67 @@ function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
   return opt?.label || String(value);
 }
 
-/** Linha pro resumo do produto. `fullSentence: true` indica que `value` ja e a
- *  frase completa (ex: "Possui o carregador completo original da Apple") e o
- *  render deve esconder o `label:` prefix. */
-type ExtraLine = { label: string; value: string; fullSentence?: boolean };
+/** Linha unificada do resumo. `bold` (opcional) e o prefixo a destacar (titulo
+ *  da pergunta) — quando ausente, a linha inteira renderiza como texto comum
+ *  (condicoes hardcoded e respostas com summaryLabel). */
+type SummaryLine = { slug: string; ordem: number; bold?: string; text: string };
 
-// Converte respostas dinamicas em pares { label, value } pra renderizar/exibir.
-// Pra perguntas com `summaryLabel` na opcao escolhida, retorna a frase completa
-// como `fullSentence` — o resumo mostra so a frase, sem o titulo da pergunta.
-function formatExtraLines(questions: TradeInQuestion[] | undefined, answers: Record<string, unknown> | undefined): ExtraLine[] {
-  if (!questions || !answers) return [];
-  return questions
-    .map((q): ExtraLine | null => {
-      const raw = answers[q.slug];
+/** Constroi um lookup slug → ordem a partir do qc do admin (com slugs
+ *  normalizados). Ordem do admin sempre vence o HARDCODED_DEFAULT_ORDEM. */
+function buildOrdemBySlug(questionsConfig: TradeInQuestion[] | undefined): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const q of questionsConfig ?? []) {
+    if (q.ativo === false) continue;
+    if (typeof q.ordem === "number") map.set(normalizeSlug(q.slug), q.ordem);
+  }
+  return map;
+}
+
+/** Mistura entries hardcoded + perguntas dinamicas em uma lista ordenada pelo
+ *  ordem do admin. Se admin moveu uma yesno dynamic pra ordem 2.5, ela aparece
+ *  entre `hasDamage` (1) e `wearMarks` (4) no resumo. */
+function buildOrderedLines(
+  deviceType: DeviceType,
+  condition: AnyConditionData,
+  extraQuestions: TradeInQuestion[] | undefined,
+  extraAnswers: Record<string, unknown> | undefined,
+  questionsConfig: TradeInQuestion[] | undefined,
+): SummaryLine[] {
+  const ordemBySlug = buildOrdemBySlug(questionsConfig);
+  const ordemFor = (slug: string): number => {
+    const fromAdmin = ordemBySlug.get(slug);
+    if (fromAdmin !== undefined) return fromAdmin;
+    return HARDCODED_DEFAULT_ORDEM[slug] ?? 999;
+  };
+
+  // Hardcoded: cada entry vira linha de texto simples (sem bold prefix).
+  const condLines: SummaryLine[] = getAnyConditionEntries(deviceType, condition).map((e) => ({
+    slug: e.slug,
+    ordem: ordemFor(e.slug),
+    text: e.text,
+  }));
+
+  // Dinamicas: cada pergunta respondida vira KV (com bold) ou frase completa
+  // (sem bold) quando a opcao tem summaryLabel cadastrado.
+  const extraLines: SummaryLine[] = (extraQuestions ?? [])
+    .map((q): SummaryLine | null => {
+      const raw = extraAnswers?.[q.slug];
       if (raw === undefined || raw === null || raw === "") return null;
-      // Multiselect / Array — sem suporte a summaryLabel por enquanto, cai no kv padrao
+      const slugN = normalizeSlug(q.slug);
+      const ordem = typeof q.ordem === "number" ? q.ordem : ordemFor(slugN);
       if (!Array.isArray(raw)) {
         const opt = findSelectedOption(q, raw);
         if (opt?.summaryLabel) {
-          return { label: q.titulo || q.slug, value: opt.summaryLabel, fullSentence: true };
+          return { slug: slugN, ordem, text: opt.summaryLabel };
         }
       }
       const value = formatExtraAnswer(q, raw);
       if (value === "—") return null;
-      return { label: q.titulo || q.slug, value };
+      return { slug: slugN, ordem, bold: q.titulo || q.slug, text: value };
     })
-    .filter((l): l is ExtraLine => l !== null);
+    .filter((l): l is SummaryLine => l !== null);
+
+  return [...condLines, ...extraLines].sort((a, b) => a.ordem - b.ordem);
 }
 
 /**
@@ -100,6 +158,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
     extraAnswers, extraQuestions,
     usedModel2, usedStorage2, usedColor2, condition2, deviceType2,
     extraAnswers2, extraQuestions2,
+    questionsConfig,
     newModel, newStorage, newPrice,
     clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem,
     whatsappNumero, vendedor, onReset, onGoToStep,
@@ -110,9 +169,18 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
   const hasSecond = !!(usedModel2 && usedStorage2);
   const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
-  // Linhas das perguntas dinamicas pra resumo UI + mensagem WhatsApp
-  const extraLines1 = formatExtraLines(extraQuestions, extraAnswers);
-  const extraLines2 = formatExtraLines(extraQuestions2, extraAnswers2);
+  // Lista unificada (condicoes hardcoded + perguntas dinamicas) ordenada pela
+  // posicao definida no admin. Usado tanto no resumo UI quanto na mensagem
+  // WhatsApp e no lead, pra que a ordem visivel pro cliente bata com o que
+  // chega pro operador.
+  const orderedLines1 = buildOrderedLines(deviceType, condition, extraQuestions, extraAnswers, questionsConfig);
+  const orderedLines2 = (hasSecond && condition2 && deviceType2)
+    ? buildOrderedLines(deviceType2, condition2, extraQuestions2, extraAnswers2, questionsConfig)
+    : [];
+
+  function lineToText(l: SummaryLine): string {
+    return l.bold ? `${l.bold}: ${l.text}` : l.text;
+  }
 
   function buildWhatsAppMsg(): string {
     const lines: string[] = [];
@@ -133,19 +201,13 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
     if (hasSecond) lines.push("", `*Aparelho 1:*`);
     lines.push(`Modelo: ${usedModel} ${usedStorage}`);
     if (usedColor) lines.push(`Cor: ${usedColor}`);
-    const condLines = getAnyConditionLines(deviceType, condition);
-    if (condLines.length > 0) lines.push(`Condição: ${condLines.join(", ")}`);
-    // Perguntas dinamicas (cadastradas via /admin/simulacoes). Pra opcoes com
-    // summaryLabel cadastrado, mostra so a frase completa (sem prefixo "label:").
-    for (const l of extraLines1) lines.push(l.fullSentence ? l.value : `${l.label}: ${l.value}`);
+    for (const l of orderedLines1) lines.push(lineToText(l));
 
     if (hasSecond && condition2 && deviceType2) {
       lines.push("", `*Aparelho 2:*`);
       lines.push(`Modelo: ${usedModel2} ${usedStorage2 || ""}`);
       if (usedColor2) lines.push(`Cor: ${usedColor2}`);
-      const condLines2 = getAnyConditionLines(deviceType2, condition2);
-      if (condLines2.length > 0) lines.push(`Condição: ${condLines2.join(", ")}`);
-      for (const l of extraLines2) lines.push(l.fullSentence ? l.value : `${l.label}: ${l.value}`);
+      for (const l of orderedLines2) lines.push(lineToText(l));
     }
 
     lines.push("");
@@ -157,13 +219,9 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
     setEnviando(true);
     // Salva lead com status AVALIACAO_MANUAL pra equipe ter historico
     try {
-      const condLines = getAnyConditionLines(deviceType, condition);
-      const condLines2 = hasSecond && condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
-      // Respostas dinamicas viram linhas "Label: Valor" (ou frase completa
-      // quando summaryLabel cadastrado) e entram em condicaoLinhas pra chegar
-      // no admin junto com as condicoes hardcoded.
-      const extraLinesStr1 = extraLines1.map((l) => l.fullSentence ? l.value : `${l.label}: ${l.value}`);
-      const extraLinesStr2 = extraLines2.map((l) => l.fullSentence ? l.value : `${l.label}: ${l.value}`);
+      // condicaoLinhas chega no admin com a mesma ordem que o cliente viu.
+      const condicaoLinhas = orderedLines1.map(lineToText);
+      const condicaoLinhas2 = orderedLines2.map(lineToText);
       await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -182,7 +240,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
           diferenca: 0,
           status: "AVALIACAO_MANUAL",
           formaPagamento: "WhatsApp Avaliacao Manual",
-          condicaoLinhas: [...condLines, ...extraLinesStr1],
+          condicaoLinhas,
           whatsappDestino: whatsappNumero,
           vendedor: vendedor || null,
           ...(hasSecond ? {
@@ -190,7 +248,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
             storageUsado2: usedStorage2,
             corUsado2: usedColor2 || "",
             avaliacaoUsado2: 0,
-            condicaoLinhas2: [...condLines2, ...extraLinesStr2],
+            condicaoLinhas2: condicaoLinhas2,
           } : {}),
           website: getHoneypotValue(),
         }),
@@ -236,44 +294,30 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
             {usedModel} {usedStorage}
             {usedColor ? ` · ${usedColor}` : ""}
           </p>
-          {(() => {
-            const condLines1 = getAnyConditionLines(deviceType, condition);
-            const hasLines = condLines1.length > 0 || extraLines1.length > 0;
-            return hasLines ? (
-              <div className="mt-2 space-y-0.5">
-                {condLines1.map((l, i) => (
-                  <p key={`c-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>{l}</p>
-                ))}
-                {extraLines1.map((l, i) => (
-                  <p key={`e-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
-                    {l.fullSentence ? l.value : (<><span className="font-medium">{l.label}:</span> {l.value}</>)}
-                  </p>
-                ))}
-              </div>
-            ) : null;
-          })()}
+          {orderedLines1.length > 0 && (
+            <div className="mt-2 space-y-0.5">
+              {orderedLines1.map((l, i) => (
+                <p key={`l1-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
+                  {l.bold ? (<><span className="font-medium">{l.bold}:</span> {l.text}</>) : l.text}
+                </p>
+              ))}
+            </div>
+          )}
           {hasSecond && (
             <>
               <p className="text-[14px] mt-3" style={{ color: "var(--ti-text)" }}>
                 {usedModel2} {usedStorage2}
                 {usedColor2 ? ` · ${usedColor2}` : ""}
               </p>
-              {(() => {
-                const condLines2 = condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
-                const hasLines = condLines2.length > 0 || extraLines2.length > 0;
-                return hasLines ? (
-                  <div className="mt-2 space-y-0.5">
-                    {condLines2.map((l, i) => (
-                      <p key={`c2-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>{l}</p>
-                    ))}
-                    {extraLines2.map((l, i) => (
-                      <p key={`e2-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
-                        {l.fullSentence ? l.value : (<><span className="font-medium">{l.label}:</span> {l.value}</>)}
-                      </p>
-                    ))}
-                  </div>
-                ) : null;
-              })()}
+              {orderedLines2.length > 0 && (
+                <div className="mt-2 space-y-0.5">
+                  {orderedLines2.map((l, i) => (
+                    <p key={`l2-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
+                      {l.bold ? (<><span className="font-medium">{l.bold}:</span> {l.text}</>) : l.text}
+                    </p>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>

@@ -256,34 +256,42 @@ export function calculateQuote(
   return { tradeInValue, newPrice, difference, pix: difference, installments };
 }
 
+/** Linha do resumo com o slug da pergunta hardcoded que a gerou. Permite que
+ *  o StepManualHandoff intercale com perguntas dinamicas via ordem do admin. */
+export interface ConditionEntry {
+  slug: string;
+  text: string;
+}
+
 /**
- * Gera linhas de condicao para exibicao e WhatsApp
+ * Gera entries (slug + texto) das condicoes hardcoded de iPhone.
+ * Usar `getConditionLines` quando so o texto importa.
  */
-export function getConditionLines(condition: ConditionData, deviceType?: DeviceType): string[] {
+export function getConditionEntries(condition: ConditionData, deviceType?: DeviceType): ConditionEntry[] {
   const monthNames = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  const lines: string[] = [];
+  const entries: ConditionEntry[] = [];
 
   // Trincado/defeito: hasDamage=true e rejeitado (nao chega aqui), entao so
   // confirma "Sem trincado/defeito" pro aparelho aceito.
-  lines.push(condition.hasDamage ? "Com trincado/defeito" : "Sem trincado/defeito");
+  entries.push({ slug: "hasDamage", text: condition.hasDamage ? "Com trincado/defeito" : "Sem trincado/defeito" });
 
   if (condition.warrantyMonth !== null) {
     const yearSuffix = condition.warrantyYear ? ` de ${condition.warrantyYear}` : "";
-    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}`);
+    entries.push({ slug: "warrantyMonth", text: `Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}` });
   }
 
   // MacBook: campo battery armazena CICLOS (0..9999), demais dispositivos
   // armazenam saude de bateria em %. Label muda conforme o deviceType.
   if (deviceType === "macbook") {
-    lines.push(`Ciclos de bateria: ${condition.battery}`);
+    entries.push({ slug: "battery", text: `Ciclos de bateria: ${condition.battery}` });
   } else {
-    lines.push(`Saude bateria ${condition.battery}%`);
+    entries.push({ slug: "battery", text: `Saude bateria ${condition.battery}%` });
   }
 
   // New wear marks system
   if (condition.hasWearMarks !== undefined) {
     if (!condition.hasWearMarks || !condition.wearMarks || condition.wearMarks.length === 0) {
-      lines.push("Sem marcas de uso");
+      entries.push({ slug: "wearMarks", text: "Sem marcas de uso" });
     } else {
       const wearLabels: Record<string, string> = {
         screen_scratches: "Arranhoes na tela",
@@ -292,30 +300,38 @@ export function getConditionLines(condition: ConditionData, deviceType?: DeviceT
         heavy_peeling: "Descascado forte",
       };
       condition.wearMarks.forEach((m) => {
-        lines.push(wearLabels[m] || m);
+        entries.push({ slug: "wearMarks", text: wearLabels[m] || m });
       });
     }
   } else {
     // Legacy
-    if (condition.screenScratch === "none") lines.push("Sem arranhoes na tela");
-    else if (condition.screenScratch === "one") lines.push("1 arranhao na tela");
-    else lines.push("2 ou mais arranhoes na tela");
+    if (condition.screenScratch === "none") entries.push({ slug: "screenScratch", text: "Sem arranhoes na tela" });
+    else if (condition.screenScratch === "one") entries.push({ slug: "screenScratch", text: "1 arranhao na tela" });
+    else entries.push({ slug: "screenScratch", text: "2 ou mais arranhoes na tela" });
 
-    if (condition.sideScratch === "none") lines.push("Sem arranhoes laterais");
-    else if (condition.sideScratch === "one") lines.push("1 arranhao lateral");
-    else lines.push("2 ou mais arranhoes laterais");
+    if (condition.sideScratch === "none") entries.push({ slug: "sideScratch", text: "Sem arranhoes laterais" });
+    else if (condition.sideScratch === "one") entries.push({ slug: "sideScratch", text: "1 arranhao lateral" });
+    else entries.push({ slug: "sideScratch", text: "2 ou mais arranhoes laterais" });
 
-    if (condition.peeling === "none") lines.push("Sem marcas de uso");
-    else if (condition.peeling === "light") lines.push("Marcas de uso leves");
-    else lines.push("Marcas de uso fortes");
+    if (condition.peeling === "none") entries.push({ slug: "peeling", text: "Sem marcas de uso" });
+    else if (condition.peeling === "light") entries.push({ slug: "peeling", text: "Marcas de uso leves" });
+    else entries.push({ slug: "peeling", text: "Marcas de uso fortes" });
   }
 
-  if (condition.partsReplaced === "apple") lines.push(`Peca trocada na Apple (autorizada)${condition.partsReplacedDetail ? `: ${condition.partsReplacedDetail}` : ""}`);
-  else if (condition.partsReplaced === "no") lines.push("Sem pecas trocadas");
+  if (condition.partsReplaced === "apple") entries.push({ slug: "partsReplaced", text: `Peca trocada na Apple (autorizada)${condition.partsReplacedDetail ? `: ${condition.partsReplacedDetail}` : ""}` });
+  else if (condition.partsReplaced === "no") entries.push({ slug: "partsReplaced", text: "Sem pecas trocadas" });
 
-  lines.push(condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original");
+  entries.push({ slug: "hasOriginalBox", text: condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original" });
 
-  return lines;
+  return entries;
+}
+
+/**
+ * Gera linhas de condicao para exibicao e WhatsApp.
+ * Wrapper sobre `getConditionEntries` quando so o texto importa.
+ */
+export function getConditionLines(condition: ConditionData, deviceType?: DeviceType): string[] {
+  return getConditionEntries(condition, deviceType).map((e) => e.text);
 }
 
 /**
@@ -372,33 +388,37 @@ export function calculateIPadTradeInValue(
   return Math.max(value, 0);
 }
 
-export function getIPadConditionLines(condition: IPadConditionData): string[] {
+export function getIPadConditionEntries(condition: IPadConditionData): ConditionEntry[] {
   const monthNames = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  const lines: string[] = [];
+  const entries: ConditionEntry[] = [];
 
   if (condition.warrantyMonth !== null) {
     const yearSuffix = condition.warrantyYear ? ` de ${condition.warrantyYear}` : "";
-    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}`);
+    entries.push({ slug: "warrantyMonth", text: `Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}` });
   }
 
-  lines.push(`Saude bateria ${condition.battery}%`);
+  entries.push({ slug: "battery", text: `Saude bateria ${condition.battery}%` });
 
-  if (condition.screenScratch === "none") lines.push("Sem arranhoes na tela");
-  else if (condition.screenScratch === "one") lines.push("1 arranhao na tela");
-  else lines.push("2 ou mais arranhoes na tela");
+  if (condition.screenScratch === "none") entries.push({ slug: "screenScratch", text: "Sem arranhoes na tela" });
+  else if (condition.screenScratch === "one") entries.push({ slug: "screenScratch", text: "1 arranhao na tela" });
+  else entries.push({ slug: "screenScratch", text: "2 ou mais arranhoes na tela" });
 
-  if (condition.sideScratch === "none") lines.push("Sem arranhoes laterais");
-  else if (condition.sideScratch === "one") lines.push("1 arranhao lateral");
-  else lines.push("2 ou mais arranhoes laterais");
+  if (condition.sideScratch === "none") entries.push({ slug: "sideScratch", text: "Sem arranhoes laterais" });
+  else if (condition.sideScratch === "one") entries.push({ slug: "sideScratch", text: "1 arranhao lateral" });
+  else entries.push({ slug: "sideScratch", text: "2 ou mais arranhoes laterais" });
 
-  if (condition.peeling === "none") lines.push("Sem marcas de uso");
-  else if (condition.peeling === "light") lines.push("Marcas de uso leves");
-  else lines.push("Marcas de uso fortes");
+  if (condition.peeling === "none") entries.push({ slug: "peeling", text: "Sem marcas de uso" });
+  else if (condition.peeling === "light") entries.push({ slug: "peeling", text: "Marcas de uso leves" });
+  else entries.push({ slug: "peeling", text: "Marcas de uso fortes" });
 
-  lines.push(condition.hasApplePencil ? "Apple Pencil inclusa" : "Sem Apple Pencil");
-  lines.push(condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original");
+  entries.push({ slug: "hasApplePencil", text: condition.hasApplePencil ? "Apple Pencil inclusa" : "Sem Apple Pencil" });
+  entries.push({ slug: "hasOriginalBox", text: condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original" });
 
-  return lines;
+  return entries;
+}
+
+export function getIPadConditionLines(condition: IPadConditionData): string[] {
+  return getIPadConditionEntries(condition).map((e) => e.text);
 }
 
 // ──────────────────────────────────────────
@@ -447,32 +467,36 @@ export function calculateMacBookTradeInValue(
   return Math.max(value, 0);
 }
 
-export function getMacBookConditionLines(condition: MacBookConditionData): string[] {
+export function getMacBookConditionEntries(condition: MacBookConditionData): ConditionEntry[] {
   const monthNames = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  const lines: string[] = [];
+  const entries: ConditionEntry[] = [];
 
   if (condition.warrantyMonth !== null) {
     const yearSuffix = condition.warrantyYear ? ` de ${condition.warrantyYear}` : "";
-    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}`);
+    entries.push({ slug: "warrantyMonth", text: `Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}` });
   }
 
-  lines.push(`Ciclos de bateria: ${condition.batteryCycles}`);
+  entries.push({ slug: "battery", text: `Ciclos de bateria: ${condition.batteryCycles}` });
 
-  if (condition.screenScratch === "none") lines.push("Sem arranhoes na tela");
-  else if (condition.screenScratch === "one") lines.push("1 arranhao na tela");
-  else lines.push("2 ou mais arranhoes na tela");
+  if (condition.screenScratch === "none") entries.push({ slug: "screenScratch", text: "Sem arranhoes na tela" });
+  else if (condition.screenScratch === "one") entries.push({ slug: "screenScratch", text: "1 arranhao na tela" });
+  else entries.push({ slug: "screenScratch", text: "2 ou mais arranhoes na tela" });
 
-  if (condition.bodyScratch === "none") lines.push("Sem arranhoes no corpo");
-  else if (condition.bodyScratch === "light") lines.push("Arranhoes leves no corpo");
-  else lines.push("Arranhoes fortes no corpo");
+  if (condition.bodyScratch === "none") entries.push({ slug: "bodyScratch", text: "Sem arranhoes no corpo" });
+  else if (condition.bodyScratch === "light") entries.push({ slug: "bodyScratch", text: "Arranhoes leves no corpo" });
+  else entries.push({ slug: "bodyScratch", text: "Arranhoes fortes no corpo" });
 
-  if (condition.keyboardCondition === "perfect") lines.push("Teclado perfeito");
-  else lines.push("Teclado com teclas grudando");
+  if (condition.keyboardCondition === "perfect") entries.push({ slug: "keyboardCondition", text: "Teclado perfeito" });
+  else entries.push({ slug: "keyboardCondition", text: "Teclado com teclas grudando" });
 
-  lines.push(condition.hasCharger ? "Carregador incluso" : "Sem carregador");
-  lines.push(condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original");
+  entries.push({ slug: "hasCharger", text: condition.hasCharger ? "Carregador incluso" : "Sem carregador" });
+  entries.push({ slug: "hasOriginalBox", text: condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original" });
 
-  return lines;
+  return entries;
+}
+
+export function getMacBookConditionLines(condition: MacBookConditionData): string[] {
+  return getMacBookConditionEntries(condition).map((e) => e.text);
 }
 
 /**
@@ -495,21 +519,31 @@ export function calculateAnyTradeInValue(
 }
 
 /**
- * Helper unificado: gera linhas de condicao para qualquer tipo de dispositivo
+ * Helper unificado: gera entries (slug + texto) das condicoes hardcoded.
+ * Use no StepManualHandoff pra ordenar com perguntas dinamicas via admin.
+ */
+export function getAnyConditionEntries(
+  deviceType: DeviceType,
+  condition: AnyConditionData
+): ConditionEntry[] {
+  if (deviceType === "ipad" && isIPadCondition(condition)) {
+    return getIPadConditionEntries(condition);
+  }
+  if (deviceType === "macbook" && isMacBookCondition(condition)) {
+    return getMacBookConditionEntries(condition);
+  }
+  return getConditionEntries(condition as ConditionData, deviceType);
+}
+
+/**
+ * Helper unificado: gera linhas de condicao para qualquer tipo de dispositivo.
+ * Wrapper sobre `getAnyConditionEntries` quando so o texto importa.
  */
 export function getAnyConditionLines(
   deviceType: DeviceType,
   condition: AnyConditionData
 ): string[] {
-  if (deviceType === "ipad" && isIPadCondition(condition)) {
-    return getIPadConditionLines(condition);
-  }
-  if (deviceType === "macbook" && isMacBookCondition(condition)) {
-    return getMacBookConditionLines(condition);
-  }
-  // Fallback: trata como ConditionData genérica mas respeita deviceType pro
-  // label da bateria (MacBook = "Ciclos de bateria: X", outros = "Saude bateria X%").
-  return getConditionLines(condition as ConditionData, deviceType);
+  return getAnyConditionEntries(deviceType, condition).map((e) => e.text);
 }
 
 // ──────────────────────────────────────────

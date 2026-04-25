@@ -619,6 +619,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               extraAnswers={extraAnswers} extraQuestions={extraQuestions}
               extraAnswers2={hasSecondDevice ? extraAnswers2 : undefined} extraQuestions2={hasSecondDevice ? extraQuestions2 : undefined}
+              questionsConfig={questionsConfig ?? undefined}
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
               whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal}
