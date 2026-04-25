@@ -9,6 +9,7 @@ import {
   calculateAnyTradeInValue, getDiscountsForModel, formatBRL,
   type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts,
 } from "@/lib/calculations";
+import { WATCH_SERIES_CASES, filterCoresByCase } from "@/lib/watch-cores";
 
 type MultiDeviceType = DeviceType | "watch";
 
@@ -47,98 +48,8 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
   partsReplaced: 5, hasWarranty: 6, warrantyMonth: 7, hasOriginalBox: 8,
 };
 
-// Material da caixa do Apple Watch por geracao Series. Hardcoded porque nao
-// vem do catalogo hoje — admin nao tem dimensao separada pra isso. Usado pra
-// (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Aco/Titanio.
-// Cores oficiais Apple por geracao + material (BR). Aco Inox e Titanio sempre
-// vem GPS+Cel de fabrica.
-const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; forceGPSCel?: boolean }[]> = {
-  "9": [
-    { material: "Alumínio", cores: ["Estelar", "Meia-noite", "Prateado", "Vermelho", "Rosa"] },
-    { material: "Aço Inoxidável", cores: ["Grafite", "Prateado", "Dourado"], forceGPSCel: true },
-  ],
-  "10": [
-    // Apple Watch Series 10 Aluminio: so 3 cores oficiais — Jet Black,
-    // Rose Gold, Silver. Sem Cinza-espacial (essa cor era do Series 9 Aco
-    // / Series 11 Aluminio, nao Series 10).
-    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante"] },
-    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
-  ],
-  "11": [
-    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
-    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
-  ],
-};
-
-// Aliases bidirecionais entre o catalogo do admin e a nomenclatura Apple
-// oficial. Catalogo costuma usar nomes PT genericos ("Preto", "Dourado",
-// "Cinza") que mapeiam pra varias cores Apple especificas dependendo do
-// modelo + material. Os aliases tem que ser permissivos pra nao deixar cor
-// cadastrada de fora — o filtro por material da o contexto pra resolver.
-//
-// Chaves e valores normalizados (lowercase, sem acento, hifen→espaco).
-const COR_ALIASES: Record<string, string[]> = {
-  // Prateado / Prata / Silver
-  "prata": ["prateado", "silver"],
-  "prateado": ["prata", "silver"],
-  "silver": ["prata", "prateado"],
-  // Preto generico → cobre Midnight (Series 9 Al), Jet Black (Series 10/11 Al),
-  // Black Titanium etc. Catalogo usa so "Preto" pra todos.
-  "preto": ["preto brilhante", "jet black", "meia noite", "midnight", "titanio preto", "black titanium"],
-  "preto brilhante": ["preto", "jet black"],
-  "jet black": ["preto", "preto brilhante"],
-  "meia noite": ["midnight", "preto"],
-  "midnight": ["meia noite", "preto"],
-  "titanio preto": ["preto", "black titanium"],
-  "black titanium": ["preto", "titanio preto"],
-  // Natural / Titanio Natural
-  "natural": ["titanio natural"],
-  "titanio natural": ["natural"],
-  // Ardosia / Slate (Titanium); cinza tb pode ser slate
-  "ardosia": ["slate", "slate titanium"],
-  "slate": ["ardosia", "slate titanium"],
-  "slate titanium": ["ardosia", "slate"],
-  // Estelar / Starlight
-  "estelar": ["starlight"],
-  "starlight": ["estelar"],
-  // Cinza generico → cobre Graphite (Series 9 Aço), Space Gray (Al), Slate
-  // (Titanium). Quando o catalogo so cadastrou "Cinza", deixa ele matchear
-  // qualquer um — o filtro do material restringe pelo allow-list.
-  "cinza": ["grafite", "graphite", "space gray", "space grey", "cinza espacial", "slate", "ardosia"],
-  "cinza espacial": ["space gray", "space grey", "cinza"],
-  "space gray": ["cinza espacial", "cinza"],
-  "space grey": ["cinza espacial", "cinza"],
-  "grafite": ["graphite", "cinza"],
-  "graphite": ["grafite", "cinza"],
-  // Dourado generico → cobre Gold (Series 9 Aço), Rose Gold (Series 10/11 Al),
-  // Gold Titanium (Series 10/11 Ti). Catalogo usa so "Dourado" pra todos.
-  "dourado": ["gold", "ouro", "ouro rosa", "rose gold", "rose", "gold titanium"],
-  "gold": ["dourado", "ouro"],
-  "ouro": ["dourado", "gold"],
-  "ouro rosa": ["rose gold", "rose", "dourado"],
-  "rose gold": ["ouro rosa", "dourado"],
-  "rose": ["ouro rosa", "dourado"],
-  "gold titanium": ["dourado", "gold"],
-  // Vermelho / Red / Product RED
-  "vermelho": ["red", "product red"],
-  "red": ["vermelho"],
-  "product red": ["vermelho"],
-  // Rosa / Pink
-  "rosa": ["pink"],
-  "pink": ["rosa"],
-};
-
-// Normaliza string pra comparacao de cor: lowercase, sem acento, hifen vira
-// espaco (Cinza-espacial vs Cinza espacial), espacos colapsados, trim.
-function normalizeCor(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[-_]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// WATCH_SERIES_CASES, COR_ALIASES, normalizeCor extraidos pra lib/watch-cores.ts
+// (compartilhados com /admin/gerar-link). filterCoresByCase faz o filtro/dedup.
 
 // Markdown seguro pra helpText: escape HTML primeiro, depois aplica formatacao.
 // Suporta:
@@ -496,59 +407,12 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // pra Aluminio) colapsam pelo alias, mostrando so o nome canonico Apple.
   // Quando intersecao fica vazia (catalogo desalinhado), cai pra raw pra
   // nao travar o cliente.
+  // Cores filtradas pelo material da caixa (Watch Series). Logica em
+  // lib/watch-cores.ts (compartilhado com /admin/gerar-link).
   const coresModelo = useMemo(() => {
     if (!requiresWatchCase || !watchCase) return coresModeloRaw;
-    const opt = watchCaseOptions.find((o) => o.material === watchCase);
-    if (!opt || opt.cores.length === 0) return coresModeloRaw;
-
-    // Resolve "canonical bucket" pra uma cor: pega o nome normalizado dela e
-    // todas as suas aliases (transitivo de profundidade 1 — suficiente pra
-    // grafo plano que temos), retorna como Set. Duas cores estao no mesmo
-    // bucket se Set.intersection nao for vazia. Usamos isso pra dedup:
-    // "Preto" e "Preto Brilhante" caem no mesmo bucket {preto, preto brilhante,
-    // jet black} e so o primeiro a aparecer entra na lista.
-    const bucketOf = (cor: string): Set<string> => {
-      const n = normalizeCor(cor);
-      const bucket = new Set<string>([n]);
-      for (const alias of COR_ALIASES[n] || []) bucket.add(normalizeCor(alias));
-      return bucket;
-    };
-    const overlaps = (a: Set<string>, b: Set<string>) => {
-      for (const x of a) if (b.has(x)) return true;
-      return false;
-    };
-
-    // Bucket de cada cor canonica do material — usado pra ver se uma cor do
-    // catalogo "casa" com alguma canonica.
-    const canonicaBuckets = opt.cores.map((c) => ({ name: c, bucket: bucketOf(c) }));
-
-    // Mostra o nome CANONICO Apple (ex: "Ardósia") quando ha match, em vez do
-    // nome generico do catalogo (ex: "Cinza"). Mas se o catalogo cadastrou
-    // uma variacao mais especifica (ex: "Cinza-espacial" exato), preserva
-    // esse nome — o catalogo vence quando tem nome exato.
-    const filtered: string[] = [];
-    const usedBuckets: Set<string>[] = [];
-    for (const cb of canonicaBuckets) {
-      if (usedBuckets.some((u) => overlaps(u, cb.bucket))) continue;
-      // Tenta match EXATO primeiro (mesmo nome normalizado) — se o catalogo
-      // ja tem o nome canonico (ou variacao com mesma normalizacao), usa esse.
-      const exact = coresModeloRaw.find((cor) => normalizeCor(cor) === normalizeCor(cb.name));
-      if (exact) {
-        filtered.push(exact);
-        usedBuckets.push(cb.bucket);
-        continue;
-      }
-      // Fallback: se ha alguma cor no catalogo cujo bucket overlapa, mostra
-      // o NOME CANONICO (cb.name) em vez do nome generico do catalogo. Pra
-      // o operador ler "Ardósia" no resumo em vez de "Cinza".
-      const hasAlias = coresModeloRaw.some((cor) => overlaps(bucketOf(cor), cb.bucket));
-      if (hasAlias) {
-        filtered.push(cb.name);
-        usedBuckets.push(cb.bucket);
-      }
-    }
-    return filtered.length > 0 ? filtered : coresModeloRaw;
-  }, [coresModeloRaw, requiresWatchCase, watchCase, watchCaseOptions]);
+    return filterCoresByCase(coresModeloRaw, subLine, watchCase);
+  }, [coresModeloRaw, requiresWatchCase, watchCase, subLine]);
 
   // Se o chip selecionado tem só 1 modelo, auto-selecionar
   const needsScreenSize = modelsForChip.length > 1;
