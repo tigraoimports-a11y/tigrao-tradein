@@ -64,6 +64,14 @@ export const TEMAS_TRADEIN: Record<string, TemaTradeIn> = {
   clean: lightTheme("Clean Branco", "Fundo branco com detalhes pretos — minimalista", "⚪", "#1D1D1F", "#3A3A3C", {
     ctaBg: "#1D1D1F", ctaHover: "#3A3A3C",
   }),
+  // Tema "tigrao-light": versao DIA da marca TigraoImports — fundo branco com
+  // accent laranja (#E8740E) e CTA verde. Adicionado Abr/2026 como default
+  // diurno pra alinhar identidade visual (antes usava "clean" que tinha accent
+  // PRETO, escondendo a cor da marca durante o dia inteiro).
+  "tigrao-light": lightTheme("Tigrão Light", "Fundo branco com laranja tigre — identidade da marca de dia", "🐯", "#E8740E", "#F5A623", {
+    accentLight: "#FFF5EC", accentText: "#C45A00",
+    ctaBg: "#22C55E", ctaHover: "#16A34A",
+  }),
   apple: lightTheme("Apple Blue", "Azul Apple — estilo loja oficial", "🍎", "#0071E3", "#0077ED", {
     accentLight: "#EDF4FF",
   }),

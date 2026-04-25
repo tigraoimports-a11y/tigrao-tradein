@@ -39,6 +39,20 @@ const DEVICE_OPTIONS: { type: MultiDeviceType; emoji: string; label: string }[] 
   { type: "watch", emoji: "\u{231A}", label: "Apple Watch" },
 ];
 
+// Influencers que ja compraram na TigraoImports — exibidos como social proof
+// na landing inicial. Andre tem fotos pessoais COM eles (no momento da compra)
+// + autorizacao verbal de uso. PRA ATIVAR A SECAO:
+//   1. Subir fotos em /public/images/influencer-1.jpg, influencer-2.jpg, etc
+//   2. Preencher o array abaixo com handle + path da foto
+//   3. Deploy (a secao aparece automaticamente)
+// Enquanto array vazio, secao fica escondida na landing (sem placeholder feio).
+const INFLUENCERS_LANDING: { handle: string; foto: string }[] = [
+  // Exemplo (descomentar quando tiver foto + autorizacao escrita):
+  // { handle: "@influenciador1", foto: "/images/influencer-1.jpg" },
+  // { handle: "@influenciador2", foto: "/images/influencer-2.jpg" },
+  // { handle: "@influenciador3", foto: "/images/influencer-3.jpg" },
+];
+
 export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaParam, previewMode = false }: { vendedor?: string | null; temaParam?: string | null; previewMode?: boolean }) {
   const [vendedor] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
@@ -48,10 +62,14 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     return vendedorProp ?? null;
   });
 
-  // Theme — from URL ?tema= or admin config with auto night mode (18h-6h)
-  const [temaDia, setTemaDia] = useState<string>("clean");
+  // Theme — from URL ?tema= or admin config with auto night mode (18h-6h).
+  // Default DIA mudou de "clean" (preto) pra "tigrao-light" (laranja da marca).
+  // Antes o cliente nunca via a cor da marca durante o dia — accent ficava
+  // preto. Agora o laranja TigraoImports aparece em badges/destaques tanto de
+  // dia quanto de noite, mantendo identidade consistente.
+  const [temaDia, setTemaDia] = useState<string>("tigrao-light");
   const [temaNoite, setTemaNoite] = useState<string>("tigrao");
-  const [temaKey, setTemaKey] = useState<string>(temaParam || "tigrao");
+  const [temaKey, setTemaKey] = useState<string>(temaParam || "tigrao-light");
   const tema = useMemo(() => getTemaTI(temaKey), [temaKey]);
   const cssVars = useMemo(() => temaTICSSVars(tema), [tema]);
 
@@ -383,22 +401,40 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
   if (!started && !loading) {
     return (
-      <main className="min-h-dvh flex flex-col items-center justify-center px-4" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
-        <div className="w-full max-w-[440px] text-center space-y-6 animate-fadeIn">
-          {/* Logo */}
-          <div className="text-[48px]">{"\u{1F34E}"}</div>
+      <main className="min-h-dvh flex flex-col items-center justify-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
+        <div className="w-full max-w-[440px] space-y-7 animate-fadeIn">
 
-          <div>
-            <h1 className="text-[28px] font-bold tracking-tight leading-tight" style={{ color: tema.text }}>
-              Troque seu produto Apple usado por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>novo</span> e pague<br />em ate <span style={{ color: "var(--ti-accent, #E8740E)" }}>21x</span> no cartao!
-            </h1>
+          {/* HEADER COM LOGO REAL — avatar (foto do Andre) + nome.
+              Antes era so emoji 🍎 sem identidade. Agora marca aparece no
+              topo. Foto deve ficar em /public/images/andre.jpg — se nao
+              existir, fallback pra emoji tigre (🐯, simbolo da marca). */}
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-[28px]"
+              style={{ backgroundColor: "var(--ti-accent-light, #FFF5EC)", border: "2px solid var(--ti-accent, #E8740E)" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/andre.jpg" alt="TigrãoImports"
+                className="w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement!.innerHTML = "🐯"; }} />
+            </div>
+            <div className="text-left">
+              <p className="text-[16px] font-bold leading-tight" style={{ color: tema.text }}>TigrãoImports</p>
+              <p className="text-[11px] leading-tight" style={{ color: "var(--ti-accent, #E8740E)" }}>Trade-In Apple</p>
+            </div>
           </div>
 
-          <p className="text-[16px] leading-relaxed" style={{ color: tema.textMuted }}>
-            Descubra em <strong>30 segundos</strong> quanto vale seu aparelho na troca por um novo lacrado com garantia Apple.
-          </p>
+          {/* HEADLINE — sem mostrar valor especifico (Andre nao quis aproximar
+              valores). Foco no que importa: troca lacrada com garantia Apple +
+              parcelamento. Mantem 21x como ancora de "compravel". */}
+          <div className="text-center space-y-3">
+            <h1 className="text-[26px] font-bold tracking-tight leading-tight" style={{ color: tema.text }}>
+              Troque seu iPhone usado por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>lacrado</span><br />pagando só a diferença
+            </h1>
+            <p className="text-[15px] leading-relaxed" style={{ color: tema.textMuted }}>
+              Descubra em <strong style={{ color: tema.text }}>30 segundos</strong> quanto vale seu aparelho na troca por um novo com garantia Apple.
+            </p>
+          </div>
 
-          {/* CTA */}
+          {/* CTA verde — mantido (psicologia de conversao + dinheiro). */}
           <button
             onClick={() => { setStarted(true); setStep(0); trackStep(0); }}
             className="w-full py-4 rounded-2xl text-[18px] font-bold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
@@ -407,24 +443,47 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
             Descobrir o valor do meu aparelho
           </button>
 
-          {/* Social proof */}
-          <div className="flex items-center justify-center gap-2 pt-2">
-            <div className="flex -space-x-1">
-              <span className="text-lg">{"\u2B50\u2B50\u2B50\u2B50\u2B50"}</span>
+          {/* Social proof — 5 estrelas + numero de trocas */}
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-base leading-none">{"\u2B50\u2B50\u2B50\u2B50\u2B50"}</span>
+            <span className="text-[13px] font-semibold" style={{ color: tema.text }}>+400 trocas realizadas</span>
+          </div>
+
+          {/* Trust badges — usa cor de marca em vez de verde generico */}
+          <div className="flex items-center justify-center gap-4 text-[12px]" style={{ color: tema.textMuted }}>
+            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> Lacrado</span>
+            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> Nota fiscal</span>
+            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> Garantia Apple</span>
+          </div>
+
+          {/* SECAO INFLUENCERS — placeholder ate Andre subir as fotos em
+              /public/images/influencer-1.jpg (etc) e me passar os @s. Quando
+              tiver as fotos, basta preencher o array INFLUENCERS abaixo. */}
+          {INFLUENCERS_LANDING.length > 0 && (
+            <div className="pt-4 space-y-3" style={{ borderTop: `1px solid ${tema.cardBorder}` }}>
+              <p className="text-[11px] font-semibold tracking-wider uppercase text-center" style={{ color: tema.textMuted }}>Quem comprou aqui</p>
+              <div className="flex justify-center gap-3">
+                {INFLUENCERS_LANDING.map((inf) => (
+                  <a key={inf.handle} href={`https://instagram.com/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-1 transition-opacity hover:opacity-80">
+                    <div className="w-16 h-16 rounded-full overflow-hidden" style={{ border: "2px solid var(--ti-accent, #E8740E)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={inf.foto} alt={inf.handle} className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-[11px] font-medium" style={{ color: tema.textMuted }}>{inf.handle}</span>
+                  </a>
+                ))}
+              </div>
             </div>
-            <span className="text-[13px] font-medium" style={{ color: tema.textMuted }}>+400 trocas realizadas</span>
-          </div>
+          )}
 
-          <div className="flex items-center justify-center gap-4 text-[12px] pt-1" style={{ color: tema.textMuted }}>
-            <span>{"\u2705"} Produtos lacrados</span>
-            <span>{"\u2705"} Nota fiscal</span>
-            <span>{"\u2705"} Garantia Apple</span>
-          </div>
-
-          {/* Footer */}
-          <div className="pt-4">
-            <p className="text-[13px] font-semibold" style={{ color: tema.textMuted }}>TigraoImports</p>
-            <p className="text-[11px]" style={{ color: tema.textMuted }}>Barra da Tijuca, Rio de Janeiro</p>
+          {/* FOOTER ENRIQUECIDO — credibilidade real (5 anos + CNPJ) sem
+              expor endereco (preferencia do Andre, escritorio nao e loja
+              aberta ao publico). */}
+          <div className="pt-5 text-center space-y-1" style={{ borderTop: `1px solid ${tema.cardBorder}` }}>
+            <p className="text-[12px] font-semibold" style={{ color: tema.text }}>TigrãoImports</p>
+            <p className="text-[11px]" style={{ color: tema.textMuted }}>+5 anos no Rio de Janeiro · +400 trocas realizadas</p>
+            <p className="text-[10px]" style={{ color: tema.textDim }}>CNPJ 50.139.554/0001-42</p>
           </div>
         </div>
       </main>
