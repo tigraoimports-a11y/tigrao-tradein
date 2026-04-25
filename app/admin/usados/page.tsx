@@ -131,8 +131,10 @@ const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
     { key: "armazenamento", label: "Armazenamento", options: ["64GB", "128GB", "256GB", "512GB", "1TB"] },
   ],
   ipad: [
+    // Tela vai no NOME do modelo (ex: "iPad Pro M4 11\""), nao como spec separado
+    // — mesma convencao do MacBook. Evita inconsistencia entre modelos antigos
+    // (com tela mixada em armazenamento, ex: "128GB | 11\"") e novos.
     { key: "armazenamento", label: "Armazenamento", options: ["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"] },
-    { key: "tela", label: "Tela", options: ['8.3"', '10.2"', '10.9"', '11"', '12.9"', '13"'] },
     { key: "conectividade", label: "Conectividade", options: ["Wifi", "Wifi + Cel"] },
   ],
   macbook: [
@@ -150,7 +152,7 @@ const SPEC_FIELDS_BY_CAT: Record<string, SpecField[]> = {
 // Placeholder do campo "Modelo" conforme a categoria aberta.
 const MODELO_PLACEHOLDER_BY_CAT: Record<string, string> = {
   iphone: "Ex: 17 Pro Max (sem 'iPhone')",
-  ipad: "Ex: Air M3 (sem 'iPad')",
+  ipad: 'Ex: Air M3 13" (sem \'iPad\', inclua a tela)',
   macbook: "Ex: Air M3 13\" (sem 'MacBook', inclua a tela)",
   watch: "Ex: Series 9 (sem 'Apple Watch')",
 };
@@ -777,9 +779,17 @@ export function UsadosContent() {
         const parts = r.armazenamento.split("|").map((p) => p.trim());
         const conectIdxInRow = parts.findIndex((p) => conectOptSet.has(p));
         const conect = conectIdxInRow !== -1 ? parts[conectIdxInRow] : "_sem_conect_";
-        const basePartsArr = conectIdxInRow !== -1
+        let basePartsArr = conectIdxInRow !== -1
           ? parts.filter((_, i) => i !== conectIdxInRow)
           : parts;
+        // iPad: tokens de tela legados (ex: "11\"") em armazenamento sao stripados
+        // do baseKey de display + agrupamento. Modelos novos seguem a convencao
+        // "tela no nome", mas variantes antigas tinham tela misturada em armaz —
+        // sem isso, "iPad Pro M2" com legacy "128GB | 11\"" exibia uma linha unica
+        // bagunçada em vez de agrupar com novas "128GB | Wifi+Cel".
+        if (catFilter === "ipad") {
+          basePartsArr = basePartsArr.filter((p) => !/^\d+(?:\.\d+)?"$/.test(p));
+        }
         const baseKey = basePartsArr.join(" | ");
         if (!bases[baseKey]) bases[baseKey] = { baseKey, baseParts: basePartsArr, variants: {} };
         bases[baseKey].variants[conect] = r;
