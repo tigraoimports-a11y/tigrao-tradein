@@ -18,6 +18,10 @@ interface StepUsedDeviceMultiProps {
   modelDiscounts?: Record<string, ModelDiscounts>;
   questionsConfig?: TradeInQuestion[] | null;
   deviceType: MultiDeviceType;
+  /** Labels editaveis cadastrados via /admin/simulacoes. Hoje usado pros help
+   *  texts do campo bateria (1 por device_type). Se vazio, cai nos valores
+   *  hardcoded pra nao quebrar clientes sem admin configurado. */
+  labels?: Record<string, string>;
   onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType; extraAnswers?: Record<string, unknown> }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
 }
@@ -43,15 +47,47 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
   partsReplaced: 5, hasWarranty: 6, warrantyMonth: 7, hasOriginalBox: 8,
 };
 
-// Markdown seguro pra helpText: escape HTML primeiro, depois aplica **bold**.
-// So permite negrito; nenhuma outra tag vira HTML.
+// Material da caixa do Apple Watch por geracao Series. Hardcoded porque nao
+// vem do catalogo hoje — admin nao tem dimensao separada pra isso. Usado pra
+// (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Titanio.
+// Series 9: Aluminio (cores standard) + Aco Inoxidavel (Grafite/Prateado/Dourado).
+// Series 10/11: Aluminio + Titanio (Natural/Dourado/Ardosia, sempre GPS+Cel).
+const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; forceGPSCel?: boolean }[]> = {
+  "9": [
+    { material: "Alumínio", cores: ["Meia-noite", "Estelar", "Prateado", "Vermelho", "Rosa"] },
+    { material: "Aço Inoxidável", cores: ["Grafite", "Prateado", "Dourado"] },
+  ],
+  "10": [
+    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
+    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
+  ],
+  "11": [
+    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
+    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
+  ],
+};
+
+// Markdown seguro pra helpText: escape HTML primeiro, depois aplica formatacao.
+// Suporta:
+//  - **negrito**
+//  - *italico* (ou _italico_)
+//  - ## Titulo grande / ### subtitulo (so no inicio de linha)
+// Qualquer outra tag fica escapada — sem injecao de HTML arbitrario.
 function renderSafeMarkdown(raw: string): string {
-  const escaped = raw
+  let s = raw
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Negrito **texto** — primeiro porque ** englobaria * solto se invertido
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Italico *texto* ou _texto_ (nao casa com * sozinho — exige conteudo entre)
+  s = s.replace(/(?<![*])\*(?!\*)([^*\n]+?)\*(?!\*)/g, "<em>$1</em>");
+  s = s.replace(/(?<![_])_(?!_)([^_\n]+?)_(?!_)/g, "<em>$1</em>");
+  // Headers tamanho de fonte (so no inicio da linha)
+  s = s.replace(/^### (.+)$/gm, '<span style="font-size:1.05em;font-weight:600">$1</span>');
+  s = s.replace(/^## (.+)$/gm, '<span style="font-size:1.15em;font-weight:700">$1</span>');
+  return s;
 }
 
 // Formata uma resposta dinamica pra exibir no resumo/WhatsApp.
@@ -125,9 +161,12 @@ function extractLines(models: string[], deviceType: MultiDeviceType): string[] {
       // Apenas 3 linhas top-level: SE / Series / Ultra. Modelos que nao casam
       // com nenhum padrao sao ignorados (nao criamos linha "Apple Watch"
       // generica — antes virava despejo de todos os modelos).
+      // IMPORTANTE: `\b` depois de "SE" — sem isso, /SE/i case-insensitive
+      // batia em "Apple Watch SEries 9" (Se- prefixo de Series), classificando
+      // todos os Series como SE e fazendo a linha Series sumir do cliente.
       models.forEach((m) => {
-        if (/Apple Watch SE/i.test(m)) { s.add("SE"); return; }
-        if (/Apple Watch Ultra/i.test(m)) { s.add("Ultra"); return; }
+        if (/Apple Watch SE\b/i.test(m)) { s.add("SE"); return; }
+        if (/Apple Watch Ultra\b/i.test(m)) { s.add("Ultra"); return; }
         if (/Apple Watch (?:Series )?\d+/i.test(m)) { s.add("Series"); return; }
       });
       const order = ["SE", "Series", "Ultra"];
@@ -151,9 +190,11 @@ function getModelsInLine(allModels: string[], line: string, deviceType: MultiDev
       if (line === "Pro") return allModels.filter((m) => m.includes("Pro"));
       return allModels;
     case "watch":
-      if (line === "SE") return allModels.filter((m) => /Apple Watch SE/i.test(m));
-      if (line === "Ultra") return allModels.filter((m) => /Apple Watch Ultra/i.test(m));
-      if (line === "Series") return allModels.filter((m) => /Apple Watch (?:Series )?\d+/i.test(m) && !/Apple Watch SE/i.test(m) && !/Apple Watch Ultra/i.test(m));
+      // `\b` depois de SE/Ultra evita match "Series" (Se-prefix) e
+      // mantenedor consistencia com extractLines.
+      if (line === "SE") return allModels.filter((m) => /Apple Watch SE\b/i.test(m));
+      if (line === "Ultra") return allModels.filter((m) => /Apple Watch Ultra\b/i.test(m));
+      if (line === "Series") return allModels.filter((m) => /Apple Watch (?:Series )?\d+/i.test(m) && !/Apple Watch SE\b/i.test(m) && !/Apple Watch Ultra\b/i.test(m));
       return [];
     default:
       return [];
@@ -176,7 +217,7 @@ function toCalcDeviceType(dt: MultiDeviceType): DeviceType {
   return dt;
 }
 
-export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelDiscounts, questionsConfig, deviceType, onNext, onTrackQuestion }: StepUsedDeviceMultiProps) {
+export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelDiscounts, questionsConfig, deviceType, labels, onNext, onTrackQuestion }: StepUsedDeviceMultiProps) {
   // Normaliza slugs: alguns cadastros no admin foram criados com sufixo de
   // device_type (ex: `hasDamage_ipad`, `battery_macbook`). O codigo usa os
   // slugs puros (`hasDamage`, `battery`), entao strip do sufixo `_${deviceType}`
@@ -196,8 +237,16 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
+  // Apple Watch Series: material da caixa (Aluminio/Aco Inoxidavel/Titanio).
+  // Afeta cores disponiveis + forca conectividade pra Titanio (sempre GPS+Cel).
+  // So aplica pra Watch Series — SE tem so Aluminio e Ultra tem so Titanio.
+  const [watchCase, setWatchCase] = useState<string | null>(null);
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
+  // Quando o cliente clica o botao "Normal" (em vez de digitar), guardamos o
+  // rotulo aqui pra que o resumo mostre "Bateria: Normal" no lugar do numero.
+  // Limpa quando o cliente digita um valor novo.
+  const [batteryLabel, setBatteryLabel] = useState<string | null>(null);
   const [screenScratch, setScreenScratch] = useState<"none"|"one"|"multiple"|null>(null);
   const [sideScratch, setSideScratch] = useState<"none"|"one"|"multiple"|null>(null);
   const [peeling, setPeeling] = useState<"none"|"light"|"heavy"|null>(null);
@@ -227,13 +276,26 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   }, [deviceType]);
   useEffect(() => { fetchCores(); }, [fetchCores]);
 
-  // Cores pro modelo selecionado (traduzidas pra PT, dedup)
-  const coresModelo = useMemo(() => {
+  // Cores brutas pro modelo selecionado (traduzidas pra PT, dedup). A
+  // filtragem por caixa do Watch Series vem depois, em `coresModelo`.
+  const coresModeloRaw = useMemo(() => {
     if (!model) return [];
-    // Tenta match exato primeiro, depois substring
+    // Tenta match exato primeiro
     let cores = coresDisponiveis[model];
     if (!cores) {
-      const entry = Object.entries(coresDisponiveis).find(([k]) => model.toUpperCase().includes(k.toUpperCase()) || k.toUpperCase().includes(model.toUpperCase()));
+      // Fallback: match por TOKENS (substring quebra com "iPad 11º (A16)" vs
+      // "iPad A16" — o "º (" entre os tokens nao aparece nos dois). Tokeniza
+      // ambos os lados, exige todos os tokens do MENOR lado presentes no maior,
+      // com minimo de 2 tokens pra nao colar match generico tipo so "iPad".
+      const tokens = (s: string) =>
+        s.toLowerCase().replace(/[º°ª()]/g, " ").split(/\s+/).filter(Boolean);
+      const modelT = tokens(model);
+      const entry = Object.entries(coresDisponiveis).find(([k]) => {
+        const keyT = tokens(k);
+        const shorter = modelT.length <= keyT.length ? modelT : keyT;
+        const longer = modelT.length <= keyT.length ? keyT : modelT;
+        return shorter.length >= 2 && shorter.every((t) => longer.includes(t));
+      });
       cores = entry?.[1] ?? [];
     }
     if (!cores || cores.length === 0) return [];
@@ -316,6 +378,27 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   }, [chipGroups]);
   const modelsForChip = useMemo(() => chipGroups && subLine ? (chipGroups[subLine] || []) : [], [chipGroups, subLine]);
 
+  // Opcoes de caixa pro Apple Watch Series, determinadas pela geracao (subLine).
+  // Watch Series 9 → [Aluminio, Aco Inox]; Series 10/11 → [Aluminio, Titanio].
+  // SE e Ultra nao tem escolha — ignora.
+  const watchCaseOptions = useMemo(() => {
+    if (deviceType !== "watch" || line !== "Series") return [];
+    return WATCH_SERIES_CASES[subLine] || [];
+  }, [deviceType, line, subLine]);
+  const requiresWatchCase = watchCaseOptions.length > 0;
+
+  // Cores filtradas pela caixa quando aplicavel (Watch Series). Se a lista
+  // filtrada ficar vazia (ex: cor nao cadastrada no catalogo mas prevista no
+  // hardcoded), cai na lista bruta pra nao travar o cliente.
+  const coresModelo = useMemo(() => {
+    if (!requiresWatchCase || !watchCase) return coresModeloRaw;
+    const opt = watchCaseOptions.find((o) => o.material === watchCase);
+    if (!opt || opt.cores.length === 0) return coresModeloRaw;
+    const allowed = new Set(opt.cores.map((c) => c.toLowerCase()));
+    const filtered = coresModeloRaw.filter((c) => allowed.has(c.toLowerCase()));
+    return filtered.length > 0 ? filtered : coresModeloRaw;
+  }, [coresModeloRaw, requiresWatchCase, watchCase, watchCaseOptions]);
+
   // Se o chip selecionado tem só 1 modelo, auto-selecionar
   const needsScreenSize = modelsForChip.length > 1;
   const autoModel = modelsForChip.length === 1 ? modelsForChip[0] : null;
@@ -356,7 +439,8 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
 
   const cond: ConditionData = {
     screenScratch: screenScratch ?? "none", sideScratch: sideScratch ?? "none", peeling: peeling ?? "none",
-    battery: battery ?? 100, hasDamage: hasDamage === true, partsReplaced: partsReplaced ?? "no",
+    battery: battery ?? 100, batteryLabel: batteryLabel || undefined,
+    hasDamage: hasDamage === true, partsReplaced: partsReplaced ?? "no",
     partsReplacedDetail: partsReplaced === "apple" ? partsReplacedDetail : "",
     hasWarranty: hasWarranty === true, warrantyMonth: hasWarranty ? warrantyMonth : null,
     warrantyYear: hasWarranty ? warrantyYear : null, hasOriginalBox: hasOriginalBox === true,
@@ -518,9 +602,9 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const canProceed = model && storageCompleto && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && !batteryRejected && warrantyFilled && boxOk && dynamicOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
-  function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
-  function handleSubLineChange(sl: string) { setSubLine(sl); setModel(""); setStorage(""); setHasDamage(null); tq("chip"); }
-  function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); tq("model"); }
+  function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setWatchCase(null); setHasDamage(null); tq("line"); }
+  function handleSubLineChange(sl: string) { setSubLine(sl); setModel(""); setStorage(""); setWatchCase(null); setHasDamage(null); tq("chip"); }
+  function handleModelChange(m: string) { setModel(m); setStorage(""); setWatchCase(null); setHasDamage(null); tq("model"); }
 
   // Auto-select model when chip has only 1 model
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -539,6 +623,31 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       setStorage(storages[0]);
     }
   }, [model, storages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Titanio no Apple Watch Series 10/11 e sempre GPS+Cel. Quando o cliente
+  // seleciona Titanio, se o storage atual tem conectividade "GPS" puro, busca
+  // a variante equivalente com "GPS+Cel" (mesmo tamanho) e troca. Se nao
+  // existir, mantem o atual e deixa pro operador avaliar manualmente.
+  useEffect(() => {
+    if (!watchCase) return;
+    const opt = watchCaseOptions.find((o) => o.material === watchCase);
+    if (!opt?.forceGPSCel || !storage) return;
+    const parts = parseStorageSpec(storage);
+    const conect = (parts.conectividade || parts.tela || "").toLowerCase();
+    if (conect.includes("cel") || conect.includes("+")) return; // ja e GPS+Cel
+    // Procura variante compativel com mesmo tamanho (parts[0]) mas conectividade GPS+Cel
+    const alt = storages.find((s) => {
+      const p = parseStorageSpec(s);
+      return p.armazenamento === parts.armazenamento && /cel|\+/i.test(p.conectividade || p.tela);
+    });
+    if (alt && alt !== storage) setStorage(alt);
+  }, [watchCase, storage, storages, watchCaseOptions]);
+
+  // Limpa cor escolhida se mudou de caixa — cores disponiveis mudam.
+  useEffect(() => {
+    setCor("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCase]);
 
   const deviceLabel = DEVICE_LABELS[deviceType];
 
@@ -767,8 +876,27 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         )
       )}
 
+      {/* Material da caixa — Watch Series 9/10/11. Series 9 tem Aluminio/Aco,
+          Series 10/11 tem Aluminio/Titanio. Titanio forca GPS+Cel via useEffect. */}
+      {model && storageCompleto && requiresWatchCase && (
+        <Section title="Material da caixa">
+          <div className={`grid gap-2 ${watchCaseOptions.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+            {watchCaseOptions.map((opt) => (
+              <Btn key={opt.material} sel={watchCase === opt.material}
+                onClick={() => { setWatchCase(opt.material); tq("watchCase"); }}
+                className="w-full text-center">{opt.material}</Btn>
+            ))}
+          </div>
+          {watchCase && watchCaseOptions.find(o => o.material === watchCase)?.forceGPSCel && (
+            <p className="mt-2 text-center text-[11px]" style={{ color: "var(--ti-muted)" }}>
+              Titânio sempre vem com GPS + Celular — ajustado automaticamente.
+            </p>
+          )}
+        </Section>
+      )}
+
       {/* Cor do aparelho */}
-      {model && storageCompleto && coresModelo.length > 0 && (
+      {model && storageCompleto && (!requiresWatchCase || watchCase) && coresModelo.length > 0 && (
         <Section title="Qual a cor do seu aparelho?">
           <div className={`grid gap-2 ${coresModelo.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
             {coresModelo.map(c => (
@@ -785,7 +913,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       )}
 
       {/* Cor manual — quando não tem cores do catálogo */}
-      {model && storageCompleto && coresModelo.length === 0 && (
+      {model && storageCompleto && (!requiresWatchCase || watchCase) && coresModelo.length === 0 && (
         <Section title="Qual a cor do seu aparelho?">
           <input
             type="text"
@@ -825,10 +953,12 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
           <Section title={getQTitle(qc, "battery", deviceType === "macbook" ? "Ciclos de bateria" : "Saude da bateria")} order={getOrdem("battery")}>
             <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
               <div className="relative">
-                <input type="tel" inputMode="numeric" pattern="[0-9]*" value={battery ?? ""}
-                  placeholder={deviceType === "macbook" ? "Ex: 150" : "Ex: 87"}
+                <input type="tel" inputMode="numeric" pattern="[0-9]*"
+                  value={batteryLabel ? "" : (battery ?? "")}
+                  placeholder={batteryLabel ?? (deviceType === "macbook" ? "Ex: 150" : "Ex: 87")}
                   onChange={(e) => {
                     const r = e.target.value.replace(/\D/g, "");
+                    setBatteryLabel(null); // digitou — descarta rotulo "Normal"
                     if (r === "") { setBattery(null); return; }
                     // MacBook: campo armazena ciclos (0..9999). Demais: saude em % (1..100).
                     const cap = deviceType === "macbook" ? 9999 : 100;
@@ -838,7 +968,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   className={`w-full px-4 py-3 ${deviceType === "macbook" ? "pr-4" : "pr-10"} rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors`}
                   style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
                 />
-                {deviceType !== "macbook" && (
+                {deviceType !== "macbook" && !batteryLabel && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
                 )}
               </div>
@@ -849,63 +979,68 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                     // iPad as vezes so mostra "Normal" em vez de numero — cliente
                     // clica pra liberar assumindo aparelho saudavel (100%).
                     setBattery(100);
+                    setBatteryLabel("Normal");
                     tq("battery");
                   }}
                   className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
                   style={{
-                    backgroundColor: battery === 100 ? "var(--ti-success-light)" : "var(--ti-input-bg)",
-                    color: battery === 100 ? "var(--ti-success)" : "var(--ti-muted)",
-                    border: `1px solid ${battery === 100 ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                    backgroundColor: batteryLabel ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                    color: batteryLabel ? "var(--ti-success)" : "var(--ti-muted)",
+                    border: `1px solid ${batteryLabel ? "var(--ti-success)" : "var(--ti-card-border)"}`,
                   }}
                 >
                   Aparece só &quot;Normal&quot; no meu iPad
                 </button>
               )}
-              {deviceType === "iphone" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. Abra <strong style={{ color: "var(--ti-text)" }}>Ajustes</strong> no seu iPhone</p>
-                    <p>2. Toque em <strong style={{ color: "var(--ti-text)" }}>Bateria</strong></p>
-                    <p>3. Toque em <strong style={{ color: "var(--ti-text)" }}>Saude e Carregamento da Bateria</strong></p>
-                    <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Maxima</strong></p>
-                  </div>
-                </details>
-              )}
-              {deviceType === "ipad" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. Abra <strong style={{ color: "var(--ti-text)" }}>Ajustes</strong> no seu iPad</p>
-                    <p>2. Toque em <strong style={{ color: "var(--ti-text)" }}>Bateria</strong></p>
-                    <p>3. Toque em <strong style={{ color: "var(--ti-text)" }}>Saude da Bateria</strong></p>
-                    <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Maxima</strong></p>
-                  </div>
-                </details>
-              )}
               {deviceType === "macbook" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir os ciclos de bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. Clique no menu <strong style={{ color: "var(--ti-text)" }}>Apple</strong> {">"} <strong style={{ color: "var(--ti-text)" }}>Sobre Este Mac</strong></p>
-                    <p>2. Clique em <strong style={{ color: "var(--ti-text)" }}>Mais Informacoes</strong></p>
-                    <p>3. Role ate o final e clique em <strong style={{ color: "var(--ti-text)" }}>Relatorio do Sistema</strong></p>
-                    <p>4. Na barra lateral, clique em <strong style={{ color: "var(--ti-text)" }}>Energia</strong></p>
-                    <p>5. Veja <strong style={{ color: "var(--ti-text)" }}>Contagem de Ciclos</strong></p>
-                  </div>
-                </details>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // MacBook tambem suporta "Normal" — quando o cliente nao
+                    // sabe os ciclos. Marcamos batteryCycles=0 (sem desconto)
+                    // e o resumo mostra "Bateria: Normal".
+                    setBattery(0);
+                    setBatteryLabel("Normal");
+                    tq("battery");
+                  }}
+                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                  style={{
+                    backgroundColor: batteryLabel ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                    color: batteryLabel ? "var(--ti-success)" : "var(--ti-muted)",
+                    border: `1px solid ${batteryLabel ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                  }}
+                >
+                  Não sei os ciclos — bateria normal
+                </button>
               )}
-              {deviceType === "watch" && (
-                <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saude da bateria?</summary>
-                  <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
-                    <p>1. No Apple Watch, abra <strong style={{ color: "var(--ti-text)" }}>Ajustes</strong></p>
-                    <p>2. Toque em <strong style={{ color: "var(--ti-text)" }}>Bateria</strong></p>
-                    <p>3. Toque em <strong style={{ color: "var(--ti-text)" }}>Saude da Bateria</strong></p>
-                    <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Maxima</strong></p>
-                  </div>
-                </details>
-              )}
+              {/* Ajuda "Como descobrir a saude/ciclos da bateria?" — texto padrao
+                  por device_type, sobrescrivel via labels.help_battery_{device}
+                  em /admin/simulacoes. Suporta markdown (negrito, italico, ## titulo). */}
+              {(() => {
+                const defaults: Record<string, string> = {
+                  iphone: "## Como descobrir a saúde da bateria?\n\n1. Abra **Ajustes** no seu iPhone\n2. Toque em **Bateria**\n3. Toque em **Saúde e Carregamento da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
+                  ipad: "## Como descobrir a saúde da bateria?\n\n1. Abra **Ajustes** no seu iPad\n2. Toque em **Bateria**\n3. Toque em **Saúde da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
+                  macbook: "## Como descobrir os ciclos de bateria?\n\n1. Clique no menu **Apple** > **Sobre Este Mac**\n2. Clique em **Mais Informações**\n3. Role até o final e clique em **Relatório do Sistema**\n4. Na barra lateral, clique em **Energia**\n5. Veja **Contagem de Ciclos**",
+                  watch: "## Como descobrir a saúde da bateria?\n\n1. No Apple Watch, abra **Ajustes**\n2. Toque em **Bateria**\n3. Toque em **Saúde da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
+                };
+                const key = `help_battery_${deviceType}`;
+                const raw = labels?.[key]?.trim() || defaults[deviceType] || "";
+                if (!raw) return null;
+                // Extrai primeiro `## Titulo` como summary; resto vai no body.
+                const headerMatch = raw.match(/^## (.+)$/m);
+                const title = headerMatch ? headerMatch[1] : "Como descobrir a saúde da bateria?";
+                const body = headerMatch ? raw.replace(/^## .+$/m, "").trim() : raw;
+                return (
+                  <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+                    <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>{title}</summary>
+                    <div
+                      className="text-[11px] mt-2 whitespace-pre-wrap leading-relaxed"
+                      style={{ color: "var(--ti-muted)" }}
+                      dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(body) }}
+                    />
+                  </details>
+                );
+              })()}
               {batteryRejected && batteryRejectMessage && (
                 <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
                   <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{batteryRejectMessage}</p>
@@ -1181,10 +1316,19 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       })}
 
       {canProceed && (
-        <button onClick={() => onNext({
-          usedModel: model, usedStorage: storage, usedColor: cor, condition: cond, tradeInValue, deviceType: calcDeviceType,
-          extraAnswers: dynamicQuestions.length > 0 ? extraAnswers : undefined,
-        })}
+        <button onClick={() => {
+          // Injetar watchCase como "pseudo-answer" quando aplicavel — TradeInCalculatorMulti
+          // reconhece o slug especial `__watchCase__` e monta uma pergunta sintetica
+          // pro resumo mostrar "Caixa: Aluminio" junto com as outras respostas.
+          const finalExtraAnswers = watchCase
+            ? { ...(extraAnswers || {}), __watchCase__: watchCase }
+            : extraAnswers;
+          const hasExtras = dynamicQuestions.length > 0 || !!watchCase;
+          onNext({
+            usedModel: model, usedStorage: storage, usedColor: cor, condition: cond, tradeInValue, deviceType: calcDeviceType,
+            extraAnswers: hasExtras ? finalExtraAnswers : undefined,
+          });
+        }}
           className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
           style={{ backgroundColor: "#22c55e", order: 999 }}>
           Ver minha avaliacao {"\u2192"}

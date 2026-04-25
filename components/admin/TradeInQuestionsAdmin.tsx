@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { TradeInQuestion, TradeInQuestionOption, SeminovoOption, SeminovoCategoria, getSeminovoVariantes, consolidateSeminovos } from "@/lib/types";
+import { useConfirmModal } from "@/components/admin/ConfirmModal";
 
 interface Props {
   password: string;
@@ -36,6 +37,7 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [deviceTab, setDeviceTab] = useState("iphone");
+  const { confirm: confirmModal, prompt: promptModal, modal } = useConfirmModal();
 
   function getHeaders() {
     return { "x-admin-password": password, "Content-Type": "application/json" };
@@ -169,6 +171,7 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
 
   return (
     <div className="space-y-4">
+      {modal}
       {/* Device type tabs */}
       <div className="flex gap-2 flex-wrap items-center">
         {DEVICE_TABS.map(t => (
@@ -237,9 +240,18 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
         </div>
         <button
           onClick={async () => {
-            const titulo = prompt("Titulo da nova pergunta:");
+            const titulo = await promptModal({
+              title: "Nova pergunta",
+              description: "Informe o titulo da pergunta que o cliente vai ver.",
+              placeholder: "Ex: Possui o carregador original?",
+            });
             if (!titulo) return;
-            const tipo = prompt("Tipo (yesno, selection, numeric, multiselect, conditional_date):", "yesno");
+            const tipo = await promptModal({
+              title: "Tipo da pergunta",
+              description: "yesno | selection | numeric | multiselect | conditional_date",
+              placeholder: "yesno",
+              defaultValue: "yesno",
+            });
             if (!tipo) return;
             const slug = titulo.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 30);
             const ordem = questions.length + 1;
@@ -326,7 +338,13 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
               <div onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={async () => {
-                    if (!confirm(`Excluir pergunta "${q.titulo}"?`)) return;
+                    const ok = await confirmModal({
+                      title: "Excluir pergunta",
+                      description: `"${q.titulo}" vai sumir do formulario. Nao afeta respostas ja coletadas.`,
+                      confirmLabel: "Excluir",
+                      variant: "danger",
+                    });
+                    if (!ok) return;
                     const isUUID = /^[0-9a-f]{8}-/i.test(q.id);
                     if (isUUID) {
                       try {
@@ -365,37 +383,52 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                     <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Opções de resposta</label>
                     <div className="mt-2 space-y-2">
                       {q.opcoes.map((opt, oi) => (
-                        <div key={oi} className="flex items-center gap-2 bg-[#F5F5F7] rounded-lg px-3 py-2">
-                          <input
-                            value={opt.label}
-                            onChange={(e) => updateOption(q.id, oi, { label: e.target.value })}
-                            className="flex-1 px-2 py-1 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                            placeholder="Label"
-                          />
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-[#86868B]">R$</span>
+                        <div key={oi} className="bg-[#F5F5F7] rounded-lg px-3 py-2 space-y-2">
+                          <div className="flex items-center gap-2">
                             <input
-                              type="number"
-                              value={opt.discount}
-                              onChange={(e) => updateOption(q.id, oi, { discount: Number(e.target.value) })}
-                              className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
+                              value={opt.label}
+                              onChange={(e) => updateOption(q.id, oi, { label: e.target.value })}
+                              className="flex-1 px-2 py-1 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                              placeholder="Label do botao"
+                            />
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-[#86868B]">R$</span>
+                              <input
+                                type="number"
+                                value={opt.discount}
+                                onChange={(e) => updateOption(q.id, oi, { discount: Number(e.target.value) })}
+                                className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
+                              />
+                            </div>
+                            {opt.reject && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700">Rejeita</span>
+                            )}
+                            <label className="flex items-center gap-1 text-[10px] text-[#86868B]">
+                              <input
+                                type="checkbox"
+                                checked={!!opt.reject}
+                                onChange={(e) => updateOption(q.id, oi, { reject: e.target.checked })}
+                                className="w-3 h-3 accent-red-500"
+                              />
+                              Rejeitar
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider whitespace-nowrap">No resumo:</span>
+                            <input
+                              value={opt.summaryLabel || ""}
+                              onChange={(e) => updateOption(q.id, oi, { summaryLabel: e.target.value })}
+                              className="flex-1 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                              placeholder="Frase completa (ex: Possui o carregador completo original da Apple)"
                             />
                           </div>
-                          {opt.reject && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700">Rejeita</span>
-                          )}
-                          <label className="flex items-center gap-1 text-[10px] text-[#86868B]">
-                            <input
-                              type="checkbox"
-                              checked={!!opt.reject}
-                              onChange={(e) => updateOption(q.id, oi, { reject: e.target.checked })}
-                              className="w-3 h-3 accent-red-500"
-                            />
-                            Rejeitar
-                          </label>
                         </div>
                       ))}
                     </div>
+                    <p className="mt-2 text-[11px] text-[#86868B]">
+                      <strong>Label do botão</strong>: aparece no formulário (ex: &quot;Sim&quot; / &quot;Nao&quot;).{" "}
+                      <strong>No resumo</strong> (opcional): frase completa pro StepManualHandoff e WhatsApp. Se vazio, mostra &quot;titulo: label&quot;.
+                    </p>
                   </div>
                 )}
 
@@ -476,7 +509,10 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                         className="mt-1 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                       />
                       <p className="mt-1 text-[11px] text-[#86868B]">
-                        Aparece como painel expansivel abaixo do input. Use <code>**texto**</code> pra deixar em <strong>negrito</strong>. Quebras de linha sao preservadas.
+                        Aparece como painel expansivel abaixo do input. Formatacao suportada:{" "}
+                        <code>**negrito**</code> · <code>*italico*</code> ou <code>_italico_</code> ·{" "}
+                        <code>## Titulo grande</code> · <code>### Subtitulo</code> (no inicio da linha).
+                        Quebras de linha sao preservadas.
                       </p>
                     </div>
 
@@ -562,10 +598,19 @@ const DEFAULT_SEMINOVOS: SeminovoOption[] = [
 
 const DEFAULT_ORIGENS = ["Anúncio", "Story", "Direct", "WhatsApp", "Indicação", "Já sou cliente"];
 
-const LABEL_GROUPS: { title: string; keys: { key: string; label: string }[] }[] = [
+const LABEL_GROUPS: { title: string; keys: { key: string; label: string; multiline?: boolean }[] }[] = [
   {
     title: "Etapa 1 — Aparelho Usado",
     keys: [{ key: "step1_titulo", label: "Título da etapa" }],
+  },
+  {
+    title: "Help texts da bateria (por categoria)",
+    keys: [
+      { key: "help_battery_iphone", label: "iPhone — passo a passo", multiline: true },
+      { key: "help_battery_ipad", label: "iPad — passo a passo", multiline: true },
+      { key: "help_battery_macbook", label: "MacBook — passo a passo (ciclos)", multiline: true },
+      { key: "help_battery_watch", label: "Apple Watch — passo a passo", multiline: true },
+    ],
   },
   {
     title: "Etapa 2 — Aparelho Novo",
@@ -784,14 +829,24 @@ function TradeInConfigAdmin({ password, deviceTab: _deviceTab }: { password: str
                 {group.title}
               </div>
               <div className="space-y-2">
-                {group.keys.map(({ key, label }) => (
+                {group.keys.map(({ key, label, multiline }) => (
                   <div key={key}>
                     <label className="text-[11px] text-[#86868B] mb-0.5 block">{label}</label>
-                    <input
-                      value={labels[key] || ""}
-                      onChange={(e) => setLabels({ ...labels, [key]: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                    />
+                    {multiline ? (
+                      <textarea
+                        value={labels[key] || ""}
+                        onChange={(e) => setLabels({ ...labels, [key]: e.target.value })}
+                        rows={6}
+                        placeholder="Markdown suportado: **negrito** · *italico* · ## Titulo"
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E] font-mono"
+                      />
+                    ) : (
+                      <input
+                        value={labels[key] || ""}
+                        onChange={(e) => setLabels({ ...labels, [key]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                      />
+                    )}
                   </div>
                 ))}
               </div>

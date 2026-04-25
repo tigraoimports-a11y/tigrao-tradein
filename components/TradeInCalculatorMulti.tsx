@@ -277,6 +277,22 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     const dynamicQs = (questionsConfig ?? []).filter(
       (q) => q.ativo !== false && !["battery","hasDamage","hasOriginalBox","hasWarranty","hasWearMarks","partsReplaced","peeling","screenScratch","sideScratch","warrantyMonth","wearMarks"].includes(q.slug)
     );
+    // Caixa do Apple Watch (hardcoded no StepUsedDeviceMulti) vem em
+    // extraAnswers.__watchCase__. Aqui injetamos pergunta sintetica pra que o
+    // resumo renderize "Caixa: Aluminio" junto das outras respostas.
+    if (data.extraAnswers?.__watchCase__) {
+      dynamicQs.push({
+        id: "synthetic-watch-case",
+        slug: "__watchCase__",
+        titulo: "Caixa",
+        tipo: "selection" as const,
+        opcoes: [],
+        ordem: 0.5, // aparece logo depois do hasDamage no resumo
+        ativo: true,
+        config: {},
+        device_type: "watch",
+      });
+    }
     if (step === 1) {
       setDeviceType(data.deviceType); setUsedModel(data.usedModel); setUsedStorage(data.usedStorage);
       setUsedColor(data.usedColor || "");
@@ -548,6 +564,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               modelDiscounts={usedData.modelDiscounts}
               questionsConfig={questionsConfig}
               deviceType={selectedDeviceType}
+              labels={tradeinConfig?.labels}
               onNext={handleStep1Complete}
               onTrackQuestion={trackQuestion}
             />
@@ -595,6 +612,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
                 modelDiscounts={usedData.modelDiscounts}
                 questionsConfig={questionsConfig}
                 deviceType={selectedDeviceType}
+                labels={tradeinConfig?.labels}
                 onNext={handleStep1Complete}
                 onTrackQuestion={trackQuestion}
               />
@@ -619,6 +637,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               extraAnswers={extraAnswers} extraQuestions={extraQuestions}
               extraAnswers2={hasSecondDevice ? extraAnswers2 : undefined} extraQuestions2={hasSecondDevice ? extraQuestions2 : undefined}
+              questionsConfig={questionsConfig ?? undefined}
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
               whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal}

@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { useConfirmModal } from "@/components/admin/ConfirmModal";
 
 interface ValorUsado {
   id: string;
@@ -215,6 +216,7 @@ interface GarantiaRow {
 
 export function UsadosContent() {
   const { password, user } = useAdmin();
+  const { confirm: confirmModal, prompt: promptModal, modal: confirmModalUI } = useConfirmModal();
   const [valores, setValores] = useState<ValorUsado[]>([]);
   const [descontos, setDescontos] = useState<DescontoCondicao[]>([]);
   const [excluidos, setExcluidos] = useState<string[]>([]);
@@ -505,7 +507,13 @@ export function UsadosContent() {
   // Remove uma variante especifica (1 linha no banco). Usado pelo botao "×" em
   // cada celula de conectividade.
   const handleDeleteVariant = async (v: ValorUsado) => {
-    if (!confirm(`Remover "${v.modelo} — ${v.armazenamento}" do banco?\n\nSo apaga essa variante especifica; as outras conectividades do mesmo armaz/tela continuam intactas.`)) return;
+    const ok = await confirmModal({
+      title: `Remover "${v.modelo} — ${v.armazenamento}"?`,
+      description: "So apaga essa variante especifica; as outras conectividades do mesmo armaz/tela continuam intactas.",
+      confirmLabel: "Remover",
+      variant: "danger",
+    });
+    if (!ok) return;
     const k = `del-${v.id}`;
     setSaving(k);
     const res = await apiPost({ action: "delete_valor", id: v.id });
@@ -573,7 +581,13 @@ export function UsadosContent() {
   };
 
   const handleRemoveDesconto = async (d: DescontoCondicao) => {
-    if (!confirm(`Remover "${d.detalhe}" de "${d.condicao}"?`)) return;
+    const ok = await confirmModal({
+      title: `Remover "${d.detalhe}"?`,
+      description: `Desconto de "${d.condicao}" sera apagado.`,
+      confirmLabel: "Remover",
+      variant: "danger",
+    });
+    if (!ok) return;
     // Delete via upsert with special value to mark for deletion
     // Actually, we need a delete action in the API. For now, set discount to 0 to effectively disable it.
     // Or better: we can add a delete action
@@ -779,6 +793,27 @@ export function UsadosContent() {
     }
   }
 
+  // Ordena os nomes de modelo dentro do grupo. Pra MacBook, prioriza tela
+  // (14"→15"→16") e depois o chip (M1 antes de M1 Pro antes de M1 Max antes de
+  // M2). Pra outras categorias, alfabetico estavel.
+  const modelSortKey = (name: string): [number, number, number, string] => {
+    const screenMatch = name.match(/(\d+(?:\.\d+)?)\s*"/);
+    const screen = screenMatch ? parseFloat(screenMatch[1]) : 0;
+    const chipMatch = name.match(/\bM(\d+)(?:\s+(Pro|Max))?\b/i);
+    const chipNum = chipMatch ? parseInt(chipMatch[1]) : 0;
+    const variant = (chipMatch?.[2] || "").toLowerCase();
+    const variantOrd = variant === "" ? 0 : variant === "pro" ? 1 : variant === "max" ? 2 : 3;
+    return [screen, chipNum, variantOrd, name];
+  };
+  const sortedModelos = Object.keys(grouped).sort((a, b) => {
+    const ka = modelSortKey(a);
+    const kb = modelSortKey(b);
+    for (let i = 0; i < 3; i++) {
+      if (ka[i] !== kb[i]) return Number(ka[i]) - Number(kb[i]);
+    }
+    return String(ka[3]).localeCompare(String(kb[3]));
+  });
+
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
   const modelosMap = new Map<string, string>(); // lowercase → nome canônico
   valores.forEach(v => { if (v.modelo) modelosMap.set(v.modelo.toLowerCase(), v.modelo); });
@@ -886,6 +921,7 @@ export function UsadosContent() {
 
   return (
     <div className="space-y-6">
+      {confirmModalUI}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-lg font-bold text-[#1D1D1F]">Avaliacao de Usados</h2>
         <div className="flex gap-2">
@@ -1119,7 +1155,8 @@ export function UsadosContent() {
               </button>
             </div>
           ) : (
-            Object.entries(grouped).map(([modelo, rows]) => {
+            sortedModelos.map((modelo) => {
+              const rows = grouped[modelo];
               const conectividadesDoModelo = conectividadesByModel[modelo] || [];
               return (
               <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
@@ -1153,11 +1190,15 @@ export function UsadosContent() {
                     )}
                     <button
                       onClick={async () => {
-                        const novo = prompt(`Renomear "${modelo}" para:`, modelo);
-                        if (novo === null) return; // cancelou
+                        const novo = await promptModal({
+                          title: `Renomear "${modelo}"`,
+                          description: "Atualiza TODAS as variantes (armazenamento), descontos ligados ao modelo, registros de excluidos e de garantia.",
+                          defaultValue: modelo,
+                          confirmLabel: "Renomear",
+                        });
+                        if (!novo) return;
                         const trimmed = novo.trim();
                         if (!trimmed || trimmed === modelo) return;
-                        if (!confirm(`Renomear "${modelo}" para "${trimmed}"?\n\nIsso atualiza TODAS as variantes (armazenamento), descontos ligados ao modelo, registros de excluidos e de garantia.`)) return;
                         const res = await apiPost({ action: "rename_modelo", modelo_antigo: modelo, modelo_novo: trimmed });
                         const json = await res.json().catch(() => ({}));
                         if (!res.ok) {
@@ -1176,7 +1217,13 @@ export function UsadosContent() {
                     </button>
                     <button
                       onClick={async () => {
-                        if (!confirm(`Excluir "${modelo}" do simulador?\n\nCliente nao vera mais esse modelo na lista de troca. Pra reativar, va na aba "Excluidos" e remova da lista.`)) return;
+                        const ok = await confirmModal({
+                          title: `Excluir "${modelo}" do simulador?`,
+                          description: "Cliente nao vera mais esse modelo na lista de troca. Pra reativar, va na aba 'Excluidos' e remova da lista.",
+                          confirmLabel: "Excluir",
+                          variant: "danger",
+                        });
+                        if (!ok) return;
                         await apiPost({ action: "add_excluido", modelo });
                         setExcluidos((prev) => prev.includes(modelo) ? prev : [...prev, modelo]);
                       }}
@@ -1187,7 +1234,13 @@ export function UsadosContent() {
                     </button>
                     <button
                       onClick={async () => {
-                        if (!confirm(`APAGAR "${modelo}" DE VEZ?\n\nIsso remove todos os armazenamentos, garantias, descontos por modelo e a entrada em "Excluidos" desse modelo. Nao da pra desfazer — so re-cadastrando.\n\nUse quando o modelo foi cadastrado errado ou saiu de catalogo.`)) return;
+                        const ok = await confirmModal({
+                          title: `APAGAR "${modelo}" DE VEZ?`,
+                          description: "Isso remove todos os armazenamentos, garantias, descontos por modelo e a entrada em 'Excluidos' desse modelo. Nao da pra desfazer — so re-cadastrando.\n\nUse quando o modelo foi cadastrado errado ou saiu de catalogo.",
+                          confirmLabel: "Apagar de vez",
+                          variant: "danger",
+                        });
+                        if (!ok) return;
                         const res = await apiPost({ action: "delete_modelo_full", modelo });
                         if (!res.ok) { const j = await res.json().catch(() => ({})); alert(`Erro: ${j.error || "falha ao apagar"}`); return; }
                         setValores((prev) => prev.filter((v) => v.modelo !== modelo));
@@ -1504,7 +1557,17 @@ export function UsadosContent() {
                                 <button onClick={() => handleSaveValor(v)} disabled={isSaving} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50">{isSaving ? "..." : "Salvar"}</button>
                               </div>
                             ) : (
-                              <button onClick={() => setEditing({ ...editing, [key]: String(v.valor_base) })} className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors">Editar</button>
+                              <div className="flex gap-2 justify-end items-center">
+                                <button onClick={() => setEditing({ ...editing, [key]: String(v.valor_base) })} className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors">Editar</button>
+                                <button
+                                  onClick={() => handleDeleteVariant(v)}
+                                  disabled={saving === `del-${v.id}`}
+                                  title="Remover essa variante (combo invalido tipo 24GB+256GB)"
+                                  className="text-red-300 hover:text-red-600 text-base leading-none"
+                                >
+                                  ✕
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
