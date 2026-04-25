@@ -124,7 +124,25 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
   const [catConfigs, setCatConfigs] = useState<{ categoria: string; modo: string; ativo: boolean }[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_formularios_seminovos?: string; whatsapp_seminovo_iphone?: string; whatsapp_seminovo_ipad?: string; whatsapp_seminovo_macbook?: string; whatsapp_seminovo_watch?: string; whatsapp_vendedores?: Record<string, string>; site_logo_url?: string | null; site_logo_position?: string; site_influencers_enabled?: boolean | string; site_influencers?: { handle: string; foto_url: string }[] }) | null>(null);
+  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & {
+    whatsapp_principal?: string; whatsapp_formularios_seminovos?: string;
+    whatsapp_seminovo_iphone?: string; whatsapp_seminovo_ipad?: string;
+    whatsapp_seminovo_macbook?: string; whatsapp_seminovo_watch?: string;
+    whatsapp_vendedores?: Record<string, string>;
+    // Site config — Fase 1
+    site_logo_url?: string | null; site_logo_position?: string;
+    site_influencers_enabled?: boolean | string;
+    site_influencers?: { handle: string; foto_url: string }[];
+    // Site config — Fase 2 (textos editaveis + feedbacks de clientes)
+    site_header_title?: string; site_header_tagline?: string;
+    site_headline_p1?: string; site_headline_destaque?: string; site_headline_p2?: string;
+    site_subtitle?: string; site_cta_text?: string;
+    site_trust_1?: string; site_trust_2?: string; site_trust_3?: string;
+    site_social_proof_text?: string;
+    site_footer_line1?: string; site_footer_cnpj?: string;
+    site_feedbacks_enabled?: boolean | string;
+    site_feedbacks?: { foto_url: string; nome: string; texto: string }[];
+  }) | null>(null);
   // Mapa dinamico de WhatsApp por vendedor — usa DB se disponivel
   const VENDEDOR_WHATSAPP = useMemo(() => {
     const dbMap = tradeinConfig?.whatsapp_vendedores;
@@ -167,6 +185,33 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
         .map((i) => ({ handle: i.handle, foto: i.foto_url }));
     }
     return INFLUENCERS_FALLBACK;
+  })();
+
+  // === Site config Fase 2 — textos editaveis + feedbacks ===
+  // Cada campo: usa valor do banco OU fallback hardcoded (preserva landing v2
+  // mesmo se banco nunca foi inicializado).
+  const siteHeaderTitle: string = tradeinConfig?.site_header_title || "TigrãoImports";
+  const siteHeaderTagline: string = tradeinConfig?.site_header_tagline || "Trade-In Apple";
+  const siteHeadlineP1: string = tradeinConfig?.site_headline_p1 || "Troque seu iPhone usado por um";
+  const siteHeadlineDestaque: string = tradeinConfig?.site_headline_destaque || "NOVO";
+  const siteHeadlineP2: string = tradeinConfig?.site_headline_p2 || "pagando só a diferença";
+  const siteSubtitle: string = tradeinConfig?.site_subtitle || "Descubra em 30 segundos quanto vale seu aparelho na troca por um novo com garantia Apple.";
+  const siteCtaText: string = tradeinConfig?.site_cta_text || "Descobrir o valor do meu aparelho";
+  const siteTrust1: string = tradeinConfig?.site_trust_1 || "Lacrado";
+  const siteTrust2: string = tradeinConfig?.site_trust_2 || "Nota fiscal";
+  const siteTrust3: string = tradeinConfig?.site_trust_3 || "Garantia Apple";
+  const siteSocialProofText: string = tradeinConfig?.site_social_proof_text || "+1.730 trocas realizadas";
+  const siteFooterLine1: string = tradeinConfig?.site_footer_line1 || "+5 anos no Rio de Janeiro · +1.730 trocas realizadas";
+  const siteFooterCnpj: string = tradeinConfig?.site_footer_cnpj || "CNPJ 50.139.554/0001-42";
+  // Feedbacks — desabilitado por default (Andre comeca a coletar prints depois)
+  const siteFeedbacksEnabled: boolean = (() => {
+    const raw = tradeinConfig?.site_feedbacks_enabled;
+    return raw === true || raw === "true";
+  })();
+  const siteFeedbacks: { foto_url: string; nome: string; texto: string }[] = (() => {
+    const fromDb = tradeinConfig?.site_feedbacks;
+    if (Array.isArray(fromDb)) return fromDb.filter((f) => f && f.foto_url);
+    return [];
   })();
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
@@ -444,43 +489,42 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
                 onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement!.innerHTML = "🐯"; }} />
             </div>
             <div className="text-left">
-              <p className="text-[16px] font-bold leading-tight" style={{ color: tema.text }}>TigrãoImports</p>
-              <p className="text-[11px] leading-tight" style={{ color: "var(--ti-accent, #E8740E)" }}>Trade-In Apple</p>
+              <p className="text-[16px] font-bold leading-tight" style={{ color: tema.text }}>{siteHeaderTitle}</p>
+              <p className="text-[11px] leading-tight" style={{ color: "var(--ti-accent, #E8740E)" }}>{siteHeaderTagline}</p>
             </div>
           </div>
 
-          {/* HEADLINE — sem mostrar valor especifico (Andre nao quis aproximar
-              valores). Foco no que importa: troca lacrada com garantia Apple +
-              parcelamento. Mantem 21x como ancora de "compravel". */}
+          {/* HEADLINE — gerenciada pelo admin em /admin/configuracoes/site
+              (3 partes — meio destacado em laranja). */}
           <div className="text-center space-y-3">
             <h1 className="text-[26px] font-bold tracking-tight leading-tight" style={{ color: tema.text }}>
-              Troque seu iPhone usado por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>NOVO</span><br />pagando só a diferença
+              {siteHeadlineP1} <span style={{ color: "var(--ti-accent, #E8740E)" }}>{siteHeadlineDestaque}</span><br />{siteHeadlineP2}
             </h1>
             <p className="text-[15px] leading-relaxed" style={{ color: tema.textMuted }}>
-              Descubra em <strong style={{ color: tema.text }}>30 segundos</strong> quanto vale seu aparelho na troca por um novo com garantia Apple.
+              {siteSubtitle}
             </p>
           </div>
 
-          {/* CTA verde — mantido (psicologia de conversao + dinheiro). */}
+          {/* CTA verde — texto editavel via admin */}
           <button
             onClick={() => { setStarted(true); setStep(0); trackStep(0); }}
             className="w-full py-4 rounded-2xl text-[18px] font-bold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
             style={{ backgroundColor: "#22c55e" }}
           >
-            Descobrir o valor do meu aparelho
+            {siteCtaText}
           </button>
 
-          {/* Social proof — 5 estrelas + numero de trocas */}
+          {/* Social proof — 5 estrelas + numero de trocas (texto editavel) */}
           <div className="flex items-center justify-center gap-2">
             <span className="text-base leading-none">{"\u2B50\u2B50\u2B50\u2B50\u2B50"}</span>
-            <span className="text-[13px] font-semibold" style={{ color: tema.text }}>+1.730 trocas realizadas</span>
+            <span className="text-[13px] font-semibold" style={{ color: tema.text }}>{siteSocialProofText}</span>
           </div>
 
-          {/* Trust badges — usa cor de marca em vez de verde generico */}
+          {/* Trust badges — 3 textos editaveis com checkmark laranja */}
           <div className="flex items-center justify-center gap-4 text-[12px]" style={{ color: tema.textMuted }}>
-            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> Lacrado</span>
-            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> Nota fiscal</span>
-            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> Garantia Apple</span>
+            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust1}</span>
+            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust2}</span>
+            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust3}</span>
           </div>
 
           {/* SECAO INFLUENCERS — gerenciada pelo admin em
@@ -504,13 +548,41 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
             </div>
           )}
 
-          {/* FOOTER ENRIQUECIDO — credibilidade real (5 anos + CNPJ) sem
-              expor endereco (preferencia do Andre, escritorio nao e loja
-              aberta ao publico). */}
+          {/* SECAO FEEDBACKS — depoimentos de clientes (prints WhatsApp).
+              Gerenciada pelo admin em /admin/configuracoes/site. Esconde se
+              admin desativou ou se nao tem nenhum cadastrado. */}
+          {siteFeedbacksEnabled && siteFeedbacks.length > 0 && (
+            <div className="pt-4 space-y-3" style={{ borderTop: `1px solid ${tema.cardBorder}` }}>
+              <p className="text-[11px] font-semibold tracking-wider uppercase text-center" style={{ color: tema.textMuted }}>O que dizem nossos clientes</p>
+              <div className="space-y-3">
+                {siteFeedbacks.map((fb, idx) => (
+                  <div key={idx} className="rounded-2xl p-3 flex items-start gap-3"
+                    style={{ backgroundColor: tema.cardBg, border: `1px solid ${tema.cardBorder}` }}>
+                    <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0"
+                      style={{ border: `1px solid ${tema.cardBorder}` }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={fb.foto_url} alt={fb.nome || "Feedback"} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {fb.nome && (
+                        <p className="text-[12px] font-semibold mb-0.5" style={{ color: tema.text }}>{fb.nome}</p>
+                      )}
+                      {fb.texto && (
+                        <p className="text-[12px] leading-snug" style={{ color: tema.textMuted }}>&ldquo;{fb.texto}&rdquo;</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* FOOTER — credibilidade (5 anos + CNPJ). Textos editaveis pelo
+              admin. Sem endereco exposto (escritorio fechado). */}
           <div className="pt-5 text-center space-y-1" style={{ borderTop: `1px solid ${tema.cardBorder}` }}>
-            <p className="text-[12px] font-semibold" style={{ color: tema.text }}>TigrãoImports</p>
-            <p className="text-[11px]" style={{ color: tema.textMuted }}>+5 anos no Rio de Janeiro · +1.730 trocas realizadas</p>
-            <p className="text-[10px]" style={{ color: tema.textDim }}>CNPJ 50.139.554/0001-42</p>
+            <p className="text-[12px] font-semibold" style={{ color: tema.text }}>{siteHeaderTitle}</p>
+            <p className="text-[11px]" style={{ color: tema.textMuted }}>{siteFooterLine1}</p>
+            <p className="text-[10px]" style={{ color: tema.textDim }}>{siteFooterCnpj}</p>
           </div>
         </div>
       </main>

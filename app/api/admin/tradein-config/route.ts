@@ -40,6 +40,23 @@ export async function GET(req: NextRequest) {
   if (labels._site_logo_position !== undefined) result.site_logo_position = labels._site_logo_position;
   if (labels._site_influencers_enabled !== undefined) result.site_influencers_enabled = labels._site_influencers_enabled;
   if (labels._site_influencers !== undefined) result.site_influencers = labels._site_influencers;
+  // Fase 2 (Abr/2026) — textos editaveis da landing + secao de feedbacks de
+  // clientes (prints WhatsApp). Tudo no JSONB labels.
+  if (labels._site_header_title !== undefined) result.site_header_title = labels._site_header_title;
+  if (labels._site_header_tagline !== undefined) result.site_header_tagline = labels._site_header_tagline;
+  if (labels._site_headline_p1 !== undefined) result.site_headline_p1 = labels._site_headline_p1;
+  if (labels._site_headline_destaque !== undefined) result.site_headline_destaque = labels._site_headline_destaque;
+  if (labels._site_headline_p2 !== undefined) result.site_headline_p2 = labels._site_headline_p2;
+  if (labels._site_subtitle !== undefined) result.site_subtitle = labels._site_subtitle;
+  if (labels._site_cta_text !== undefined) result.site_cta_text = labels._site_cta_text;
+  if (labels._site_trust_1 !== undefined) result.site_trust_1 = labels._site_trust_1;
+  if (labels._site_trust_2 !== undefined) result.site_trust_2 = labels._site_trust_2;
+  if (labels._site_trust_3 !== undefined) result.site_trust_3 = labels._site_trust_3;
+  if (labels._site_social_proof_text !== undefined) result.site_social_proof_text = labels._site_social_proof_text;
+  if (labels._site_footer_line1 !== undefined) result.site_footer_line1 = labels._site_footer_line1;
+  if (labels._site_footer_cnpj !== undefined) result.site_footer_cnpj = labels._site_footer_cnpj;
+  if (labels._site_feedbacks_enabled !== undefined) result.site_feedbacks_enabled = labels._site_feedbacks_enabled;
+  if (labels._site_feedbacks !== undefined) result.site_feedbacks = labels._site_feedbacks;
 
   return NextResponse.json({ data: result });
 }
@@ -75,6 +92,22 @@ export async function PUT(req: NextRequest) {
     "site_logo_position",
     "site_influencers_enabled",
     "site_influencers",
+    // Fase 2 (textos da landing + feedbacks de clientes)
+    "site_header_title",
+    "site_header_tagline",
+    "site_headline_p1",
+    "site_headline_destaque",
+    "site_headline_p2",
+    "site_subtitle",
+    "site_cta_text",
+    "site_trust_1",
+    "site_trust_2",
+    "site_trust_3",
+    "site_social_proof_text",
+    "site_footer_line1",
+    "site_footer_cnpj",
+    "site_feedbacks_enabled",
+    "site_feedbacks",
   ] as const;
   const hasAnyWaField = whatsappFields.some((k) => body[k] !== undefined);
   const hasAnySiteField = siteFields.some((k) => body[k] !== undefined);
