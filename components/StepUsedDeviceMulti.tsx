@@ -125,9 +125,12 @@ function extractLines(models: string[], deviceType: MultiDeviceType): string[] {
       // Apenas 3 linhas top-level: SE / Series / Ultra. Modelos que nao casam
       // com nenhum padrao sao ignorados (nao criamos linha "Apple Watch"
       // generica — antes virava despejo de todos os modelos).
+      // IMPORTANTE: `\b` depois de "SE" — sem isso, /SE/i case-insensitive
+      // batia em "Apple Watch SEries 9" (Se- prefixo de Series), classificando
+      // todos os Series como SE e fazendo a linha Series sumir do cliente.
       models.forEach((m) => {
-        if (/Apple Watch SE/i.test(m)) { s.add("SE"); return; }
-        if (/Apple Watch Ultra/i.test(m)) { s.add("Ultra"); return; }
+        if (/Apple Watch SE\b/i.test(m)) { s.add("SE"); return; }
+        if (/Apple Watch Ultra\b/i.test(m)) { s.add("Ultra"); return; }
         if (/Apple Watch (?:Series )?\d+/i.test(m)) { s.add("Series"); return; }
       });
       const order = ["SE", "Series", "Ultra"];
@@ -151,9 +154,11 @@ function getModelsInLine(allModels: string[], line: string, deviceType: MultiDev
       if (line === "Pro") return allModels.filter((m) => m.includes("Pro"));
       return allModels;
     case "watch":
-      if (line === "SE") return allModels.filter((m) => /Apple Watch SE/i.test(m));
-      if (line === "Ultra") return allModels.filter((m) => /Apple Watch Ultra/i.test(m));
-      if (line === "Series") return allModels.filter((m) => /Apple Watch (?:Series )?\d+/i.test(m) && !/Apple Watch SE/i.test(m) && !/Apple Watch Ultra/i.test(m));
+      // `\b` depois de SE/Ultra evita match "Series" (Se-prefix) e
+      // mantenedor consistencia com extractLines.
+      if (line === "SE") return allModels.filter((m) => /Apple Watch SE\b/i.test(m));
+      if (line === "Ultra") return allModels.filter((m) => /Apple Watch Ultra\b/i.test(m));
+      if (line === "Series") return allModels.filter((m) => /Apple Watch (?:Series )?\d+/i.test(m) && !/Apple Watch SE\b/i.test(m) && !/Apple Watch Ultra\b/i.test(m));
       return [];
     default:
       return [];
@@ -198,6 +203,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const [storage, setStorage] = useState("");
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
+  // Quando o cliente clica o botao "Normal" (em vez de digitar), guardamos o
+  // rotulo aqui pra que o resumo mostre "Bateria: Normal" no lugar do numero.
+  // Limpa quando o cliente digita um valor novo.
+  const [batteryLabel, setBatteryLabel] = useState<string | null>(null);
   const [screenScratch, setScreenScratch] = useState<"none"|"one"|"multiple"|null>(null);
   const [sideScratch, setSideScratch] = useState<"none"|"one"|"multiple"|null>(null);
   const [peeling, setPeeling] = useState<"none"|"light"|"heavy"|null>(null);
@@ -230,10 +239,22 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // Cores pro modelo selecionado (traduzidas pra PT, dedup)
   const coresModelo = useMemo(() => {
     if (!model) return [];
-    // Tenta match exato primeiro, depois substring
+    // Tenta match exato primeiro
     let cores = coresDisponiveis[model];
     if (!cores) {
-      const entry = Object.entries(coresDisponiveis).find(([k]) => model.toUpperCase().includes(k.toUpperCase()) || k.toUpperCase().includes(model.toUpperCase()));
+      // Fallback: match por TOKENS (substring quebra com "iPad 11º (A16)" vs
+      // "iPad A16" — o "º (" entre os tokens nao aparece nos dois). Tokeniza
+      // ambos os lados, exige todos os tokens do MENOR lado presentes no maior,
+      // com minimo de 2 tokens pra nao colar match generico tipo so "iPad".
+      const tokens = (s: string) =>
+        s.toLowerCase().replace(/[º°ª()]/g, " ").split(/\s+/).filter(Boolean);
+      const modelT = tokens(model);
+      const entry = Object.entries(coresDisponiveis).find(([k]) => {
+        const keyT = tokens(k);
+        const shorter = modelT.length <= keyT.length ? modelT : keyT;
+        const longer = modelT.length <= keyT.length ? keyT : modelT;
+        return shorter.length >= 2 && shorter.every((t) => longer.includes(t));
+      });
       cores = entry?.[1] ?? [];
     }
     if (!cores || cores.length === 0) return [];
@@ -356,7 +377,8 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
 
   const cond: ConditionData = {
     screenScratch: screenScratch ?? "none", sideScratch: sideScratch ?? "none", peeling: peeling ?? "none",
-    battery: battery ?? 100, hasDamage: hasDamage === true, partsReplaced: partsReplaced ?? "no",
+    battery: battery ?? 100, batteryLabel: batteryLabel || undefined,
+    hasDamage: hasDamage === true, partsReplaced: partsReplaced ?? "no",
     partsReplacedDetail: partsReplaced === "apple" ? partsReplacedDetail : "",
     hasWarranty: hasWarranty === true, warrantyMonth: hasWarranty ? warrantyMonth : null,
     warrantyYear: hasWarranty ? warrantyYear : null, hasOriginalBox: hasOriginalBox === true,
@@ -825,10 +847,12 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
           <Section title={getQTitle(qc, "battery", deviceType === "macbook" ? "Ciclos de bateria" : "Saude da bateria")} order={getOrdem("battery")}>
             <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
               <div className="relative">
-                <input type="tel" inputMode="numeric" pattern="[0-9]*" value={battery ?? ""}
-                  placeholder={deviceType === "macbook" ? "Ex: 150" : "Ex: 87"}
+                <input type="tel" inputMode="numeric" pattern="[0-9]*"
+                  value={batteryLabel ? "" : (battery ?? "")}
+                  placeholder={batteryLabel ?? (deviceType === "macbook" ? "Ex: 150" : "Ex: 87")}
                   onChange={(e) => {
                     const r = e.target.value.replace(/\D/g, "");
+                    setBatteryLabel(null); // digitou — descarta rotulo "Normal"
                     if (r === "") { setBattery(null); return; }
                     // MacBook: campo armazena ciclos (0..9999). Demais: saude em % (1..100).
                     const cap = deviceType === "macbook" ? 9999 : 100;
@@ -838,7 +862,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   className={`w-full px-4 py-3 ${deviceType === "macbook" ? "pr-4" : "pr-10"} rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors`}
                   style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
                 />
-                {deviceType !== "macbook" && (
+                {deviceType !== "macbook" && !batteryLabel && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
                 )}
               </div>
@@ -849,16 +873,38 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                     // iPad as vezes so mostra "Normal" em vez de numero — cliente
                     // clica pra liberar assumindo aparelho saudavel (100%).
                     setBattery(100);
+                    setBatteryLabel("Normal");
                     tq("battery");
                   }}
                   className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
                   style={{
-                    backgroundColor: battery === 100 ? "var(--ti-success-light)" : "var(--ti-input-bg)",
-                    color: battery === 100 ? "var(--ti-success)" : "var(--ti-muted)",
-                    border: `1px solid ${battery === 100 ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                    backgroundColor: batteryLabel ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                    color: batteryLabel ? "var(--ti-success)" : "var(--ti-muted)",
+                    border: `1px solid ${batteryLabel ? "var(--ti-success)" : "var(--ti-card-border)"}`,
                   }}
                 >
                   Aparece só &quot;Normal&quot; no meu iPad
+                </button>
+              )}
+              {deviceType === "macbook" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // MacBook tambem suporta "Normal" — quando o cliente nao
+                    // sabe os ciclos. Marcamos batteryCycles=0 (sem desconto)
+                    // e o resumo mostra "Bateria: Normal".
+                    setBattery(0);
+                    setBatteryLabel("Normal");
+                    tq("battery");
+                  }}
+                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                  style={{
+                    backgroundColor: batteryLabel ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                    color: batteryLabel ? "var(--ti-success)" : "var(--ti-muted)",
+                    border: `1px solid ${batteryLabel ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                  }}
+                >
+                  Não sei os ciclos — bateria normal
                 </button>
               )}
               {deviceType === "iphone" && (

@@ -7,6 +7,10 @@ export interface ConditionData {
   sideScratch: "none" | "one" | "multiple";
   peeling: "none" | "light" | "heavy";
   battery: number;
+  /** Quando o cliente clica "Normal" (botao quick-value) em vez de digitar um
+   *  numero, guardamos o rotulo aqui pra que o resumo mostre "Bateria: Normal"
+   *  em vez de "Saude bateria 100%". Limpa quando o cliente digita um valor. */
+  batteryLabel?: string | null;
   hasDamage: boolean;
   partsReplaced: "no" | "apple" | "thirdParty";
   partsReplacedDetail?: string;
@@ -29,6 +33,9 @@ export interface MacBookConditionData {
   screenScratch: "none" | "one" | "multiple";
   bodyScratch: "none" | "light" | "heavy";
   batteryCycles: number; // contagem de ciclos
+  /** Igual ao `batteryLabel` de ConditionData — quando o cliente clica
+   *  "Normal" em vez de digitar ciclos, guardamos o rotulo aqui. */
+  batteryLabel?: string | null;
   keyboardCondition: "perfect" | "sticky";
   hasCharger: boolean;
   hasDamage: boolean;
@@ -282,7 +289,11 @@ export function getConditionEntries(condition: ConditionData, deviceType?: Devic
 
   // MacBook: campo battery armazena CICLOS (0..9999), demais dispositivos
   // armazenam saude de bateria em %. Label muda conforme o deviceType.
-  if (deviceType === "macbook") {
+  // Se o cliente clicou o quick-value (ex: "Normal"), mostra o rotulo em vez
+  // do numero — pra refletir o que ele de fato escolheu na UI.
+  if (condition.batteryLabel) {
+    entries.push({ slug: "battery", text: `Bateria: ${condition.batteryLabel}` });
+  } else if (deviceType === "macbook") {
     entries.push({ slug: "battery", text: `Ciclos de bateria: ${condition.battery}` });
   } else {
     entries.push({ slug: "battery", text: `Saude bateria ${condition.battery}%` });
@@ -397,7 +408,11 @@ export function getIPadConditionEntries(condition: IPadConditionData): Condition
     entries.push({ slug: "warrantyMonth", text: `Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}` });
   }
 
-  entries.push({ slug: "battery", text: `Saude bateria ${condition.battery}%` });
+  if (condition.batteryLabel) {
+    entries.push({ slug: "battery", text: `Bateria: ${condition.batteryLabel}` });
+  } else {
+    entries.push({ slug: "battery", text: `Saude bateria ${condition.battery}%` });
+  }
 
   if (condition.screenScratch === "none") entries.push({ slug: "screenScratch", text: "Sem arranhoes na tela" });
   else if (condition.screenScratch === "one") entries.push({ slug: "screenScratch", text: "1 arranhao na tela" });
@@ -476,7 +491,11 @@ export function getMacBookConditionEntries(condition: MacBookConditionData): Con
     entries.push({ slug: "warrantyMonth", text: `Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}` });
   }
 
-  entries.push({ slug: "battery", text: `Ciclos de bateria: ${condition.batteryCycles}` });
+  if (condition.batteryLabel) {
+    entries.push({ slug: "battery", text: `Bateria: ${condition.batteryLabel}` });
+  } else {
+    entries.push({ slug: "battery", text: `Ciclos de bateria: ${condition.batteryCycles}` });
+  }
 
   if (condition.screenScratch === "none") entries.push({ slug: "screenScratch", text: "Sem arranhoes na tela" });
   else if (condition.screenScratch === "one") entries.push({ slug: "screenScratch", text: "1 arranhao na tela" });

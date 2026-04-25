@@ -779,6 +779,27 @@ export function UsadosContent() {
     }
   }
 
+  // Ordena os nomes de modelo dentro do grupo. Pra MacBook, prioriza tela
+  // (14"→15"→16") e depois o chip (M1 antes de M1 Pro antes de M1 Max antes de
+  // M2). Pra outras categorias, alfabetico estavel.
+  const modelSortKey = (name: string): [number, number, number, string] => {
+    const screenMatch = name.match(/(\d+(?:\.\d+)?)\s*"/);
+    const screen = screenMatch ? parseFloat(screenMatch[1]) : 0;
+    const chipMatch = name.match(/\bM(\d+)(?:\s+(Pro|Max))?\b/i);
+    const chipNum = chipMatch ? parseInt(chipMatch[1]) : 0;
+    const variant = (chipMatch?.[2] || "").toLowerCase();
+    const variantOrd = variant === "" ? 0 : variant === "pro" ? 1 : variant === "max" ? 2 : 3;
+    return [screen, chipNum, variantOrd, name];
+  };
+  const sortedModelos = Object.keys(grouped).sort((a, b) => {
+    const ka = modelSortKey(a);
+    const kb = modelSortKey(b);
+    for (let i = 0; i < 3; i++) {
+      if (ka[i] !== kb[i]) return Number(ka[i]) - Number(kb[i]);
+    }
+    return String(ka[3]).localeCompare(String(kb[3]));
+  });
+
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
   const modelosMap = new Map<string, string>(); // lowercase → nome canônico
   valores.forEach(v => { if (v.modelo) modelosMap.set(v.modelo.toLowerCase(), v.modelo); });
@@ -1119,7 +1140,8 @@ export function UsadosContent() {
               </button>
             </div>
           ) : (
-            Object.entries(grouped).map(([modelo, rows]) => {
+            sortedModelos.map((modelo) => {
+              const rows = grouped[modelo];
               const conectividadesDoModelo = conectividadesByModel[modelo] || [];
               return (
               <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
@@ -1504,7 +1526,17 @@ export function UsadosContent() {
                                 <button onClick={() => handleSaveValor(v)} disabled={isSaving} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50">{isSaving ? "..." : "Salvar"}</button>
                               </div>
                             ) : (
-                              <button onClick={() => setEditing({ ...editing, [key]: String(v.valor_base) })} className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors">Editar</button>
+                              <div className="flex gap-2 justify-end items-center">
+                                <button onClick={() => setEditing({ ...editing, [key]: String(v.valor_base) })} className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors">Editar</button>
+                                <button
+                                  onClick={() => handleDeleteVariant(v)}
+                                  disabled={saving === `del-${v.id}`}
+                                  title="Remover essa variante (combo invalido tipo 24GB+256GB)"
+                                  className="text-red-300 hover:text-red-600 text-base leading-none"
+                                >
+                                  ✕
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
