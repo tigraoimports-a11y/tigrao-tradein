@@ -58,7 +58,10 @@ const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; fo
     { material: "Aço Inoxidável", cores: ["Grafite", "Prateado", "Dourado"], forceGPSCel: true },
   ],
   "10": [
-    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
+    // Apple Watch Series 10 Aluminio: so 3 cores oficiais — Jet Black,
+    // Rose Gold, Silver. Sem Cinza-espacial (essa cor era do Series 9 Aco
+    // / Series 11 Aluminio, nao Series 10).
+    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante"] },
     { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
   ],
   "11": [
