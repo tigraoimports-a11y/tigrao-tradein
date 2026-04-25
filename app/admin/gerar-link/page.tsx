@@ -5,7 +5,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
 import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
-import { detectWatchSeriesGen, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
+import { WATCH_SERIES_CASES, detectWatchSeriesGen, detectWatchMaterial, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
 import { getModeloBase } from "@/lib/produto-display";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 import { getPublicBaseUrl } from "@/lib/public-url";
@@ -190,24 +190,38 @@ export default function GerarLinkPage() {
     return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
   }, [catalogoCores]);
 
-  // Detecta Apple Watch Series (9/10/11) no produto principal — quando
-  // detectado, mostra picker de material da caixa e filtra cores conforme.
+  // Detecta Apple Watch Series (9/10/11) no produto principal.
   // SE/Ultra retornam null (so um material possivel — sem necessidade de filtro).
   const watchSeriesGen = useMemo(() => detectWatchSeriesGen(produtos[0] || ""), [produtos]);
+
+  // Detecta material EXPLICITO no nome do produto (ex: "Apple Watch Series 11
+  // Titanio GPS+Cel 42mm"). Quando detectado, bypassa o picker e usa ja como
+  // material escolhido — operador cadastra preco do Titanio em /admin/precos
+  // com "Titanio" no nome e o sistema resolve automaticamente.
+  const watchMaterialFromName = useMemo(() => detectWatchMaterial(produtos[0] || ""), [produtos]);
+
   // Materiais disponiveis sao DERIVADOS do catalogo cadastrado: so mostra
   // Aluminio/Aço/Titanio se ha cores cadastradas pra esse material no admin.
-  // Tigrao nao vende Titanio a pronta entrega — entao Titanio so aparece se
-  // admin cadastrar cores Titanio (Tit. Natural, Dourado, Ardosia) pra esse
-  // modelo via /admin/precos ou /admin/usados.
+  // Quando o produto ja tem material explicito no nome, retorna apenas esse
+  // material (Titanio detectado → so Titanio).
   const watchCaseOptions = useMemo(() => {
     if (!watchSeriesGen) return [];
     const raw = coresParaProduto(produtos[0] || "");
-    return getAvailableMaterials(raw, watchSeriesGen);
-  }, [watchSeriesGen, produtos, coresParaProduto]);
+    const all = getAvailableMaterials(raw, watchSeriesGen);
+    if (watchMaterialFromName) {
+      // Se a opcao detectada nao esta no catalogo (cores nao cadastradas
+      // ainda), retorna ela mesma assim com forceGPSCel inferido do hardcoded.
+      const found = all.find(o => o.material === watchMaterialFromName);
+      if (found) return [found];
+      const hardcoded = WATCH_SERIES_CASES[watchSeriesGen]?.find(o => o.material === watchMaterialFromName);
+      return hardcoded ? [{ ...hardcoded }] : all;
+    }
+    return all;
+  }, [watchSeriesGen, watchMaterialFromName, produtos, coresParaProduto]);
 
   // Reset material quando o produto muda (ou nao e mais Watch Series).
   // Auto-seleciona quando ha apenas 1 material disponivel (caso comum: Tigrao
-  // so tem Aluminio cadastrado) — operador nao precisa clicar.
+  // so tem Aluminio cadastrado, OU produto ja indica Titanio no nome).
   useEffect(() => {
     if (!watchSeriesGen) { setWatchCaseSel(""); return; }
     if (watchCaseOptions.length === 1) {

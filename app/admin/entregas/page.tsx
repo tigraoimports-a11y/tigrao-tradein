@@ -7,7 +7,7 @@ import { getTaxa, calcularLiquido } from "@/lib/taxas";
 import { INSTALLMENT_RATES } from "@/lib/calculations";
 import { formatProdutoDisplay, getModeloBase, limparNomeProduto } from "@/lib/produto-display";
 import { corParaPT } from "@/lib/cor-pt";
-import { detectWatchSeriesGen, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
+import { WATCH_SERIES_CASES, detectWatchSeriesGen, detectWatchMaterial, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
 import { useVendedores } from "@/lib/vendedores";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
@@ -1669,16 +1669,23 @@ export default function EntregasPage() {
                           {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
                           {produtosFiltradosPreco.map((m) => {
                             const coresRaw = coresParaProduto(m.nome);
-                            // Detecta Watch Series — materiais disponiveis derivam do
-                            // catalogo (so mostra Aluminio/Aco/Titanio se ha cor cadastrada
-                            // pra esse material). Quando so tem 1, picker nao aparece —
-                            // operador pula direto pras cores.
+                            // Detecta Watch Series + material explicito no nome do
+                            // produto (ex: "Apple Watch Series 11 Titanio 42mm" → Titanio).
+                            // Quando material detectado no nome, bypassa o picker.
                             const watchGen = detectWatchSeriesGen(m.nome);
-                            const caseOptions = watchGen ? getAvailableMaterials(coresRaw, watchGen) : [];
+                            const matFromName = detectWatchMaterial(m.nome);
+                            // Materiais disponiveis: deriva do catalogo, ou forca o detectado
+                            // do nome. Quando so tem 1, picker nao aparece.
+                            const allCases = watchGen ? getAvailableMaterials(coresRaw, watchGen) : [];
+                            const caseOptions = (watchGen && matFromName)
+                              ? (allCases.find(o => o.material === matFromName)
+                                  ? [allCases.find(o => o.material === matFromName)!]
+                                  : (WATCH_SERIES_CASES[watchGen]?.filter(o => o.material === matFromName) || allCases))
+                              : allCases;
                             const showCasePicker = !!watchGen && caseOptions.length > 1;
-                            // Material efetivo: usa o tempWatchCase se operador escolheu;
-                            // se so tem 1 material, usa esse automaticamente.
-                            const effectiveMaterial = tempWatchCase || (caseOptions.length === 1 ? caseOptions[0].material : "");
+                            // Material efetivo: tempWatchCase (operador escolheu) ou
+                            // detectado no nome ou auto-selecionado quando so 1.
+                            const effectiveMaterial = tempWatchCase || matFromName || (caseOptions.length === 1 ? caseOptions[0].material : "");
                             const cores = (watchGen && effectiveMaterial)
                               ? filterCoresByCase(coresRaw, watchGen, effectiveMaterial)
                               : coresRaw;

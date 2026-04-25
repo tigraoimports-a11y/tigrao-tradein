@@ -115,6 +115,18 @@ export function detectWatchSeriesGen(nomeProduto: string): string | null {
   return WATCH_SERIES_CASES[gen] ? gen : null;
 }
 
+/** Detecta o material da caixa explicito no nome do produto. Usado pra que
+ *  ao cadastrar um SKU "Apple Watch Series 11 Titanio GPS+Cel 42mm" em
+ *  /admin/precos, o sistema ja saiba que e Titanio sem precisar de picker
+ *  separado. Retorna o nome canonico do material ou null se nao detectou.
+ *  Aceita acentos opcionais e variacoes EN ("Titanium", "Stainless Steel"). */
+export function detectWatchMaterial(nomeProduto: string): string | null {
+  if (/\b(titanio|titânio|titanium)\b/i.test(nomeProduto)) return "Titânio";
+  if (/\b(aco\s+inox|aço\s+inox|stainless\s+steel|stainless)\b/i.test(nomeProduto)) return "Aço Inoxidável";
+  if (/\b(aluminio|alumínio|aluminum)\b/i.test(nomeProduto)) return "Alumínio";
+  return null;
+}
+
 /** Retorna os materiais (Aluminio/Aço/Titânio) que tem AO MENOS uma cor
  *  cadastrada no catalogo pra essa geracao. Usado pra montar o picker de
  *  material — so mostra opcoes que de fato existem no estoque/catalogo do
