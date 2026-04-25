@@ -146,9 +146,10 @@ export function getAvailableMaterials(coresRaw: string[], gen: string): { materi
 /** Filtra/dedup uma lista de cores do catalogo pelo material da caixa.
  *  - Match e via bucket de aliases (case+acento insensitive, EN/PT, dedup
  *    de variantes — "Preto" e "Preto Brilhante" colapsam).
- *  - Match exato com o nome canonico vence (preserva o nome catalogado).
- *  - Fallback: se nao tem exato mas tem alias, mostra o NOME CANONICO Apple
- *    (ex: catalogo so tem "Cinza" pra Series 10 Titanio → mostra "Ardósia").
+ *  - Sempre mostra o NOME DO CATALOGO (o que admin cadastrou) — preserva
+ *    nomes curtos preferidos do operador (ex: catalogo tem "Preto" → mostra
+ *    "Preto", nao "Preto Brilhante" oficial Apple). Quando admin cadastra
+ *    "Ardósia" exato, esse nome e usado.
  *  - Quando intersecao fica vazia (catalogo desalinhado), cai pra coresRaw
  *    pra nao travar a UI.
  *  - Ordem segue a lista canonica (oficial Apple), nao alfabetica do catalogo. */
@@ -160,17 +161,13 @@ export function filterCoresByCase(coresRaw: string[], gen: string, material: str
   for (const canonica of opt.cores) {
     const cbBucket = bucketOfCor(canonica);
     if (usedBuckets.some((u) => bucketsOverlap(u, cbBucket))) continue;
-    // Match exato primeiro
-    const exact = coresRaw.find((cor) => normalizeCor(cor) === normalizeCor(canonica));
-    if (exact) {
-      filtered.push(exact);
-      usedBuckets.push(cbBucket);
-      continue;
-    }
-    // Fallback: alias overlap → mostra o nome canonico Apple
-    const hasAlias = coresRaw.some((cor) => bucketsOverlap(bucketOfCor(cor), cbBucket));
-    if (hasAlias) {
-      filtered.push(canonica);
+    // Procura cor no catalogo cujo bucket sobrepoe — match exato OU alias.
+    // Usa o nome DO CATALOGO (preserva preferencias do admin: "Preto" em vez
+    // de "Preto Brilhante", "Cinza" em vez de "Ardósia" quando catalogo so
+    // tem "Cinza" cadastrado).
+    const match = coresRaw.find((cor) => bucketsOverlap(bucketOfCor(cor), cbBucket));
+    if (match) {
+      filtered.push(match);
       usedBuckets.push(cbBucket);
     }
   }
