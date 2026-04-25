@@ -96,9 +96,18 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
       // Se o ID parece ser do fallback (não é UUID válido), criar no banco via POST
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q.id);
       const method = isUUID ? "PUT" : "POST";
+      // Slug e UNIQUE GLOBAL na tabela. Pra evitar collision quando o admin
+      // salva o mesmo hardcoded ("battery", "hasDamage" etc) pra varios device
+      // types, sufixa com `_${deviceTab}` quando NAO for iphone (iphone fica
+      // como bare slug, padrao legacy do seed). O cliente normaliza no qc
+      // (strip de _ipad/_macbook/_watch) entao continua reconhecendo o slug.
+      const suffix = `_${deviceTab}`;
+      const slugToSave = (deviceTab === "iphone" || q.slug.endsWith(suffix))
+        ? q.slug
+        : `${q.slug}${suffix}`;
       const body = isUUID
         ? { id: q.id, titulo: q.titulo, opcoes: q.opcoes, config: q.config, ativo: q.ativo }
-        : { slug: q.slug, titulo: q.titulo, tipo: q.tipo, opcoes: q.opcoes, config: q.config, ativo: q.ativo, ordem: q.ordem, device_type: deviceTab };
+        : { slug: slugToSave, titulo: q.titulo, tipo: q.tipo, opcoes: q.opcoes, config: q.config, ativo: q.ativo, ordem: q.ordem, device_type: deviceTab };
       const res = await fetch("/api/admin/tradein-perguntas", {
         method,
         headers: getHeaders(),
