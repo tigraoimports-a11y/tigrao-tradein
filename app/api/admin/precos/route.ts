@@ -250,6 +250,45 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json({ ok: true, imported: rows.length });
 }
 
+// PATCH — operacoes em lote. Hoje suporta `rename_modelo`: troca o `modelo`
+// de TODAS as linhas dentro de uma categoria pra agrupa-las sob um novo
+// titulo no painel de precos. Usado pelo botao "Renomear grupo" — sem isso,
+// admin teria que editar cada variante individual.
+export async function PATCH(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "precos.write", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const usuario = getUsuario(req);
+
+  const body = await req.json();
+  const { action, oldModelo, newModelo, categoria } = body;
+
+  if (action !== "rename_modelo") {
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  }
+  if (!oldModelo || !newModelo) {
+    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+  }
+  if (oldModelo === newModelo) {
+    return NextResponse.json({ ok: true, updated: 0 });
+  }
+
+  const { supabase } = await import("@/lib/supabase");
+
+  // Filtra por categoria quando enviada — evita renomear grupo de outra
+  // categoria com mesmo nome (defensivo, geralmente nao acontece).
+  let q = supabase.from("precos").update({ modelo: newModelo, updated_at: new Date().toISOString() }).eq("modelo", oldModelo);
+  if (categoria) q = q.eq("categoria", categoria);
+  const { data, error } = await q.select("id");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const updated = (data ?? []).length;
+  await logActivity(usuario, "Renomeou grupo de precos", `${oldModelo} -> ${newModelo} (${updated} variantes)`, "precos");
+
+  return NextResponse.json({ ok: true, updated });
+}
+
 // DELETE — remover um produto
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

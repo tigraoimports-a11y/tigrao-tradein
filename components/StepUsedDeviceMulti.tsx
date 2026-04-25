@@ -43,15 +43,27 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
   partsReplaced: 5, hasWarranty: 6, warrantyMonth: 7, hasOriginalBox: 8,
 };
 
-// Markdown seguro pra helpText: escape HTML primeiro, depois aplica **bold**.
-// So permite negrito; nenhuma outra tag vira HTML.
+// Markdown seguro pra helpText: escape HTML primeiro, depois aplica formatacao.
+// Suporta:
+//  - **negrito**
+//  - *italico* (ou _italico_)
+//  - ## Titulo grande / ### subtitulo (so no inicio de linha)
+// Qualquer outra tag fica escapada — sem injecao de HTML arbitrario.
 function renderSafeMarkdown(raw: string): string {
-  const escaped = raw
+  let s = raw
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Negrito **texto** — primeiro porque ** englobaria * solto se invertido
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Italico *texto* ou _texto_ (nao casa com * sozinho — exige conteudo entre)
+  s = s.replace(/(?<![*])\*(?!\*)([^*\n]+?)\*(?!\*)/g, "<em>$1</em>");
+  s = s.replace(/(?<![_])_(?!_)([^_\n]+?)_(?!_)/g, "<em>$1</em>");
+  // Headers tamanho de fonte (so no inicio da linha)
+  s = s.replace(/^### (.+)$/gm, '<span style="font-size:1.05em;font-weight:600">$1</span>');
+  s = s.replace(/^## (.+)$/gm, '<span style="font-size:1.15em;font-weight:700">$1</span>');
+  return s;
 }
 
 // Formata uma resposta dinamica pra exibir no resumo/WhatsApp.

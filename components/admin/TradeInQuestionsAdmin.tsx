@@ -491,7 +491,10 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                         className="mt-1 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                       />
                       <p className="mt-1 text-[11px] text-[#86868B]">
-                        Aparece como painel expansivel abaixo do input. Use <code>**texto**</code> pra deixar em <strong>negrito</strong>. Quebras de linha sao preservadas.
+                        Aparece como painel expansivel abaixo do input. Formatacao suportada:{" "}
+                        <code>**negrito**</code> · <code>*italico*</code> ou <code>_italico_</code> ·{" "}
+                        <code>## Titulo grande</code> · <code>### Subtitulo</code> (no inicio da linha).
+                        Quebras de linha sao preservadas.
                       </p>
                     </div>
 

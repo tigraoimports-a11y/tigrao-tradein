@@ -66,6 +66,9 @@ function PrecosContent() {
   // Headers editáveis (renomear colunas)
   const [editingHeader, setEditingHeader] = useState<{ catKey: string; colIdx: number } | null>(null);
 
+  // Renomear titulo do grupo (modelo) — atualiza todas as linhas em batch via PATCH.
+  const [editingGroup, setEditingGroup] = useState<{ original: string; current: string } | null>(null);
+
   // Categorias dinâmicas (somente para lacrados — seminovos tem lista fixa)
   const [categorias, setCategorias] = useState<Categoria[]>(() => getCategoriasPrecos());
   const [showNewCat, setShowNewCat] = useState(false);
@@ -94,6 +97,29 @@ function PrecosContent() {
     if (!tabKeys.includes(tab) && tabKeys.length > 0) setTab(tabKeys[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewTipo]);
+  // Renomear o titulo do grupo (campo `modelo` em batch — todas variantes do
+  // modelo recebem o novo nome). PATCH no /api/admin/precos.
+  async function handleRenameGroup() {
+    if (!editingGroup) return;
+    const newName = editingGroup.current.trim();
+    if (!newName || newName === editingGroup.original) { setEditingGroup(null); return; }
+    setSaving("rename-group");
+    const headers = { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") };
+    const res = await fetch("/api/admin/precos", {
+      method: "PATCH", headers,
+      body: JSON.stringify({ action: "rename_modelo", oldModelo: editingGroup.original, newModelo: newName, categoria: tab }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(`Erro ao renomear: ${j.error || "falha"}`);
+      setSaving(null);
+      return;
+    }
+    await fetchData(password);
+    setEditingGroup(null);
+    setSaving(null);
+  }
+
   const [showAdd, setShowAdd] = useState(false);
   const [newProd, setNewProd] = useState({ modelo: "", preco_pix: "", tipo: "TRADEIN" });
   // Campos de especificação dinâmicos (label + valor) — combinados com " | " no armazenamento
@@ -809,10 +835,55 @@ function PrecosContent() {
           // Gerar headers das colunas de spec (usa labels salvos pelo usuário)
           const defaultLabels = getLabelsForCategory(tab);
 
+          // No MacBook o groupLabel e derivado da tela ("MacBooks 14\"") — nao
+          // representa um `modelo` cadastrado. Pra outras categorias o
+          // groupLabel === r.modelo, entao da pra renomear em batch.
+          const canRenameGroup = !isMac;
+          const isEditingThis = editingGroup?.original === groupLabel;
+
           return (
           <div key={groupLabel} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
-              <h2 className="font-semibold text-[#1D1D1F]">{groupLabel}</h2>
+            <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center gap-2">
+              {isEditingThis ? (
+                <>
+                  <input
+                    autoFocus
+                    value={editingGroup!.current}
+                    onChange={(e) => setEditingGroup({ ...editingGroup!, current: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRenameGroup();
+                      if (e.key === "Escape") setEditingGroup(null);
+                    }}
+                    className="flex-1 px-2 py-1 rounded border border-[#E8740E] text-sm font-semibold focus:outline-none"
+                  />
+                  <button
+                    onClick={handleRenameGroup}
+                    disabled={saving === "rename-group"}
+                    className="px-3 py-1 rounded text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50"
+                  >
+                    {saving === "rename-group" ? "..." : "Salvar"}
+                  </button>
+                  <button
+                    onClick={() => setEditingGroup(null)}
+                    className="px-3 py-1 rounded text-xs text-[#86868B] hover:text-[#1D1D1F] border border-[#D2D2D7]"
+                  >
+                    Cancelar
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2 className="font-semibold text-[#1D1D1F]">{groupLabel}</h2>
+                  {canRenameGroup && (
+                    <button
+                      onClick={() => setEditingGroup({ original: groupLabel, current: groupLabel })}
+                      title="Renomear grupo (atualiza todas as variantes)"
+                      className="text-[11px] text-[#86868B] hover:text-[#E8740E] transition-colors"
+                    >
+                      ✏️ Renomear
+                    </button>
+                  )}
+                </>
+              )}
             </div>
             <table className="w-full text-sm">
               <thead>

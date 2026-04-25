@@ -271,13 +271,14 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
-        {/* WhatsApp Seminovos — por categoria */}
+        {/* WhatsApp Troca — Outros Modelos (antes "Seminovos") */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-4">
           <div>
-            <p className="font-bold text-[#1D1D1F]">📱 WhatsApp Troca — Seminovos</p>
+            <p className="font-bold text-[#1D1D1F]">📱 WhatsApp Troca — Outros Modelos</p>
             <p className="text-xs text-[#86868B] mt-1">
-              Número que recebe formulários de troca para cada categoria de seminovo.
-              Deixe <b>vazio</b> pra cair no <b>WhatsApp Principal</b> (fallback).
+              Roteamento por categoria pra trocas que vao pra um numero diferente do <b>WhatsApp Principal</b>.
+              Hoje recebe formularios de seminovos por categoria (iPhone Seminovo, iPad Seminovo, etc).
+              Deixe <b>vazio</b> pra cair no Principal (fallback).
             </p>
           </div>
 
