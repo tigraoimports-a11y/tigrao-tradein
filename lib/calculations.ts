@@ -259,15 +259,25 @@ export function calculateQuote(
 /**
  * Gera linhas de condicao para exibicao e WhatsApp
  */
-export function getConditionLines(condition: ConditionData): string[] {
+export function getConditionLines(condition: ConditionData, deviceType?: DeviceType): string[] {
   const monthNames = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const lines: string[] = [];
+
+  // Trincado/defeito: hasDamage=true e rejeitado (nao chega aqui), entao so
+  // confirma "Sem trincado/defeito" pro aparelho aceito.
+  lines.push(condition.hasDamage ? "Com trincado/defeito" : "Sem trincado/defeito");
 
   if (condition.warrantyMonth !== null) {
     lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}`);
   }
 
-  lines.push(`Saude bateria ${condition.battery}%`);
+  // MacBook: campo battery armazena CICLOS (0..9999), demais dispositivos
+  // armazenam saude de bateria em %. Label muda conforme o deviceType.
+  if (deviceType === "macbook") {
+    lines.push(`Ciclos de bateria: ${condition.battery}`);
+  } else {
+    lines.push(`Saude bateria ${condition.battery}%`);
+  }
 
   // New wear marks system
   if (condition.hasWearMarks !== undefined) {
@@ -494,7 +504,9 @@ export function getAnyConditionLines(
   if (deviceType === "macbook" && isMacBookCondition(condition)) {
     return getMacBookConditionLines(condition);
   }
-  return getConditionLines(condition as ConditionData);
+  // Fallback: trata como ConditionData genérica mas respeita deviceType pro
+  // label da bateria (MacBook = "Ciclos de bateria: X", outros = "Saude bateria X%").
+  return getConditionLines(condition as ConditionData, deviceType);
 }
 
 // ──────────────────────────────────────────

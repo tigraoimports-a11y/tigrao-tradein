@@ -43,6 +43,17 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
   partsReplaced: 5, hasWarranty: 6, warrantyMonth: 7, hasOriginalBox: 8,
 };
 
+// Markdown seguro pra helpText: escape HTML primeiro, depois aplica **bold**.
+// So permite negrito; nenhuma outra tag vira HTML.
+function renderSafeMarkdown(raw: string): string {
+  const escaped = raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
 // Formata uma resposta dinamica pra exibir no resumo/WhatsApp.
 function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
   if (value === undefined || value === null || value === "") return "—";
@@ -1130,6 +1141,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               const cfg = (q.config || {}) as Record<string, unknown>;
               const ph = typeof cfg.placeholder === "string" ? cfg.placeholder : "Ex: 500";
               const help = typeof cfg.helpText === "string" ? cfg.helpText : "";
+              const helpTitle = typeof cfg.helpTitle === "string" && cfg.helpTitle.trim() ? cfg.helpTitle : "Como descobrir?";
               const rb = typeof cfg.rejectBelow === "number" ? cfg.rejectBelow : undefined;
               const rm = typeof cfg.rejectMessage === "string" ? cfg.rejectMessage : "";
               const isRejected = typeof val === "number" && rb !== undefined && val < rb;
@@ -1151,8 +1163,9 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   />
                   {help && (
                     <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                      <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir?</summary>
-                      <p className="text-[11px] mt-2 whitespace-pre-line" style={{ color: "var(--ti-muted)" }}>{help}</p>
+                      <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>{helpTitle}</summary>
+                      <div className="text-[11px] mt-2 whitespace-pre-line" style={{ color: "var(--ti-muted)" }}
+                        dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(help) }} />
                     </details>
                   )}
                   {isRejected && rm && (

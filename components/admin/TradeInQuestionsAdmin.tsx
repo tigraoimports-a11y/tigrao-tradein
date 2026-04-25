@@ -456,15 +456,28 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                     </div>
 
                     <div>
-                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Texto de ajuda (&quot;Como descobrir?&quot;)</label>
+                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Titulo do painel de ajuda</label>
+                      <input
+                        type="text"
+                        value={typeof (q.config as Record<string, unknown>).helpTitle === "string" ? (q.config.helpTitle as string) : ""}
+                        onChange={(e) => updateConfig(q.id, "helpTitle", e.target.value)}
+                        placeholder="Como descobrir? (padrao)"
+                        className="mt-1 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Texto de ajuda</label>
                       <textarea
                         value={typeof (q.config as Record<string, unknown>).helpText === "string" ? (q.config.helpText as string) : ""}
                         onChange={(e) => updateConfig(q.id, "helpText", e.target.value)}
-                        placeholder="Ajustes > Bateria > Saude da Bateria"
-                        rows={3}
+                        placeholder="Ex: Menu **Apple** > Sobre Este Mac > ..."
+                        rows={4}
                         className="mt-1 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
                       />
-                      <p className="mt-1 text-[11px] text-[#86868B]">Aparece como painel expansivel &quot;Como descobrir?&quot; abaixo do input.</p>
+                      <p className="mt-1 text-[11px] text-[#86868B]">
+                        Aparece como painel expansivel abaixo do input. Use <code>**texto**</code> pra deixar em <strong>negrito</strong>. Quebras de linha sao preservadas.
+                      </p>
                     </div>
 
                     <div className="border-t border-[#E5E5EA] pt-3">
