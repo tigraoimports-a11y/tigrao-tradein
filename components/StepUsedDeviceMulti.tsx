@@ -52,18 +52,19 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
 // (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Titanio.
 // Series 9: Aluminio (cores standard) + Aco Inoxidavel (Grafite/Prateado/Dourado).
 // Series 10/11: Aluminio + Titanio (Natural/Dourado/Ardosia, sempre GPS+Cel).
-const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; forceGPSCel?: boolean }[]> = {
+const WATCH_SERIES_CASES: Record<string, { material: string; forceGPSCel?: boolean }[]> = {
   "9": [
-    { material: "Alumínio", cores: ["Meia-noite", "Estelar", "Prateado", "Vermelho", "Rosa"] },
-    { material: "Aço Inoxidável", cores: ["Grafite", "Prateado", "Dourado"] },
+    { material: "Alumínio" },
+    // Series 9 Aco Inox so vem GPS+Cel de fabrica.
+    { material: "Aço Inoxidável", forceGPSCel: true },
   ],
   "10": [
-    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
-    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
+    { material: "Alumínio" },
+    { material: "Titânio", forceGPSCel: true },
   ],
   "11": [
-    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
-    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
+    { material: "Alumínio" },
+    { material: "Titânio", forceGPSCel: true },
   ],
 };
 
@@ -415,17 +416,11 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   }, [deviceType, line, subLine]);
   const requiresWatchCase = watchCaseOptions.length > 0;
 
-  // Cores filtradas pela caixa quando aplicavel (Watch Series). Se a lista
-  // filtrada ficar vazia (ex: cor nao cadastrada no catalogo mas prevista no
-  // hardcoded), cai na lista bruta pra nao travar o cliente.
-  const coresModelo = useMemo(() => {
-    if (!requiresWatchCase || !watchCase) return coresModeloRaw;
-    const opt = watchCaseOptions.find((o) => o.material === watchCase);
-    if (!opt || opt.cores.length === 0) return coresModeloRaw;
-    const allowed = new Set(opt.cores.map((c) => c.toLowerCase()));
-    const filtered = coresModeloRaw.filter((c) => allowed.has(c.toLowerCase()));
-    return filtered.length > 0 ? filtered : coresModeloRaw;
-  }, [coresModeloRaw, requiresWatchCase, watchCase, watchCaseOptions]);
+  // Cores: usa direto o catalogo cadastrado em /admin/usados (sem filtro por
+  // material). O admin gerencia a lista de cores por modelo, e o material da
+  // caixa fica capturado via watchCase no resumo. Antes filtrava por uma lista
+  // hardcoded que escondia cores cadastradas — operador cobrou pra mostrar todas.
+  const coresModelo = coresModeloRaw;
 
   // Se o chip selecionado tem só 1 modelo, auto-selecionar
   const needsScreenSize = modelsForChip.length > 1;
@@ -833,10 +828,80 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             );
           })()
         ) : storages.some(hasStructuredStorage) ? (
-          // Formato estruturado "armaz | tela | conect" (iPad/Watch com
-          // variantes). Renderiza em steps sequenciais ao inves de 1 botao
-          // por combinacao — cliente escolhe armaz → tela → conectividade.
-          (() => {
+          // Formato estruturado: pra iPad e "armaz | tela | conect" (3 partes);
+          // pra Watch e "tamanho | conect" (2 partes). Branch por deviceType.
+          deviceType === "watch" ? (() => {
+            // Watch: parts[0] e tamanho da caixa (38mm, 41mm, 45mm...) e
+            // parts[1] e conectividade (GPS, GPS+Cel). parseStorageSpec coloca
+            // parts[1] no campo .tela (legacy de iPad), entao tratamos como
+            // conectividade aqui.
+            const specs = storages.map(s => {
+              const p = parseStorageSpec(s);
+              return { raw: s, tamanho: p.armazenamento, conect: p.tela || p.conectividade };
+            });
+            const currentP = storage ? parseStorageSpec(storage) : { armazenamento: "", tela: "", conectividade: "" };
+            const currentTamanho = currentP.armazenamento;
+            const currentConect = currentP.tela || currentP.conectividade;
+            const tamanhoOpts = [...new Set(specs.map(s => s.tamanho).filter(Boolean))];
+            const afterTamanho = specs.filter(s => s.tamanho === currentTamanho);
+            const conectOptsAll = [...new Set(afterTamanho.map(s => s.conect).filter(Boolean))];
+            // Material com forceGPSCel filtra so as opcoes com "Cel" (GPS+Cel,
+            // GPS + Cel etc) — Series 9 Aco Inox e Series 10/11 Titanio sempre
+            // saem GPS+Cel de fabrica.
+            const caixaOpt = watchCase ? watchCaseOptions.find(o => o.material === watchCase) : null;
+            const conectOpts = caixaOpt?.forceGPSCel
+              ? conectOptsAll.filter(c => /cel|\+/i.test(c))
+              : conectOptsAll;
+            const pickStorage = (tamanho: string, conect: string) => {
+              const match = specs.find(s => s.tamanho === tamanho && (!conect || s.conect === conect));
+              if (match) { setStorage(match.raw); tq("storage"); }
+            };
+            return (
+              <>
+                {tamanhoOpts.length > 0 && (
+                  <Section title="Tamanho da caixa">
+                    <div className={`grid gap-2 ${tamanhoOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {tamanhoOpts.map(t => (
+                        <Btn key={t} sel={currentTamanho === t}
+                          onClick={() => pickStorage(t, "")}
+                          className="w-full text-center">{t}</Btn>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+                {/* Material da caixa entra ENTRE tamanho e conectividade (so
+                    Watch Series). Quando a caixa forca GPS+Cel, o passo de
+                    conectividade so mostra essa opcao. */}
+                {currentTamanho && requiresWatchCase && (
+                  <Section title="Material da caixa">
+                    <div className={`grid gap-2 ${watchCaseOptions.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {watchCaseOptions.map((opt) => (
+                        <Btn key={opt.material} sel={watchCase === opt.material}
+                          onClick={() => { setWatchCase(opt.material); tq("watchCase"); }}
+                          className="w-full text-center">{opt.material}</Btn>
+                      ))}
+                    </div>
+                    {watchCase && caixaOpt?.forceGPSCel && (
+                      <p className="mt-2 text-center text-[11px]" style={{ color: "var(--ti-muted)" }}>
+                        {watchCase} sempre vem com GPS + Celular de fábrica.
+                      </p>
+                    )}
+                  </Section>
+                )}
+                {currentTamanho && (!requiresWatchCase || watchCase) && conectOpts.length > 0 && (
+                  <Section title="Conectividade">
+                    <div className={`grid gap-2 ${conectOpts.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                      {conectOpts.map(c => (
+                        <Btn key={c} sel={currentConect === c}
+                          onClick={() => pickStorage(currentTamanho, c)}
+                          className="w-full text-center">{c}</Btn>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+              </>
+            );
+          })() : (() => {
             const specs = storages.map(s => ({ raw: s, ...parseStorageSpec(s) }));
             const currentParts = storage ? parseStorageSpec(storage) : { armazenamento: "", tela: "", conectividade: "" };
 
@@ -904,24 +969,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         )
       )}
 
-      {/* Material da caixa — Watch Series 9/10/11. Series 9 tem Aluminio/Aco,
-          Series 10/11 tem Aluminio/Titanio. Titanio forca GPS+Cel via useEffect. */}
-      {model && storageCompleto && requiresWatchCase && (
-        <Section title="Material da caixa">
-          <div className={`grid gap-2 ${watchCaseOptions.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
-            {watchCaseOptions.map((opt) => (
-              <Btn key={opt.material} sel={watchCase === opt.material}
-                onClick={() => { setWatchCase(opt.material); tq("watchCase"); }}
-                className="w-full text-center">{opt.material}</Btn>
-            ))}
-          </div>
-          {watchCase && watchCaseOptions.find(o => o.material === watchCase)?.forceGPSCel && (
-            <p className="mt-2 text-center text-[11px]" style={{ color: "var(--ti-muted)" }}>
-              Titânio sempre vem com GPS + Celular — ajustado automaticamente.
-            </p>
-          )}
-        </Section>
-      )}
+      {/* Material da caixa do Apple Watch e renderizado INLINE no fluxo de
+          tamanho/conectividade (entre os dois) — ver bloco "watch" da
+          structured storage acima. Aqui era a posicao antiga depois da cor;
+          movido pra antes pra que conectividade possa filtrar GPS+Cel. */}
 
       {/* Cor do aparelho */}
       {model && storageCompleto && (!requiresWatchCase || watchCase) && coresModelo.length > 0 && (
