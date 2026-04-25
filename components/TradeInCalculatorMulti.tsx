@@ -630,22 +630,31 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               tradeinConfig={tradeinConfig} />
           )}
 
-          {step === 4 && avaliacaoManual && (
-            <StepManualHandoff
-              usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} condition={condition} deviceType={deviceType}
-              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
-              condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
-              extraAnswers={extraAnswers} extraQuestions={extraQuestions}
-              extraAnswers2={hasSecondDevice ? extraAnswers2 : undefined} extraQuestions2={hasSecondDevice ? extraQuestions2 : undefined}
-              questionsConfig={questionsConfig ?? undefined}
-              newModel={newModel} newStorage={newStorage} newPrice={newPrice}
-              clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
-              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal}
-              vendedor={vendedor}
-              onReset={handleReset}
-              onGoToStep={handleGoToStep}
-            />
-          )}
+          {step === 4 && avaliacaoManual && (() => {
+            // Roteamento por categoria pra avaliacao manual: iPad/MacBook/Watch
+            // trade-in vai pro WhatsApp configurado em /admin/configuracoes
+            // (secao "WhatsApp Troca — Outros Modelos"). Antes ia tudo pro
+            // Principal (Bianca) ignorando a config — agora usa o numero da
+            // categoria, com fallback pro principal quando vazio.
+            const cat = (selectedDeviceType as keyof typeof whatsappSeminovoByCat) || "iphone";
+            const whatsappManualCat = whatsappSeminovoByCat[cat] || whatsappPrincipal;
+            return (
+              <StepManualHandoff
+                usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} condition={condition} deviceType={deviceType}
+                usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
+                condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
+                extraAnswers={extraAnswers} extraQuestions={extraQuestions}
+                extraAnswers2={hasSecondDevice ? extraAnswers2 : undefined} extraQuestions2={hasSecondDevice ? extraQuestions2 : undefined}
+                questionsConfig={questionsConfig ?? undefined}
+                newModel={newModel} newStorage={newStorage} newPrice={newPrice}
+                clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
+                whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappManualCat}
+                vendedor={vendedor}
+                onReset={handleReset}
+                onGoToStep={handleGoToStep}
+              />
+            );
+          })()}
           {step === 4 && !avaliacaoManual && (
             <StepQuote
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
