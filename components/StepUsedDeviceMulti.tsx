@@ -370,13 +370,41 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const chipList = useMemo(() => {
     if (!chipGroups) return [];
     const keys = Object.keys(chipGroups);
-    const extractNum = (s: string) => {
-      const m = s.match(/(\d+)/);
-      return m ? Number(m[1]) : 999;
+    // Pra MacBook/iPad: ordena por chip M-num e variante (plain < Pro < Max).
+    // Sem isso, "M1" e "M1 Pro" empatavam no number sort e ficavam fora de
+    // ordem (M1 Pro antes de M1). Pra Apple Watch (chip e so a geracao tipo
+    // "9", "10"), sem variante — extractKey retorna [9,0] e funciona igual.
+    const extractKey = (s: string): [number, number] => {
+      const m = s.match(/M(\d+)(?:\s+(Pro|Max))?/i);
+      if (m) {
+        const num = Number(m[1]);
+        const variant = (m[2] || "").toLowerCase();
+        const ord = variant === "" ? 0 : variant === "pro" ? 1 : variant === "max" ? 2 : 3;
+        return [num, ord];
+      }
+      // Fallback: extrai primeiro numero (Watch geracao "9", "10", etc).
+      const n = s.match(/(\d+)/);
+      return [n ? Number(n[1]) : 999, 0];
     };
-    return keys.sort((a, b) => extractNum(a) - extractNum(b));
+    return keys.sort((a, b) => {
+      const ka = extractKey(a);
+      const kb = extractKey(b);
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      return ka[1] - kb[1];
+    });
   }, [chipGroups]);
-  const modelsForChip = useMemo(() => chipGroups && subLine ? (chipGroups[subLine] || []) : [], [chipGroups, subLine]);
+  const modelsForChip = useMemo(() => {
+    const list = chipGroups && subLine ? (chipGroups[subLine] || []) : [];
+    // Ordena por tamanho de tela (14" antes de 16"). Sem isso, modelos podem
+    // chegar do banco em qualquer ordem — antes "16\"" aparecia antes de "14\""
+    // pra MacBook Pro M2 Pro porque a string "16" e maior que "14" no sort
+    // alfabetico padrao do Object.keys.
+    const screenInches = (m: string): number => {
+      const match = m.match(/(\d+)[""]/);
+      return match ? Number(match[1]) : 999;
+    };
+    return [...list].sort((a, b) => screenInches(a) - screenInches(b));
+  }, [chipGroups, subLine]);
 
   // Opcoes de caixa pro Apple Watch Series, determinadas pela geracao (subLine).
   // Watch Series 9 → [Aluminio, Aco Inox]; Series 10/11 → [Aluminio, Titanio].
@@ -992,27 +1020,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   Aparece só &quot;Normal&quot; no meu iPad
                 </button>
               )}
-              {deviceType === "macbook" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // MacBook tambem suporta "Normal" — quando o cliente nao
-                    // sabe os ciclos. Marcamos batteryCycles=0 (sem desconto)
-                    // e o resumo mostra "Bateria: Normal".
-                    setBattery(0);
-                    setBatteryLabel("Normal");
-                    tq("battery");
-                  }}
-                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
-                  style={{
-                    backgroundColor: batteryLabel ? "var(--ti-success-light)" : "var(--ti-input-bg)",
-                    color: batteryLabel ? "var(--ti-success)" : "var(--ti-muted)",
-                    border: `1px solid ${batteryLabel ? "var(--ti-success)" : "var(--ti-card-border)"}`,
-                  }}
-                >
-                  Não sei os ciclos — bateria normal
-                </button>
-              )}
+              {/* MacBook nao tem mais o botao "Normal" hardcoded aqui — admin
+                  cadastra uma pergunta numeric de "Saude de bateria %" via
+                  /admin/simulacoes e configura `quickLabel`/`quickValue` ali.
+                  O botao aparece automaticamente abaixo do input dinamico. */}
               {/* Ajuda "Como descobrir a saude/ciclos da bateria?" — texto padrao
                   por device_type, sobrescrivel via labels.help_battery_{device}
                   em /admin/simulacoes. Suporta markdown (negrito, italico, ## titulo). */}
@@ -1280,12 +1291,18 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               const rb = typeof cfg.rejectBelow === "number" ? cfg.rejectBelow : undefined;
               const rm = typeof cfg.rejectMessage === "string" ? cfg.rejectMessage : "";
               const isRejected = typeof val === "number" && rb !== undefined && val < rb;
+              // Quick-value (botao tipo "Normal" pra saude de bateria) — admin
+              // configura quickLabel + quickValue. Cliente clica em vez de digitar;
+              // o resumo mostra o rotulo no lugar do numero quando o valor bate.
+              const quickLabel = typeof cfg.quickLabel === "string" && cfg.quickLabel.trim() ? cfg.quickLabel : null;
+              const quickValue = typeof cfg.quickValue === "number" ? cfg.quickValue : null;
+              const quickActive = quickLabel !== null && quickValue !== null && val === quickValue;
               return (
                 <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
                   <input
                     type="number"
                     inputMode="numeric"
-                    value={typeof val === "number" ? String(val) : (typeof val === "string" ? val : "")}
+                    value={quickActive ? "" : (typeof val === "number" ? String(val) : (typeof val === "string" ? val : ""))}
                     onChange={(e) => {
                       const raw = e.target.value.trim();
                       const num = raw === "" ? undefined : Number(raw);
@@ -1294,8 +1311,22 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                     }}
                     className="w-full px-4 py-3 rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors"
                     style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-card-border)" }}
-                    placeholder={ph}
+                    placeholder={quickActive && quickLabel ? quickLabel : ph}
                   />
+                  {quickLabel !== null && quickValue !== null && (
+                    <button
+                      type="button"
+                      onClick={() => { setVal(quickValue); tq(q.slug); }}
+                      className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                      style={{
+                        backgroundColor: quickActive ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                        color: quickActive ? "var(--ti-success)" : "var(--ti-muted)",
+                        border: `1px solid ${quickActive ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                      }}
+                    >
+                      {quickLabel}
+                    </button>
+                  )}
                   {help && (
                     <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
                       <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>{helpTitle}</summary>
