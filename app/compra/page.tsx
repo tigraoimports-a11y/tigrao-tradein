@@ -527,6 +527,14 @@ function CompraForm() {
   const [trocaSerial2, setTrocaSerial2] = useState("");
   const [trocaImei2, setTrocaImei2] = useState("");
 
+  // Status da consulta Infosimples (Anatel/Celular Legal) — preenchido pelo
+  // backend apos OCR. "OK" = aparelho regular, "BLOQUEADO" = roubo/furto/perda,
+  // "ERRO" = consulta falhou. Usado no texto WhatsApp que vai pro vendedor pra
+  // sinalizar antifraude antes de fechar a venda.
+  type ImeiStatusValor = "OK" | "BLOQUEADO" | "ERRO" | null;
+  const [trocaImeiStatus1, setTrocaImeiStatus1] = useState<ImeiStatusValor>(null);
+  const [trocaImeiStatus2, setTrocaImeiStatus2] = useState<ImeiStatusValor>(null);
+
   // Resultado do OCR por slot (serial1/imei1/serial2/imei2).
   // "ok" = OCR conseguiu ler; "fail" = OCR falhou (cliente digita manual).
   type OcrStatus = { state: "idle" | "reading" | "ok" | "fail"; error?: string };
@@ -584,6 +592,13 @@ function CompraForm() {
         if (extractedImei) {
           if (slot.aparelho === 1) setTrocaImei1(extractedImei);
           else setTrocaImei2(extractedImei);
+        }
+        // Status Infosimples (Anatel/Celular Legal) — backend ja consultou
+        // automaticamente apos OCR. Salva pra usar no texto WhatsApp.
+        const imeiStatusFromBackend: ImeiStatusValor = json.imeiStatus || null;
+        if (imeiStatusFromBackend) {
+          if (slot.aparelho === 1) setTrocaImeiStatus1(imeiStatusFromBackend);
+          else setTrocaImeiStatus2(imeiStatusFromBackend);
         }
         // Status do slot depende do que era esperado ali
         const valorDoSlot = slot.tipo === "serial" ? extractedSerial : extractedImei;
@@ -961,7 +976,17 @@ function CompraForm() {
         if (trocaCond) lines.push(`*Condição:* ${trocaCond}`);
         if (trocaCaixaParam) lines.push(`*Caixa original:* ${trocaCaixaParam === "1" ? "Sim" : "Não"}`);
         if (trocaSerial1.trim()) lines.push(`*Nº de Série:* ${trocaSerial1.trim()}`);
-        if (trocaImei1.trim()) lines.push(`*IMEI:* ${trocaImei1.trim()}`);
+        if (trocaImei1.trim()) {
+          // Status Anatel/Infosimples vai grudado no IMEI pra equipe ver de
+          // cara. ✅ = pode comprar, ❌ = NAO comprar (consultar manual antes),
+          // ⚠️ = consulta falhou (consultar manual no site da Anatel).
+          const statusIcon =
+            trocaImeiStatus1 === "OK" ? " ✅ Verificado" :
+            trocaImeiStatus1 === "BLOQUEADO" ? " ❌ BLOQUEADO — NAO COMPRAR" :
+            trocaImeiStatus1 === "ERRO" ? " ⚠️ Consultar manual" :
+            "";
+          lines.push(`*IMEI:* ${trocaImei1.trim()}${statusIcon}`);
+        }
       } else if (descTroca) {
         lines.push(`*Modelo:* ${descTroca}`);
       }
@@ -974,7 +999,14 @@ function CompraForm() {
         if (trocaCond2Param) lines.push(`*Condição:* ${trocaCond2Param}`);
         if (trocaCaixa2Param) lines.push(`*Caixa original:* ${trocaCaixa2Param === "1" ? "Sim" : "Não"}`);
         if (trocaSerial2.trim()) lines.push(`*Nº de Série:* ${trocaSerial2.trim()}`);
-        if (trocaImei2.trim()) lines.push(`*IMEI:* ${trocaImei2.trim()}`);
+        if (trocaImei2.trim()) {
+          const statusIcon2 =
+            trocaImeiStatus2 === "OK" ? " ✅ Verificado" :
+            trocaImeiStatus2 === "BLOQUEADO" ? " ❌ BLOQUEADO — NAO COMPRAR" :
+            trocaImeiStatus2 === "ERRO" ? " ⚠️ Consultar manual" :
+            "";
+          lines.push(`*IMEI:* ${trocaImei2.trim()}${statusIcon2}`);
+        }
       }
       if (valorBase > 0) { lines.push(""); lines.push(`*Diferença a pagar:* R$ ${fmt(valorBase)}`); }
     }
