@@ -14,6 +14,8 @@ export interface RouteWaypoint {
   cliente: string;
   bairro: string | null;
   endereco: string | null;
+  entregador?: string | null;
+  horario?: string | null;
   lat: number;
   lng: number;
   distanciaDaAnteriorKm: number;
@@ -101,10 +103,13 @@ export default function RouteMap({ origem, waypoints, height = 480 }: RouteMapPr
       const marker = L.marker([wp.lat, wp.lng], { icon: createNumberedIcon(wp.ordem) }).addTo(map);
       marker.bindPopup(
         `<div style="font-family:system-ui,sans-serif;min-width:180px;">
-          <div style="font-weight:700;font-size:14px;color:#E8740E;margin-bottom:4px;">Parada ${wp.ordem}</div>
+          <div style="font-weight:700;font-size:14px;color:#E8740E;margin-bottom:4px;">
+            Parada ${wp.ordem}${wp.horario ? ` · ${wp.horario}` : ""}
+          </div>
           <div style="font-weight:600;color:#1D1D1F;font-size:13px;">${wp.cliente}</div>
           ${wp.bairro ? `<div style="color:#6E6E73;font-size:12px;margin-top:2px;">${wp.bairro}</div>` : ""}
           ${wp.endereco ? `<div style="color:#86868B;font-size:11px;margin-top:2px;">${wp.endereco}</div>` : ""}
+          ${wp.entregador ? `<div style="color:#6E6E73;font-size:11px;margin-top:4px;">🛵 ${wp.entregador}</div>` : ""}
           <div style="color:#86868B;font-size:11px;margin-top:6px;border-top:1px solid #E5E5E5;padding-top:4px;">
             ${wp.distanciaDaAnteriorKm} km da parada anterior
           </div>

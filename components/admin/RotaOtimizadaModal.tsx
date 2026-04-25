@@ -15,7 +15,8 @@ interface RotaOtimizadaModalProps {
 interface RotaResponse {
   waypoints: RouteWaypoint[];
   distanciaTotalKm: number;
-  semCoords: Array<{ id: string; cliente: string; bairro: string | null; endereco: string | null; regiao: string | null }>;
+  semCoords: Array<{ id: string; cliente: string; bairro: string | null; endereco: string | null; regiao: string | null; entregador: string | null }>;
+  entregadores: Array<{ nome: string; qtd: number }>;
   origem: { lat: number; lng: number };
   message?: string;
 }
@@ -30,6 +31,8 @@ function hojeBR(): string {
 
 export default function RotaOtimizadaModal({ password, onClose }: RotaOtimizadaModalProps) {
   const [date, setDate] = useState<string>(hojeBR());
+  // Filtro motoboy: cada motoboy tem rota propria. "" = sem filtro (todos).
+  const [filtroEntregador, setFiltroEntregador] = useState<string>("");
   const [data, setData] = useState<RotaResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -41,7 +44,7 @@ export default function RotaOtimizadaModal({ password, onClose }: RotaOtimizadaM
       const res = await fetch("/api/admin/entregas/otimizar-rota", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": password },
-        body: JSON.stringify({ date }),
+        body: JSON.stringify({ date, entregador: filtroEntregador || undefined }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -54,7 +57,7 @@ export default function RotaOtimizadaModal({ password, onClose }: RotaOtimizadaM
       setErro(e instanceof Error ? e.message : "Erro de rede");
     }
     setLoading(false);
-  }, [password, date]);
+  }, [password, date, filtroEntregador]);
 
   useEffect(() => {
     calcular();
@@ -82,7 +85,7 @@ export default function RotaOtimizadaModal({ password, onClose }: RotaOtimizadaM
           <div>
             <h2 className="text-base font-bold text-[#1D1D1F]">🗺️ Rota Otimizada</h2>
             <p className="text-xs text-[#86868B]">
-              Ordem otima das entregas pendentes (saindo da loja na Barra)
+              Ordem otima das entregas pendentes (saindo do escritorio na Barra Olimpica)
             </p>
           </div>
           <button
@@ -96,13 +99,28 @@ export default function RotaOtimizadaModal({ password, onClose }: RotaOtimizadaM
 
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-[#E5E5E5] bg-[#FAFAFA] flex-wrap">
-          <label className="text-xs font-medium text-[#6E6E73]">Data das entregas:</label>
+          <label className="text-xs font-medium text-[#6E6E73]">Data:</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
           />
+          {/* Filtro motoboy — cada motoboy tem rota propria, faz sentido
+              otimizar separado em vez de juntar todas entregas do dia. */}
+          <label className="text-xs font-medium text-[#6E6E73] ml-2">Motoboy:</label>
+          <select
+            value={filtroEntregador}
+            onChange={(e) => setFiltroEntregador(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none bg-white"
+          >
+            <option value="">Todos</option>
+            {(data?.entregadores || []).map((ent) => (
+              <option key={ent.nome} value={ent.nome}>
+                {ent.nome} ({ent.qtd})
+              </option>
+            ))}
+          </select>
           <button
             onClick={calcular}
             disabled={loading}
@@ -156,15 +174,27 @@ export default function RotaOtimizadaModal({ password, onClose }: RotaOtimizadaM
                         {wp.ordem}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-[#1D1D1F] truncate">{wp.cliente}</div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-[#1D1D1F] truncate">{wp.cliente}</div>
+                          {wp.horario && (
+                            <span className="text-[10px] text-[#86868B] shrink-0">{wp.horario}</span>
+                          )}
+                        </div>
                         {wp.bairro && (
                           <div className="text-xs text-[#6E6E73]">{wp.bairro}</div>
                         )}
                         {wp.endereco && (
                           <div className="text-[10px] text-[#86868B] truncate">{wp.endereco}</div>
                         )}
-                        <div className="text-[10px] text-[#86868B] mt-1">
-                          {wp.distanciaDaAnteriorKm} km da anterior
+                        <div className="flex items-center justify-between mt-1 gap-2">
+                          <span className="text-[10px] text-[#86868B]">
+                            {wp.distanciaDaAnteriorKm} km da anterior
+                          </span>
+                          {wp.entregador && (
+                            <span className="text-[10px] text-[#6E6E73] truncate" title={`Motoboy: ${wp.entregador}`}>
+                              🛵 {wp.entregador}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
