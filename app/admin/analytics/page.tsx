@@ -29,10 +29,13 @@ interface AnalyticsData {
   whatsappCount: number;
   exitCount: number;
   cotarOutroCount: number;
+  compraViewCount?: number;
+  compraSubmitCount?: number;
   funnel: FunnelStep[];
   questionBreakdown: QuestionBreakdown[];
   daily: DailyData[];
   conversionRate: string;
+  conversionRateFinal?: string;
 }
 
 const STEP_LABELS: Record<number, string> = {
@@ -40,6 +43,7 @@ const STEP_LABELS: Record<number, string> = {
   2: "Aparelho Novo",
   3: "Seus Dados",
   4: "Cotacao",
+  5: "Formulario /compra",
 };
 
 const QUESTION_LABELS: Record<string, string> = {
@@ -134,7 +138,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI Cards — top of funnel */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <KPICard label="Acessaram o site" value={data.visits} />
         <KPICard
           label="Iniciaram simulacao"
@@ -148,7 +152,6 @@ export default function AnalyticsPage() {
         <KPICard
           label="Fecharam pedido"
           value={data.whatsappCount}
-          accent
           sub={
             data.startedCount > 0
               ? `${((data.whatsappCount / data.startedCount) * 100).toFixed(0)}% de quem iniciou`
@@ -156,10 +159,20 @@ export default function AnalyticsPage() {
           }
         />
         <KPICard
-          label="Conversao geral"
-          value={`${data.conversionRate}%`}
+          label="Submeteram /compra"
+          value={data.compraSubmitCount ?? 0}
           accent
-          sub="fechou / acessou"
+          sub={
+            (data.compraViewCount ?? 0) > 0
+              ? `${((((data.compraSubmitCount ?? 0) / (data.compraViewCount ?? 1)) * 100)).toFixed(0)}% de quem entrou`
+              : "etapa 5 (formulario)"
+          }
+        />
+        <KPICard
+          label="Conversao final"
+          value={`${data.conversionRateFinal ?? data.conversionRate}%`}
+          accent
+          sub="submit /compra / acessos"
         />
       </div>
 
@@ -208,7 +221,8 @@ export default function AnalyticsPage() {
                 label: `Etapa ${f.step}: ${STEP_LABELS[f.step] || `Step ${f.step}`}`,
                 count: f.views,
               })),
-              { label: "Fecharam pedido (WhatsApp)", count: data.whatsappCount, isFinal: true },
+              { label: "Fecharam pedido (WhatsApp)", count: data.whatsappCount },
+              { label: "Submeteram /compra", count: data.compraSubmitCount ?? 0, isFinal: true },
             ];
             const max = Math.max(...fullFunnel.map((s) => s.count), 1);
             return fullFunnel.map((s, idx) => {

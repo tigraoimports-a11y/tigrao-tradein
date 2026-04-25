@@ -6,6 +6,7 @@ import { WHATSAPP_FORMULARIO } from "@/lib/whatsapp-config";
 import { corParaPT } from "@/lib/cor-pt";
 import { getAgendamentoBounds } from "@/lib/date-utils";
 import { withUTMs } from "@/lib/utm-tracker";
+import { useTradeInAnalytics } from "@/lib/useTradeInAnalytics";
 
 function maskCPF(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -67,6 +68,11 @@ interface ProdutoAPI {
 
 function CompraForm() {
   const searchParams = useSearchParams();
+  // Tracking de funil — etapa 5 (formulario de compra). Eventos:
+  //   compra_view    — cliente entrou na pagina
+  //   compra_submit  — cliente concluiu formulario com sucesso
+  // Permite ver drop-off do /troca → /compra → submit no /admin/analytics.
+  const { trackAction } = useTradeInAnalytics();
 
   // URL params
   const produtoParam = searchParams.get("produto") || searchParams.get("p") || "";
@@ -241,6 +247,13 @@ function CompraForm() {
   // teóricas (todas as cores Apple daquele modelo), complementa o estoque real
   // quando o modelo nao tem peças em estoque no momento.
   const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
+
+  // Tracking: dispara "compra_view" 1x quando cliente entra na pagina.
+  // Reutiliza session_id do /troca quando vier no mesmo navegador (analytics
+  // amarra as duas etapas como mesma jornada).
+  useEffect(() => {
+    trackAction("compra_view");
+  }, [trackAction]);
 
   // Fetch products + config
   useEffect(() => {
@@ -1087,6 +1100,9 @@ function CompraForm() {
       }
     }
 
+    // Tracking: cliente concluiu o formulario com sucesso (etapa 5 do funil)
+    trackAction("compra_submit");
+
     const url = `https://wa.me/${whatsappFinal}?text=${encodeURIComponent(lines.join("\n"))}`;
     window.open(url, "_blank");
   }
@@ -1291,6 +1307,9 @@ function CompraForm() {
           })),
         });
       } catch { /* não bloqueia redirect */ }
+
+      // Tracking: cliente concluiu o formulario com sucesso (etapa 5 do funil)
+      trackAction("compra_submit");
 
       // Redireciona pro Mercado Pago (troca a URL, não abre nova aba — assim
       // o cliente não perde o contexto do pedido).
