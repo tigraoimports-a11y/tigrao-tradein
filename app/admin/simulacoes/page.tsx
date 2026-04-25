@@ -50,7 +50,7 @@ interface SimulacaoRow {
   cor_usado?: string | null;
   avaliacao_usado: number;
   diferenca: number;
-  status: "GOSTEI" | "SAIR" | "INVALIDO";
+  status: "GOSTEI" | "SAIR" | "INVALIDO" | "AVALIACAO_MANUAL";
   motivo_invalido?: string | null;
   obs_invalido?: string | null;
   respondido_wa?: boolean | null;
@@ -150,7 +150,7 @@ export default function AdminPage() {
   const data = skuFilter && dataRaw
     ? dataRaw.filter((r) => ((r as unknown as { sku?: string | null }).sku || "").toUpperCase() === skuFilter)
     : dataRaw;
-  const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR" | "INVALIDO" | "PENDENTE">("todos");
+  const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR" | "INVALIDO" | "AVALIACAO_MANUAL" | "PENDENTE">("todos");
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -538,6 +538,7 @@ export default function AdminPage() {
   const gostei = data.filter((d) => d.status === "GOSTEI").length;
   const saiu = data.filter((d) => d.status === "SAIR").length;
   const invalidos = data.filter((d) => d.status === "INVALIDO").length;
+  const avaliacaoManual = data.filter((d) => d.status === "AVALIACAO_MANUAL").length;
   const conversao = total > 0 ? Math.round((gostei / total) * 100) : 0;
   const ticketMedio = total > 0
     ? Math.round(data.reduce((acc, d) => acc + d.diferenca, 0) / total)
@@ -1477,7 +1478,7 @@ export default function AdminPage() {
           {/* Table header */}
           <div className="px-5 py-4 border-b border-[#D2D2D7] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
             <div className="flex gap-2 flex-wrap">
-              {(["todos", "GOSTEI", "SAIR", "INVALIDO", "PENDENTE"] as const).map((t) => (
+              {(["todos", "GOSTEI", "SAIR", "AVALIACAO_MANUAL", "INVALIDO", "PENDENTE"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1489,6 +1490,8 @@ export default function AdminPage() {
                         ? "bg-red-100 text-red-600"
                         : t === "INVALIDO"
                         ? "bg-gray-200 text-gray-700"
+                        : t === "AVALIACAO_MANUAL"
+                        ? "bg-blue-100 text-blue-700"
                         : t === "PENDENTE"
                         ? "bg-yellow-100 text-yellow-700"
                         : "bg-orange-100 text-[#E8740E]"
@@ -1501,6 +1504,8 @@ export default function AdminPage() {
                     ? `Fecharam (${gostei})`
                     : t === "SAIR"
                     ? `Saíram (${saiu})`
+                    : t === "AVALIACAO_MANUAL"
+                    ? `Avaliação Manual (${avaliacaoManual})`
                     : t === "INVALIDO"
                     ? `Inválidos (${invalidos})`
                     : `Pendente (${pendente})`}
