@@ -66,7 +66,7 @@ export const TOOLS: MCPTool[] = [
       const { desde, ate } = rangeDatas(args, 7);
       let query = supabase
         .from("vendas")
-        .select("data, cliente, telefone, modelo, valor_venda, status_pagamento, vendedor, forma_pagamento")
+        .select("data, cliente, telefone, produto, preco_vendido, lucro, status_pagamento, forma, banco")
         .gte("data", desde)
         .lte("data", ate)
         .order("data", { ascending: false })
@@ -80,21 +80,23 @@ export const TOOLS: MCPTool[] = [
         return `Sem vendas no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
       }
 
-      const total = data.reduce((s, v) => s + (Number(v.valor_venda) || 0), 0);
+      const total = data.reduce((s, v) => s + (Number(v.preco_vendido) || 0), 0);
+      const totalLucro = data.reduce((s, v) => s + (Number(v.lucro) || 0), 0);
       const linhas = data.map((v) => {
         const partes = [
           dataBR(v.data),
           v.cliente || "?",
-          v.modelo || "?",
-          brl(Number(v.valor_venda) || 0),
+          v.produto || "?",
+          brl(Number(v.preco_vendido) || 0),
           v.status_pagamento || "?",
         ];
-        if (v.vendedor) partes.push(`vend: ${v.vendedor}`);
+        if (v.forma) partes.push(v.forma);
         return `• ${partes.join(" | ")}`;
       });
 
       return [
-        `${data.length} venda${data.length > 1 ? "s" : ""} de ${dataBR(desde)} a ${dataBR(ate)} — total ${brl(total)}`,
+        `${data.length} venda${data.length > 1 ? "s" : ""} de ${dataBR(desde)} a ${dataBR(ate)}`,
+        `Faturamento ${brl(total)} | Lucro ${brl(totalLucro)}`,
         "",
         ...linhas,
       ].join("\n");
@@ -121,13 +123,13 @@ export const TOOLS: MCPTool[] = [
     handler: async (args, supabase) => {
       let query = supabase
         .from("estoque")
-        .select("produto, imei, serial, cor_pt, custo_unitario, fornecedor, status, data_compra")
-        .order("data_compra", { ascending: false })
+        .select("produto, categoria, imei, serial_no, cor, custo_unitario, fornecedor, status, data_compra")
+        .order("data_compra", { ascending: false, nullsFirst: false })
         .limit(100);
       if (!args.incluir_vendidos) query = query.neq("status", "VENDIDO");
       if (args.busca) {
         const b = String(args.busca).trim();
-        query = query.or(`produto.ilike.%${b}%,imei.ilike.%${b}%,serial.ilike.%${b}%`);
+        query = query.or(`produto.ilike.%${b}%,imei.ilike.%${b}%,serial_no.ilike.%${b}%`);
       }
 
       const { data, error } = await query;
@@ -140,9 +142,9 @@ export const TOOLS: MCPTool[] = [
 
       const total = data.reduce((s, e) => s + (Number(e.custo_unitario) || 0), 0);
       const linhas = data.map((e) => {
-        const id = e.imei || e.serial || "?";
+        const id = e.imei || e.serial_no || "?";
         const idShort = id.length > 8 ? `...${id.slice(-6)}` : id;
-        return `• ${e.produto || "?"} | ${e.cor_pt || "?"} | ${idShort} | ${brl(Number(e.custo_unitario) || 0)} | ${e.status || "?"}`;
+        return `• ${e.produto || "?"} | ${e.cor || "?"} | ${idShort} | ${brl(Number(e.custo_unitario) || 0)} | ${e.status || "?"}`;
       });
 
       return [
@@ -178,20 +180,20 @@ export const TOOLS: MCPTool[] = [
 
       const { data, error } = await supabase
         .from("vendas")
-        .select("data, cliente, telefone, cpf, modelo, valor_venda, status_pagamento")
+        .select("data, cliente, telefone, cpf, produto, preco_vendido, status_pagamento")
         .or(filtros.join(","))
         .order("data", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
       if (!data || data.length === 0) return `Nenhum cliente/venda encontrada pra "${b}".`;
 
-      const total = data.reduce((s, v) => s + (Number(v.valor_venda) || 0), 0);
+      const total = data.reduce((s, v) => s + (Number(v.preco_vendido) || 0), 0);
       const primeiraVenda = data[data.length - 1];
       const ultimaVenda = data[0];
       const nomesUnicos = Array.from(new Set(data.map((v) => v.cliente).filter(Boolean)));
 
       const linhas = data.slice(0, 20).map((v) =>
-        `• ${dataBR(v.data)} | ${v.modelo || "?"} | ${brl(Number(v.valor_venda) || 0)} | ${v.status_pagamento || "?"}`
+        `• ${dataBR(v.data)} | ${v.produto || "?"} | ${brl(Number(v.preco_vendido) || 0)} | ${v.status_pagamento || "?"}`
       );
 
       return [
@@ -220,27 +222,37 @@ export const TOOLS: MCPTool[] = [
       },
     },
     handler: async (args, supabase) => {
-      const data = args.data || new Date().toISOString().slice(0, 10);
+      const dataAlvo = args.data || new Date().toISOString().slice(0, 10);
 
-      const { data: saldos, error } = await supabase
+      // Schema: 1 row por dia com colunas separadas pra cada banco
+      // esp_X = saldo final ("espelho") do banco no fim do dia
+      const { data: rows, error } = await supabase
         .from("saldos_bancarios")
-        .select("data, banco, valor")
-        .lte("data", data)
+        .select("data, esp_itau, esp_inf, esp_mp, esp_especie")
+        .lte("data", dataAlvo)
         .order("data", { ascending: false })
-        .limit(20);
+        .limit(1);
       if (error) throw new Error(error.message);
-      if (!saldos || saldos.length === 0) return `Sem saldos registrados ate ${dataBR(data)}.`;
+      if (!rows || rows.length === 0) return `Sem saldos registrados ate ${dataBR(dataAlvo)}.`;
 
-      // Pega o ultimo dia que tem registro
-      const ultimaData = saldos[0].data;
-      const doDia = saldos.filter((s) => s.data === ultimaData);
-      const total = doDia.reduce((s, x) => s + (Number(x.valor) || 0), 0);
-      const linhas = doDia.map((s) => `• ${s.banco}: ${brl(Number(s.valor) || 0)}`);
+      const r = rows[0];
+      const itau = Number(r.esp_itau) || 0;
+      const inf = Number(r.esp_inf) || 0;
+      const mp = Number(r.esp_mp) || 0;
+      const especie = Number(r.esp_especie) || 0;
+      const total = itau + inf + mp + especie;
+
+      const aviso = r.data !== dataAlvo
+        ? ` (ultima data com registro antes de ${dataBR(dataAlvo)})`
+        : "";
 
       return [
-        `Saldos em ${dataBR(ultimaData)}${ultimaData !== data ? ` (ultima data registrada antes de ${dataBR(data)})` : ""}`,
+        `Saldos em ${dataBR(r.data)}${aviso}`,
         "",
-        ...linhas,
+        `• Itau: ${brl(itau)}`,
+        `• InfinitePay: ${brl(inf)}`,
+        `• Mercado Pago: ${brl(mp)}`,
+        `• Especie (caixa): ${brl(especie)}`,
         "",
         `TOTAL: ${brl(total)}`,
       ].join("\n");
@@ -340,29 +352,30 @@ export const TOOLS: MCPTool[] = [
 
       const { data, error } = await supabase
         .from("vendas")
-        .select("modelo, valor_venda")
+        .select("produto, preco_vendido, lucro")
         .gte("data", desde)
         .lte("data", ate)
-        .not("modelo", "is", null)
+        .not("produto", "is", null)
         .limit(5000);
       if (error) throw new Error(error.message);
       if (!data || data.length === 0) return `Sem vendas no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
 
-      // Agrupa por modelo
-      const porModelo = new Map<string, { qtd: number; total: number }>();
+      // Agrupa por produto
+      const porProduto = new Map<string, { qtd: number; total: number; lucro: number }>();
       for (const v of data) {
-        const m = String(v.modelo).trim();
-        const cur = porModelo.get(m) || { qtd: 0, total: 0 };
+        const p = String(v.produto).trim();
+        const cur = porProduto.get(p) || { qtd: 0, total: 0, lucro: 0 };
         cur.qtd += 1;
-        cur.total += Number(v.valor_venda) || 0;
-        porModelo.set(m, cur);
+        cur.total += Number(v.preco_vendido) || 0;
+        cur.lucro += Number(v.lucro) || 0;
+        porProduto.set(p, cur);
       }
-      const ranking = Array.from(porModelo.entries())
+      const ranking = Array.from(porProduto.entries())
         .sort((a, b) => b[1].qtd - a[1].qtd)
         .slice(0, limite);
 
       const linhas = ranking.map(
-        ([modelo, agg], i) => `${i + 1}. ${modelo} — ${agg.qtd} unid • ${brl(agg.total)}`
+        ([produto, agg], i) => `${i + 1}. ${produto} — ${agg.qtd} unid • ${brl(agg.total)} (lucro ${brl(agg.lucro)})`
       );
 
       return [
