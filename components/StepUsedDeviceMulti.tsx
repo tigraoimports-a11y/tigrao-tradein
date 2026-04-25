@@ -43,6 +43,26 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
   partsReplaced: 5, hasWarranty: 6, warrantyMonth: 7, hasOriginalBox: 8,
 };
 
+// Material da caixa do Apple Watch por geracao Series. Hardcoded porque nao
+// vem do catalogo hoje — admin nao tem dimensao separada pra isso. Usado pra
+// (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Titanio.
+// Series 9: Aluminio (cores standard) + Aco Inoxidavel (Grafite/Prateado/Dourado).
+// Series 10/11: Aluminio + Titanio (Natural/Dourado/Ardosia, sempre GPS+Cel).
+const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; forceGPSCel?: boolean }[]> = {
+  "9": [
+    { material: "Alumínio", cores: ["Meia-noite", "Estelar", "Prateado", "Vermelho", "Rosa"] },
+    { material: "Aço Inoxidável", cores: ["Grafite", "Prateado", "Dourado"] },
+  ],
+  "10": [
+    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
+    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
+  ],
+  "11": [
+    { material: "Alumínio", cores: ["Ouro Rosa", "Prateado", "Preto Brilhante", "Cinza-espacial"] },
+    { material: "Titânio", cores: ["Titânio Natural", "Dourado", "Ardósia"], forceGPSCel: true },
+  ],
+};
+
 // Markdown seguro pra helpText: escape HTML primeiro, depois aplica formatacao.
 // Suporta:
 //  - **negrito**
@@ -213,6 +233,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
+  // Apple Watch Series: material da caixa (Aluminio/Aco Inoxidavel/Titanio).
+  // Afeta cores disponiveis + forca conectividade pra Titanio (sempre GPS+Cel).
+  // So aplica pra Watch Series — SE tem so Aluminio e Ultra tem so Titanio.
+  const [watchCase, setWatchCase] = useState<string | null>(null);
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
   // Quando o cliente clica o botao "Normal" (em vez de digitar), guardamos o
@@ -248,8 +272,9 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   }, [deviceType]);
   useEffect(() => { fetchCores(); }, [fetchCores]);
 
-  // Cores pro modelo selecionado (traduzidas pra PT, dedup)
-  const coresModelo = useMemo(() => {
+  // Cores brutas pro modelo selecionado (traduzidas pra PT, dedup). A
+  // filtragem por caixa do Watch Series vem depois, em `coresModelo`.
+  const coresModeloRaw = useMemo(() => {
     if (!model) return [];
     // Tenta match exato primeiro
     let cores = coresDisponiveis[model];
@@ -348,6 +373,27 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     return keys.sort((a, b) => extractNum(a) - extractNum(b));
   }, [chipGroups]);
   const modelsForChip = useMemo(() => chipGroups && subLine ? (chipGroups[subLine] || []) : [], [chipGroups, subLine]);
+
+  // Opcoes de caixa pro Apple Watch Series, determinadas pela geracao (subLine).
+  // Watch Series 9 → [Aluminio, Aco Inox]; Series 10/11 → [Aluminio, Titanio].
+  // SE e Ultra nao tem escolha — ignora.
+  const watchCaseOptions = useMemo(() => {
+    if (deviceType !== "watch" || line !== "Series") return [];
+    return WATCH_SERIES_CASES[subLine] || [];
+  }, [deviceType, line, subLine]);
+  const requiresWatchCase = watchCaseOptions.length > 0;
+
+  // Cores filtradas pela caixa quando aplicavel (Watch Series). Se a lista
+  // filtrada ficar vazia (ex: cor nao cadastrada no catalogo mas prevista no
+  // hardcoded), cai na lista bruta pra nao travar o cliente.
+  const coresModelo = useMemo(() => {
+    if (!requiresWatchCase || !watchCase) return coresModeloRaw;
+    const opt = watchCaseOptions.find((o) => o.material === watchCase);
+    if (!opt || opt.cores.length === 0) return coresModeloRaw;
+    const allowed = new Set(opt.cores.map((c) => c.toLowerCase()));
+    const filtered = coresModeloRaw.filter((c) => allowed.has(c.toLowerCase()));
+    return filtered.length > 0 ? filtered : coresModeloRaw;
+  }, [coresModeloRaw, requiresWatchCase, watchCase, watchCaseOptions]);
 
   // Se o chip selecionado tem só 1 modelo, auto-selecionar
   const needsScreenSize = modelsForChip.length > 1;
@@ -552,9 +598,9 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const canProceed = model && storageCompleto && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && !batteryRejected && warrantyFilled && boxOk && dynamicOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
-  function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
-  function handleSubLineChange(sl: string) { setSubLine(sl); setModel(""); setStorage(""); setHasDamage(null); tq("chip"); }
-  function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); tq("model"); }
+  function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setWatchCase(null); setHasDamage(null); tq("line"); }
+  function handleSubLineChange(sl: string) { setSubLine(sl); setModel(""); setStorage(""); setWatchCase(null); setHasDamage(null); tq("chip"); }
+  function handleModelChange(m: string) { setModel(m); setStorage(""); setWatchCase(null); setHasDamage(null); tq("model"); }
 
   // Auto-select model when chip has only 1 model
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -573,6 +619,31 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       setStorage(storages[0]);
     }
   }, [model, storages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Titanio no Apple Watch Series 10/11 e sempre GPS+Cel. Quando o cliente
+  // seleciona Titanio, se o storage atual tem conectividade "GPS" puro, busca
+  // a variante equivalente com "GPS+Cel" (mesmo tamanho) e troca. Se nao
+  // existir, mantem o atual e deixa pro operador avaliar manualmente.
+  useEffect(() => {
+    if (!watchCase) return;
+    const opt = watchCaseOptions.find((o) => o.material === watchCase);
+    if (!opt?.forceGPSCel || !storage) return;
+    const parts = parseStorageSpec(storage);
+    const conect = (parts.conectividade || parts.tela || "").toLowerCase();
+    if (conect.includes("cel") || conect.includes("+")) return; // ja e GPS+Cel
+    // Procura variante compativel com mesmo tamanho (parts[0]) mas conectividade GPS+Cel
+    const alt = storages.find((s) => {
+      const p = parseStorageSpec(s);
+      return p.armazenamento === parts.armazenamento && /cel|\+/i.test(p.conectividade || p.tela);
+    });
+    if (alt && alt !== storage) setStorage(alt);
+  }, [watchCase, storage, storages, watchCaseOptions]);
+
+  // Limpa cor escolhida se mudou de caixa — cores disponiveis mudam.
+  useEffect(() => {
+    setCor("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCase]);
 
   const deviceLabel = DEVICE_LABELS[deviceType];
 
@@ -801,8 +872,27 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         )
       )}
 
+      {/* Material da caixa — Watch Series 9/10/11. Series 9 tem Aluminio/Aco,
+          Series 10/11 tem Aluminio/Titanio. Titanio forca GPS+Cel via useEffect. */}
+      {model && storageCompleto && requiresWatchCase && (
+        <Section title="Material da caixa">
+          <div className={`grid gap-2 ${watchCaseOptions.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+            {watchCaseOptions.map((opt) => (
+              <Btn key={opt.material} sel={watchCase === opt.material}
+                onClick={() => { setWatchCase(opt.material); tq("watchCase"); }}
+                className="w-full text-center">{opt.material}</Btn>
+            ))}
+          </div>
+          {watchCase && watchCaseOptions.find(o => o.material === watchCase)?.forceGPSCel && (
+            <p className="mt-2 text-center text-[11px]" style={{ color: "var(--ti-muted)" }}>
+              Titânio sempre vem com GPS + Celular — ajustado automaticamente.
+            </p>
+          )}
+        </Section>
+      )}
+
       {/* Cor do aparelho */}
-      {model && storageCompleto && coresModelo.length > 0 && (
+      {model && storageCompleto && (!requiresWatchCase || watchCase) && coresModelo.length > 0 && (
         <Section title="Qual a cor do seu aparelho?">
           <div className={`grid gap-2 ${coresModelo.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
             {coresModelo.map(c => (
@@ -819,7 +909,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       )}
 
       {/* Cor manual — quando não tem cores do catálogo */}
-      {model && storageCompleto && coresModelo.length === 0 && (
+      {model && storageCompleto && (!requiresWatchCase || watchCase) && coresModelo.length === 0 && (
         <Section title="Qual a cor do seu aparelho?">
           <input
             type="text"
@@ -1239,10 +1329,19 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       })}
 
       {canProceed && (
-        <button onClick={() => onNext({
-          usedModel: model, usedStorage: storage, usedColor: cor, condition: cond, tradeInValue, deviceType: calcDeviceType,
-          extraAnswers: dynamicQuestions.length > 0 ? extraAnswers : undefined,
-        })}
+        <button onClick={() => {
+          // Injetar watchCase como "pseudo-answer" quando aplicavel — TradeInCalculatorMulti
+          // reconhece o slug especial `__watchCase__` e monta uma pergunta sintetica
+          // pro resumo mostrar "Caixa: Aluminio" junto com as outras respostas.
+          const finalExtraAnswers = watchCase
+            ? { ...(extraAnswers || {}), __watchCase__: watchCase }
+            : extraAnswers;
+          const hasExtras = dynamicQuestions.length > 0 || !!watchCase;
+          onNext({
+            usedModel: model, usedStorage: storage, usedColor: cor, condition: cond, tradeInValue, deviceType: calcDeviceType,
+            extraAnswers: hasExtras ? finalExtraAnswers : undefined,
+          });
+        }}
           className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
           style={{ backgroundColor: "#22c55e", order: 999 }}>
           Ver minha avaliacao {"\u2192"}
