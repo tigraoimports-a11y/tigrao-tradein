@@ -399,6 +399,31 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                   />
                 </div>
 
+                {/* Frase concisa pro resumo do produto (opcional). Yesno: usa
+                    como base + prefixa "Não " no negativo. Numeric: usa como
+                    titulo bold ("Saude da bateria: 87"). Quando vazio, cai no
+                    titulo da pergunta. Vive em config.summaryLabel. */}
+                {(q.tipo === "yesno" || q.tipo === "numeric") && (
+                  <div>
+                    <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+                      Frase no resumo {q.tipo === "yesno" ? "(opcional)" : "(opcional, vira o titulo bold)"}
+                    </label>
+                    <input
+                      value={typeof (q.config as Record<string, unknown>).summaryLabel === "string" ? (q.config.summaryLabel as string) : ""}
+                      onChange={(e) => updateConfig(q.id, "summaryLabel", e.target.value)}
+                      placeholder={q.tipo === "yesno"
+                        ? "Ex: Possui o carregador completo original (\"Não \" e prefixado quando negativo)"
+                        : "Ex: Saude de bateria"}
+                      className="mt-1 w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                    />
+                    <p className="mt-1 text-[11px] text-[#86868B]">
+                      {q.tipo === "yesno"
+                        ? "Aparece no resumo do produto (operador). Yesno: \"Possui o carregador\" / \"Não possui o carregador\". Quando vazio, cai no titulo (sem o \"?\")."
+                        : "Aparece como prefixo bold no resumo (ex: \"Saude de bateria: 87%\"). Quando vazio, usa o titulo da pergunta."}
+                    </p>
+                  </div>
+                )}
+
                 {/* Options editor - for selection, yesno, and multiselect */}
                 {(q.tipo === "selection" || q.tipo === "yesno" || q.tipo === "multiselect") && (
                   <div>
