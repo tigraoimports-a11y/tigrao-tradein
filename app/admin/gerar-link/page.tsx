@@ -2414,7 +2414,13 @@ export default function GerarLinkPage() {
             <input
               type="checkbox"
               checked={encomenda}
-              onChange={(e) => { setEncomenda(e.target.checked); if (!e.target.checked) { setPrevisaoChegada(""); setSinalPct(""); } }}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setEncomenda(checked);
+                if (!checked) { setPrevisaoChegada(""); setSinalPct(""); }
+                // Encomenda nao aceita shopping/correios — limpa se ja selecionado
+                else if (localEntrega === "shopping" || localEntrega === "correios") setLocalEntrega("");
+              }}
               className="w-5 h-5 mt-0.5 rounded accent-blue-600"
             />
             <div className="flex-1">
@@ -3107,6 +3113,38 @@ export default function GerarLinkPage() {
           )}
         </div>
 
+        {/* Bloco fluxo de pagamento — explica em texto claro o que cliente vai
+            pagar agora e quando, especialmente em encomenda com sinal. So
+            renderiza quando ha forma + preco preenchidos. */}
+        {forma && precoBase > 0 && (() => {
+          const trocaTotalFx = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+          const baseAposTroca = Math.max(precoBase - trocaTotalFx - descontoNum, 0);
+          const pctFx = Number(sinalPct) || 0;
+          const temSinalFx = encomenda && pctFx > 0 && pctFx < 100;
+          const valorAgora = temSinalFx ? Math.round((baseAposTroca * pctFx) / 100) : baseAposTroca;
+          const valorRestante = temSinalFx ? Math.max(baseAposTroca - valorAgora, 0) : 0;
+          const formaLabel = forma === "Pix" ? "PIX" : forma === "Link de Pagamento" ? `Link MP${parcelas ? ` ${parcelas}x` : ""}` : forma === "Cartao Credito" ? `Cartão${parcelas ? ` ${parcelas}x` : ""}` : forma === "Cartao Debito" ? "Débito" : forma === "Especie" ? "Espécie" : forma;
+          return (
+            <div className={`rounded-xl border p-3 text-xs leading-relaxed ${encomenda ? "border-blue-300 bg-blue-50 text-blue-900" : "border-[#D2D2D7] bg-[#F9F9FB] text-[#1D1D1F]"}`}>
+              <p className="font-bold mb-1.5">{encomenda ? "📦 Fluxo de pagamento (encomenda)" : "💳 Fluxo de pagamento"}</p>
+              <ol className="space-y-1 list-none">
+                <li>
+                  <span className="font-semibold">1.</span> Cliente paga <strong>R$ {valorAgora.toLocaleString("pt-BR")}</strong> agora via <strong>{formaLabel}</strong>{temSinalFx ? ` (sinal ${pctFx}%)` : ""}
+                </li>
+                {encomenda && previsaoChegada && (
+                  <li><span className="font-semibold">2.</span> Aguarda <strong>{previsaoChegada}</strong> para chegada do produto</li>
+                )}
+                {valorRestante > 0 && (
+                  <li><span className="font-semibold">{encomenda && previsaoChegada ? "3" : "2"}.</span> Paga restante <strong>R$ {valorRestante.toLocaleString("pt-BR")}</strong> na entrega</li>
+                )}
+                {trocaTotalFx > 0 && (
+                  <li><span className="font-semibold">{encomenda ? "4" : "2"}.</span> 💱 Aparelho da troca (R$ {trocaTotalFx.toLocaleString("pt-BR")}) recolhido na retirada</li>
+                )}
+              </ol>
+            </div>
+          );
+        })()}
+
         {showEntradaPix && (
           <div>
             <label className={labelCls}>Entrada no Pix (R$)</label>
@@ -3123,14 +3161,33 @@ export default function GerarLinkPage() {
 
         <div>
           <label className={labelCls}>Local de Entrega</label>
-          <select value={localEntrega} onChange={(e) => { setLocalEntrega(e.target.value); if (e.target.value !== "shopping" && e.target.value !== "outro") setShoppingNome(""); }} className={inputCls}>
+          <select
+            value={localEntrega}
+            onChange={(e) => {
+              const v = e.target.value;
+              // Encomenda nao aceita shopping/correios — se selecionou um, derruba
+              if (encomenda && (v === "shopping" || v === "correios")) return;
+              setLocalEntrega(v);
+              if (v !== "shopping" && v !== "outro") setShoppingNome("");
+            }}
+            className={inputCls}
+          >
             <option value="">-- Opcional --</option>
-            <option value="loja">Retirada em Loja</option>
-            <option value="shopping">Entrega em Shopping</option>
-            <option value="residencia">Entrega em Residencia</option>
-            <option value="correios">📦 Envio Correios</option>
-            <option value="outro">Outro local</option>
+            <option value="loja">Retirada no Escritório</option>
+            <option value="residencia">Entrega em Residência</option>
+            <option value="outro">Outro local combinado</option>
+            {!encomenda && (
+              <>
+                <option value="shopping">Entrega em Shopping</option>
+                <option value="correios">📦 Envio Correios</option>
+              </>
+            )}
           </select>
+          {encomenda && (
+            <p className="text-[11px] text-blue-700 mt-1">
+              📦 Encomenda: só aceita Residência, Escritório ou Outro local. {(localEntrega === "residencia" || localEntrega === "outro") && <span className="font-semibold">Pagamento será antecipado.</span>}
+            </p>
+          )}
         </div>
 
         {(localEntrega === "shopping" || localEntrega === "outro") && (
@@ -3164,12 +3221,38 @@ export default function GerarLinkPage() {
           </div>
           <div>
             <label className={labelCls}>Data</label>
-            <input
-              type="date"
-              value={dataEntrega}
-              onChange={(e) => setDataEntrega(e.target.value)}
-              className={inputCls}
-            />
+            {(() => {
+              // Encomenda: orcamento dura 24h, entao agendamento so pode ser
+              // hoje ou amanha. Fora disso, sem restricao (usa min/max do form
+              // padrao do browser, que aceita qualquer data).
+              const hoje = new Date();
+              const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
+              const isoFmt = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+              const minDate = encomenda ? isoFmt(hoje) : undefined;
+              const maxDate = encomenda ? isoFmt(amanha) : undefined;
+              return (
+                <input
+                  type="date"
+                  value={dataEntrega}
+                  min={minDate}
+                  max={maxDate}
+                  onChange={(e) => {
+                    let v = e.target.value;
+                    if (encomenda && v && (v < minDate! || v > maxDate!)) {
+                      // Clamp pra dentro da janela encomenda
+                      v = v < minDate! ? minDate! : maxDate!;
+                    }
+                    setDataEntrega(v);
+                  }}
+                  className={inputCls}
+                />
+              );
+            })()}
+            {encomenda && (
+              <p className="text-[11px] text-blue-700 mt-1">
+                ⏱ Encomenda: agendamento até amanhã (orçamento expira em 24h)
+              </p>
+            )}
           </div>
         </div>
 
