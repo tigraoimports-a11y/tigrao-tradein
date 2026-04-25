@@ -3,11 +3,11 @@
 import { useState } from "react";
 import type { TradeInConfig } from "@/lib/types";
 
-// Campo "Como nos encontrou?" foi REMOVIDO (Abr/2026) pra reduzir friccao na
-// etapa 4 — cliente nao quer responder isso, era obrigatorio e atrasava o
-// momento mais critico do funil (chegar na cotacao). UTMs do anuncio ja dao
-// essa info via Meta Pixel + utm-tracker. Mantemos clienteOrigem="" no payload
-// pra nao quebrar tipos no backend.
+// Campos "Como nos encontrou?" e "Instagram" foram REMOVIDOS (Abr/2026) pra
+// reduzir friccao na etapa 4 — cliente nao quer responder isso na hora critica
+// do funil (chegar na cotacao). UTMs do anuncio + Meta Pixel ja dao a info de
+// origem. Form fica enxuto: so Nome + WhatsApp. Mantemos clienteInstagram="" e
+// clienteOrigem="" no payload pra nao quebrar tipos no backend.
 interface StepClientDataProps {
   onNext: (data: { clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string }) => void;
   onBack: () => void;
@@ -18,9 +18,9 @@ interface StepClientDataProps {
   tradeinConfig?: TradeInConfig | null;
 }
 
-export default function StepClientData({ onNext, onBack, initialNome, initialWhatsApp, initialInstagram, tradeinConfig }: StepClientDataProps) {
-  const [nome, setNome] = useState(initialNome || ""); const [whatsapp, setWhatsapp] = useState(initialWhatsApp || "");
-  const [instagram, setInstagram] = useState(initialInstagram || "");
+export default function StepClientData({ onNext, onBack, initialNome, initialWhatsApp, tradeinConfig }: StepClientDataProps) {
+  const [nome, setNome] = useState(initialNome || "");
+  const [whatsapp, setWhatsapp] = useState(initialWhatsApp || "");
   const canProceed = nome.trim() !== "" && whatsapp.trim() !== "";
 
   const lbl = tradeinConfig?.labels || {};
@@ -48,16 +48,9 @@ export default function StepClientData({ onNext, onBack, initialNome, initialWha
           className="w-full px-4 py-3.5 rounded-2xl text-[15px] transition-colors" style={inputStyle} />
       </div>
 
-      <div className="animate-fadeIn">
-        <label className="block text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: "var(--ti-muted)" }}>{lbl.step3_instagram_label || "Instagram (opcional)"}</label>
-        <input type="text" placeholder={lbl.step3_instagram_placeholder || "@seuperfil"} value={instagram}
-          onChange={(e) => { const v = e.target.value; setInstagram(v && !v.startsWith("@") ? "@"+v : v); }}
-          className="w-full px-4 py-3.5 rounded-2xl text-[15px] transition-colors" style={inputStyle} />
-      </div>
-
       <div className="space-y-3 pt-2">
         {canProceed && (
-          <button onClick={() => onNext({ clienteNome: nome.trim().toUpperCase(), clienteWhatsApp: whatsapp.trim(), clienteInstagram: instagram.trim(), clienteOrigem: "" })}
+          <button onClick={() => onNext({ clienteNome: nome.trim().toUpperCase(), clienteWhatsApp: whatsapp.trim(), clienteInstagram: "", clienteOrigem: "" })}
             className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
             style={{ backgroundColor: "var(--ti-accent)" }}>
             Ver minha cotação
