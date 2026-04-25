@@ -337,6 +337,11 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // e o slug, valor depende do `tipo`: string pra selection/yesno,
   // string[] pra multiselect, number pra numeric.
   const [extraAnswers, setExtraAnswers] = useState<Record<string, unknown>>({});
+  // Slugs de perguntas numericas dinamicas que foram explicitamente rejeitadas
+  // via botao "Em Manutenção" (config.rejectLabel). Quando true, dynamicOk
+  // retorna false e isPriorRejecting bloqueia o reveal das perguntas seguintes
+  // — sem precisar codificar um valor sentinela em extraAnswers.
+  const [extraRejected, setExtraRejected] = useState<Record<string, boolean>>({});
 
   // Busca cores do catálogo/estoque quando muda o deviceType
   const fetchCores = useCallback(async () => {
@@ -624,6 +629,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // Perguntas numericas com config.rejectBelow bloqueiam o avanco quando o valor
   // e menor que o threshold (ex: bateria < 80%).
   const dynamicOk = dynamicQuestions.every((q) => {
+    if (extraRejected[q.slug]) return false;
     const v = extraAnswers[q.slug];
     if (q.tipo === "multiselect") return v !== undefined;
     if (v === undefined || v === null || v === "") return false;
@@ -640,7 +646,6 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // o fluxo (proximas perguntas nao apareciam).
   const batteryMax = deviceType === "macbook" ? 9999 : 100;
   const batteryMin = deviceType === "macbook" ? 0 : 1;
-  const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= batteryMin && battery <= batteryMax);
   // Pergunta hardcoded "battery" tambem suporta rejeicao por valor minimo:
   // admin cadastra config.rejectBelow (ex: 80) + config.rejectMessage. Quando
   // bateria < rejectBelow, bloqueia canProceed e esconde perguntas seguintes.
@@ -656,7 +661,21 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     const rm = cfg?.rejectMessage;
     return typeof rm === "string" ? rm : "";
   })();
-  const batteryRejected = batteryRejectBelow !== undefined && battery !== null && battery < batteryRejectBelow;
+  // Botao de rejeicao explicita ("Em Manutenção", "Nao consigo verificar"). Admin
+  // cadastra config.rejectLabel; cliente clica e marca o aparelho como rejeitado
+  // sem precisar digitar valor. Funciona pra MacBook (que usa ciclos, onde
+  // rejectBelow nao se aplica) e pra qualquer device onde admin queira opcao de
+  // rejeicao manual.
+  const batteryRejectLabel = (() => {
+    const cfg = getQ(qc, "battery")?.config as Record<string, unknown> | undefined;
+    const rl = cfg?.rejectLabel;
+    return typeof rl === "string" && rl.trim() ? rl : null;
+  })();
+  const isBatteryManutencao = batteryRejectLabel !== null && batteryLabel === batteryRejectLabel;
+  const batteryRejected = isBatteryManutencao || (batteryRejectBelow !== undefined && battery !== null && battery < batteryRejectBelow);
+  // Manutencao tambem conta como bateria respondida — vai cair em batteryRejected
+  // e bloquear canProceed, mas nao trava o reveal por "ainda nao respondeu".
+  const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= batteryMin && battery <= batteryMax) || isBatteryManutencao;
 
   // Reveal progressivo: mostra pergunta N so quando todas as anteriores (na ordem
   // configurada pelo admin) estao respondidas. Sem isso, perguntas apareciam em
@@ -676,7 +695,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       case "warrantyMonth": return hasWarranty === false || warrantyMonth !== null;
       case "hasOriginalBox": return hasOriginalBox !== null;
       default: {
-        // Pergunta dinamica: considera respondida quando tem valor em extraAnswers.
+        // Pergunta dinamica: considera respondida quando tem valor em extraAnswers
+        // OU quando foi rejeitada manualmente via botao "Em Manutenção" (sem
+        // valor numerico, mas com isPriorRejecting=true).
+        if (extraRejected[slug]) return true;
         const v = extraAnswers[slug];
         const q = getQ(qc, slug);
         if (q?.tipo === "multiselect") return v !== undefined;
@@ -731,6 +753,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       if (prev.slug === "hasDamage" && hasDamage === true) return true;
       if (prev.slug === "partsReplaced" && partsReplaced === "thirdParty") return true;
       if (prev.slug === "battery" && batteryRejected) return true;
+      if (extraRejected[prev.slug]) return true;
       const v = extraAnswers[prev.slug];
       if (prev.tipo === "numeric" && typeof v === "number") {
         const rb = (prev.config as Record<string, unknown>)?.rejectBelow;
@@ -1179,30 +1202,55 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
                 )}
               </div>
-              {deviceType === "ipad" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // iPad as vezes so mostra "Normal" em vez de numero — cliente
-                    // clica pra liberar assumindo aparelho saudavel (100%).
-                    setBattery(100);
-                    setBatteryLabel("Normal");
-                    tq("battery");
-                  }}
-                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
-                  style={{
-                    backgroundColor: batteryLabel ? "var(--ti-success-light)" : "var(--ti-input-bg)",
-                    color: batteryLabel ? "var(--ti-success)" : "var(--ti-muted)",
-                    border: `1px solid ${batteryLabel ? "var(--ti-success)" : "var(--ti-card-border)"}`,
-                  }}
-                >
-                  Aparece só &quot;Normal&quot; no meu iPad
-                </button>
-              )}
+              {deviceType === "ipad" && (() => {
+                const normalActive = batteryLabel === "Normal";
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // iPad as vezes so mostra "Normal" em vez de numero — cliente
+                      // clica pra liberar assumindo aparelho saudavel (100%).
+                      setBattery(100);
+                      setBatteryLabel("Normal");
+                      tq("battery");
+                    }}
+                    className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                    style={{
+                      backgroundColor: normalActive ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                      color: normalActive ? "var(--ti-success)" : "var(--ti-muted)",
+                      border: `1px solid ${normalActive ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                    }}
+                  >
+                    Aparece só &quot;Normal&quot; no meu iPad
+                  </button>
+                );
+              })()}
               {/* MacBook nao tem mais o botao "Normal" hardcoded aqui — admin
                   cadastra uma pergunta numeric de "Saude de bateria %" via
                   /admin/simulacoes e configura `quickLabel`/`quickValue` ali.
                   O botao aparece automaticamente abaixo do input dinamico. */}
+              {batteryRejectLabel && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Marca rejeicao manual: limpa numero, fixa rotulo na cor
+                    // de erro. batteryRejected dispara via batteryLabel ===
+                    // batteryRejectLabel — bloqueia canProceed e mostra a
+                    // rejectMessage abaixo.
+                    setBattery(null);
+                    setBatteryLabel(batteryRejectLabel);
+                    tq("battery");
+                  }}
+                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                  style={{
+                    backgroundColor: isBatteryManutencao ? "var(--ti-error-light)" : "var(--ti-input-bg)",
+                    color: isBatteryManutencao ? "var(--ti-error)" : "var(--ti-muted)",
+                    border: `1px solid ${isBatteryManutencao ? "var(--ti-error)" : "var(--ti-card-border)"}`,
+                  }}
+                >
+                  {batteryRejectLabel}
+                </button>
+              )}
               {/* Ajuda "Como descobrir a saude/ciclos da bateria?". Prioridade:
                   1) helpText/helpTitle cadastrado na propria pergunta `battery`
                      em /admin/simulacoes (mais especifico — admin edita inline)
@@ -1485,33 +1533,53 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               const helpTitle = typeof cfg.helpTitle === "string" && cfg.helpTitle.trim() ? cfg.helpTitle : "Como descobrir?";
               const rb = typeof cfg.rejectBelow === "number" ? cfg.rejectBelow : undefined;
               const rm = typeof cfg.rejectMessage === "string" ? cfg.rejectMessage : "";
-              const isRejected = typeof val === "number" && rb !== undefined && val < rb;
+              const rejectLabel = typeof cfg.rejectLabel === "string" && cfg.rejectLabel.trim() ? cfg.rejectLabel : null;
+              const manutencaoActive = !!extraRejected[q.slug];
+              const isRejected = manutencaoActive || (typeof val === "number" && rb !== undefined && val < rb);
               // Quick-value (botao tipo "Normal" pra saude de bateria) — admin
               // configura quickLabel + quickValue. Cliente clica em vez de digitar;
               // o resumo mostra o rotulo no lugar do numero quando o valor bate.
               const quickLabel = typeof cfg.quickLabel === "string" && cfg.quickLabel.trim() ? cfg.quickLabel : null;
               const quickValue = typeof cfg.quickValue === "number" ? cfg.quickValue : null;
-              const quickActive = quickLabel !== null && quickValue !== null && val === quickValue;
+              const quickActive = quickLabel !== null && quickValue !== null && val === quickValue && !manutencaoActive;
               return (
                 <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
                   <input
                     type="number"
                     inputMode="numeric"
-                    value={quickActive ? "" : (typeof val === "number" ? String(val) : (typeof val === "string" ? val : ""))}
+                    value={quickActive || manutencaoActive ? "" : (typeof val === "number" ? String(val) : (typeof val === "string" ? val : ""))}
                     onChange={(e) => {
                       const raw = e.target.value.trim();
                       const num = raw === "" ? undefined : Number(raw);
                       setVal(Number.isFinite(num as number) ? (num as number) : undefined);
+                      // Digitou — descarta a marcacao "Em Manutenção".
+                      if (manutencaoActive) {
+                        setExtraRejected(prev => {
+                          const next = { ...prev };
+                          delete next[q.slug];
+                          return next;
+                        });
+                      }
                       tq(q.slug);
                     }}
                     className="w-full px-4 py-3 rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors"
                     style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-card-border)" }}
-                    placeholder={quickActive && quickLabel ? quickLabel : ph}
+                    placeholder={manutencaoActive && rejectLabel ? rejectLabel : (quickActive && quickLabel ? quickLabel : ph)}
                   />
                   {quickLabel !== null && quickValue !== null && (
                     <button
                       type="button"
-                      onClick={() => { setVal(quickValue); tq(q.slug); }}
+                      onClick={() => {
+                        setVal(quickValue);
+                        if (manutencaoActive) {
+                          setExtraRejected(prev => {
+                            const next = { ...prev };
+                            delete next[q.slug];
+                            return next;
+                          });
+                        }
+                        tq(q.slug);
+                      }}
                       className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
                       style={{
                         backgroundColor: quickActive ? "var(--ti-success-light)" : "var(--ti-input-bg)",
@@ -1520,6 +1588,27 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                       }}
                     >
                       {quickLabel}
+                    </button>
+                  )}
+                  {rejectLabel && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Marca rejeicao manual: limpa val e seta flag. dynamicOk
+                        // bloqueia avanco; isPriorRejecting esconde perguntas seguintes;
+                        // a rejectMessage abaixo aparece via isRejected=true.
+                        setVal(undefined);
+                        setExtraRejected(prev => ({ ...prev, [q.slug]: true }));
+                        tq(q.slug);
+                      }}
+                      className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                      style={{
+                        backgroundColor: manutencaoActive ? "var(--ti-error-light)" : "var(--ti-input-bg)",
+                        color: manutencaoActive ? "var(--ti-error)" : "var(--ti-muted)",
+                        border: `1px solid ${manutencaoActive ? "var(--ti-error)" : "var(--ti-card-border)"}`,
+                      }}
+                    >
+                      {rejectLabel}
                     </button>
                   )}
                   {help && (
