@@ -7,6 +7,7 @@ import { getTaxa, calcularLiquido } from "@/lib/taxas";
 import { INSTALLMENT_RATES } from "@/lib/calculations";
 import { formatProdutoDisplay, getModeloBase, limparNomeProduto } from "@/lib/produto-display";
 import { corParaPT } from "@/lib/cor-pt";
+import { WATCH_SERIES_CASES, detectWatchSeriesGen, detectWatchMaterial, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
 import { useVendedores } from "@/lib/vendedores";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
@@ -364,6 +365,9 @@ export default function EntregasPage() {
   const [carrinho, setCarrinho] = useState<CarrinhoItem[]>([]);
   const [addingProduct, setAddingProduct] = useState(false);
   const [tempCor, setTempCor] = useState("");
+  // Material da caixa do Apple Watch Series (Aluminio/Aco/Titanio). Filtra
+  // as cores quando o produto selecionado e Apple Watch Series 9/10/11.
+  const [tempWatchCase, setTempWatchCase] = useState("");
   const [desconto, setDesconto] = useState("");
   const [trocaAtiva, setTrocaAtiva] = useState(false);
   const [trocaValor, setTrocaValor] = useState("");
@@ -1664,31 +1668,73 @@ export default function EntregasPage() {
                         <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
                           {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
                           {produtosFiltradosPreco.map((m) => {
-                            const cores = coresParaProduto(m.nome);
+                            const coresRaw = coresParaProduto(m.nome);
+                            // Detecta Watch Series + material explicito no nome do
+                            // produto (ex: "Apple Watch Series 11 Titanio 42mm" → Titanio).
+                            // Quando material detectado no nome, bypassa o picker.
+                            const watchGen = detectWatchSeriesGen(m.nome);
+                            const matFromName = detectWatchMaterial(m.nome);
+                            // Materiais disponiveis: deriva do catalogo, ou forca o detectado
+                            // do nome. Quando so tem 1, picker nao aparece.
+                            const allCases = watchGen ? getAvailableMaterials(coresRaw, watchGen) : [];
+                            const caseOptions = (watchGen && matFromName)
+                              ? (allCases.find(o => o.material === matFromName)
+                                  ? [allCases.find(o => o.material === matFromName)!]
+                                  : (WATCH_SERIES_CASES[watchGen]?.filter(o => o.material === matFromName) || allCases))
+                              : allCases;
+                            const showCasePicker = !!watchGen && caseOptions.length > 1;
+                            // Material efetivo: tempWatchCase (operador escolheu) ou
+                            // detectado no nome ou auto-selecionado quando so 1.
+                            const effectiveMaterial = tempWatchCase || matFromName || (caseOptions.length === 1 ? caseOptions[0].material : "");
+                            const cores = (watchGen && effectiveMaterial)
+                              ? filterCoresByCase(coresRaw, watchGen, effectiveMaterial)
+                              : coresRaw;
+                            const isSelected = produtos[0] === m.nome;
                             return (
                               <div key={m.nome}>
                                 <button type="button" onClick={() => {
-                                  if (cores.length === 0) {
-                                    // No colors — add directly to carrinho
+                                  if (coresRaw.length === 0) {
                                     setCarrinho(prev => [...prev, { key: `${m.nome}-${Date.now()}`, nome: m.nome, cor: "", preco: m.preco, categoria: catSel }]);
-                                    setAddingProduct(false); setCatSel(""); setTempCor("");
+                                    setAddingProduct(false); setCatSel(""); setTempCor(""); setTempWatchCase("");
                                   } else {
-                                    // Has colors — select this product to show color chips
                                     setProdutos([m.nome]);
                                     setTempCor("");
+                                    setTempWatchCase("");
                                   }
-                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${produtos[0] === m.nome ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                                  <p className={`text-sm font-semibold ${produtos[0] === m.nome ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
-                                  <p className={`text-sm font-bold ${produtos[0] === m.nome ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${isSelected ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                                  <p className={`text-sm font-semibold ${isSelected ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                                  <p className={`text-sm font-bold ${isSelected ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                                 </button>
-                                {produtos[0] === m.nome && cores.length > 0 && (
+                                {/* Picker de material da caixa pra Watch Series — operador
+                                    escolhe Aluminio/Aco/Titanio antes da cor pra nao misturar. */}
+                                {isSelected && showCasePicker && (
+                                  <div className={`px-4 py-3 border-t ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
+                                    <p className="text-xs font-medium mb-2 text-[#86868B]">Material da caixa:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {caseOptions.map((opt) => (
+                                        <button key={opt.material} type="button" onClick={() => setTempWatchCase(tempWatchCase === opt.material ? "" : opt.material)}
+                                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${tempWatchCase === opt.material ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#1C1C1E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                                        >{opt.material}</button>
+                                      ))}
+                                    </div>
+                                    {tempWatchCase && caseOptions.find(o => o.material === tempWatchCase)?.forceGPSCel && (
+                                      <p className={`mt-2 text-[11px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                                        {tempWatchCase} sempre vem com GPS + Celular de fábrica.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                                {/* Cores aparecem quando: (1) nao precisa de picker
+                                    de material, OU (2) operador escolheu material, OU
+                                    (3) so tem 1 material disponivel (auto-selecionado). */}
+                                {isSelected && coresRaw.length > 0 && (!showCasePicker || effectiveMaterial) && (
                                   <div className={`px-4 py-3 border-t ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
                                     <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
                                     <div className="flex flex-wrap gap-2">
                                       {cores.map(cor => (
                                         <button key={cor} type="button" onClick={() => {
                                           setCarrinho(prev => [...prev, { key: `${m.nome}-${cor}-${Date.now()}`, nome: m.nome, cor, preco: m.preco, categoria: catSel }]);
-                                          setAddingProduct(false); setCatSel(""); setTempCor(""); setProdutos([""]);
+                                          setAddingProduct(false); setCatSel(""); setTempCor(""); setProdutos([""]); setTempWatchCase("");
                                         }}
                                           className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${dm ? "bg-[#1C1C1E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E] hover:bg-[#3A2410]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E] hover:bg-[#FFF5EB]"}`}
                                         >{cor}</button>

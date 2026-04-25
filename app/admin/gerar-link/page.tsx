@@ -5,6 +5,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
 import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
+import { WATCH_SERIES_CASES, detectWatchSeriesGen, detectWatchMaterial, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
 import { getModeloBase } from "@/lib/produto-display";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 import { getPublicBaseUrl } from "@/lib/public-url";
@@ -69,6 +70,9 @@ export default function GerarLinkPage() {
   }, [precosVenda, catSel]);
   const [corSel, setCorSel] = useState("");
   const [coresExtras, setCoresExtras] = useState<string[]>([]); // cor por índice extra (produto 2, 3, ...)
+  // Material da caixa do Apple Watch Series (Aluminio/Aco/Titanio). Filtra
+  // as cores disponiveis quando produtos[0] e Apple Watch Series 9/10/11.
+  const [watchCaseSel, setWatchCaseSel] = useState("");
 
   // Fetch estoque para obter cores reais disponíveis + seminovos
   const [estoqueItems, setEstoqueItems] = useState<{ produto: string; categoria: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
@@ -186,7 +190,57 @@ export default function GerarLinkPage() {
     return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
   }, [catalogoCores]);
 
-  const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
+  // Detecta Apple Watch Series (9/10/11) no produto principal.
+  // SE/Ultra retornam null (so um material possivel — sem necessidade de filtro).
+  const watchSeriesGen = useMemo(() => detectWatchSeriesGen(produtos[0] || ""), [produtos]);
+
+  // Detecta material EXPLICITO no nome do produto (ex: "Apple Watch Series 11
+  // Titanio GPS+Cel 42mm"). Quando detectado, bypassa o picker e usa ja como
+  // material escolhido — operador cadastra preco do Titanio em /admin/precos
+  // com "Titanio" no nome e o sistema resolve automaticamente.
+  const watchMaterialFromName = useMemo(() => detectWatchMaterial(produtos[0] || ""), [produtos]);
+
+  // Materiais disponiveis sao DERIVADOS do catalogo cadastrado: so mostra
+  // Aluminio/Aço/Titanio se ha cores cadastradas pra esse material no admin.
+  // Quando o produto ja tem material explicito no nome, retorna apenas esse
+  // material (Titanio detectado → so Titanio).
+  const watchCaseOptions = useMemo(() => {
+    if (!watchSeriesGen) return [];
+    const raw = coresParaProduto(produtos[0] || "");
+    const all = getAvailableMaterials(raw, watchSeriesGen);
+    if (watchMaterialFromName) {
+      // Se a opcao detectada nao esta no catalogo (cores nao cadastradas
+      // ainda), retorna ela mesma assim com forceGPSCel inferido do hardcoded.
+      const found = all.find(o => o.material === watchMaterialFromName);
+      if (found) return [found];
+      const hardcoded = WATCH_SERIES_CASES[watchSeriesGen]?.find(o => o.material === watchMaterialFromName);
+      return hardcoded ? [{ ...hardcoded }] : all;
+    }
+    return all;
+  }, [watchSeriesGen, watchMaterialFromName, produtos, coresParaProduto]);
+
+  // Reset material quando o produto muda (ou nao e mais Watch Series).
+  // Auto-seleciona quando ha apenas 1 material disponivel (caso comum: Tigrao
+  // so tem Aluminio cadastrado, OU produto ja indica Titanio no nome).
+  useEffect(() => {
+    if (!watchSeriesGen) { setWatchCaseSel(""); return; }
+    if (watchCaseOptions.length === 1) {
+      if (watchCaseSel !== watchCaseOptions[0].material) setWatchCaseSel(watchCaseOptions[0].material);
+      return;
+    }
+    if (watchCaseSel && !watchCaseOptions.find(o => o.material === watchCaseSel)) setWatchCaseSel("");
+  }, [watchSeriesGen, watchCaseSel, watchCaseOptions]);
+
+  const coresDisponiveis = useMemo(() => {
+    const raw = coresParaProduto(produtos[0] || "");
+    // Filtra cores do catalogo pelo material da caixa quando Watch Series com
+    // material escolhido. Senao retorna a lista bruta (compat com fluxo
+    // existente pra iPhone/iPad/MacBook/Watch SE/Ultra).
+    if (watchSeriesGen && watchCaseSel) {
+      return filterCoresByCase(raw, watchSeriesGen, watchCaseSel);
+    }
+    return raw;
+  }, [produtos, coresParaProduto, watchSeriesGen, watchCaseSel]);
 
   // Auto-soma preço base quando há múltiplos produtos
   // Lookup preço de cada produto pelo nome na lista de preços
@@ -2579,7 +2633,28 @@ export default function GerarLinkPage() {
 
         {produtoManual ? (
           <>
-            {produtos[0] && coresDisponiveis.length > 0 && (
+            {/* Picker de material da caixa — so Apple Watch Series 9/10/11
+                COM MAIS DE 1 material disponivel no catalogo. Quando so tem
+                1 material cadastrado (caso comum: Tigrao so tem Aluminio),
+                auto-seleciona e mostra direto o picker de cor. */}
+            {watchSeriesGen && watchCaseOptions.length > 1 && (
+              <div className={`px-4 py-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
+                <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Material da caixa:</p>
+                <div className="flex flex-wrap gap-2">
+                  {watchCaseOptions.map((opt) => (
+                    <button key={opt.material} onClick={() => { setWatchCaseSel(watchCaseSel === opt.material ? "" : opt.material); setCorSel(""); }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${watchCaseSel === opt.material ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                    >{opt.material}</button>
+                  ))}
+                </div>
+                {watchCaseSel && watchCaseOptions.find(o => o.material === watchCaseSel)?.forceGPSCel && (
+                  <p className={`mt-2 text-[11px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                    {watchCaseSel} sempre vem com GPS + Celular de fábrica.
+                  </p>
+                )}
+              </div>
+            )}
+            {produtos[0] && coresDisponiveis.length > 0 && (!watchSeriesGen || watchCaseSel) && (
               <div className={`px-4 py-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
                 <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cor do produto 1:</p>
                 <div className="flex flex-wrap gap-2">
