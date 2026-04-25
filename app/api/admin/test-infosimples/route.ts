@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { consultarImei } from "@/lib/infosimples";
 
 export const runtime = "nodejs";
+// Infosimples pode demorar 30-45s em consultas cold. Vercel hobby permite 10s,
+// pro 60s. Forcamos maxDuration=60 pra ter margem na chamada raw + helper.
+export const maxDuration = 60;
 
 /**
  * Endpoint de diagnostico pra Infosimples (Anatel/Celular Legal).
@@ -54,22 +57,32 @@ export async function GET(request: Request) {
     statusText?: string;
     body?: unknown;
     error?: string;
+    durationMs?: number;
   } | null = null;
 
   if (token) {
+    const startMs = Date.now();
     try {
       const apiUrl = new URL("https://api.infosimples.com/api/v2/consultas/anatel/celular-legal");
       apiUrl.searchParams.set("token", token);
-      apiUrl.searchParams.set("timeout", "600");
+      // timeout=30 → Infosimples espera no maximo 30s (em vez de 600s) — evita
+      // travar a funcao Vercel ate o limite de maxDuration
+      apiUrl.searchParams.set("timeout", "30");
       apiUrl.searchParams.set("ignore_site_receipt", "0");
       apiUrl.searchParams.set("imei", imei.replace(/\D/g, ""));
 
       // URL "publica" (sem expor o token completo nos logs)
       const safeUrl = apiUrl.toString().replace(token, `${token.slice(0, 8)}...REDACTED`);
 
+      // Timeout local de 50s — fica abaixo do maxDuration=60 da rota
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 50000);
+
       const res = await fetch(apiUrl.toString(), {
         method: "POST",
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const bodyText = await res.text();
       let bodyParsed: unknown = bodyText;
@@ -84,10 +97,13 @@ export async function GET(request: Request) {
         status: res.status,
         statusText: res.statusText,
         body: bodyParsed,
+        durationMs: Date.now() - startMs,
       };
     } catch (e) {
+      const isAbort = e instanceof Error && e.name === "AbortError";
       rawCall = {
-        error: e instanceof Error ? e.message : String(e),
+        error: isAbort ? `Timeout apos ${Date.now() - startMs}ms (limite 50s)` : e instanceof Error ? e.message : String(e),
+        durationMs: Date.now() - startMs,
       };
     }
   }
