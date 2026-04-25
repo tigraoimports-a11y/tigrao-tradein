@@ -2819,7 +2819,36 @@ export default function GerarLinkPage() {
 
                 {/* Cor selector when a model is pending color choice */}
                 {cartCorPending && (() => {
-                  const cores = coresParaProduto(cartCorPending.nome);
+                  // Mesma logica do picker do modo manual: pra Apple Watch
+                  // Series, deriva material via /admin/precos (nome do produto)
+                  // e filtra cores conforme. Sem isso, todas as cores do
+                  // catalogo (Aluminio + Titanio) aparecem misturadas.
+                  const coresRaw = coresParaProduto(cartCorPending.nome);
+                  const cartWatchGen = detectWatchSeriesGen(cartCorPending.nome);
+                  const cartMatFromName = detectWatchMaterial(cartCorPending.nome);
+                  // Materiais cadastrados em /admin/precos pra essa geracao
+                  const cartCaseOptions = (() => {
+                    if (!cartWatchGen) return [];
+                    if (cartMatFromName) {
+                      const hc = WATCH_SERIES_CASES[cartWatchGen]?.find(o => o.material === cartMatFromName);
+                      return hc ? [{ ...hc, cores: [...hc.cores] }] : [];
+                    }
+                    const materials = new Set<string>();
+                    for (const p of precosVenda) {
+                      const fullName = `${p.modelo} ${p.armazenamento}`.trim();
+                      if (detectWatchSeriesGen(fullName) !== cartWatchGen) continue;
+                      const mat = detectWatchMaterial(fullName);
+                      materials.add(mat || "Alumínio");
+                    }
+                    const all = WATCH_SERIES_CASES[cartWatchGen] || [];
+                    return all.filter(opt => materials.has(opt.material));
+                  })();
+                  // Material efetivo: detectado no nome OU auto-selecionado quando so 1
+                  const effectiveMaterial = cartMatFromName
+                    || (cartCaseOptions.length === 1 ? cartCaseOptions[0].material : "");
+                  const cores = (cartWatchGen && effectiveMaterial)
+                    ? filterCoresByCase(coresRaw, cartWatchGen, effectiveMaterial)
+                    : coresRaw;
                   if (cores.length === 0) return null;
                   return (
                     <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-[#FAFAFA] border border-[#E5E5EA]"}`}>
