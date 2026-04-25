@@ -115,6 +115,22 @@ export function detectWatchSeriesGen(nomeProduto: string): string | null {
   return WATCH_SERIES_CASES[gen] ? gen : null;
 }
 
+/** Retorna os materiais (Aluminio/Aço/Titânio) que tem AO MENOS uma cor
+ *  cadastrada no catalogo pra essa geracao. Usado pra montar o picker de
+ *  material — so mostra opcoes que de fato existem no estoque/catalogo do
+ *  Tigrao. Ex: se admin so cadastrou cores Aluminio pra Series 11, o picker
+ *  nao oferece Titanio. Quando admin ativar/cadastrar Titanio, aparece. */
+export function getAvailableMaterials(coresRaw: string[], gen: string): { material: string; cores: string[]; forceGPSCel?: boolean }[] {
+  const opts = WATCH_SERIES_CASES[gen];
+  if (!opts) return [];
+  return opts.filter((opt) => {
+    const filtered = filterCoresByCase(coresRaw, gen, opt.material);
+    // filterCoresByCase faz fallback pra coresRaw quando intersecao vazia —
+    // entao precisamos checar se REALMENTE casou (cor do material existe no catalogo).
+    return filtered !== coresRaw && filtered.length > 0;
+  });
+}
+
 /** Filtra/dedup uma lista de cores do catalogo pelo material da caixa.
  *  - Match e via bucket de aliases (case+acento insensitive, EN/PT, dedup
  *    de variantes — "Preto" e "Preto Brilhante" colapsam).

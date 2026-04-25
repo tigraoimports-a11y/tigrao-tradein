@@ -5,7 +5,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
 import { useVendedores, getWhatsAppFromVendedores } from "@/lib/vendedores";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
-import { WATCH_SERIES_CASES, detectWatchSeriesGen, filterCoresByCase } from "@/lib/watch-cores";
+import { detectWatchSeriesGen, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
 import { getModeloBase } from "@/lib/produto-display";
 import { buildWaFollowUpUrl } from "@/lib/whatsappFollowUp";
 import { getPublicBaseUrl } from "@/lib/public-url";
@@ -194,12 +194,27 @@ export default function GerarLinkPage() {
   // detectado, mostra picker de material da caixa e filtra cores conforme.
   // SE/Ultra retornam null (so um material possivel — sem necessidade de filtro).
   const watchSeriesGen = useMemo(() => detectWatchSeriesGen(produtos[0] || ""), [produtos]);
-  const watchCaseOptions = useMemo(() => watchSeriesGen ? WATCH_SERIES_CASES[watchSeriesGen] : [], [watchSeriesGen]);
+  // Materiais disponiveis sao DERIVADOS do catalogo cadastrado: so mostra
+  // Aluminio/Aço/Titanio se ha cores cadastradas pra esse material no admin.
+  // Tigrao nao vende Titanio a pronta entrega — entao Titanio so aparece se
+  // admin cadastrar cores Titanio (Tit. Natural, Dourado, Ardosia) pra esse
+  // modelo via /admin/precos ou /admin/usados.
+  const watchCaseOptions = useMemo(() => {
+    if (!watchSeriesGen) return [];
+    const raw = coresParaProduto(produtos[0] || "");
+    return getAvailableMaterials(raw, watchSeriesGen);
+  }, [watchSeriesGen, produtos, coresParaProduto]);
 
-  // Reset material quando o produto muda (ou nao e mais Watch Series)
+  // Reset material quando o produto muda (ou nao e mais Watch Series).
+  // Auto-seleciona quando ha apenas 1 material disponivel (caso comum: Tigrao
+  // so tem Aluminio cadastrado) — operador nao precisa clicar.
   useEffect(() => {
-    if (!watchSeriesGen) setWatchCaseSel("");
-    else if (watchCaseSel && !watchCaseOptions.find(o => o.material === watchCaseSel)) setWatchCaseSel("");
+    if (!watchSeriesGen) { setWatchCaseSel(""); return; }
+    if (watchCaseOptions.length === 1) {
+      if (watchCaseSel !== watchCaseOptions[0].material) setWatchCaseSel(watchCaseOptions[0].material);
+      return;
+    }
+    if (watchCaseSel && !watchCaseOptions.find(o => o.material === watchCaseSel)) setWatchCaseSel("");
   }, [watchSeriesGen, watchCaseSel, watchCaseOptions]);
 
   const coresDisponiveis = useMemo(() => {
@@ -2604,10 +2619,11 @@ export default function GerarLinkPage() {
 
         {produtoManual ? (
           <>
-            {/* Picker de material da caixa — so Apple Watch Series 9/10/11.
-                Sem material escolhido, NAO mostra cores (forcar fluxo pra
-                operador escolher material primeiro e nao misturar Al/Ti). */}
-            {watchSeriesGen && watchCaseOptions.length > 0 && (
+            {/* Picker de material da caixa — so Apple Watch Series 9/10/11
+                COM MAIS DE 1 material disponivel no catalogo. Quando so tem
+                1 material cadastrado (caso comum: Tigrao so tem Aluminio),
+                auto-seleciona e mostra direto o picker de cor. */}
+            {watchSeriesGen && watchCaseOptions.length > 1 && (
               <div className={`px-4 py-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
                 <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Material da caixa:</p>
                 <div className="flex flex-wrap gap-2">

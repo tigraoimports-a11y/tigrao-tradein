@@ -7,7 +7,7 @@ import { getTaxa, calcularLiquido } from "@/lib/taxas";
 import { INSTALLMENT_RATES } from "@/lib/calculations";
 import { formatProdutoDisplay, getModeloBase, limparNomeProduto } from "@/lib/produto-display";
 import { corParaPT } from "@/lib/cor-pt";
-import { WATCH_SERIES_CASES, detectWatchSeriesGen, filterCoresByCase } from "@/lib/watch-cores";
+import { detectWatchSeriesGen, filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
 import { useVendedores } from "@/lib/vendedores";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
@@ -1669,14 +1669,18 @@ export default function EntregasPage() {
                           {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
                           {produtosFiltradosPreco.map((m) => {
                             const coresRaw = coresParaProduto(m.nome);
-                            // Detecta Watch Series — mostra picker de material primeiro
+                            // Detecta Watch Series — materiais disponiveis derivam do
+                            // catalogo (so mostra Aluminio/Aco/Titanio se ha cor cadastrada
+                            // pra esse material). Quando so tem 1, picker nao aparece —
+                            // operador pula direto pras cores.
                             const watchGen = detectWatchSeriesGen(m.nome);
-                            const caseOptions = watchGen ? WATCH_SERIES_CASES[watchGen] : [];
-                            const showCasePicker = !!watchGen && caseOptions.length > 0;
-                            // Cores filtradas pelo material da caixa (Watch Series com material
-                            // escolhido) ou lista bruta (outros casos).
-                            const cores = (showCasePicker && tempWatchCase)
-                              ? filterCoresByCase(coresRaw, watchGen, tempWatchCase)
+                            const caseOptions = watchGen ? getAvailableMaterials(coresRaw, watchGen) : [];
+                            const showCasePicker = !!watchGen && caseOptions.length > 1;
+                            // Material efetivo: usa o tempWatchCase se operador escolheu;
+                            // se so tem 1 material, usa esse automaticamente.
+                            const effectiveMaterial = tempWatchCase || (caseOptions.length === 1 ? caseOptions[0].material : "");
+                            const cores = (watchGen && effectiveMaterial)
+                              ? filterCoresByCase(coresRaw, watchGen, effectiveMaterial)
                               : coresRaw;
                             const isSelected = produtos[0] === m.nome;
                             return (
@@ -1713,7 +1717,10 @@ export default function EntregasPage() {
                                     )}
                                   </div>
                                 )}
-                                {isSelected && coresRaw.length > 0 && (!showCasePicker || tempWatchCase) && (
+                                {/* Cores aparecem quando: (1) nao precisa de picker
+                                    de material, OU (2) operador escolheu material, OU
+                                    (3) so tem 1 material disponivel (auto-selecionado). */}
+                                {isSelected && coresRaw.length > 0 && (!showCasePicker || effectiveMaterial) && (
                                   <div className={`px-4 py-3 border-t ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
                                     <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
                                     <div className="flex flex-wrap gap-2">

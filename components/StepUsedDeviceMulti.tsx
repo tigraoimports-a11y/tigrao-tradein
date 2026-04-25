@@ -9,7 +9,7 @@ import {
   calculateAnyTradeInValue, getDiscountsForModel, formatBRL,
   type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts,
 } from "@/lib/calculations";
-import { WATCH_SERIES_CASES, filterCoresByCase } from "@/lib/watch-cores";
+import { filterCoresByCase, getAvailableMaterials } from "@/lib/watch-cores";
 
 type MultiDeviceType = DeviceType | "watch";
 
@@ -390,14 +390,19 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     return [...list].sort((a, b) => screenInches(a) - screenInches(b));
   }, [chipGroups, subLine]);
 
-  // Opcoes de caixa pro Apple Watch Series, determinadas pela geracao (subLine).
-  // Watch Series 9 → [Aluminio, Aco Inox]; Series 10/11 → [Aluminio, Titanio].
-  // SE e Ultra nao tem escolha — ignora.
+  // Opcoes de caixa pro Apple Watch Series, derivadas das cores cadastradas
+  // no catalogo. Watch Series 9 pode ter [Aluminio, Aco Inox]; Series 10/11
+  // pode ter [Aluminio, Titanio] — mas so aparece o material que TEM cor
+  // cadastrada no admin pra esse modelo. Ex: Tigrao so cadastrou cores
+  // Aluminio pra Series 11 → so Aluminio aparece. SE e Ultra nao tem escolha.
   const watchCaseOptions = useMemo(() => {
     if (deviceType !== "watch" || line !== "Series") return [];
-    return WATCH_SERIES_CASES[subLine] || [];
-  }, [deviceType, line, subLine]);
-  const requiresWatchCase = watchCaseOptions.length > 0;
+    return getAvailableMaterials(coresModeloRaw, subLine);
+  }, [deviceType, line, subLine, coresModeloRaw]);
+  // Picker de material so aparece quando ha MAIS DE 1 material cadastrado.
+  // Quando so tem 1, auto-seleciona via useEffect abaixo (operador/cliente
+  // pula direto pras cores).
+  const requiresWatchCase = watchCaseOptions.length > 1;
 
   // Cores: filtra pelo material da caixa (Watch Series). O catalogo guarda
   // cores por MODELO sem dimensao de material, entao usamos a lista hardcoded
@@ -407,12 +412,13 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   // pra Aluminio) colapsam pelo alias, mostrando so o nome canonico Apple.
   // Quando intersecao fica vazia (catalogo desalinhado), cai pra raw pra
   // nao travar o cliente.
-  // Cores filtradas pelo material da caixa (Watch Series). Logica em
-  // lib/watch-cores.ts (compartilhado com /admin/gerar-link).
+  // Cores filtradas pelo material da caixa (Watch Series). Filtra mesmo quando
+  // ha so 1 material auto-selecionado — admin/cliente nao deve ver cores de
+  // outro material misturadas. Logica em lib/watch-cores.ts.
   const coresModelo = useMemo(() => {
-    if (!requiresWatchCase || !watchCase) return coresModeloRaw;
+    if (deviceType !== "watch" || line !== "Series" || !watchCase) return coresModeloRaw;
     return filterCoresByCase(coresModeloRaw, subLine, watchCase);
-  }, [coresModeloRaw, requiresWatchCase, watchCase, subLine]);
+  }, [coresModeloRaw, deviceType, line, watchCase, subLine]);
 
   // Se o chip selecionado tem só 1 modelo, auto-selecionar
   const needsScreenSize = modelsForChip.length > 1;
@@ -638,6 +644,22 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       setStorage(storages[0]);
     }
   }, [model, storages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select watchCase quando so tem 1 material disponivel (caso comum:
+  // Tigrao so cadastrou cores Aluminio). Cliente pula direto pras cores sem
+  // ver o picker de material.
+  useEffect(() => {
+    if (deviceType !== "watch" || line !== "Series") {
+      if (watchCase !== null) setWatchCase(null);
+      return;
+    }
+    if (watchCaseOptions.length === 1 && watchCase !== watchCaseOptions[0].material) {
+      setWatchCase(watchCaseOptions[0].material);
+    } else if (watchCaseOptions.length === 0 && watchCase !== null) {
+      setWatchCase(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceType, line, subLine, watchCaseOptions]);
 
   // Titanio no Apple Watch Series 10/11 e sempre GPS+Cel. Quando o cliente
   // seleciona Titanio, se o storage atual tem conectividade "GPS" puro, busca
