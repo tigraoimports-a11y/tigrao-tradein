@@ -323,6 +323,16 @@ const DEFAULT_QUESTIONS: Omit<TradeInQuestion, "id">[] = [
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const deviceType = searchParams.get("device_type") || "iphone";
+  // ?source=defaults retorna SEMPRE os defaults hardcoded, ignorando o DB.
+  // Usado pelo /admin/simulacoes pra mesclar hardcoded + DB no editor — sem
+  // isso, hardcoded so aparece quando DB esta totalmente vazio (caso DB tenha
+  // 1 pergunta custom, hardcoded sumia do editor).
+  const source = searchParams.get("source");
+  if (source === "defaults") {
+    return NextResponse.json({
+      data: DEFAULT_QUESTIONS.filter((q) => q.device_type === deviceType),
+    });
+  }
 
   try {
     const { supabase } = await import("@/lib/supabase");

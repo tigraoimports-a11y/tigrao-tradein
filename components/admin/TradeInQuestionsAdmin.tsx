@@ -63,7 +63,10 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
     // o "battery" hardcoded — admin so via no fluxo cliente, sem editar.
     Promise.all([
       fetch(`/api/admin/tradein-perguntas?device_type=${dt}`, { headers: getHeaders() }).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch(`/api/tradein-perguntas?device_type=${dt}`).then(r => r.json()).catch(() => ({ data: [] })),
+      // ?source=defaults forca sempre os defaults hardcoded, ignorando estado
+      // do DB. Sem isso, quando DB tem ALGUMA pergunta custom, defaults
+      // sumiam (a public API so retorna defaults quando DB esta vazio).
+      fetch(`/api/tradein-perguntas?device_type=${dt}&source=defaults`).then(r => r.json()).catch(() => ({ data: [] })),
     ])
       .then(([dbJson, defJson]) => {
         const dbQs: TradeInQuestion[] = dbJson.data || [];
