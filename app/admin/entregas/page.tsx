@@ -1670,18 +1670,30 @@ export default function EntregasPage() {
                           {produtosFiltradosPreco.map((m) => {
                             const coresRaw = coresParaProduto(m.nome);
                             // Detecta Watch Series + material explicito no nome do
-                            // produto (ex: "Apple Watch Series 11 Titanio 42mm" → Titanio).
-                            // Quando material detectado no nome, bypassa o picker.
+                            // produto. Trigger pra "ativar" Titanio: cadastrar produto
+                            // com "Titanio" no nome em /admin/precos. Senao, deriva
+                            // dos OUTROS produtos da mesma geracao em precosVenda
+                            // (sem "Titanio" = Aluminio default).
                             const watchGen = detectWatchSeriesGen(m.nome);
                             const matFromName = detectWatchMaterial(m.nome);
-                            // Materiais disponiveis: deriva do catalogo, ou forca o detectado
-                            // do nome. Quando so tem 1, picker nao aparece.
-                            const allCases = watchGen ? getAvailableMaterials(coresRaw, watchGen) : [];
-                            const caseOptions = (watchGen && matFromName)
-                              ? (allCases.find(o => o.material === matFromName)
-                                  ? [allCases.find(o => o.material === matFromName)!]
-                                  : (WATCH_SERIES_CASES[watchGen]?.filter(o => o.material === matFromName) || allCases))
-                              : allCases;
+                            const caseOptions = (() => {
+                              if (!watchGen) return [];
+                              // Se este produto ja tem material no nome, so ele.
+                              if (matFromName) {
+                                const hc = WATCH_SERIES_CASES[watchGen]?.find(o => o.material === matFromName);
+                                return hc ? [{ ...hc, cores: [...hc.cores] }] : [];
+                              }
+                              // Scan precosVenda da mesma geracao
+                              const materials = new Set<string>();
+                              for (const p of precosVenda) {
+                                const fullName = `${p.modelo} ${p.armazenamento}`.trim();
+                                if (detectWatchSeriesGen(fullName) !== watchGen) continue;
+                                const mat = detectWatchMaterial(fullName);
+                                materials.add(mat || "Alumínio");
+                              }
+                              const all = WATCH_SERIES_CASES[watchGen] || [];
+                              return all.filter(opt => materials.has(opt.material));
+                            })();
                             const showCasePicker = !!watchGen && caseOptions.length > 1;
                             // Material efetivo: tempWatchCase (operador escolheu) ou
                             // detectado no nome ou auto-selecionado quando so 1.

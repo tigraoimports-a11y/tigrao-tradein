@@ -200,24 +200,31 @@ export default function GerarLinkPage() {
   // com "Titanio" no nome e o sistema resolve automaticamente.
   const watchMaterialFromName = useMemo(() => detectWatchMaterial(produtos[0] || ""), [produtos]);
 
-  // Materiais disponiveis sao DERIVADOS do catalogo cadastrado: so mostra
-  // Aluminio/Aço/Titanio se ha cores cadastradas pra esse material no admin.
-  // Quando o produto ja tem material explicito no nome, retorna apenas esse
-  // material (Titanio detectado → so Titanio).
+  // Materiais disponiveis sao DERIVADOS dos produtos cadastrados em
+  // /admin/precos da MESMA geracao Series. Se Tigrao so cadastrou produto
+  // Aluminio (sem "Titanio" no nome), so Aluminio aparece. Quando admin
+  // cadastrar "Apple Watch Series 11 Titanio GPS+Cel 42mm" em /admin/precos,
+  // o sistema detecta "Titanio" no nome e habilita Titanio automaticamente.
+  // Produtos sem material explicito no nome contam como Aluminio (default).
   const watchCaseOptions = useMemo(() => {
     if (!watchSeriesGen) return [];
-    const raw = coresParaProduto(produtos[0] || "");
-    const all = getAvailableMaterials(raw, watchSeriesGen);
+    // Se o proprio produto selecionado ja tem material no nome, retorna so esse.
     if (watchMaterialFromName) {
-      // Se a opcao detectada nao esta no catalogo (cores nao cadastradas
-      // ainda), retorna ela mesma assim com forceGPSCel inferido do hardcoded.
-      const found = all.find(o => o.material === watchMaterialFromName);
-      if (found) return [found];
       const hardcoded = WATCH_SERIES_CASES[watchSeriesGen]?.find(o => o.material === watchMaterialFromName);
-      return hardcoded ? [{ ...hardcoded }] : all;
+      return hardcoded ? [{ ...hardcoded, cores: [...hardcoded.cores] }] : [];
     }
-    return all;
-  }, [watchSeriesGen, watchMaterialFromName, produtos, coresParaProduto]);
+    // Senao, scan TODOS os produtos da mesma geracao em /admin/precos
+    // (precosVenda) e ve quais materiais existem cadastrados.
+    const materialsInPrecos = new Set<string>();
+    for (const p of precosVenda) {
+      const nomeFull = `${p.modelo} ${p.armazenamento}`.trim();
+      if (detectWatchSeriesGen(nomeFull) !== watchSeriesGen) continue;
+      const mat = detectWatchMaterial(nomeFull);
+      materialsInPrecos.add(mat || "Alumínio"); // sem material no nome = Aluminio (default)
+    }
+    const all = WATCH_SERIES_CASES[watchSeriesGen] || [];
+    return all.filter(opt => materialsInPrecos.has(opt.material));
+  }, [watchSeriesGen, watchMaterialFromName, precosVenda]);
 
   // Reset material quando o produto muda (ou nao e mais Watch Series).
   // Auto-seleciona quando ha apenas 1 material disponivel (caso comum: Tigrao
