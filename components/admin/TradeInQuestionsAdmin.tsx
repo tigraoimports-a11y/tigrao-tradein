@@ -502,6 +502,37 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                     </div>
 
                     <div>
+                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Botao rapido (quick value)</label>
+                      <p className="mt-0.5 text-[11px] text-[#86868B]">Cliente clica em vez de digitar — util pra &quot;Normal&quot; (=100%) ou &quot;Não sei&quot; (=0). No resumo aparece o rotulo em vez do numero.</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={typeof (q.config as Record<string, unknown>).quickLabel === "string" ? (q.config.quickLabel as string) : ""}
+                          onChange={(e) => updateConfig(q.id, "quickLabel", e.target.value)}
+                          placeholder="Rotulo (ex: Normal)"
+                          className="flex-1 px-2 py-1 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                        />
+                        <span className="text-xs text-[#86868B]">=</span>
+                        <input
+                          type="number"
+                          value={typeof (q.config as Record<string, unknown>).quickValue === "number" ? String((q.config.quickValue as number)) : ""}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            if (raw === "") {
+                              const next = { ...q.config } as Record<string, unknown>;
+                              delete next.quickValue;
+                              updateQuestion(q.id, { config: next });
+                            } else {
+                              updateConfig(q.id, "quickValue", Number(raw));
+                            }
+                          }}
+                          placeholder="Valor (ex: 100)"
+                          className="w-28 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
                       <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Titulo do painel de ajuda</label>
                       <input
                         type="text"

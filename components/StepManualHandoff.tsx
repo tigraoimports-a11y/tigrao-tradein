@@ -169,6 +169,16 @@ function buildOrderedLines(
         if (yesno) {
           return { slug: slugN, ordem, text: yesno };
         }
+        // Numeric com quick-value cadastrado: quando o valor bate exatamente,
+        // mostra o rotulo (ex: "Saude bateria: Normal" em vez de "100").
+        if (q.tipo === "numeric" && typeof raw === "number") {
+          const cfg = (q.config || {}) as Record<string, unknown>;
+          const quickLabel = typeof cfg.quickLabel === "string" && cfg.quickLabel.trim() ? cfg.quickLabel : null;
+          const quickValue = typeof cfg.quickValue === "number" ? cfg.quickValue : null;
+          if (quickLabel !== null && quickValue !== null && raw === quickValue) {
+            return { slug: slugN, ordem, bold: q.titulo || q.slug, text: quickLabel };
+          }
+        }
       }
       const value = formatExtraAnswer(q, raw);
       if (value === "—") return null;
