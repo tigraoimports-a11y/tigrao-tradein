@@ -103,6 +103,10 @@ export default function MapaVendasPage() {
   const [range, setRange] = useState<RangeOption>("30");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  // Item #21: modo de visualizacao do mapa (pins vs heatmap real) e
+  // qual metrica controla a intensidade (qty/receita/lucro)
+  const [mapMode, setMapMode] = useState<"pins" | "heatmap">("pins");
+  const [mapMetric, setMapMetric] = useState<"qty" | "receita" | "lucro">("qty");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -199,8 +203,44 @@ export default function MapaVendasPage() {
         <KPICard label="Ticket Medio" value={fmt(data.ticketMedio)} accent />
       </div>
 
-      {/* Sales Map */}
-      <SalesMap bairros={data.bairros} />
+      {/* Sales Map (item #21 — toggles modo + metrica) */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-end gap-2 flex-wrap">
+          <span className="text-[11px] uppercase tracking-wide text-[#86868B] font-medium mr-1">Visualizacao:</span>
+          <div className="inline-flex rounded-lg border border-[#D2D2D7] bg-white overflow-hidden text-xs">
+            {(["pins", "heatmap"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMapMode(m)}
+                className={`px-3 py-1.5 transition-colors ${
+                  mapMode === m
+                    ? "bg-[#E8740E] text-white"
+                    : "text-[#6E6E73] hover:bg-[#FFF5EB]"
+                }`}
+              >
+                {m === "pins" ? "Pins" : "Heatmap"}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] uppercase tracking-wide text-[#86868B] font-medium ml-2 mr-1">Intensidade:</span>
+          <div className="inline-flex rounded-lg border border-[#D2D2D7] bg-white overflow-hidden text-xs">
+            {(["qty", "receita", "lucro"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMapMetric(m)}
+                className={`px-3 py-1.5 transition-colors ${
+                  mapMetric === m
+                    ? "bg-[#E8740E] text-white"
+                    : "text-[#6E6E73] hover:bg-[#FFF5EB]"
+                }`}
+              >
+                {m === "qty" ? "Vendas" : m === "receita" ? "Faturamento" : "Lucro"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <SalesMap bairros={data.bairros} mode={mapMode} metric={mapMetric} />
+      </div>
 
       {/* Top Bairros */}
       <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
