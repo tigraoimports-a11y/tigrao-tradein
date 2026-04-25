@@ -224,6 +224,9 @@ export default function AdminPage() {
   const [historicoBusca, setHistoricoBusca] = useState("");
   const [encaminhando, setEncaminhando] = useState<string | null>(null);
   const [historicoModal, setHistoricoModal] = useState<HistoricoItem | null>(null);
+  // Item antifraude: tracking de qual IMEI esta sendo reconsultado
+  // Formato: "id:aparelho" ex: "abc-123:1" pra evitar concorrencia entre cards
+  const [reconsultandoImei, setReconsultandoImei] = useState<string | null>(null);
   // Modal "Gerar Entrega": coleta data/horário/entregador/obs, pré-preenchidos do formulário do cliente
   const [gerarEntregaItem, setGerarEntregaItem] = useState<HistoricoItem | null>(null);
   const [gerarData, setGerarData] = useState("");
@@ -320,6 +323,61 @@ export default function AdminPage() {
   // hora usando os dados da simulação, pra que o admin possa prosseguir com a entrega.
   // Exclui definitivamente um registro do historico (so admin). Pede confirmacao
   // e atualiza o state local sem refetch full da lista.
+  // Item antifraude: forca nova consulta Anatel/Infosimples pra um IMEI ja
+  // gravado. Usado quando equipe ve "⚠️ Consultar manual" (timeout/erro
+  // transitorio) e quer tentar de novo sem pedir cliente reenviar print.
+  const reconsultarImei = useCallback(async (h: HistoricoItem, aparelho: 1 | 2) => {
+    if (!password) return;
+    const key = `${h.id}:${aparelho}`;
+    setReconsultandoImei(key);
+    try {
+      const res = await fetch("/api/admin/reconsultar-imei", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": password,
+          "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
+        },
+        body: JSON.stringify({ link_compra_id: h.id, aparelho }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) {
+        alert(`Erro ao reconsultar: ${j.error || res.status}`);
+        return;
+      }
+      // Atualiza o state local pra UI refletir imediatamente sem refetch
+      setHistorico((prev) =>
+        prev.map((x) => {
+          if (x.id !== h.id) return x;
+          if (aparelho === 1) {
+            return {
+              ...x,
+              troca_imei_status: j.status,
+              troca_imei_consulta_detalhes: j.detalhes,
+            };
+          }
+          return {
+            ...x,
+            troca_imei2_status: j.status,
+            troca_imei2_consulta_detalhes: j.detalhes,
+          };
+        })
+      );
+      // Atualiza tambem o modal aberto se for desse item
+      setHistoricoModal((prev) => {
+        if (!prev || prev.id !== h.id) return prev;
+        if (aparelho === 1) {
+          return { ...prev, troca_imei_status: j.status, troca_imei_consulta_detalhes: j.detalhes };
+        }
+        return { ...prev, troca_imei2_status: j.status, troca_imei2_consulta_detalhes: j.detalhes };
+      });
+    } catch (e) {
+      alert(`Erro de rede: ${String(e)}`);
+    } finally {
+      setReconsultandoImei(null);
+    }
+  }, [password, user]);
+
   const excluirHistorico = useCallback(async (h: HistoricoItem) => {
     if (!password) return;
     const nome = h.cliente_nome || h.cliente_telefone || h.id.slice(0, 8);
@@ -1032,6 +1090,18 @@ export default function AdminPage() {
                                   <p className="font-semibold">Aparelho 1 — IMEI {h.troca_imei}</p>
                                   <p className="text-[10px] opacity-80">{h.troca_imei_consulta_detalhes || h.troca_imei_status}</p>
                                 </div>
+                                {/* Botao reconsultar so faz sentido se status NAO for OK
+                                    (OK ja foi confirmado, nao precisa refazer) */}
+                                {h.troca_imei_status !== "OK" && (
+                                  <button
+                                    onClick={() => reconsultarImei(h, 1)}
+                                    disabled={reconsultandoImei === `${h.id}:1`}
+                                    className="ml-1 text-[10px] px-2 py-0.5 rounded bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50 flex-shrink-0"
+                                    title="Forca nova consulta na Anatel via Infosimples"
+                                  >
+                                    {reconsultandoImei === `${h.id}:1` ? "..." : "🔄"}
+                                  </button>
+                                )}
                               </div>
                             )}
                             {h.troca_imei2 && h.troca_imei2_status && (
@@ -1047,6 +1117,16 @@ export default function AdminPage() {
                                   <p className="font-semibold">Aparelho 2 — IMEI {h.troca_imei2}</p>
                                   <p className="text-[10px] opacity-80">{h.troca_imei2_consulta_detalhes || h.troca_imei2_status}</p>
                                 </div>
+                                {h.troca_imei2_status !== "OK" && (
+                                  <button
+                                    onClick={() => reconsultarImei(h, 2)}
+                                    disabled={reconsultandoImei === `${h.id}:2`}
+                                    className="ml-1 text-[10px] px-2 py-0.5 rounded bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50 flex-shrink-0"
+                                    title="Forca nova consulta na Anatel via Infosimples"
+                                  >
+                                    {reconsultandoImei === `${h.id}:2` ? "..." : "🔄"}
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
