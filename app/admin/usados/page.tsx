@@ -793,25 +793,31 @@ export function UsadosContent() {
     }
   }
 
-  // Ordena os nomes de modelo dentro do grupo. Pra MacBook, prioriza tela
-  // (14"→15"→16") e depois o chip (M1 antes de M1 Pro antes de M1 Max antes de
-  // M2). Pra outras categorias, alfabetico estavel.
-  const modelSortKey = (name: string): [number, number, number, string] => {
+  // Ordena os nomes de modelo dentro do grupo. Pra MacBook agrupa por linha
+  // (Air antes de Pro), depois geracao do chip (M1 < M1 Pro < M1 Max < M2 ...),
+  // e por fim tela (13" < 14" < 15" < 16"). Pra outras categorias, cai pra
+  // alfabetico estavel — todos com chipNum 0 dao o mesmo peso.
+  //
+  // Chave: [linha, chipNum, variantOrd, screen, name].
+  const modelSortKey = (name: string): [number, number, number, number, string] => {
+    let lineOrd = 0;
+    if (/MacBook Pro/i.test(name)) lineOrd = 1;
+    else if (/MacBook Air/i.test(name)) lineOrd = 0;
     const screenMatch = name.match(/(\d+(?:\.\d+)?)\s*"/);
     const screen = screenMatch ? parseFloat(screenMatch[1]) : 0;
     const chipMatch = name.match(/\bM(\d+)(?:\s+(Pro|Max))?\b/i);
     const chipNum = chipMatch ? parseInt(chipMatch[1]) : 0;
     const variant = (chipMatch?.[2] || "").toLowerCase();
     const variantOrd = variant === "" ? 0 : variant === "pro" ? 1 : variant === "max" ? 2 : 3;
-    return [screen, chipNum, variantOrd, name];
+    return [lineOrd, chipNum, variantOrd, screen, name];
   };
   const sortedModelos = Object.keys(grouped).sort((a, b) => {
     const ka = modelSortKey(a);
     const kb = modelSortKey(b);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       if (ka[i] !== kb[i]) return Number(ka[i]) - Number(kb[i]);
     }
-    return String(ka[3]).localeCompare(String(kb[3]));
+    return String(ka[4]).localeCompare(String(kb[4]));
   });
 
   // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
