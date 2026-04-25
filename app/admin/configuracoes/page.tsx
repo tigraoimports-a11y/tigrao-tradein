@@ -276,17 +276,18 @@ export default function ConfiguracoesPage() {
           <div>
             <p className="font-bold text-[#1D1D1F]">📱 WhatsApp Troca — Outros Modelos</p>
             <p className="text-xs text-[#86868B] mt-1">
-              Roteamento por categoria pra trocas que vao pra um numero diferente do <b>WhatsApp Principal</b>.
-              Hoje recebe formularios de seminovos por categoria (iPhone Seminovo, iPad Seminovo, etc).
-              Deixe <b>vazio</b> pra cair no Principal (fallback).
+              Roteamento por categoria pra trocas que vao pra um numero diferente do <b>WhatsApp Principal</b>:
+              <br />• <b>iPhone Seminovo (compra)</b>: cliente quer comprar um iPhone seminovo
+              <br />• <b>iPad / MacBook / Apple Watch (trade-in)</b>: cliente trocando um destes (avaliacao manual)
+              <br />Deixe <b>vazio</b> pra cair no Principal (fallback).
             </p>
           </div>
 
           {([
-            { key: "iphone", label: "iPhone Seminovo", icon: "📱", value: formSemiIphone, set: setFormSemiIphone },
-            { key: "ipad", label: "iPad Seminovo", icon: "📱", value: formSemiIpad, set: setFormSemiIpad },
-            { key: "macbook", label: "MacBook Seminovo", icon: "💻", value: formSemiMacbook, set: setFormSemiMacbook },
-            { key: "watch", label: "Apple Watch Seminovo", icon: "⌚", value: formSemiWatch, set: setFormSemiWatch },
+            { key: "iphone", label: "iPhone Seminovo (compra)", icon: "📱", value: formSemiIphone, set: setFormSemiIphone },
+            { key: "ipad", label: "iPad (trade-in)", icon: "📱", value: formSemiIpad, set: setFormSemiIpad },
+            { key: "macbook", label: "MacBook (trade-in)", icon: "💻", value: formSemiMacbook, set: setFormSemiMacbook },
+            { key: "watch", label: "Apple Watch (trade-in)", icon: "⌚", value: formSemiWatch, set: setFormSemiWatch },
           ] as const).map((cat) => (
             <div key={cat.key} className="border-t border-[#F5F5F7] pt-3 first:border-t-0 first:pt-0 space-y-2">
               <div className="flex items-center justify-between">
