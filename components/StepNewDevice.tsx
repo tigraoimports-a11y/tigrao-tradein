@@ -314,11 +314,16 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
           {model && storages_.length > 0 && <Sec title="Armazenamento"><div className="flex gap-2 flex-wrap">
             {storages_.map((s) => {
               const p = getProductPrice(products, model, s);
-              // Preco "com troca aplicada" — antes mostrava so o preco cheio
-              // (R$ 8.797), o que dava choque de preco no cliente. Agora mostra
-              // tambem quanto ele realmente paga DEPOIS da troca, em verde.
-              // Isso ancora o valor final cedo, antes da etapa 5.
-              const comTroca = p && tradeInValue > 0 ? Math.max(p - tradeInValue, 0) : null;
+              // Preco com troca aplicada — antes mostrava so o preco cheio
+              // (R$ 8.797), o que dava choque de preco no cliente.
+              // Mudanca Abr/2026 (feedback do Andre): mostra valor PARCELADO
+              // em 12x em vez de a vista, porque a maioria das compras e
+              // parcelada. Texto "com sua troca" deixa claro que o desconto
+              // ja esta aplicado (sem isso cliente podia achar que era preco
+              // cheio sem troca).
+              const parcela12 = p && tradeInValue > 0
+                ? calculateQuote(tradeInValue, p).installments.find(i => i.parcelas === 12)?.valorParcela
+                : null;
               return (
               <button key={s} onClick={() => setStorage(s)}
                 className="flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 flex flex-col items-center gap-1"
@@ -326,10 +331,13 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                   ? { backgroundColor: "var(--ti-accent-light)", color: "var(--ti-accent-text)", border: "1px solid var(--ti-accent)" }
                   : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }}>
                 <span className="font-semibold">{s}</span>
-                {p && comTroca !== null ? (
+                {p && parcela12 ? (
                   <>
-                    <span className="text-[10px] line-through" style={{ opacity: 0.45 }}>{formatBRL(p)}</span>
-                    <span className="text-[12px] font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(comTroca)}</span>
+                    <span className="text-[10px] line-through leading-tight" style={{ opacity: 0.45 }}>{formatBRL(p)}</span>
+                    <span className="text-[12px] font-semibold leading-tight" style={{ color: "var(--ti-success)" }}>
+                      12x {formatBRL(parcela12)}
+                    </span>
+                    <span className="text-[9px] leading-tight" style={{ opacity: 0.6 }}>com sua troca</span>
                   </>
                 ) : (
                   p && <span className="text-[12px] font-normal" style={{ opacity: 0.7 }}>{formatBRL(p)}</span>
@@ -357,7 +365,9 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
               {modelB && storagesB.length > 0 && <Sec title="Armazenamento"><div className="flex gap-2 flex-wrap">
                 {storagesB.map((s) => {
                   const p = getProductPrice(products, modelB, s);
-                  const comTroca = p && tradeInValue > 0 ? Math.max(p - tradeInValue, 0) : null;
+                  const parcela12 = p && tradeInValue > 0
+                    ? calculateQuote(tradeInValue, p).installments.find(i => i.parcelas === 12)?.valorParcela
+                    : null;
                   return (
                   <button key={s} onClick={() => setStorageB(s)}
                     className="flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all flex flex-col items-center gap-1"
@@ -365,10 +375,13 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       ? { backgroundColor: "var(--ti-accent-light)", color: "var(--ti-accent-text)", border: "1px solid var(--ti-accent)" }
                       : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }}>
                     <span className="font-semibold">{s}</span>
-                    {p && comTroca !== null ? (
+                    {p && parcela12 ? (
                       <>
-                        <span className="text-[10px] line-through" style={{ opacity: 0.45 }}>{formatBRL(p)}</span>
-                        <span className="text-[12px] font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(comTroca)}</span>
+                        <span className="text-[10px] line-through leading-tight" style={{ opacity: 0.45 }}>{formatBRL(p)}</span>
+                        <span className="text-[12px] font-semibold leading-tight" style={{ color: "var(--ti-success)" }}>
+                          12x {formatBRL(parcela12)}
+                        </span>
+                        <span className="text-[9px] leading-tight" style={{ opacity: 0.6 }}>com sua troca</span>
                       </>
                     ) : (
                       p && <span className="text-[12px] font-normal" style={{ opacity: 0.7 }}>{formatBRL(p)}</span>
