@@ -55,6 +55,13 @@ interface SiteConfig {
   // Feedbacks (Fase 2 — prints WhatsApp)
   site_feedbacks_enabled: boolean;
   site_feedbacks: Feedback[];
+  // Fase 4 — cor da marca + toggles de visibilidade
+  site_brand_color: string;          // hex, ex: "#E8740E"
+  site_show_tagline: boolean;
+  site_show_subtitle: boolean;
+  site_show_trust_badges: boolean;
+  site_show_social_proof: boolean;
+  site_show_footer_cnpj: boolean;
 }
 
 // Defaults sensatos — se admin nunca editou, esses valores sao usados como
@@ -80,6 +87,12 @@ const DEFAULT_CONFIG: SiteConfig = {
   site_influencers: [],
   site_feedbacks_enabled: false,
   site_feedbacks: [],
+  site_brand_color: "#E8740E", // laranja TigraoImports atual
+  site_show_tagline: true,
+  site_show_subtitle: true,
+  site_show_trust_badges: true,
+  site_show_social_proof: true,
+  site_show_footer_cnpj: true,
 };
 
 const FALLBACK_LOGO = "/images/andre.png";
@@ -126,6 +139,19 @@ export default function SiteConfigEditor() {
         site_influencers: Array.isArray(d.site_influencers) ? d.site_influencers : [],
         site_feedbacks_enabled: d.site_feedbacks_enabled === true || d.site_feedbacks_enabled === "true",
         site_feedbacks: Array.isArray(d.site_feedbacks) ? d.site_feedbacks : [],
+        // Fase 4 — toggles defaultam pra TRUE quando undefined (preserva
+        // landing v2 atual onde tudo esta visivel).
+        site_brand_color: d.site_brand_color || DEFAULT_CONFIG.site_brand_color,
+        site_show_tagline: d.site_show_tagline === undefined || d.site_show_tagline === null
+          ? true : (d.site_show_tagline === true || d.site_show_tagline === "true"),
+        site_show_subtitle: d.site_show_subtitle === undefined || d.site_show_subtitle === null
+          ? true : (d.site_show_subtitle === true || d.site_show_subtitle === "true"),
+        site_show_trust_badges: d.site_show_trust_badges === undefined || d.site_show_trust_badges === null
+          ? true : (d.site_show_trust_badges === true || d.site_show_trust_badges === "true"),
+        site_show_social_proof: d.site_show_social_proof === undefined || d.site_show_social_proof === null
+          ? true : (d.site_show_social_proof === true || d.site_show_social_proof === "true"),
+        site_show_footer_cnpj: d.site_show_footer_cnpj === undefined || d.site_show_footer_cnpj === null
+          ? true : (d.site_show_footer_cnpj === true || d.site_show_footer_cnpj === "true"),
       });
     } catch (err) {
       flash("error", "Erro ao carregar: " + (err as Error).message);
@@ -623,6 +649,91 @@ export default function SiteConfigEditor() {
             </button>
           </>
         )}
+      </section>
+
+      {/* === SECAO 5 — CORES & VISIBILIDADE === */}
+      <section className={sectionStyle}>
+        <h2 className={sectionTitle}>5. Cores e visibilidade</h2>
+        <p className={sectionDesc}>
+          Personalize a cor da marca e ative/desative seções secundárias da landing.
+          Use com cuidado — esses elementos foram pensados pra maximizar conversão.
+        </p>
+
+        {/* Color picker */}
+        <div className="pb-5 border-b border-[#E8E8ED] mb-5">
+          <label className={labelStyle + " mb-2"}>Cor primária da marca</label>
+          <div className="flex items-center gap-3">
+            <input type="color" value={config.site_brand_color}
+              onChange={(e) => setConfig({ ...config, site_brand_color: e.target.value })}
+              className="w-14 h-14 rounded-lg cursor-pointer border-2 border-[#D2D2D7]" />
+            <input type="text" value={config.site_brand_color}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                // Aceita hex com ou sem # — adiciona se faltar
+                const normalized = v.startsWith("#") ? v : (v ? "#" + v : "");
+                setConfig({ ...config, site_brand_color: normalized });
+              }}
+              placeholder="#E8740E"
+              className={inputStyle + " w-32 font-mono"} />
+            <button onClick={() => setConfig({ ...config, site_brand_color: DEFAULT_CONFIG.site_brand_color })}
+              className="px-3 py-2 text-[12px] text-[#86868B] hover:text-[#1D1D1F] underline">
+              Restaurar padrão
+            </button>
+          </div>
+          <p className="text-[11px] text-[#AEAEB2] mt-2">
+            Cor usada em destaques: palavra da headline, ✓ trust badges, borders dos avatares,
+            tagline, etc. <strong>O CTA verde NÃO muda</strong> (verde converte mais que
+            laranja em botões de ação).
+          </p>
+
+          {/* Preview de elementos com a nova cor */}
+          <div className="mt-3 p-4 rounded-lg bg-[#FAFAFA] border border-[#E8E8ED]">
+            <p className="text-[11px] text-[#86868B] mb-2 uppercase tracking-wider">Preview:</p>
+            <div className="space-y-2">
+              <p className="text-[15px] text-[#1D1D1F]">
+                Texto com <span style={{ color: config.site_brand_color, fontWeight: "bold" }}>palavra destacada</span> em laranja.
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full" style={{ border: `2px solid ${config.site_brand_color}`, backgroundColor: config.site_brand_color + "15" }} />
+                <div className="flex gap-2 text-[12px] text-[#86868B]">
+                  <span><span style={{ color: config.site_brand_color }}>✓</span> Trust badge 1</span>
+                  <span><span style={{ color: config.site_brand_color }}>✓</span> Trust badge 2</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Toggles de secoes */}
+        <div className="space-y-3">
+          <p className="text-[12px] font-semibold text-[#1D1D1F] mb-2">
+            Seções secundárias (mostrar / esconder)
+          </p>
+          {[
+            { key: "site_show_tagline" as const, label: "Tagline (\"Trade-In Apple\" abaixo do nome)", warning: false },
+            { key: "site_show_subtitle" as const, label: "Subtítulo (texto abaixo da headline)", warning: true },
+            { key: "site_show_trust_badges" as const, label: "Trust badges (✓ Lacrado / ✓ NF / ✓ Garantia)", warning: true },
+            { key: "site_show_social_proof" as const, label: "Social proof (estrelas + número de trocas)", warning: true },
+            { key: "site_show_footer_cnpj" as const, label: "CNPJ no footer", warning: false },
+          ].map((item) => (
+            <div key={item.key} className="flex items-center justify-between p-3 rounded-lg border border-[#E8E8ED] bg-[#FAFAFA]">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-[#1D1D1F]">{item.label}</p>
+                {item.warning && !config[item.key] && (
+                  <p className="text-[11px] text-amber-700 mt-0.5">⚠️ Esconder isso pode reduzir confiança/conversão</p>
+                )}
+              </div>
+              <label className="inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                <input type="checkbox" checked={config[item.key]}
+                  onChange={(e) => setConfig({ ...config, [item.key]: e.target.checked })}
+                  className="sr-only peer" />
+                <div className="w-10 h-5 bg-[#D2D2D7] peer-checked:bg-[#E8740E] rounded-full transition-colors relative">
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${config[item.key] ? "left-5" : "left-0.5"}`} />
+                </div>
+              </label>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* === BOTAO SALVAR === */}

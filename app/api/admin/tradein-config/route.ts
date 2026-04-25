@@ -57,6 +57,13 @@ export async function GET(req: NextRequest) {
   if (labels._site_footer_cnpj !== undefined) result.site_footer_cnpj = labels._site_footer_cnpj;
   if (labels._site_feedbacks_enabled !== undefined) result.site_feedbacks_enabled = labels._site_feedbacks_enabled;
   if (labels._site_feedbacks !== undefined) result.site_feedbacks = labels._site_feedbacks;
+  // Fase 4 (Abr/2026) — cor da marca + toggles de visibilidade.
+  if (labels._site_brand_color !== undefined) result.site_brand_color = labels._site_brand_color;
+  if (labels._site_show_tagline !== undefined) result.site_show_tagline = labels._site_show_tagline;
+  if (labels._site_show_subtitle !== undefined) result.site_show_subtitle = labels._site_show_subtitle;
+  if (labels._site_show_trust_badges !== undefined) result.site_show_trust_badges = labels._site_show_trust_badges;
+  if (labels._site_show_social_proof !== undefined) result.site_show_social_proof = labels._site_show_social_proof;
+  if (labels._site_show_footer_cnpj !== undefined) result.site_show_footer_cnpj = labels._site_show_footer_cnpj;
 
   return NextResponse.json({ data: result });
 }
@@ -108,6 +115,13 @@ export async function PUT(req: NextRequest) {
     "site_footer_cnpj",
     "site_feedbacks_enabled",
     "site_feedbacks",
+    // Fase 4 — cor + toggles de visibilidade
+    "site_brand_color",
+    "site_show_tagline",
+    "site_show_subtitle",
+    "site_show_trust_badges",
+    "site_show_social_proof",
+    "site_show_footer_cnpj",
   ] as const;
   const hasAnyWaField = whatsappFields.some((k) => body[k] !== undefined);
   const hasAnySiteField = siteFields.some((k) => body[k] !== undefined);
