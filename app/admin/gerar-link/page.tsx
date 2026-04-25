@@ -138,6 +138,9 @@ export default function GerarLinkPage() {
     if (/Apple Watch Ultra/i.test(nomeProduto)) return [];
     // Acessórios sem cor (Apple Pencil, cabos, etc)
     if (/Pencil|Cable|Cabo|Carregador|Adapter|Hub|Case|Capa|Pelicula/i.test(nomeProduto)) return [];
+    // AirPods (Pro/normais) so tem branco — NAO oferecer cor. AirPods Max e a
+    // unica linha com cores e fica de fora desse bloqueio.
+    if (/^AirPods\b/i.test(nomeProduto.trim()) && !/AirPods\s*Max/i.test(nomeProduto)) return [];
     // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")

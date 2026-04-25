@@ -1233,6 +1233,47 @@ function BancoMiniCard({
 // Modal: Conferir Recebimentos do dia
 // ====================================================================
 
+function parseNumPt(s: string): number {
+  const n = parseFloat(s.replace(/\./g, "").replace(",", "."));
+  return isFinite(n) ? n : 0;
+}
+
+interface ConferInputProps {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  sistema: number;
+}
+
+// Definido FORA do ConferenciaModal — se ficasse dentro, cada render do modal
+// recriaria a função componente e o React desmontaria o <input>, perdendo foco
+// a cada tecla digitada.
+function ConferInput({ label, value, onChange, sistema }: ConferInputProps) {
+  const diff = value - sistema;
+  const diffOk = Math.abs(diff) < 1;
+  return (
+    <div className="flex items-center gap-2">
+      <label className="text-xs text-[#86868B] flex-1">{label}</label>
+      <span className="text-[10px] text-[#86868B] w-24 text-right font-mono" title="Sistema calculou">
+        {sistema > 0 ? money(sistema) : "—"}
+      </span>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-[#86868B]">R$</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value === 0 ? "" : value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          onChange={(e) => onChange(parseNumPt(e.target.value))}
+          placeholder="0,00"
+          className={`w-28 px-2 py-1 rounded border text-right font-mono text-sm focus:outline-none ${
+            value > 0 && !diffOk ? "border-red-400 focus:border-red-500" : "border-[#D2D2D7] focus:border-[#E8740E]"
+          }`}
+        />
+      </div>
+    </div>
+  );
+}
+
 interface ConferenciaModalProps {
   data: string;
   conferAtual: ConferenciaDia | undefined;
@@ -1272,11 +1313,6 @@ function ConferenciaModal({
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const parseNum = (s: string): number => {
-    const n = parseFloat(s.replace(/\./g, "").replace(",", "."));
-    return isFinite(n) ? n : 0;
-  };
-
   // Total manual: soma tudo positivo. Especie negativa = deposito interno, ignora.
   const especieEfetiva = form.especie > 0 ? form.especie : 0;
   const totalManual =
@@ -1315,32 +1351,6 @@ function ConferenciaModal({
     }
   };
 
-  const Input = ({ label, value, onChange, sistema }: { label: string; value: number; onChange: (v: number) => void; sistema: number }) => {
-    const diff = value - sistema;
-    const diffOk = Math.abs(diff) < 1;
-    return (
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-[#86868B] flex-1">{label}</label>
-        <span className="text-[10px] text-[#86868B] w-24 text-right font-mono" title="Sistema calculou">
-          {sistema > 0 ? money(sistema) : "—"}
-        </span>
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-[#86868B]">R$</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={value === 0 ? "" : value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            onChange={(e) => onChange(parseNum(e.target.value))}
-            placeholder="0,00"
-            className={`w-28 px-2 py-1 rounded border text-right font-mono text-sm focus:outline-none ${
-              value > 0 && !diffOk ? "border-red-400 focus:border-red-500" : "border-[#D2D2D7] focus:border-[#E8740E]"
-            }`}
-          />
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
@@ -1365,8 +1375,8 @@ function ConferenciaModal({
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 ITAÚ</h3>
             <div className="space-y-2">
-              <Input label="Pix" value={form.itau_pix} onChange={(v) => setForm({ ...form, itau_pix: v })} sistema={recebidoSistema.itau_pix} />
-              <Input label="Crédito" value={form.itau_credito} onChange={(v) => setForm({ ...form, itau_credito: v })} sistema={recebidoSistema.itau_credito} />
+              <ConferInput label="Pix" value={form.itau_pix} onChange={(v) => setForm({ ...form, itau_pix: v })} sistema={recebidoSistema.itau_pix} />
+              <ConferInput label="Crédito" value={form.itau_credito} onChange={(v) => setForm({ ...form, itau_credito: v })} sistema={recebidoSistema.itau_credito} />
             </div>
           </div>
 
@@ -1374,9 +1384,9 @@ function ConferenciaModal({
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 INFINITEPAY</h3>
             <div className="space-y-2">
-              <Input label="Pix" value={form.infinite_pix} onChange={(v) => setForm({ ...form, infinite_pix: v })} sistema={recebidoSistema.infinite_pix} />
-              <Input label="Crédito" value={form.infinite_credito} onChange={(v) => setForm({ ...form, infinite_credito: v })} sistema={recebidoSistema.infinite_credito} />
-              <Input label="Débito" value={form.infinite_debito} onChange={(v) => setForm({ ...form, infinite_debito: v })} sistema={recebidoSistema.infinite_debito} />
+              <ConferInput label="Pix" value={form.infinite_pix} onChange={(v) => setForm({ ...form, infinite_pix: v })} sistema={recebidoSistema.infinite_pix} />
+              <ConferInput label="Crédito" value={form.infinite_credito} onChange={(v) => setForm({ ...form, infinite_credito: v })} sistema={recebidoSistema.infinite_credito} />
+              <ConferInput label="Débito" value={form.infinite_debito} onChange={(v) => setForm({ ...form, infinite_debito: v })} sistema={recebidoSistema.infinite_debito} />
             </div>
           </div>
 
@@ -1384,8 +1394,8 @@ function ConferenciaModal({
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-3">🏦 MERCADO PAGO</h3>
             <div className="space-y-2">
-              <Input label="Crédito (link)" value={form.mp_credito} onChange={(v) => setForm({ ...form, mp_credito: v })} sistema={recebidoSistema.mp_credito} />
-              <Input label="Pix" value={form.mp_pix} onChange={(v) => setForm({ ...form, mp_pix: v })} sistema={recebidoSistema.mp_pix} />
+              <ConferInput label="Crédito (link)" value={form.mp_credito} onChange={(v) => setForm({ ...form, mp_credito: v })} sistema={recebidoSistema.mp_credito} />
+              <ConferInput label="Pix" value={form.mp_pix} onChange={(v) => setForm({ ...form, mp_pix: v })} sistema={recebidoSistema.mp_pix} />
             </div>
           </div>
 
@@ -1393,7 +1403,7 @@ function ConferenciaModal({
           <div className="bg-[#F5F5F7] rounded-xl p-4">
             <h3 className="text-sm font-bold text-[#1D1D1F] mb-1">💵 ESPÉCIE</h3>
             <p className="text-[10px] text-[#86868B] mb-3">Negativos = depósito interno, ignorados no total</p>
-            <Input label="Dinheiro" value={form.especie} onChange={(v) => setForm({ ...form, especie: v })} sistema={recebidoSistema.especie} />
+            <ConferInput label="Dinheiro" value={form.especie} onChange={(v) => setForm({ ...form, especie: v })} sistema={recebidoSistema.especie} />
           </div>
 
           {/* Observacao */}
