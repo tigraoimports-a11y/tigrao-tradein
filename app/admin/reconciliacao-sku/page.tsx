@@ -127,7 +127,19 @@ export default function ReconciliacaoSkuPage() {
   const [loading, setLoading] = useState(true);
   const [tipoFiltro, setTipoFiltro] = useState<TipoInc | "todos">("todos");
   const [skuInfo, setSkuInfo] = useState<string | null>(null);
-  const [periodoDias, setPeriodoDias] = useState(30);
+  // Periodo: pode ser numero de dias ("7", "30", "90", "365") OU "mes_atual"
+  // (do dia 1 do mes ate hoje). String pra suportar ambos sem confundir tipos.
+  const [periodo, setPeriodo] = useState<string>("30");
+
+  // Calcula data inicial (YYYY-MM-DD) baseado na opcao selecionada.
+  const calcularFromDate = (opt: string): string => {
+    if (opt === "mes_atual") {
+      const hoje = new Date();
+      return new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+    }
+    const dias = Number(opt) || 30;
+    return new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  };
   const [syncingSku, setSyncingSku] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [backfillingCor, setBackfillingCor] = useState(false);
@@ -149,7 +161,7 @@ export default function ReconciliacaoSkuPage() {
   const fetchData = useCallback(() => {
     if (!password) return;
     setLoading(true);
-    const fromDate = new Date(Date.now() - periodoDias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const fromDate = calcularFromDate(periodo);
     fetch(`/api/admin/sku/reconciliacao?from=${fromDate}`, {
       headers: { "x-admin-password": password },
     })
@@ -164,7 +176,7 @@ export default function ReconciliacaoSkuPage() {
       })
       .catch(() => setInconsistencias([]))
       .finally(() => setLoading(false));
-  }, [password, periodoDias]);
+  }, [password, periodo]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -435,14 +447,15 @@ export default function ReconciliacaoSkuPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <select
-            value={periodoDias}
-            onChange={(e) => setPeriodoDias(Number(e.target.value))}
+            value={periodo}
+            onChange={(e) => setPeriodo(e.target.value)}
             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-[#D2D2D7]"
           >
-            <option value={7}>Últimos 7 dias</option>
-            <option value={30}>Últimos 30 dias</option>
-            <option value={90}>Últimos 90 dias</option>
-            <option value={365}>Último ano</option>
+            <option value="7">Últimos 7 dias</option>
+            <option value="30">Últimos 30 dias</option>
+            <option value="mes_atual">Mês atual</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="365">Último ano</option>
           </select>
           <button
             onClick={fetchData}
