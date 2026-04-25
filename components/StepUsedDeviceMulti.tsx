@@ -1020,27 +1020,10 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   Aparece só &quot;Normal&quot; no meu iPad
                 </button>
               )}
-              {deviceType === "macbook" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // MacBook tambem suporta "Normal" — quando o cliente nao
-                    // sabe os ciclos. Marcamos batteryCycles=0 (sem desconto)
-                    // e o resumo mostra "Bateria: Normal".
-                    setBattery(0);
-                    setBatteryLabel("Normal");
-                    tq("battery");
-                  }}
-                  className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
-                  style={{
-                    backgroundColor: batteryLabel ? "var(--ti-success-light)" : "var(--ti-input-bg)",
-                    color: batteryLabel ? "var(--ti-success)" : "var(--ti-muted)",
-                    border: `1px solid ${batteryLabel ? "var(--ti-success)" : "var(--ti-card-border)"}`,
-                  }}
-                >
-                  Não sei os ciclos — bateria normal
-                </button>
-              )}
+              {/* MacBook nao tem mais o botao "Normal" hardcoded aqui — admin
+                  cadastra uma pergunta numeric de "Saude de bateria %" via
+                  /admin/simulacoes e configura `quickLabel`/`quickValue` ali.
+                  O botao aparece automaticamente abaixo do input dinamico. */}
               {/* Ajuda "Como descobrir a saude/ciclos da bateria?" — texto padrao
                   por device_type, sobrescrivel via labels.help_battery_{device}
                   em /admin/simulacoes. Suporta markdown (negrito, italico, ## titulo). */}
@@ -1308,12 +1291,18 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               const rb = typeof cfg.rejectBelow === "number" ? cfg.rejectBelow : undefined;
               const rm = typeof cfg.rejectMessage === "string" ? cfg.rejectMessage : "";
               const isRejected = typeof val === "number" && rb !== undefined && val < rb;
+              // Quick-value (botao tipo "Normal" pra saude de bateria) — admin
+              // configura quickLabel + quickValue. Cliente clica em vez de digitar;
+              // o resumo mostra o rotulo no lugar do numero quando o valor bate.
+              const quickLabel = typeof cfg.quickLabel === "string" && cfg.quickLabel.trim() ? cfg.quickLabel : null;
+              const quickValue = typeof cfg.quickValue === "number" ? cfg.quickValue : null;
+              const quickActive = quickLabel !== null && quickValue !== null && val === quickValue;
               return (
                 <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
                   <input
                     type="number"
                     inputMode="numeric"
-                    value={typeof val === "number" ? String(val) : (typeof val === "string" ? val : "")}
+                    value={quickActive ? "" : (typeof val === "number" ? String(val) : (typeof val === "string" ? val : ""))}
                     onChange={(e) => {
                       const raw = e.target.value.trim();
                       const num = raw === "" ? undefined : Number(raw);
@@ -1322,8 +1311,22 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                     }}
                     className="w-full px-4 py-3 rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors"
                     style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-card-border)" }}
-                    placeholder={ph}
+                    placeholder={quickActive && quickLabel ? quickLabel : ph}
                   />
+                  {quickLabel !== null && quickValue !== null && (
+                    <button
+                      type="button"
+                      onClick={() => { setVal(quickValue); tq(q.slug); }}
+                      className="w-full py-2 rounded-xl text-[13px] font-medium transition-colors"
+                      style={{
+                        backgroundColor: quickActive ? "var(--ti-success-light)" : "var(--ti-input-bg)",
+                        color: quickActive ? "var(--ti-success)" : "var(--ti-muted)",
+                        border: `1px solid ${quickActive ? "var(--ti-success)" : "var(--ti-card-border)"}`,
+                      }}
+                    >
+                      {quickLabel}
+                    </button>
+                  )}
                   {help && (
                     <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
                       <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>{helpTitle}</summary>
