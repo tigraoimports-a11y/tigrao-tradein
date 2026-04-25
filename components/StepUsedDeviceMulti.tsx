@@ -486,37 +486,41 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
     if (!requiresWatchCase || !watchCase) return coresModeloRaw;
     const opt = watchCaseOptions.find((o) => o.material === watchCase);
     if (!opt || opt.cores.length === 0) return coresModeloRaw;
-    const allowed = new Set(opt.cores.map(normalizeCor));
-    const matchAllowed = (cor: string): boolean => {
+
+    // Resolve "canonical bucket" pra uma cor: pega o nome normalizado dela e
+    // todas as suas aliases (transitivo de profundidade 1 — suficiente pra
+    // grafo plano que temos), retorna como Set. Duas cores estao no mesmo
+    // bucket se Set.intersection nao for vazia. Usamos isso pra dedup:
+    // "Preto" e "Preto Brilhante" caem no mesmo bucket {preto, preto brilhante,
+    // jet black} e so o primeiro a aparecer entra na lista.
+    const bucketOf = (cor: string): Set<string> => {
       const n = normalizeCor(cor);
-      if (allowed.has(n)) return true;
-      const aliases = COR_ALIASES[n] || [];
-      return aliases.some((a) => allowed.has(normalizeCor(a)));
+      const bucket = new Set<string>([n]);
+      for (const alias of COR_ALIASES[n] || []) bucket.add(normalizeCor(alias));
+      return bucket;
     };
-    // Mostra cores na ordem do hardcoded (Apple oficial), nao na ordem alfabetica
-    // do catalogo. Cor cadastrada que nao bate no allow-list e descartada.
+    const overlaps = (a: Set<string>, b: Set<string>) => {
+      for (const x of a) if (b.has(x)) return true;
+      return false;
+    };
+
+    // Bucket de cada cor canonica do material — usado pra ver se uma cor do
+    // catalogo "casa" com alguma canonica.
+    const canonicaBuckets = opt.cores.map((c) => ({ name: c, bucket: bucketOf(c) }));
+
+    // Mostra cores na ordem do hardcoded (Apple oficial). Pra cada canonica,
+    // pega A PRIMEIRA cor do catalogo cujo bucket sobrepoe — as outras do mesmo
+    // bucket (aliases) sao ignoradas, garantindo dedup.
     const filtered: string[] = [];
-    const seen = new Set<string>();
-    for (const canonica of opt.cores) {
-      const match = coresModeloRaw.find((cor) => {
-        const n = normalizeCor(cor);
-        if (seen.has(n)) return false;
-        if (n === normalizeCor(canonica)) return true;
-        const aliases = COR_ALIASES[n] || [];
-        return aliases.some((a) => normalizeCor(a) === normalizeCor(canonica));
-      });
+    const usedBuckets: Set<string>[] = []; // buckets ja consumidos
+    for (const cb of canonicaBuckets) {
+      // Skip se o bucket dessa canonica ja foi consumido (cores 9/10/11 podem
+      // ter overlap entre materiais — ex: "Prateado" em Aluminio e Aco).
+      if (usedBuckets.some((u) => overlaps(u, cb.bucket))) continue;
+      const match = coresModeloRaw.find((cor) => overlaps(bucketOf(cor), cb.bucket));
       if (match) {
         filtered.push(match);
-        seen.add(normalizeCor(match));
-      }
-    }
-    // Inclui qualquer cor do catalogo que casa com allow-list mas nao foi pega
-    // no loop acima (ordem fora da Apple) — defensivo.
-    for (const cor of coresModeloRaw) {
-      const n = normalizeCor(cor);
-      if (!seen.has(n) && matchAllowed(cor)) {
-        filtered.push(cor);
-        seen.add(n);
+        usedBuckets.push(cb.bucket);
       }
     }
     return filtered.length > 0 ? filtered : coresModeloRaw;
