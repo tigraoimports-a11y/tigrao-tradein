@@ -1,0 +1,479 @@
+// MCP tools — funcoes "read-only" expostas pro Claude/ChatGPT consumirem
+// via /api/mcp. Cada tool tem um schema (JSON Schema) que descreve os args
+// e um handler que faz a query no Supabase e devolve um texto formatado.
+//
+// Padrao do protocolo MCP: handler retorna `string` (vai pra
+// `content: [{ type: "text", text }]` no tools/call response).
+//
+// Filosofia: cada tool retorna texto JA FORMATADO pra o LLM consumir
+// diretamente — nao JSON cru. Mais token-efficient e ja vem em portugues.
+
+import { SupabaseClient } from "@supabase/supabase-js";
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: object;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler: (args: any, supabase: SupabaseClient) => Promise<string>;
+}
+
+// --- Helpers ---
+
+const brl = (n: number | string | null | undefined): string => {
+  const num = typeof n === "string" ? parseFloat(n) : (n || 0);
+  return `R$ ${(num || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+const dataBR = (s: string | null | undefined): string => {
+  if (!s) return "?";
+  // Aceita "2026-04-25" ou "2026-04-25T..."
+  const d = s.slice(0, 10);
+  const parts = d.split("-");
+  if (parts.length !== 3) return s;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rangeDatas(args: any, defaultDias = 7): { desde: string; ate: string } {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const desdeDefault = new Date(Date.now() - defaultDias * 24 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  return {
+    desde: args.desde || desdeDefault,
+    ate: args.ate || hoje,
+  };
+}
+
+// --- Tools ---
+
+export const TOOLS: MCPTool[] = [
+  {
+    name: "consultar_vendas",
+    description:
+      "Lista vendas em um periodo. Use pra perguntas tipo 'quanto vendi essa semana?', 'vendas do cliente Joao', 'vendas pendentes'. Default: ultimos 7 dias, max 100 resultados.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        desde: { type: "string", description: "Data inicial YYYY-MM-DD. Default: 7 dias atras." },
+        ate: { type: "string", description: "Data final YYYY-MM-DD. Default: hoje." },
+        cliente: { type: "string", description: "Filtrar por nome do cliente (busca parcial)." },
+        status_pagamento: { type: "string", description: "Ex: PAGO, PENDENTE, CANCELADO." },
+      },
+    },
+    handler: async (args, supabase) => {
+      const { desde, ate } = rangeDatas(args, 7);
+      let query = supabase
+        .from("vendas")
+        .select("data, cliente, telefone, modelo, valor_venda, status_pagamento, vendedor, forma_pagamento")
+        .gte("data", desde)
+        .lte("data", ate)
+        .order("data", { ascending: false })
+        .limit(100);
+      if (args.cliente) query = query.ilike("cliente", `%${args.cliente}%`);
+      if (args.status_pagamento) query = query.eq("status_pagamento", args.status_pagamento);
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) {
+        return `Sem vendas no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
+      }
+
+      const total = data.reduce((s, v) => s + (Number(v.valor_venda) || 0), 0);
+      const linhas = data.map((v) => {
+        const partes = [
+          dataBR(v.data),
+          v.cliente || "?",
+          v.modelo || "?",
+          brl(Number(v.valor_venda) || 0),
+          v.status_pagamento || "?",
+        ];
+        if (v.vendedor) partes.push(`vend: ${v.vendedor}`);
+        return `• ${partes.join(" | ")}`;
+      });
+
+      return [
+        `${data.length} venda${data.length > 1 ? "s" : ""} de ${dataBR(desde)} a ${dataBR(ate)} — total ${brl(total)}`,
+        "",
+        ...linhas,
+      ].join("\n");
+    },
+  },
+
+  {
+    name: "consultar_estoque",
+    description:
+      "Busca produtos no estoque. Use pra 'quantos iPhone 14 tem em estoque?', 'cade o produto com IMEI X', 'estoque de MacBook'. Default: so disponivel, max 100.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        busca: {
+          type: "string",
+          description: "Texto pra buscar em modelo, IMEI ou serial. Ex: 'iPhone 14', '358...'.",
+        },
+        incluir_vendidos: {
+          type: "boolean",
+          description: "Se true, traz tambem itens ja vendidos. Default: false (so disponivel).",
+        },
+      },
+    },
+    handler: async (args, supabase) => {
+      let query = supabase
+        .from("estoque")
+        .select("produto, imei, serial, cor_pt, custo_unitario, fornecedor, status, data_compra")
+        .order("data_compra", { ascending: false })
+        .limit(100);
+      if (!args.incluir_vendidos) query = query.neq("status", "VENDIDO");
+      if (args.busca) {
+        const b = String(args.busca).trim();
+        query = query.or(`produto.ilike.%${b}%,imei.ilike.%${b}%,serial.ilike.%${b}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) {
+        return args.busca
+          ? `Nada encontrado no estoque pra "${args.busca}".`
+          : "Estoque vazio (nada disponivel).";
+      }
+
+      const total = data.reduce((s, e) => s + (Number(e.custo_unitario) || 0), 0);
+      const linhas = data.map((e) => {
+        const id = e.imei || e.serial || "?";
+        const idShort = id.length > 8 ? `...${id.slice(-6)}` : id;
+        return `• ${e.produto || "?"} | ${e.cor_pt || "?"} | ${idShort} | ${brl(Number(e.custo_unitario) || 0)} | ${e.status || "?"}`;
+      });
+
+      return [
+        `${data.length} item${data.length > 1 ? "s" : ""} no estoque — custo total ${brl(total)}`,
+        "",
+        ...linhas,
+      ].join("\n");
+    },
+  },
+
+  {
+    name: "consultar_cliente",
+    description:
+      "Busca cliente por nome, telefone ou CPF, e mostra suas compras. Use pra 'cliente Maria comprou o que?', 'historico do CPF X', 'cliente do telefone Y'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        busca: {
+          type: "string",
+          description: "Nome, telefone ou CPF (busca parcial em todos).",
+        },
+      },
+      required: ["busca"],
+    },
+    handler: async (args, supabase) => {
+      const b = String(args.busca || "").trim();
+      if (!b) throw new Error("Parametro 'busca' obrigatorio");
+
+      // Busca direto em vendas (vendas tem cliente, telefone, cpf — clientes e tabela menor)
+      const cleanedDigits = b.replace(/\D/g, "");
+      const filtros: string[] = [`cliente.ilike.%${b}%`, `telefone.ilike.%${cleanedDigits}%`];
+      if (cleanedDigits.length >= 4) filtros.push(`cpf.ilike.%${cleanedDigits}%`);
+
+      const { data, error } = await supabase
+        .from("vendas")
+        .select("data, cliente, telefone, cpf, modelo, valor_venda, status_pagamento")
+        .or(filtros.join(","))
+        .order("data", { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) return `Nenhum cliente/venda encontrada pra "${b}".`;
+
+      const total = data.reduce((s, v) => s + (Number(v.valor_venda) || 0), 0);
+      const primeiraVenda = data[data.length - 1];
+      const ultimaVenda = data[0];
+      const nomesUnicos = Array.from(new Set(data.map((v) => v.cliente).filter(Boolean)));
+
+      const linhas = data.slice(0, 20).map((v) =>
+        `• ${dataBR(v.data)} | ${v.modelo || "?"} | ${brl(Number(v.valor_venda) || 0)} | ${v.status_pagamento || "?"}`
+      );
+
+      return [
+        `Busca: "${b}"`,
+        `Clientes encontrados: ${nomesUnicos.join(", ")}`,
+        `Total: ${data.length} compras • ${brl(total)}`,
+        `Primeira: ${dataBR(primeiraVenda.data)} • Ultima: ${dataBR(ultimaVenda.data)}`,
+        "",
+        ...linhas,
+        data.length > 20 ? `\n(mostrando 20 de ${data.length})` : "",
+      ].filter(Boolean).join("\n");
+    },
+  },
+
+  {
+    name: "consultar_saldos",
+    description:
+      "Saldos bancarios em uma data. Use pra 'quanto tenho no banco?', 'saldo do Itau hoje', 'saldos no fim de marco'. Default: hoje.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        data: {
+          type: "string",
+          description: "Data YYYY-MM-DD. Default: hoje (ou ultimo dia com saldo registrado).",
+        },
+      },
+    },
+    handler: async (args, supabase) => {
+      const data = args.data || new Date().toISOString().slice(0, 10);
+
+      const { data: saldos, error } = await supabase
+        .from("saldos_bancarios")
+        .select("data, banco, valor")
+        .lte("data", data)
+        .order("data", { ascending: false })
+        .limit(20);
+      if (error) throw new Error(error.message);
+      if (!saldos || saldos.length === 0) return `Sem saldos registrados ate ${dataBR(data)}.`;
+
+      // Pega o ultimo dia que tem registro
+      const ultimaData = saldos[0].data;
+      const doDia = saldos.filter((s) => s.data === ultimaData);
+      const total = doDia.reduce((s, x) => s + (Number(x.valor) || 0), 0);
+      const linhas = doDia.map((s) => `• ${s.banco}: ${brl(Number(s.valor) || 0)}`);
+
+      return [
+        `Saldos em ${dataBR(ultimaData)}${ultimaData !== data ? ` (ultima data registrada antes de ${dataBR(data)})` : ""}`,
+        "",
+        ...linhas,
+        "",
+        `TOTAL: ${brl(total)}`,
+      ].join("\n");
+    },
+  },
+
+  {
+    name: "consultar_recebiveis",
+    description:
+      "Lista parcelas de fiado/pendentes. Use pra 'quem deve pra mim?', 'recebiveis vencidos', 'fiado do cliente X'. Default: so pendentes (nao recebidas).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        cliente: { type: "string", description: "Filtrar por nome do cliente." },
+        incluir_recebidas: {
+          type: "boolean",
+          description: "Se true, traz tambem parcelas ja recebidas. Default: false.",
+        },
+      },
+    },
+    handler: async (args, supabase) => {
+      // fiado_parcelas e uma coluna JSONB em vendas: [{ valor, data, recebido }]
+      let query = supabase
+        .from("vendas")
+        .select("id, cliente, telefone, fiado_parcelas")
+        .not("fiado_parcelas", "is", null)
+        .order("data", { ascending: false })
+        .limit(500);
+      if (args.cliente) query = query.ilike("cliente", `%${args.cliente}%`);
+
+      const { data: vendas, error } = await query;
+      if (error) throw new Error(error.message);
+
+      // Achata todas parcelas com info do cliente
+      interface Parcela { valor: number; data: string; recebido: boolean }
+      type ParcelaItem = { cliente: string; telefone: string | null; vencimento: string; valor: number; recebido: boolean };
+      const parcelas: ParcelaItem[] = [];
+      for (const v of vendas || []) {
+        const lista = Array.isArray(v.fiado_parcelas) ? (v.fiado_parcelas as Parcela[]) : [];
+        for (const p of lista) {
+          if (!args.incluir_recebidas && p.recebido) continue;
+          parcelas.push({
+            cliente: v.cliente || "?",
+            telefone: v.telefone || null,
+            vencimento: p.data,
+            valor: Number(p.valor) || 0,
+            recebido: !!p.recebido,
+          });
+        }
+      }
+
+      if (parcelas.length === 0) {
+        return args.incluir_recebidas ? "Sem parcelas registradas." : "Nenhuma parcela pendente.";
+      }
+
+      // Ordena por vencimento
+      parcelas.sort((a, b) => (a.vencimento || "").localeCompare(b.vencimento || ""));
+
+      const hoje = new Date().toISOString().slice(0, 10);
+      const pendentes = parcelas.filter((p) => !p.recebido);
+      const vencidas = pendentes.filter((p) => p.vencimento && p.vencimento < hoje);
+      const total = parcelas.reduce((s, p) => s + p.valor, 0);
+      const totalPendente = pendentes.reduce((s, p) => s + p.valor, 0);
+      const totalVencido = vencidas.reduce((s, p) => s + p.valor, 0);
+
+      const linhas = parcelas.slice(0, 40).map((p) => {
+        const vencido = !p.recebido && p.vencimento && p.vencimento < hoje ? " ⚠️ VENCIDA" : "";
+        return `• ${dataBR(p.vencimento)} | ${p.cliente} | ${brl(p.valor)} | ${p.recebido ? "✅ recebido" : "pendente"}${vencido}`;
+      });
+
+      return [
+        `${parcelas.length} parcelas — total ${brl(total)}`,
+        `Pendentes: ${pendentes.length} (${brl(totalPendente)})`,
+        vencidas.length > 0 ? `⚠️ Vencidas: ${vencidas.length} (${brl(totalVencido)})` : "",
+        "",
+        ...linhas,
+        parcelas.length > 40 ? `\n(mostrando 40 de ${parcelas.length})` : "",
+      ].filter(Boolean).join("\n");
+    },
+  },
+
+  {
+    name: "consultar_top_skus",
+    description:
+      "Top produtos mais vendidos em um periodo (por quantidade e faturamento). Use pra 'quais os mais vendidos do mes?', 'iPhone que mais vendeu'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        desde: { type: "string", description: "Data inicial YYYY-MM-DD. Default: 30 dias atras." },
+        ate: { type: "string", description: "Data final YYYY-MM-DD. Default: hoje." },
+        limite: { type: "number", description: "Quantos retornar. Default: 10." },
+      },
+    },
+    handler: async (args, supabase) => {
+      const { desde, ate } = rangeDatas(args, 30);
+      const limite = Math.min(Number(args.limite) || 10, 50);
+
+      const { data, error } = await supabase
+        .from("vendas")
+        .select("modelo, valor_venda")
+        .gte("data", desde)
+        .lte("data", ate)
+        .not("modelo", "is", null)
+        .limit(5000);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) return `Sem vendas no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
+
+      // Agrupa por modelo
+      const porModelo = new Map<string, { qtd: number; total: number }>();
+      for (const v of data) {
+        const m = String(v.modelo).trim();
+        const cur = porModelo.get(m) || { qtd: 0, total: 0 };
+        cur.qtd += 1;
+        cur.total += Number(v.valor_venda) || 0;
+        porModelo.set(m, cur);
+      }
+      const ranking = Array.from(porModelo.entries())
+        .sort((a, b) => b[1].qtd - a[1].qtd)
+        .slice(0, limite);
+
+      const linhas = ranking.map(
+        ([modelo, agg], i) => `${i + 1}. ${modelo} — ${agg.qtd} unid • ${brl(agg.total)}`
+      );
+
+      return [
+        `Top ${ranking.length} mais vendidos de ${dataBR(desde)} a ${dataBR(ate)} (${data.length} vendas total)`,
+        "",
+        ...linhas,
+      ].join("\n");
+    },
+  },
+
+  {
+    name: "consultar_funil_tradein",
+    description:
+      "Metricas do funil de trade-in (simulacoes feitas, conversao, drop-off por etapa). Use pra 'como ta o funil?', 'quantas simulacoes essa semana?', 'taxa de conversao do mes'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        desde: { type: "string", description: "Data inicial YYYY-MM-DD. Default: 30 dias atras." },
+        ate: { type: "string", description: "Data final YYYY-MM-DD. Default: hoje." },
+      },
+    },
+    handler: async (args, supabase) => {
+      const { desde, ate } = rangeDatas(args, 30);
+
+      const { data, error } = await supabase
+        .from("simulacoes")
+        .select("status, modelo_novo, created_at")
+        .gte("created_at", `${desde}T00:00:00`)
+        .lte("created_at", `${ate}T23:59:59`)
+        .limit(5000);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) return `Sem simulacoes no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
+
+      const total = data.length;
+      const gostei = data.filter((s) => s.status === "GOSTEI").length;
+      const sair = data.filter((s) => s.status === "SAIR").length;
+      const taxaConv = total > 0 ? ((gostei / total) * 100).toFixed(1) : "0";
+
+      // Top modelos novos requisitados
+      const porModelo = new Map<string, number>();
+      for (const s of data) {
+        if (!s.modelo_novo) continue;
+        porModelo.set(s.modelo_novo, (porModelo.get(s.modelo_novo) || 0) + 1);
+      }
+      const topModelos = Array.from(porModelo.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([m, q]) => `  • ${m}: ${q}`);
+
+      return [
+        `Funil trade-in — ${dataBR(desde)} a ${dataBR(ate)}`,
+        "",
+        `Total simulacoes: ${total}`,
+        `✅ Gostou da troca: ${gostei} (${taxaConv}%)`,
+        `❌ Saiu sem trocar: ${sair}`,
+        "",
+        `Top modelos requisitados:`,
+        ...topModelos,
+      ].join("\n");
+    },
+  },
+
+  {
+    name: "consultar_gastos",
+    description:
+      "Gastos por periodo, agrupados por categoria. Use pra 'quanto gastei esse mes?', 'gastos com fornecedor X', 'breakdown de despesas'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        desde: { type: "string", description: "Data inicial YYYY-MM-DD. Default: 30 dias atras." },
+        ate: { type: "string", description: "Data final YYYY-MM-DD. Default: hoje." },
+        categoria: { type: "string", description: "Filtrar por categoria especifica." },
+      },
+    },
+    handler: async (args, supabase) => {
+      const { desde, ate } = rangeDatas(args, 30);
+      let query = supabase
+        .from("gastos")
+        .select("data, categoria, descricao, valor, banco, contato_nome")
+        .gte("data", desde)
+        .lte("data", ate)
+        .order("data", { ascending: false })
+        .limit(500);
+      if (args.categoria) query = query.ilike("categoria", `%${args.categoria}%`);
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) return `Sem gastos no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
+
+      const total = data.reduce((s, g) => s + (Number(g.valor) || 0), 0);
+
+      // Agrupa por categoria
+      const porCat = new Map<string, { qtd: number; total: number }>();
+      for (const g of data) {
+        const c = g.categoria || "(sem categoria)";
+        const cur = porCat.get(c) || { qtd: 0, total: 0 };
+        cur.qtd += 1;
+        cur.total += Number(g.valor) || 0;
+        porCat.set(c, cur);
+      }
+      const ranking = Array.from(porCat.entries()).sort((a, b) => b[1].total - a[1].total);
+      const linhas = ranking.map(
+        ([cat, agg]) => `• ${cat}: ${agg.qtd}x — ${brl(agg.total)}`
+      );
+
+      return [
+        `Gastos de ${dataBR(desde)} a ${dataBR(ate)} — total ${brl(total)}`,
+        "",
+        `Por categoria:`,
+        ...linhas,
+      ].join("\n");
+    },
+  },
+];
