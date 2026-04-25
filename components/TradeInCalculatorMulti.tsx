@@ -411,6 +411,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/images/andre.png" alt="TigrãoImports"
                 className="w-full h-full object-cover"
+                style={{ objectPosition: "center 15%" }}
                 onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement!.innerHTML = "🐯"; }} />
             </div>
             <div className="text-left">
@@ -462,12 +463,12 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
               <div className="flex justify-center gap-3">
                 {INFLUENCERS_LANDING.map((inf) => (
                   <a key={inf.handle} href={`https://instagram.com/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-1 transition-opacity hover:opacity-80">
-                    <div className="w-16 h-16 rounded-full overflow-hidden" style={{ border: "2px solid var(--ti-accent, #E8740E)" }}>
+                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-80">
+                    <div className="w-20 h-20 rounded-full overflow-hidden" style={{ border: "2px solid var(--ti-accent, #E8740E)" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={inf.foto} alt={inf.handle} className="w-full h-full object-cover" />
                     </div>
-                    <span className="text-[11px] font-medium" style={{ color: tema.textMuted }}>{inf.handle}</span>
+                    <span className="text-[12px] font-medium" style={{ color: tema.textMuted }}>{inf.handle}</span>
                   </a>
                 ))}
               </div>
