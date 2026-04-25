@@ -49,9 +49,9 @@ const HARDCODED_DEFAULT_ORDEM: Record<string, number> = {
 
 // Material da caixa do Apple Watch por geracao Series. Hardcoded porque nao
 // vem do catalogo hoje — admin nao tem dimensao separada pra isso. Usado pra
-// (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Titanio.
-// Cores da Apple oficiais por geracao + material (BR). Aco Inox e Titanio
-// sempre vem GPS+Cel de fabrica.
+// (1) filtrar cores disponiveis conforme caixa e (2) forcar GPS+Cel em Aco/Titanio.
+// Cores oficiais Apple por geracao + material (BR). Aco Inox e Titanio sempre
+// vem GPS+Cel de fabrica.
 const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; forceGPSCel?: boolean }[]> = {
   "9": [
     { material: "Alumínio", cores: ["Estelar", "Meia-noite", "Prateado", "Vermelho", "Rosa"] },
@@ -67,23 +67,63 @@ const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; fo
   ],
 };
 
-// Aliases comuns no catalogo brasileiro vs nomenclatura Apple. "Prata" e
-// equivalente a "Prateado", "Preto" sozinho costuma ser "Preto Brilhante" do
-// Aluminio etc. Usado no filtro de cores por material pra nao deixar cor
-// cadastrada de fora so por causa de variacao no nome.
+// Aliases bidirecionais entre o catalogo do admin (que pode usar nomes
+// abreviados ou em ingles) e a nomenclatura Apple oficial. Usado no filtro
+// de cores por material pra nao deixar cor cadastrada de fora so por causa
+// de variacao no nome (ex: "Prata" vs "Prateado", "Slate" vs "Ardosia").
+// Chaves e valores normalizados (lowercase, sem acento, hifen→espaco).
 const COR_ALIASES: Record<string, string[]> = {
-  prata: ["prateado"],
-  prateado: ["prata"],
-  preto: ["preto brilhante"],
-  "preto brilhante": ["preto"],
-  natural: ["titanio natural", "titânio natural"],
-  "titanio natural": ["natural", "titânio natural"],
-  "titânio natural": ["natural", "titanio natural"],
+  // Prateado / Prata / Silver
+  "prata": ["prateado", "silver"],
+  "prateado": ["prata", "silver"],
+  "silver": ["prata", "prateado"],
+  // Preto / Preto Brilhante / Jet Black
+  "preto": ["preto brilhante", "jet black"],
+  "preto brilhante": ["preto", "jet black"],
+  "jet black": ["preto", "preto brilhante"],
+  // Titanio Natural / Natural
+  "natural": ["titanio natural"],
+  "titanio natural": ["natural"],
+  // Ardosia / Slate
+  "ardosia": ["slate"],
+  "slate": ["ardosia"],
+  // Estelar / Starlight
+  "estelar": ["starlight"],
+  "starlight": ["estelar"],
+  // Meia-noite / Midnight
+  "meia noite": ["midnight"],
+  "midnight": ["meia noite"],
+  // Cinza-espacial / Space Gray / Cinza espacial
+  "cinza espacial": ["space gray", "space grey"],
+  "space gray": ["cinza espacial"],
+  "space grey": ["cinza espacial"],
+  // Dourado / Gold
+  "dourado": ["gold", "ouro"],
+  "gold": ["dourado", "ouro"],
+  "ouro": ["dourado", "gold"],
+  // Ouro Rosa / Rose Gold / Rosé
+  "ouro rosa": ["rose gold", "rose"],
+  "rose gold": ["ouro rosa"],
+  "rose": ["ouro rosa"],
+  // Grafite / Graphite
+  "grafite": ["graphite"],
+  "graphite": ["grafite"],
+  // Vermelho / Red / (PRODUCT) RED
+  "vermelho": ["red", "product red"],
+  "red": ["vermelho"],
+  "product red": ["vermelho"],
 };
 
-// Normaliza string pra comparacao de cor: lowercase, sem acento, trim.
+// Normaliza string pra comparacao de cor: lowercase, sem acento, hifen vira
+// espaco (Cinza-espacial vs Cinza espacial), espacos colapsados, trim.
 function normalizeCor(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // Markdown seguro pra helpText: escape HTML primeiro, depois aplica formatacao.
