@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "@/lib/supabase";
+import { consultarImei, type ImeiStatus } from "@/lib/infosimples";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -152,9 +153,31 @@ export async function POST(req: NextRequest) {
     // preenchemos troca_imei em vez de troca_serial.
     const colSerial = aparelhoNum === 1 ? "troca_serial" : "troca_serial2";
     const colImei = aparelhoNum === 1 ? "troca_imei" : "troca_imei2";
-    const updatePayload: Record<string, string> = { [urlCol]: publicUrl };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatePayload: Record<string, any> = { [urlCol]: publicUrl };
     if (both.serial) updatePayload[colSerial] = both.serial;
     if (both.imei) updatePayload[colImei] = both.imei;
+
+    // === IMEI ANTIFRAUDE — consulta Infosimples (Anatel/Celular Legal) ===
+    // Se o OCR extraiu IMEI, consulta automaticamente pra ver se tem restricao
+    // (roubo, furto, perda). Resultado salvo nas colunas troca_imei_status e
+    // troca_imei_consulta_data pra equipe ver no /admin/simulacoes e na
+    // mensagem WhatsApp quando cliente fechar o pedido.
+    //
+    // Nao bloqueia o upload se Infosimples falhar — equipe ainda consegue
+    // consultar manual no site da Anatel.
+    let imeiStatusResult: { status: ImeiStatus; detalhes: string; consultadoEm: string } | null = null;
+    if (both.imei) {
+      const result = await consultarImei(both.imei);
+      imeiStatusResult = { status: result.status, detalhes: result.detalhes, consultadoEm: result.consultadoEm };
+      const colStatus = aparelhoNum === 1 ? "troca_imei_status" : "troca_imei2_status";
+      const colConsultaData = aparelhoNum === 1 ? "troca_imei_consulta_data" : "troca_imei2_consulta_data";
+      const colDetalhes = aparelhoNum === 1 ? "troca_imei_consulta_detalhes" : "troca_imei2_consulta_detalhes";
+      updatePayload[colStatus] = result.status;
+      updatePayload[colConsultaData] = result.consultadoEm;
+      updatePayload[colDetalhes] = result.detalhes;
+      console.log(`[upload-print:imei] aparelho=${aparelhoNum} imei=${both.imei} status=${result.status}`);
+    }
 
     const { error: updateError } = await supabase
       .from("link_compras")
@@ -173,6 +196,10 @@ export async function POST(req: NextRequest) {
       extractedImei: both.imei,
       extractedOk: !!(both.serial || both.imei),
       extractedError: both.error,
+      // Status da consulta Infosimples (se IMEI foi extraido). Frontend pode
+      // usar pra incluir o status no texto WhatsApp que vai pro vendedor.
+      imeiStatus: imeiStatusResult?.status || null,
+      imeiStatusDetalhes: imeiStatusResult?.detalhes || null,
     });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

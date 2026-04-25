@@ -207,6 +207,14 @@ export default function AdminPage() {
     troca_print_imei_url: string | null;
     troca_print_serial2_url: string | null;
     troca_print_imei2_url: string | null;
+    // IMEI extraido do print pelo OCR + status da consulta antifraude (Anatel
+    // via Infosimples). Status: "OK" | "BLOQUEADO" | "ERRO" | null.
+    troca_imei: string | null;
+    troca_imei2: string | null;
+    troca_imei_status: string | null;
+    troca_imei2_status: string | null;
+    troca_imei_consulta_detalhes: string | null;
+    troca_imei2_consulta_detalhes: string | null;
     simulacao_id: string | null;
     entrega_id: string | null;
     observacao: string | null;
@@ -999,6 +1007,47 @@ export default function AdminPage() {
                                 <p className="text-[10px] text-purple-700 mb-0.5">IMEI — Aparelho 2</p>
                                 <img src={h.troca_print_imei2_url} alt="IMEI 2" className="w-full rounded-lg border border-purple-300 hover:border-purple-500 object-cover max-h-40" />
                               </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Verificacao Antifraude — consulta Anatel/Celular Legal via Infosimples
+                          rodada automaticamente quando OCR extraiu o IMEI. Visual claro
+                          (verde = ok, vermelho = bloqueado, amarelo = erro/consultar manual). */}
+                      {(h.troca_imei_status || h.troca_imei2_status) && (
+                        <div className="border-t border-purple-300 pt-2 mt-2">
+                          <p className="text-[10px] font-bold uppercase text-purple-700 mb-2">🔍 Verificação antifraude (Anatel)</p>
+                          <div className="space-y-1.5">
+                            {h.troca_imei && h.troca_imei_status && (
+                              <div className={`flex items-start gap-2 px-2 py-1.5 rounded text-[11px] ${
+                                h.troca_imei_status === "OK" ? "bg-green-50 border border-green-300" :
+                                h.troca_imei_status === "BLOQUEADO" ? "bg-red-50 border border-red-400" :
+                                "bg-yellow-50 border border-yellow-300"
+                              }`}>
+                                <span className="font-bold flex-shrink-0">
+                                  {h.troca_imei_status === "OK" ? "✅" : h.troca_imei_status === "BLOQUEADO" ? "❌" : "⚠️"}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold">Aparelho 1 — IMEI {h.troca_imei}</p>
+                                  <p className="text-[10px] opacity-80">{h.troca_imei_consulta_detalhes || h.troca_imei_status}</p>
+                                </div>
+                              </div>
+                            )}
+                            {h.troca_imei2 && h.troca_imei2_status && (
+                              <div className={`flex items-start gap-2 px-2 py-1.5 rounded text-[11px] ${
+                                h.troca_imei2_status === "OK" ? "bg-green-50 border border-green-300" :
+                                h.troca_imei2_status === "BLOQUEADO" ? "bg-red-50 border border-red-400" :
+                                "bg-yellow-50 border border-yellow-300"
+                              }`}>
+                                <span className="font-bold flex-shrink-0">
+                                  {h.troca_imei2_status === "OK" ? "✅" : h.troca_imei2_status === "BLOQUEADO" ? "❌" : "⚠️"}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold">Aparelho 2 — IMEI {h.troca_imei2}</p>
+                                  <p className="text-[10px] opacity-80">{h.troca_imei2_consulta_detalhes || h.troca_imei2_status}</p>
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
