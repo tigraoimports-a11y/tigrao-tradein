@@ -142,6 +142,13 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     site_footer_line1?: string; site_footer_cnpj?: string;
     site_feedbacks_enabled?: boolean | string;
     site_feedbacks?: { foto_url: string; nome: string; texto: string }[];
+    // Site config — Fase 4 (cor da marca + toggles de visibilidade)
+    site_brand_color?: string;
+    site_show_tagline?: boolean | string;
+    site_show_subtitle?: boolean | string;
+    site_show_trust_badges?: boolean | string;
+    site_show_social_proof?: boolean | string;
+    site_show_footer_cnpj?: boolean | string;
   }) | null>(null);
   // Mapa dinamico de WhatsApp por vendedor — usa DB se disponivel
   const VENDEDOR_WHATSAPP = useMemo(() => {
@@ -213,6 +220,39 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     if (Array.isArray(fromDb)) return fromDb.filter((f) => f && f.foto_url);
     return [];
   })();
+
+  // === Site config Fase 4 — cor da marca + toggles de visibilidade ===
+  // Helper pra interpretar boolean | string | undefined com default true
+  // (mantem compatibilidade com landing v2 — antes da Fase 4 tudo era visivel).
+  const boolFromConfig = (raw: boolean | string | undefined, dflt: boolean): boolean => {
+    if (raw === undefined || raw === null) return dflt;
+    return raw === true || raw === "true";
+  };
+  const siteShowTagline = boolFromConfig(tradeinConfig?.site_show_tagline, true);
+  const siteShowSubtitle = boolFromConfig(tradeinConfig?.site_show_subtitle, true);
+  const siteShowTrustBadges = boolFromConfig(tradeinConfig?.site_show_trust_badges, true);
+  const siteShowSocialProof = boolFromConfig(tradeinConfig?.site_show_social_proof, true);
+  const siteShowFooterCnpj = boolFromConfig(tradeinConfig?.site_show_footer_cnpj, true);
+  // Cor primaria custom — sobrescreve --ti-accent do tema. Se admin nao
+  // setou, usa a cor do tema atual (laranja TigraoImports padrao).
+  const customBrandColor: string | null = (() => {
+    const c = tradeinConfig?.site_brand_color;
+    if (!c || typeof c !== "string") return null;
+    // Validacao basica de hex (#RGB ou #RRGGBB)
+    if (!/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(c.trim())) return null;
+    return c.trim();
+  })();
+  // CSS vars finais: usa as do tema + sobrescreve com cor custom se setado.
+  // Inclui --ti-accent-light com 12% de opacidade (hex8) pra backgrounds suaves.
+  const finalCssVars = useMemo(() => {
+    if (!customBrandColor) return cssVars;
+    return {
+      ...cssVars,
+      "--ti-accent": customBrandColor,
+      "--ti-accent-light": customBrandColor + "1F", // ~12% opacity
+      "--ti-accent-text": customBrandColor,
+    };
+  }, [cssVars, customBrandColor]);
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
@@ -444,7 +484,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
   if (loading) {
     return (
-      <main className="min-h-dvh flex items-center justify-center" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
+      <main className="min-h-dvh flex items-center justify-center" style={{ backgroundColor: tema.pageBg, ...finalCssVars }}>
         <div className="flex flex-col items-center gap-4">
           <div className="w-8 h-8 border-[3px] rounded-full animate-spin" style={{ borderColor: tema.accent, borderTopColor: "transparent" }} />
           <p className="text-[13px]" style={{ color: tema.textMuted }}>Carregando...</p>
@@ -455,7 +495,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
   if (error) {
     return (
-      <main className="min-h-dvh flex items-center justify-center px-4" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
+      <main className="min-h-dvh flex items-center justify-center px-4" style={{ backgroundColor: tema.pageBg, ...finalCssVars }}>
         <div className="text-center">
           <p className="text-[15px] mb-4" style={{ color: tema.error }}>{error}</p>
           <button
@@ -472,7 +512,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
   if (!started && !loading) {
     return (
-      <main className="min-h-dvh flex flex-col items-center justify-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
+      <main className="min-h-dvh flex flex-col items-center justify-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...finalCssVars }}>
         <div className="w-full max-w-[440px] space-y-7 animate-fadeIn">
 
           {/* HEADER COM LOGO REAL — avatar (foto do Andre) + nome.
@@ -490,19 +530,23 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
             </div>
             <div className="text-left">
               <p className="text-[16px] font-bold leading-tight" style={{ color: tema.text }}>{siteHeaderTitle}</p>
-              <p className="text-[11px] leading-tight" style={{ color: "var(--ti-accent, #E8740E)" }}>{siteHeaderTagline}</p>
+              {siteShowTagline && (
+                <p className="text-[11px] leading-tight" style={{ color: "var(--ti-accent, #E8740E)" }}>{siteHeaderTagline}</p>
+              )}
             </div>
           </div>
 
           {/* HEADLINE — gerenciada pelo admin em /admin/configuracoes/site
-              (3 partes — meio destacado em laranja). */}
+              (3 partes — meio destacado em laranja). Subtitulo opcional. */}
           <div className="text-center space-y-3">
             <h1 className="text-[26px] font-bold tracking-tight leading-tight" style={{ color: tema.text }}>
               {siteHeadlineP1} <span style={{ color: "var(--ti-accent, #E8740E)" }}>{siteHeadlineDestaque}</span><br />{siteHeadlineP2}
             </h1>
-            <p className="text-[15px] leading-relaxed" style={{ color: tema.textMuted }}>
-              {siteSubtitle}
-            </p>
+            {siteShowSubtitle && (
+              <p className="text-[15px] leading-relaxed" style={{ color: tema.textMuted }}>
+                {siteSubtitle}
+              </p>
+            )}
           </div>
 
           {/* CTA verde — texto editavel via admin */}
@@ -514,18 +558,23 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
             {siteCtaText}
           </button>
 
-          {/* Social proof — 5 estrelas + numero de trocas (texto editavel) */}
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-base leading-none">{"\u2B50\u2B50\u2B50\u2B50\u2B50"}</span>
-            <span className="text-[13px] font-semibold" style={{ color: tema.text }}>{siteSocialProofText}</span>
-          </div>
+          {/* Social proof — 5 estrelas + numero de trocas (admin pode esconder) */}
+          {siteShowSocialProof && (
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-base leading-none">{"\u2B50\u2B50\u2B50\u2B50\u2B50"}</span>
+              <span className="text-[13px] font-semibold" style={{ color: tema.text }}>{siteSocialProofText}</span>
+            </div>
+          )}
 
-          {/* Trust badges — 3 textos editaveis com checkmark laranja */}
-          <div className="flex items-center justify-center gap-4 text-[12px]" style={{ color: tema.textMuted }}>
-            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust1}</span>
-            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust2}</span>
-            <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust3}</span>
-          </div>
+          {/* Trust badges — 3 textos editaveis com checkmark laranja
+              (admin pode esconder) */}
+          {siteShowTrustBadges && (
+            <div className="flex items-center justify-center gap-4 text-[12px]" style={{ color: tema.textMuted }}>
+              <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust1}</span>
+              <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust2}</span>
+              <span><span style={{ color: "var(--ti-accent, #E8740E)" }}>{"\u2713"}</span> {siteTrust3}</span>
+            </div>
+          )}
 
           {/* SECAO INFLUENCERS — gerenciada pelo admin em
               /admin/configuracoes/site. Esconde se admin desativou ou se
@@ -578,11 +627,13 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
           )}
 
           {/* FOOTER — credibilidade (5 anos + CNPJ). Textos editaveis pelo
-              admin. Sem endereco exposto (escritorio fechado). */}
+              admin. CNPJ pode ser escondido via toggle. Sem endereco exposto. */}
           <div className="pt-5 text-center space-y-1" style={{ borderTop: `1px solid ${tema.cardBorder}` }}>
             <p className="text-[12px] font-semibold" style={{ color: tema.text }}>{siteHeaderTitle}</p>
             <p className="text-[11px]" style={{ color: tema.textMuted }}>{siteFooterLine1}</p>
-            <p className="text-[10px]" style={{ color: tema.textDim }}>{siteFooterCnpj}</p>
+            {siteShowFooterCnpj && (
+              <p className="text-[10px]" style={{ color: tema.textDim }}>{siteFooterCnpj}</p>
+            )}
           </div>
         </div>
       </main>
@@ -595,7 +646,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
   const totalSteps = 5;
 
   return (
-    <main className="min-h-dvh flex flex-col items-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
+    <main className="min-h-dvh flex flex-col items-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...finalCssVars }}>
       {/* Honeypot anti-bot — invisível pra humanos (off-screen + aria-hidden).
           Bots que fazem scraping preenchem todos os inputs; o valor é lido via
           document.getElementById('tradein-honeypot') nos handlers de submit e
