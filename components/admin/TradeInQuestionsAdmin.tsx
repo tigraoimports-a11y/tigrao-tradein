@@ -525,6 +525,20 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                     </div>
 
                     <div>
+                      <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Unidade (sufixo no resumo)</label>
+                      <input
+                        type="text"
+                        value={typeof (q.config as Record<string, unknown>).unit === "string" ? (q.config.unit as string) : ""}
+                        onChange={(e) => updateConfig(q.id, "unit", e.target.value)}
+                        placeholder='Ex: "%" ou " ciclos" (com espaco no inicio)'
+                        className="mt-1 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                      />
+                      <p className="mt-1 text-[11px] text-[#86868B]">
+                        Anexa ao numero no resumo: <code>84%</code> · <code>150 ciclos</code>. Vazio = so o numero.
+                      </p>
+                    </div>
+
+                    <div>
                       <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Placeholder do input</label>
                       <input
                         type="text"

@@ -116,6 +116,13 @@ function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
     return labels.length > 0 ? labels.join(", ") : "—";
   }
   if (typeof value === "boolean") return value ? "Sim" : "Nao";
+  // Numeric: anexa unidade cadastrada no q.config.unit (ex: "%", " ciclos").
+  // Saude da bateria => "84%". Ciclos => "150 ciclos". Sem unidade, so o numero.
+  if (q.tipo === "numeric" && typeof value === "number") {
+    const cfg = (q.config || {}) as Record<string, unknown>;
+    const unit = typeof cfg.unit === "string" ? cfg.unit : "";
+    return unit ? `${value}${unit}` : String(value);
+  }
   const opt = q.opcoes.find((o) => o.value === value);
   return opt?.label || String(value);
 }
