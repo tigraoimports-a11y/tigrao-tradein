@@ -4,7 +4,10 @@ import { getSupabase } from "@/lib/supabase";
 import { consultarImei, type ImeiStatus } from "@/lib/infosimples";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 90s pra acomodar OCR Claude (5-15s) + Infosimples com ate 2 tentativas
+// (30s + 1s + 30s = 61s worst-case). Antes era 60s mas em consultas lentas
+// da Anatel chegamos no limite.
+export const maxDuration = 90;
 
 /**
  * Upload do print do iPhone (N° de Série ou IMEI) pra link_compras.
