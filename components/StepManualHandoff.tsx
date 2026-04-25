@@ -72,15 +72,19 @@ function findSelectedOption(q: TradeInQuestion, value: unknown) {
   return q.opcoes.find((o) => o.value === value);
 }
 
-/** Heuristica pra construir uma frase completa de yesno SEM precisar do admin
- *  cadastrar `summaryLabel`. Strip do "?" no final do titulo + prefixo "Não"
- *  (com lowercase do primeiro caractere) quando a resposta for negativa.
- *  Ex: "Possui o carregador completo original?" + Sim → "Possui o carregador completo original".
- *      "Possui o carregador completo original?" + Não → "Não possui o carregador completo original". */
+/** Heuristica pra construir uma frase completa de yesno. Pega `q.config.summaryLabel`
+ *  se setado pelo admin (mais conciso pro resumo); senao usa o titulo da
+ *  pergunta sem o "?". Pra resposta negativa, prefixa "Não " com lowercase
+ *  do primeiro caractere.
+ *  Ex: config.summaryLabel="Possui o carregador completo original" + Sim →
+ *      "Possui o carregador completo original".
+ *  Ex: titulo="Possui o carregador?" + Não → "Não possui o carregador". */
 function buildYesnoSummary(q: TradeInQuestion, value: unknown): string | null {
   if (q.tipo !== "yesno") return null;
-  const titulo = (q.titulo || "").trim().replace(/\?+\s*$/, "").trim();
-  if (!titulo) return null;
+  const cfgLabel = (q.config as Record<string, unknown>)?.summaryLabel;
+  const source = (typeof cfgLabel === "string" && cfgLabel.trim()) ? cfgLabel : q.titulo || "";
+  const base = source.trim().replace(/\?+\s*$/, "").trim();
+  if (!base) return null;
   let isPositive: boolean;
   if (typeof value === "boolean") {
     isPositive = value;
@@ -92,8 +96,16 @@ function buildYesnoSummary(q: TradeInQuestion, value: unknown): string | null {
   } else {
     return null;
   }
-  if (isPositive) return titulo;
-  return `Não ${titulo[0].toLowerCase()}${titulo.slice(1)}`;
+  if (isPositive) return base;
+  return `Não ${base[0].toLowerCase()}${base.slice(1)}`;
+}
+
+/** Pega o titulo "bold" pro resumo (numeric e fallback kv): usa
+ *  `q.config.summaryLabel` quando setado, senao o titulo da pergunta. */
+function summaryBold(q: TradeInQuestion): string {
+  const cfgLabel = (q.config as Record<string, unknown>)?.summaryLabel;
+  if (typeof cfgLabel === "string" && cfgLabel.trim()) return cfgLabel.trim();
+  return q.titulo || q.slug;
 }
 
 // Formata uma resposta dinamica em string human-readable (so o valor, sem o titulo).
@@ -170,19 +182,19 @@ function buildOrderedLines(
           return { slug: slugN, ordem, text: yesno };
         }
         // Numeric com quick-value cadastrado: quando o valor bate exatamente,
-        // mostra o rotulo (ex: "Saude bateria: Normal" em vez de "100").
+        // mostra o rotulo (ex: "Saude da bateria: Normal" em vez de "100").
         if (q.tipo === "numeric" && typeof raw === "number") {
           const cfg = (q.config || {}) as Record<string, unknown>;
           const quickLabel = typeof cfg.quickLabel === "string" && cfg.quickLabel.trim() ? cfg.quickLabel : null;
           const quickValue = typeof cfg.quickValue === "number" ? cfg.quickValue : null;
           if (quickLabel !== null && quickValue !== null && raw === quickValue) {
-            return { slug: slugN, ordem, bold: q.titulo || q.slug, text: quickLabel };
+            return { slug: slugN, ordem, bold: summaryBold(q), text: quickLabel };
           }
         }
       }
       const value = formatExtraAnswer(q, raw);
       if (value === "—") return null;
-      return { slug: slugN, ordem, bold: q.titulo || q.slug, text: value };
+      return { slug: slugN, ordem, bold: summaryBold(q), text: value };
     })
     .filter((l): l is SummaryLine => l !== null);
 

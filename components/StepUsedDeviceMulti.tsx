@@ -1075,9 +1075,12 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   cadastra uma pergunta numeric de "Saude de bateria %" via
                   /admin/simulacoes e configura `quickLabel`/`quickValue` ali.
                   O botao aparece automaticamente abaixo do input dinamico. */}
-              {/* Ajuda "Como descobrir a saude/ciclos da bateria?" — texto padrao
-                  por device_type, sobrescrivel via labels.help_battery_{device}
-                  em /admin/simulacoes. Suporta markdown (negrito, italico, ## titulo). */}
+              {/* Ajuda "Como descobrir a saude/ciclos da bateria?". Prioridade:
+                  1) helpText/helpTitle cadastrado na propria pergunta `battery`
+                     em /admin/simulacoes (mais especifico — admin edita inline)
+                  2) labels.help_battery_{device} de "Textos do Formulario" (legacy)
+                  3) defaults hardcoded
+                  Suporta markdown (negrito, italico, ## titulo). */}
               {(() => {
                 const defaults: Record<string, string> = {
                   iphone: "## Como descobrir a saúde da bateria?\n\n1. Abra **Ajustes** no seu iPhone\n2. Toque em **Bateria**\n3. Toque em **Saúde e Carregamento da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
@@ -1085,12 +1088,25 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                   macbook: "## Como descobrir os ciclos de bateria?\n\n1. Clique no menu **Apple** > **Sobre Este Mac**\n2. Clique em **Mais Informações**\n3. Role até o final e clique em **Relatório do Sistema**\n4. Na barra lateral, clique em **Energia**\n5. Veja **Contagem de Ciclos**",
                   watch: "## Como descobrir a saúde da bateria?\n\n1. No Apple Watch, abra **Ajustes**\n2. Toque em **Bateria**\n3. Toque em **Saúde da Bateria**\n4. Veja o valor em **Capacidade Máxima**",
                 };
-                const key = `help_battery_${deviceType}`;
-                const raw = labels?.[key]?.trim() || defaults[deviceType] || "";
+                // 1. helpText/helpTitle direto da pergunta `battery` no qc — quando
+                // admin edita inline na pergunta, isso vence. Slug normalizado
+                // (cliente ja recebe `battery` puro depois do strip de sufixo).
+                const batteryQ = qc?.find((q) => q.slug === "battery" && q.ativo !== false);
+                const cfg = (batteryQ?.config || {}) as Record<string, unknown>;
+                const cfgHelp = typeof cfg.helpText === "string" && cfg.helpText.trim() ? cfg.helpText : "";
+                const cfgTitle = typeof cfg.helpTitle === "string" && cfg.helpTitle.trim() ? cfg.helpTitle : "";
+                let raw = cfgHelp;
+                let titleOverride = cfgTitle;
+                if (!raw) {
+                  // 2. labels.help_battery_{device} legacy
+                  const key = `help_battery_${deviceType}`;
+                  raw = (labels?.[key]?.trim() || defaults[deviceType] || "");
+                }
                 if (!raw) return null;
-                // Extrai primeiro `## Titulo` como summary; resto vai no body.
+                // Extrai primeiro `## Titulo` como summary; resto vai no body
+                // (so quando o admin nao mandou um helpTitle separado).
                 const headerMatch = raw.match(/^## (.+)$/m);
-                const title = headerMatch ? headerMatch[1] : "Como descobrir a saúde da bateria?";
+                const title = titleOverride || (headerMatch ? headerMatch[1] : "Como descobrir a saúde da bateria?");
                 const body = headerMatch ? raw.replace(/^## .+$/m, "").trim() : raw;
                 return (
                   <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
