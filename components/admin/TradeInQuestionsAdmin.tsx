@@ -365,37 +365,52 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                     <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Opções de resposta</label>
                     <div className="mt-2 space-y-2">
                       {q.opcoes.map((opt, oi) => (
-                        <div key={oi} className="flex items-center gap-2 bg-[#F5F5F7] rounded-lg px-3 py-2">
-                          <input
-                            value={opt.label}
-                            onChange={(e) => updateOption(q.id, oi, { label: e.target.value })}
-                            className="flex-1 px-2 py-1 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
-                            placeholder="Label"
-                          />
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-[#86868B]">R$</span>
+                        <div key={oi} className="bg-[#F5F5F7] rounded-lg px-3 py-2 space-y-2">
+                          <div className="flex items-center gap-2">
                             <input
-                              type="number"
-                              value={opt.discount}
-                              onChange={(e) => updateOption(q.id, oi, { discount: Number(e.target.value) })}
-                              className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
+                              value={opt.label}
+                              onChange={(e) => updateOption(q.id, oi, { label: e.target.value })}
+                              className="flex-1 px-2 py-1 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                              placeholder="Label do botao"
+                            />
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-[#86868B]">R$</span>
+                              <input
+                                type="number"
+                                value={opt.discount}
+                                onChange={(e) => updateOption(q.id, oi, { discount: Number(e.target.value) })}
+                                className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
+                              />
+                            </div>
+                            {opt.reject && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700">Rejeita</span>
+                            )}
+                            <label className="flex items-center gap-1 text-[10px] text-[#86868B]">
+                              <input
+                                type="checkbox"
+                                checked={!!opt.reject}
+                                onChange={(e) => updateOption(q.id, oi, { reject: e.target.checked })}
+                                className="w-3 h-3 accent-red-500"
+                              />
+                              Rejeitar
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider whitespace-nowrap">No resumo:</span>
+                            <input
+                              value={opt.summaryLabel || ""}
+                              onChange={(e) => updateOption(q.id, oi, { summaryLabel: e.target.value })}
+                              className="flex-1 px-2 py-1 rounded border border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                              placeholder="Frase completa (ex: Possui o carregador completo original da Apple)"
                             />
                           </div>
-                          {opt.reject && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700">Rejeita</span>
-                          )}
-                          <label className="flex items-center gap-1 text-[10px] text-[#86868B]">
-                            <input
-                              type="checkbox"
-                              checked={!!opt.reject}
-                              onChange={(e) => updateOption(q.id, oi, { reject: e.target.checked })}
-                              className="w-3 h-3 accent-red-500"
-                            />
-                            Rejeitar
-                          </label>
                         </div>
                       ))}
                     </div>
+                    <p className="mt-2 text-[11px] text-[#86868B]">
+                      <strong>Label do botão</strong>: aparece no formulário (ex: &quot;Sim&quot; / &quot;Nao&quot;).{" "}
+                      <strong>No resumo</strong> (opcional): frase completa pro StepManualHandoff e WhatsApp. Se vazio, mostra &quot;titulo: label&quot;.
+                    </p>
                   </div>
                 )}
 

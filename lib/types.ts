@@ -43,6 +43,10 @@ export interface TradeInQuestionOption {
   variant?: "default" | "success" | "error";
   reject?: boolean;
   rejectMessage?: string;
+  /** Frase completa exibida no resumo do produto (StepManualHandoff + WhatsApp).
+   *  Quando setado, o resumo mostra apenas essa frase em vez de "titulo: label".
+   *  Ex: opção "Sim" pode ter summaryLabel="Possui o carregador completo original da Apple". */
+  summaryLabel?: string;
 }
 
 /** Pergunta configurável do trade-in */

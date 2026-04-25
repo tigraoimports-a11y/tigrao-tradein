@@ -268,7 +268,8 @@ export function getConditionLines(condition: ConditionData, deviceType?: DeviceT
   lines.push(condition.hasDamage ? "Com trincado/defeito" : "Sem trincado/defeito");
 
   if (condition.warrantyMonth !== null) {
-    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}`);
+    const yearSuffix = condition.warrantyYear ? ` de ${condition.warrantyYear}` : "";
+    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}`);
   }
 
   // MacBook: campo battery armazena CICLOS (0..9999), demais dispositivos
@@ -376,7 +377,8 @@ export function getIPadConditionLines(condition: IPadConditionData): string[] {
   const lines: string[] = [];
 
   if (condition.warrantyMonth !== null) {
-    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}`);
+    const yearSuffix = condition.warrantyYear ? ` de ${condition.warrantyYear}` : "";
+    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}`);
   }
 
   lines.push(`Saude bateria ${condition.battery}%`);
@@ -450,7 +452,8 @@ export function getMacBookConditionLines(condition: MacBookConditionData): strin
   const lines: string[] = [];
 
   if (condition.warrantyMonth !== null) {
-    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}`);
+    const yearSuffix = condition.warrantyYear ? ` de ${condition.warrantyYear}` : "";
+    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}${yearSuffix}`);
   }
 
   lines.push(`Ciclos de bateria: ${condition.batteryCycles}`);

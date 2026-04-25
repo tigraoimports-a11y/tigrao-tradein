@@ -40,7 +40,16 @@ interface StepManualHandoffProps {
   onGoToStep?: (step: number) => void;
 }
 
-// Formata uma resposta dinamica em string human-readable.
+/** Resolve a opcao escolhida pelo cliente. Aceita boolean (yes/no) ou string. */
+function findSelectedOption(q: TradeInQuestion, value: unknown) {
+  if (typeof value === "boolean") {
+    const target = value ? "yes" : "no";
+    return q.opcoes.find((o) => o.value === target || o.value === (value ? "sim" : "nao"));
+  }
+  return q.opcoes.find((o) => o.value === value);
+}
+
+// Formata uma resposta dinamica em string human-readable (so o valor, sem o titulo).
 function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
   if (value === undefined || value === null || value === "") return "—";
   if (Array.isArray(value)) {
@@ -52,12 +61,32 @@ function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
   return opt?.label || String(value);
 }
 
+/** Linha pro resumo do produto. `fullSentence: true` indica que `value` ja e a
+ *  frase completa (ex: "Possui o carregador completo original da Apple") e o
+ *  render deve esconder o `label:` prefix. */
+type ExtraLine = { label: string; value: string; fullSentence?: boolean };
+
 // Converte respostas dinamicas em pares { label, value } pra renderizar/exibir.
-function formatExtraLines(questions: TradeInQuestion[] | undefined, answers: Record<string, unknown> | undefined): { label: string; value: string }[] {
+// Pra perguntas com `summaryLabel` na opcao escolhida, retorna a frase completa
+// como `fullSentence` — o resumo mostra so a frase, sem o titulo da pergunta.
+function formatExtraLines(questions: TradeInQuestion[] | undefined, answers: Record<string, unknown> | undefined): ExtraLine[] {
   if (!questions || !answers) return [];
   return questions
-    .map((q) => ({ label: q.titulo || q.slug, value: formatExtraAnswer(q, answers[q.slug]) }))
-    .filter((l) => l.value !== "—");
+    .map((q): ExtraLine | null => {
+      const raw = answers[q.slug];
+      if (raw === undefined || raw === null || raw === "") return null;
+      // Multiselect / Array — sem suporte a summaryLabel por enquanto, cai no kv padrao
+      if (!Array.isArray(raw)) {
+        const opt = findSelectedOption(q, raw);
+        if (opt?.summaryLabel) {
+          return { label: q.titulo || q.slug, value: opt.summaryLabel, fullSentence: true };
+        }
+      }
+      const value = formatExtraAnswer(q, raw);
+      if (value === "—") return null;
+      return { label: q.titulo || q.slug, value };
+    })
+    .filter((l): l is ExtraLine => l !== null);
 }
 
 /**
@@ -106,8 +135,9 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
     if (usedColor) lines.push(`Cor: ${usedColor}`);
     const condLines = getAnyConditionLines(deviceType, condition);
     if (condLines.length > 0) lines.push(`Condição: ${condLines.join(", ")}`);
-    // Perguntas dinamicas (cadastradas via /admin/simulacoes)
-    for (const l of extraLines1) lines.push(`${l.label}: ${l.value}`);
+    // Perguntas dinamicas (cadastradas via /admin/simulacoes). Pra opcoes com
+    // summaryLabel cadastrado, mostra so a frase completa (sem prefixo "label:").
+    for (const l of extraLines1) lines.push(l.fullSentence ? l.value : `${l.label}: ${l.value}`);
 
     if (hasSecond && condition2 && deviceType2) {
       lines.push("", `*Aparelho 2:*`);
@@ -115,7 +145,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
       if (usedColor2) lines.push(`Cor: ${usedColor2}`);
       const condLines2 = getAnyConditionLines(deviceType2, condition2);
       if (condLines2.length > 0) lines.push(`Condição: ${condLines2.join(", ")}`);
-      for (const l of extraLines2) lines.push(`${l.label}: ${l.value}`);
+      for (const l of extraLines2) lines.push(l.fullSentence ? l.value : `${l.label}: ${l.value}`);
     }
 
     lines.push("");
@@ -129,10 +159,11 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
     try {
       const condLines = getAnyConditionLines(deviceType, condition);
       const condLines2 = hasSecond && condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
-      // Respostas dinamicas viram linhas "Label: Valor" e entram em condicaoLinhas
-      // pra chegar no admin junto com as condicoes hardcoded.
-      const extraLinesStr1 = extraLines1.map((l) => `${l.label}: ${l.value}`);
-      const extraLinesStr2 = extraLines2.map((l) => `${l.label}: ${l.value}`);
+      // Respostas dinamicas viram linhas "Label: Valor" (ou frase completa
+      // quando summaryLabel cadastrado) e entram em condicaoLinhas pra chegar
+      // no admin junto com as condicoes hardcoded.
+      const extraLinesStr1 = extraLines1.map((l) => l.fullSentence ? l.value : `${l.label}: ${l.value}`);
+      const extraLinesStr2 = extraLines2.map((l) => l.fullSentence ? l.value : `${l.label}: ${l.value}`);
       await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -215,7 +246,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
                 ))}
                 {extraLines1.map((l, i) => (
                   <p key={`e-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
-                    <span className="font-medium">{l.label}:</span> {l.value}
+                    {l.fullSentence ? l.value : (<><span className="font-medium">{l.label}:</span> {l.value}</>)}
                   </p>
                 ))}
               </div>
@@ -237,7 +268,7 @@ export default function StepManualHandoff(p: StepManualHandoffProps) {
                     ))}
                     {extraLines2.map((l, i) => (
                       <p key={`e2-${i}`} className="text-[12px]" style={{ color: "var(--ti-muted)" }}>
-                        <span className="font-medium">{l.label}:</span> {l.value}
+                        {l.fullSentence ? l.value : (<><span className="font-medium">{l.label}:</span> {l.value}</>)}
                       </p>
                     ))}
                   </div>
