@@ -86,7 +86,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     return () => clearInterval(id);
   }, [temaParam, temaDia, temaNoite]);
 
-  const { trackSiteView, trackStep, trackQuestion, trackComplete, trackAction } = useTradeInAnalytics();
+  const { trackSiteView, trackStep, trackQuestion, trackComplete, trackAction, setDeviceContext } = useTradeInAnalytics();
 
   useEffect(() => { trackSiteView(); }, [trackSiteView]);
 
@@ -378,6 +378,9 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
   function handleDeviceSelect(dt: MultiDeviceType) {
     setSelectedDeviceType(dt);
+    // Propaga pro hook de analytics — todos eventos seguintes (step_view,
+    // question_answer, etc) ja vao com device_type=dt pra cruzar drop-off.
+    setDeviceContext(dt);
     trackAction(`device_type_${dt}`);
     setStep(1);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -470,6 +473,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
   function handleReset() {
     setStep(0); setResetKey(k => k + 1);
     setSelectedDeviceType(null);
+    setDeviceContext(null);
     setDeviceType("iphone"); setDeviceType2("iphone");
     setUsedModel(""); setUsedStorage(""); setTradeInValue(0);
     setUsedModel2(""); setUsedStorage2(""); setTradeInValue2(0);
