@@ -226,41 +226,98 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.qtd - a.qtd);
 
     // ---------------------------------------------------------------
-    // 6. VENDAS POR REGIAO
+    // 6. VENDAS POR REGIAO + CRESCIMENTO MES A MES
     // ---------------------------------------------------------------
-    const bairroMap: Record<string, { qtd: number; receita: number }> = {};
-    const cidadeMap: Record<string, { qtd: number; receita: number }> = {};
-    const estadoMap: Record<string, { qtd: number }> = {};
+    // Agrupa vendas em 2 mapas (atual + anterior) por bairro/cidade/UF, e
+    // calcula delta% pra cada região. Mostra onde o negócio esta crescendo
+    // ou caindo geograficamente.
+    type RegMap = Record<string, { qtd: number; receita: number }>;
+    const acumular = (vendas: typeof vendasMesAtual) => {
+      const bairros: RegMap = {};
+      const cidades: RegMap = {};
+      const estados: Record<string, { qtd: number }> = {};
+      for (const v of vendas) {
+        const bairro = v.bairro || "N/I";
+        const cidade = v.cidade || "N/I";
+        const uf = v.uf || "N/I";
+        const receita = Number(v.preco_vendido || 0);
+        if (!bairros[bairro]) bairros[bairro] = { qtd: 0, receita: 0 };
+        bairros[bairro].qtd++;
+        bairros[bairro].receita += receita;
+        if (!cidades[cidade]) cidades[cidade] = { qtd: 0, receita: 0 };
+        cidades[cidade].qtd++;
+        cidades[cidade].receita += receita;
+        if (!estados[uf]) estados[uf] = { qtd: 0 };
+        estados[uf].qtd++;
+      }
+      return { bairros, cidades, estados };
+    };
 
-    for (const v of vendasMesAtual) {
-      const bairro = v.bairro || "N/I";
-      const cidade = v.cidade || "N/I";
-      const uf = v.uf || "N/I";
+    const regAtual = acumular(vendasMesAtual);
+    const regAnterior = acumular(vendasMesAnterior);
 
-      if (!bairroMap[bairro]) bairroMap[bairro] = { qtd: 0, receita: 0 };
-      bairroMap[bairro].qtd++;
-      bairroMap[bairro].receita += Number(v.preco_vendido || 0);
+    // Helper: calcula delta% entre 2 valores. Cresce de 0 → N retorna 100*N
+    // (sentido "do zero pra qualquer coisa = crescimento alto"). Decresce de
+    // N → 0 retorna -100. Quando ambos sao 0, retorna 0.
+    const delta = (atual: number, anterior: number): number => {
+      if (anterior === 0 && atual === 0) return 0;
+      if (anterior === 0) return 100 * atual; // saiu do zero — destaca como ganho grande
+      return Math.round(((atual - anterior) / anterior) * 1000) / 10; // 1 casa decimal
+    };
 
-      if (!cidadeMap[cidade]) cidadeMap[cidade] = { qtd: 0, receita: 0 };
-      cidadeMap[cidade].qtd++;
-      cidadeMap[cidade].receita += Number(v.preco_vendido || 0);
+    // Une as chaves dos 2 meses (regiao pode ter sumido ou aparecido). Aceita
+    // qualquer Record de objeto pra reusar com bairros/cidades (com receita)
+    // e estados (so qtd).
+    const unirChaves = (a: Record<string, unknown>, b: Record<string, unknown>): string[] =>
+      [...new Set([...Object.keys(a), ...Object.keys(b)])];
 
-      if (!estadoMap[uf]) estadoMap[uf] = { qtd: 0 };
-      estadoMap[uf].qtd++;
-    }
+    const compararRegioes = (mapAtual: RegMap, mapAnterior: RegMap) =>
+      unirChaves(mapAtual, mapAnterior).map((nome) => {
+        const at = mapAtual[nome] || { qtd: 0, receita: 0 };
+        const an = mapAnterior[nome] || { qtd: 0, receita: 0 };
+        return {
+          nome,
+          qtd: at.qtd,
+          receita: at.receita,
+          qtdAnterior: an.qtd,
+          receitaAnterior: an.receita,
+          deltaQtd: delta(at.qtd, an.qtd),
+          deltaReceita: delta(at.receita, an.receita),
+        };
+      });
 
     const vendasPorRegiao = {
-      bairros: Object.entries(bairroMap)
-        .map(([nome, d]) => ({ nome, qtd: d.qtd, receita: d.receita }))
+      // Top 15 do mes atual por quantidade (mantem estrutura antiga mais 4 campos
+      // novos: qtdAnterior, receitaAnterior, deltaQtd, deltaReceita)
+      bairros: compararRegioes(regAtual.bairros, regAnterior.bairros)
         .sort((a, b) => b.qtd - a.qtd)
         .slice(0, 15),
-      cidades: Object.entries(cidadeMap)
-        .map(([nome, d]) => ({ nome, qtd: d.qtd, receita: d.receita }))
+      cidades: compararRegioes(regAtual.cidades, regAnterior.cidades)
         .sort((a, b) => b.qtd - a.qtd)
         .slice(0, 15),
-      estados: Object.entries(estadoMap)
-        .map(([nome, d]) => ({ nome, qtd: d.qtd }))
+      estados: unirChaves(regAtual.estados, regAnterior.estados)
+        .map((nome) => {
+          const at = regAtual.estados[nome] || { qtd: 0 };
+          const an = regAnterior.estados[nome] || { qtd: 0 };
+          return {
+            nome,
+            qtd: at.qtd,
+            qtdAnterior: an.qtd,
+            deltaQtd: delta(at.qtd, an.qtd),
+          };
+        })
         .sort((a, b) => b.qtd - a.qtd),
+      // Listas separadas pra "destaques" — top 5 que MAIS cresceram e MAIS cairam
+      // (ordem de delta, nao de qtd absoluta). So inclui regioes com pelo menos
+      // 1 venda no mes atual ou anterior.
+      destaquesCrescimento: compararRegioes(regAtual.bairros, regAnterior.bairros)
+        .filter((r) => r.qtd > 0 || r.qtdAnterior > 0)
+        .sort((a, b) => b.deltaQtd - a.deltaQtd)
+        .slice(0, 5),
+      destaquesQueda: compararRegioes(regAtual.bairros, regAnterior.bairros)
+        .filter((r) => r.qtdAnterior > 0) // so quem ja vendeu antes pode "cair"
+        .sort((a, b) => a.deltaQtd - b.deltaQtd)
+        .slice(0, 5),
     };
 
     // ---------------------------------------------------------------

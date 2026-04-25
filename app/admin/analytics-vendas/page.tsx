@@ -61,9 +61,22 @@ interface OrigemCliente {
   pct: number;
 }
 
+interface RegiaoItem {
+  nome: string;
+  qtd: number;
+  receita?: number;
+  qtdAnterior?: number;
+  receitaAnterior?: number;
+  deltaQtd?: number;
+  deltaReceita?: number;
+}
+
 interface RegiaoData {
-  bairros: { nome: string; qtd: number }[];
-  cidades: { nome: string; qtd: number }[];
+  bairros: RegiaoItem[];
+  cidades: RegiaoItem[];
+  estados?: RegiaoItem[];
+  destaquesCrescimento?: RegiaoItem[];
+  destaquesQueda?: RegiaoItem[];
 }
 
 interface CoresPorModelo {
@@ -710,6 +723,90 @@ export default function AnalyticsVendasPage() {
               </div>
             </div>
           </Section>
+
+          {/* SECTION 8: Crescimento por Regiao (mes-a-mes) */}
+          {(data.regiao.destaquesCrescimento?.length || data.regiao.destaquesQueda?.length) ? (
+            <Section title="Crescimento por Regiao (vs mes anterior)">
+              <p className="text-xs text-[#86868B] mb-4">
+                Compara vendas do mes atual com o anterior. Onde voce esta crescendo, onde esta caindo.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* MAIS CRESCERAM (verde) */}
+                <div>
+                  <h3 className="text-sm font-semibold text-green-700 mb-3">Bairros em alta</h3>
+                  <div className="space-y-2">
+                    {(data.regiao.destaquesCrescimento || []).map((r) => (
+                      <div key={r.nome} className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[#1D1D1F] truncate">{r.nome}</p>
+                          <p className="text-[11px] text-[#86868B]">{r.qtdAnterior ?? 0} → {r.qtd} vendas</p>
+                        </div>
+                        <span className="text-sm font-bold text-green-700 ml-2 shrink-0">
+                          {r.qtdAnterior === 0 ? "novo" : `+${(r.deltaQtd ?? 0).toFixed(0)}%`}
+                        </span>
+                      </div>
+                    ))}
+                    {(!data.regiao.destaquesCrescimento || data.regiao.destaquesCrescimento.length === 0) && (
+                      <p className="text-xs text-[#86868B] italic">Sem dados suficientes ainda.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* MAIS CAIRAM (vermelho) */}
+                <div>
+                  <h3 className="text-sm font-semibold text-red-700 mb-3">Bairros em queda</h3>
+                  <div className="space-y-2">
+                    {(data.regiao.destaquesQueda || []).map((r) => (
+                      <div key={r.nome} className="flex items-center justify-between p-3 rounded-lg bg-red-50 border border-red-200">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[#1D1D1F] truncate">{r.nome}</p>
+                          <p className="text-[11px] text-[#86868B]">{r.qtdAnterior ?? 0} → {r.qtd} vendas</p>
+                        </div>
+                        <span className="text-sm font-bold text-red-700 ml-2 shrink-0">
+                          {(r.deltaQtd ?? 0).toFixed(0)}%
+                        </span>
+                      </div>
+                    ))}
+                    {(!data.regiao.destaquesQueda || data.regiao.destaquesQueda.length === 0) && (
+                      <p className="text-xs text-[#86868B] italic">Nenhum bairro caiu vs mes anterior.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabela completa: top 15 bairros com qtd atual + anterior + delta */}
+              <h3 className="text-sm font-semibold text-[#1D1D1F] mb-3">Comparativo completo (top 15 bairros)</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-[11px] uppercase text-[#86868B] tracking-wide">
+                    <tr className="border-b border-[#E5E5EA]">
+                      <th className="text-left py-2">Bairro</th>
+                      <th className="text-right py-2">Anterior</th>
+                      <th className="text-right py-2">Atual</th>
+                      <th className="text-right py-2">Δ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.regiao.bairros.map((r) => {
+                      const delta = r.deltaQtd ?? 0;
+                      const corDelta = delta > 0 ? "text-green-700" : delta < 0 ? "text-red-700" : "text-[#86868B]";
+                      const sinal = delta > 0 ? "+" : "";
+                      return (
+                        <tr key={r.nome} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFB]">
+                          <td className="py-2 text-[#1D1D1F] font-medium">{r.nome}</td>
+                          <td className="py-2 text-right text-[#86868B]">{r.qtdAnterior ?? 0}</td>
+                          <td className="py-2 text-right text-[#1D1D1F] font-semibold">{r.qtd}</td>
+                          <td className={`py-2 text-right font-semibold ${corDelta}`}>
+                            {r.qtdAnterior === 0 && r.qtd > 0 ? "novo" : `${sinal}${delta.toFixed(0)}%`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          ) : null}
         </>
       )}
     </div>
