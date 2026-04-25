@@ -67,51 +67,62 @@ const WATCH_SERIES_CASES: Record<string, { material: string; cores: string[]; fo
   ],
 };
 
-// Aliases bidirecionais entre o catalogo do admin (que pode usar nomes
-// abreviados ou em ingles) e a nomenclatura Apple oficial. Usado no filtro
-// de cores por material pra nao deixar cor cadastrada de fora so por causa
-// de variacao no nome (ex: "Prata" vs "Prateado", "Slate" vs "Ardosia").
+// Aliases bidirecionais entre o catalogo do admin e a nomenclatura Apple
+// oficial. Catalogo costuma usar nomes PT genericos ("Preto", "Dourado",
+// "Cinza") que mapeiam pra varias cores Apple especificas dependendo do
+// modelo + material. Os aliases tem que ser permissivos pra nao deixar cor
+// cadastrada de fora — o filtro por material da o contexto pra resolver.
+//
 // Chaves e valores normalizados (lowercase, sem acento, hifen→espaco).
 const COR_ALIASES: Record<string, string[]> = {
   // Prateado / Prata / Silver
   "prata": ["prateado", "silver"],
   "prateado": ["prata", "silver"],
   "silver": ["prata", "prateado"],
-  // Preto / Preto Brilhante / Jet Black
-  "preto": ["preto brilhante", "jet black"],
+  // Preto generico → cobre Midnight (Series 9 Al), Jet Black (Series 10/11 Al),
+  // Black Titanium etc. Catalogo usa so "Preto" pra todos.
+  "preto": ["preto brilhante", "jet black", "meia noite", "midnight", "titanio preto", "black titanium"],
   "preto brilhante": ["preto", "jet black"],
   "jet black": ["preto", "preto brilhante"],
-  // Titanio Natural / Natural
+  "meia noite": ["midnight", "preto"],
+  "midnight": ["meia noite", "preto"],
+  "titanio preto": ["preto", "black titanium"],
+  "black titanium": ["preto", "titanio preto"],
+  // Natural / Titanio Natural
   "natural": ["titanio natural"],
   "titanio natural": ["natural"],
-  // Ardosia / Slate
-  "ardosia": ["slate"],
-  "slate": ["ardosia"],
+  // Ardosia / Slate (Titanium); cinza tb pode ser slate
+  "ardosia": ["slate", "slate titanium"],
+  "slate": ["ardosia", "slate titanium"],
+  "slate titanium": ["ardosia", "slate"],
   // Estelar / Starlight
   "estelar": ["starlight"],
   "starlight": ["estelar"],
-  // Meia-noite / Midnight
-  "meia noite": ["midnight"],
-  "midnight": ["meia noite"],
-  // Cinza-espacial / Space Gray / Cinza espacial
-  "cinza espacial": ["space gray", "space grey"],
-  "space gray": ["cinza espacial"],
-  "space grey": ["cinza espacial"],
-  // Dourado / Gold
-  "dourado": ["gold", "ouro"],
+  // Cinza generico → cobre Graphite (Series 9 Aço), Space Gray (Al), Slate
+  // (Titanium). Quando o catalogo so cadastrou "Cinza", deixa ele matchear
+  // qualquer um — o filtro do material restringe pelo allow-list.
+  "cinza": ["grafite", "graphite", "space gray", "space grey", "cinza espacial", "slate", "ardosia"],
+  "cinza espacial": ["space gray", "space grey", "cinza"],
+  "space gray": ["cinza espacial", "cinza"],
+  "space grey": ["cinza espacial", "cinza"],
+  "grafite": ["graphite", "cinza"],
+  "graphite": ["grafite", "cinza"],
+  // Dourado generico → cobre Gold (Series 9 Aço), Rose Gold (Series 10/11 Al),
+  // Gold Titanium (Series 10/11 Ti). Catalogo usa so "Dourado" pra todos.
+  "dourado": ["gold", "ouro", "ouro rosa", "rose gold", "rose", "gold titanium"],
   "gold": ["dourado", "ouro"],
   "ouro": ["dourado", "gold"],
-  // Ouro Rosa / Rose Gold / Rosé
-  "ouro rosa": ["rose gold", "rose"],
-  "rose gold": ["ouro rosa"],
-  "rose": ["ouro rosa"],
-  // Grafite / Graphite
-  "grafite": ["graphite"],
-  "graphite": ["grafite"],
-  // Vermelho / Red / (PRODUCT) RED
+  "ouro rosa": ["rose gold", "rose", "dourado"],
+  "rose gold": ["ouro rosa", "dourado"],
+  "rose": ["ouro rosa", "dourado"],
+  "gold titanium": ["dourado", "gold"],
+  // Vermelho / Red / Product RED
   "vermelho": ["red", "product red"],
   "red": ["vermelho"],
   "product red": ["vermelho"],
+  // Rosa / Pink
+  "rosa": ["pink"],
+  "pink": ["rosa"],
 };
 
 // Normaliza string pra comparacao de cor: lowercase, sem acento, hifen vira
