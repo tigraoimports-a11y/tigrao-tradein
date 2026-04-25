@@ -43,29 +43,42 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
     return { "x-admin-password": password, "Content-Type": "application/json" };
   }
 
+  // Strip do sufixo `_iphone`/`_ipad`/`_macbook`/`_watch` pra comparar slugs
+  // do banco com os hardcoded que vem sem sufixo. Evita "battery" hardcoded
+  // sumir da lista quando o admin tem so "battery_ipad" no banco.
+  function bareSlug(slug: string): string {
+    for (const suf of ["_iphone", "_ipad", "_macbook", "_watch"]) {
+      if (slug.endsWith(suf)) return slug.slice(0, -suf.length);
+    }
+    return slug;
+  }
+
   function fetchQuestions(dt: string) {
     setLoading(true);
     setExpandedId(null);
-    fetch(`/api/admin/tradein-perguntas?device_type=${dt}`, { headers: getHeaders() })
-      .then(r => r.json())
-      .then(json => {
-        if (json.data && json.data.length > 0) {
-          setQuestions(json.data);
-        } else {
-          // Fallback: buscar perguntas padrão (hardcoded) e gerar IDs fake
-          return fetch(`/api/tradein-perguntas?device_type=${dt}`)
-            .then(r => r.json())
-            .then(json2 => {
-              const qs = (json2.data || []).map((q: TradeInQuestion, i: number) => ({
-                ...q,
-                id: q.id || `fallback-${dt}-${i}`,
-              }));
-              setQuestions(qs);
-              if (qs.length > 0) {
-                setMsg("Perguntas padrao carregadas. Edite e salve pra gravar no banco.");
-                setTimeout(() => setMsg(""), 4000);
-              }
-            });
+    // Sempre busca DB + defaults e MERGE: assim hardcoded (battery, hasDamage,
+    // etc) sempre aparecem no editor mesmo quando o admin so tem cadastros
+    // dinamicos no banco. Antes, iPad com perguntas custom no DB nao mostrava
+    // o "battery" hardcoded — admin so via no fluxo cliente, sem editar.
+    Promise.all([
+      fetch(`/api/admin/tradein-perguntas?device_type=${dt}`, { headers: getHeaders() }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/tradein-perguntas?device_type=${dt}`).then(r => r.json()).catch(() => ({ data: [] })),
+    ])
+      .then(([dbJson, defJson]) => {
+        const dbQs: TradeInQuestion[] = dbJson.data || [];
+        const defQs: TradeInQuestion[] = defJson.data || [];
+        // Slugs ja presentes no DB (normalizados pra detectar sufixados).
+        const dbBareSlugs = new Set(dbQs.map(q => bareSlug(q.slug)));
+        // Adiciona defaults que nao existem no DB com IDs fake — admin pode
+        // editar e salvar pra promover pro banco.
+        const missingDefaults = defQs
+          .filter(q => !dbBareSlugs.has(bareSlug(q.slug)))
+          .map((q, i) => ({ ...q, id: q.id || `fallback-${dt}-${i}` }));
+        const merged = [...dbQs, ...missingDefaults].sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
+        setQuestions(merged);
+        if (dbQs.length === 0 && missingDefaults.length > 0) {
+          setMsg("Perguntas padrao carregadas. Edite e salve pra gravar no banco.");
+          setTimeout(() => setMsg(""), 4000);
         }
       })
       .catch(err => setMsg("Erro: " + String(err)))

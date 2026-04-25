@@ -72,6 +72,30 @@ function findSelectedOption(q: TradeInQuestion, value: unknown) {
   return q.opcoes.find((o) => o.value === value);
 }
 
+/** Heuristica pra construir uma frase completa de yesno SEM precisar do admin
+ *  cadastrar `summaryLabel`. Strip do "?" no final do titulo + prefixo "Não"
+ *  (com lowercase do primeiro caractere) quando a resposta for negativa.
+ *  Ex: "Possui o carregador completo original?" + Sim → "Possui o carregador completo original".
+ *      "Possui o carregador completo original?" + Não → "Não possui o carregador completo original". */
+function buildYesnoSummary(q: TradeInQuestion, value: unknown): string | null {
+  if (q.tipo !== "yesno") return null;
+  const titulo = (q.titulo || "").trim().replace(/\?+\s*$/, "").trim();
+  if (!titulo) return null;
+  let isPositive: boolean;
+  if (typeof value === "boolean") {
+    isPositive = value;
+  } else if (typeof value === "string") {
+    const v = value.toLowerCase().trim();
+    if (v === "yes" || v === "sim" || v === "true" || v === "1") isPositive = true;
+    else if (v === "no" || v === "nao" || v === "não" || v === "false" || v === "0") isPositive = false;
+    else return null;
+  } else {
+    return null;
+  }
+  if (isPositive) return titulo;
+  return `Não ${titulo[0].toLowerCase()}${titulo.slice(1)}`;
+}
+
 // Formata uma resposta dinamica em string human-readable (so o valor, sem o titulo).
 function formatExtraAnswer(q: TradeInQuestion, value: unknown): string {
   if (value === undefined || value === null || value === "") return "—";
@@ -136,6 +160,14 @@ function buildOrderedLines(
         const opt = findSelectedOption(q, raw);
         if (opt?.summaryLabel) {
           return { slug: slugN, ordem, text: opt.summaryLabel };
+        }
+        // Fallback heuristico: yesno sem summaryLabel cadastrado vira frase
+        // completa baseada no titulo. Evita "Pergunta?: Sim" no resumo —
+        // mostra "Possui o carregador completo" / "Não possui o carregador
+        // completo" automaticamente.
+        const yesno = buildYesnoSummary(q, raw);
+        if (yesno) {
+          return { slug: slugN, ordem, text: yesno };
         }
       }
       const value = formatExtraAnswer(q, raw);
