@@ -572,9 +572,25 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
 
           {step === 1.5 && (
             <div className="space-y-6 py-6">
-              <div className="text-center">
-                <p className="text-[15px]" style={{ color: tema.textMuted }}>Aparelho avaliado com sucesso!</p>
-                <p className="text-xs mt-1" style={{ color: tema.textDim }}>{usedModel} {usedStorage}</p>
+              {/* TELA MAGICA — momento de pico de dopamina do funil. Cliente
+                  passou por 9 perguntas pra descobrir QUANTO o aparelho vale.
+                  Antes mostrava so "Aparelho avaliado com sucesso!" — sem o
+                  valor. Cliente sentia que tava sendo enrolado ate a etapa 5.
+                  Agora mostra o valor parcial AQUI pra ancorar interesse e
+                  reduzir abandono. Fallback (tradeInValue=0) mantem texto
+                  original pra nao quebrar caso de erro. */}
+              <div className="text-center space-y-2">
+                <p className="text-[13px]" style={{ color: tema.textMuted }}>{usedModel} {usedStorage}</p>
+                {tradeInValue > 0 ? (
+                  <>
+                    <p className="text-[28px] font-bold leading-tight" style={{ color: tema.success }}>
+                      Vale {formatBRL(tradeInValue)}
+                    </p>
+                    <p className="text-[12px]" style={{ color: tema.textDim }}>na troca por um aparelho novo</p>
+                  </>
+                ) : (
+                  <p className="text-[15px]" style={{ color: tema.textMuted }}>Aparelho avaliado com sucesso!</p>
+                )}
               </div>
               <div className="rounded-2xl p-6 text-center space-y-4" style={{ backgroundColor: tema.cardBg, border: `1px solid ${tema.cardBorder}` }}>
                 <p className="text-[15px] font-semibold" style={{ color: tema.text }}>Deseja adicionar mais um aparelho na troca?</p>

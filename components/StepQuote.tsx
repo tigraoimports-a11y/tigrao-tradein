@@ -547,11 +547,15 @@ export default function StepQuote(p: StepQuoteProps) {
         </div>
       )}
 
+      {/* Saida discreta — antes era um botao vermelho gritante "NAO GOSTEI, SAIR"
+          que sabotava o fechamento (vermelho atrai olho, texto negativo planta
+          duvida). Trocado por link sutil que ainda abre o feedback de motivo
+          (importante pro negocio entender por que cliente saiu). */}
       {!showFeedback ? (
         <button onClick={() => setShowFeedback(true)}
-          className="w-full py-3 rounded-2xl text-[14px] font-medium transition-all duration-200"
-          style={{ color: "#fff", backgroundColor: "#ef4444", border: "1px solid #ef4444" }}>
-          NÃO GOSTEI, SAIR
+          className="w-full py-2.5 text-[12px] font-medium underline transition-colors hover:opacity-70"
+          style={{ color: "var(--ti-muted)", background: "transparent", border: "none" }}>
+          Não tenho certeza ainda
         </button>
       ) : (
         <div className="rounded-2xl p-5 space-y-4 animate-fadeIn" style={cardStyle}>

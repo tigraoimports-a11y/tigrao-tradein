@@ -312,14 +312,28 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
           </div></Sec>}
 
           {model && storages_.length > 0 && <Sec title="Armazenamento"><div className="flex gap-2 flex-wrap">
-            {storages_.map((s) => { const p = getProductPrice(products, model, s); return (
+            {storages_.map((s) => {
+              const p = getProductPrice(products, model, s);
+              // Preco "com troca aplicada" — antes mostrava so o preco cheio
+              // (R$ 8.797), o que dava choque de preco no cliente. Agora mostra
+              // tambem quanto ele realmente paga DEPOIS da troca, em verde.
+              // Isso ancora o valor final cedo, antes da etapa 5.
+              const comTroca = p && tradeInValue > 0 ? Math.max(p - tradeInValue, 0) : null;
+              return (
               <button key={s} onClick={() => setStorage(s)}
                 className="flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 flex flex-col items-center gap-1"
                 style={storage===s
                   ? { backgroundColor: "var(--ti-accent-light)", color: "var(--ti-accent-text)", border: "1px solid var(--ti-accent)" }
                   : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }}>
                 <span className="font-semibold">{s}</span>
-                {p && <span className="text-[12px] font-normal" style={{ opacity: 0.7 }}>{formatBRL(p)}</span>}
+                {p && comTroca !== null ? (
+                  <>
+                    <span className="text-[10px] line-through" style={{ opacity: 0.45 }}>{formatBRL(p)}</span>
+                    <span className="text-[12px] font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(comTroca)}</span>
+                  </>
+                ) : (
+                  p && <span className="text-[12px] font-normal" style={{ opacity: 0.7 }}>{formatBRL(p)}</span>
+                )}
               </button>);
             })}
           </div></Sec>}
@@ -341,14 +355,24 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
               {isIPhone && lines.length > 0 && <Sec title="Linha"><div className="grid grid-cols-3 gap-2">{lines.map((l) => <Btn key={l} sel={lineB===l} onClick={() => hLB(l)}>iPhone {l}</Btn>)}</div></Sec>}
               {((isIPhone && lineB) || !isIPhone) && modelsInLineB.length > 0 && <Sec title="Modelo"><div className="grid grid-cols-1 gap-2">{modelsInLineB.map((m) => <Btn key={m} sel={modelB===m} onClick={() => hMB(m)} className="text-left">{m}</Btn>)}</div></Sec>}
               {modelB && storagesB.length > 0 && <Sec title="Armazenamento"><div className="flex gap-2 flex-wrap">
-                {storagesB.map((s) => { const p = getProductPrice(products, modelB, s); return (
+                {storagesB.map((s) => {
+                  const p = getProductPrice(products, modelB, s);
+                  const comTroca = p && tradeInValue > 0 ? Math.max(p - tradeInValue, 0) : null;
+                  return (
                   <button key={s} onClick={() => setStorageB(s)}
                     className="flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all flex flex-col items-center gap-1"
                     style={storageB===s
                       ? { backgroundColor: "var(--ti-accent-light)", color: "var(--ti-accent-text)", border: "1px solid var(--ti-accent)" }
                       : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }}>
                     <span className="font-semibold">{s}</span>
-                    {p && <span className="text-[12px] font-normal" style={{ opacity: 0.7 }}>{formatBRL(p)}</span>}
+                    {p && comTroca !== null ? (
+                      <>
+                        <span className="text-[10px] line-through" style={{ opacity: 0.45 }}>{formatBRL(p)}</span>
+                        <span className="text-[12px] font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(comTroca)}</span>
+                      </>
+                    ) : (
+                      p && <span className="text-[12px] font-normal" style={{ opacity: 0.7 }}>{formatBRL(p)}</span>
+                    )}
                   </button>);
                 })}
               </div></Sec>}
