@@ -2,7 +2,12 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
+
+// Item #24 — modal de rota otimizada. Lazy import porque carrega Leaflet
+// (~150KB) e so e usado quando admin clica "Otimizar Rota".
+const RotaOtimizadaModal = dynamic(() => import("@/components/admin/RotaOtimizadaModal"), { ssr: false });
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
 import { INSTALLMENT_RATES } from "@/lib/calculations";
 import { formatProdutoDisplay, getModeloBase, limparNomeProduto } from "@/lib/produto-display";
@@ -278,6 +283,8 @@ export default function EntregasPage() {
   const [showForm, setShowForm] = useState(false);
   const [modoSimples, setModoSimples] = useState(false);
   const [modoColeta, setModoColeta] = useState(false);
+  // Item #24: modal de rota otimizada
+  const [showRotaModal, setShowRotaModal] = useState(false);
   const [rastreio, setRastreio] = useState("");
   // Campos específicos da coleta (aparelho)
   const [coletaBateria, setColetaBateria] = useState("");
@@ -1050,8 +1057,24 @@ export default function EntregasPage() {
           >
             {showForm && modoColeta ? "Fechar" : "🛵 Agendar Coleta"}
           </button>
+          {/* Item #24 — botao pra abrir modal de rota otimizada */}
+          <button
+            onClick={() => setShowRotaModal(true)}
+            className="px-4 py-2 rounded-xl border-2 border-blue-600 text-blue-600 text-sm font-semibold hover:bg-blue-50 transition-colors"
+            title="Calcula a melhor ordem pro motoboy visitar as entregas pendentes"
+          >
+            🗺️ Otimizar Rota
+          </button>
         </div>
       </div>
+
+      {/* Modal de rota otimizada (item #24) */}
+      {showRotaModal && (
+        <RotaOtimizadaModal
+          password={password}
+          onClose={() => setShowRotaModal(false)}
+        />
+      )}
 
       {msg && (
         <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
