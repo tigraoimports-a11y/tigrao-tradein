@@ -680,6 +680,30 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                         rows={2}
                         className="mt-2 w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-red-500"
                       />
+                      <div className="mt-3">
+                        <label className="text-[11px] text-[#86868B] block mb-1">
+                          Botão de rejeição (label)
+                        </label>
+                        <input
+                          type="text"
+                          value={typeof (q.config as Record<string, unknown>).rejectLabel === "string" ? (q.config.rejectLabel as string) : ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw.trim() === "") {
+                              const next = { ...q.config } as Record<string, unknown>;
+                              delete next.rejectLabel;
+                              updateQuestion(q.id, { config: next });
+                            } else {
+                              updateConfig(q.id, "rejectLabel", raw);
+                            }
+                          }}
+                          placeholder='Ex: "Em Manutenção"'
+                          className="w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm focus:outline-none focus:border-red-500"
+                        />
+                        <p className="mt-1 text-[11px] text-[#86868B]">
+                          Quando preenchido, o cliente ve um botao extra (em vermelho) abaixo do quick-value &quot;Normal&quot;. Clicar marca o aparelho como rejeitado e mostra a mensagem acima — util pra &quot;Em Manutenção&quot;, &quot;Não consigo verificar&quot;, etc.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
