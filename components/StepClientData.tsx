@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { TradeInConfig } from "@/lib/types";
 
-const DEFAULT_ORIGENS = [
-  "Anúncio", "Story", "Direct",
-  "WhatsApp", "Indicação", "Já sou cliente",
-];
-
+// Campo "Como nos encontrou?" foi REMOVIDO (Abr/2026) pra reduzir friccao na
+// etapa 4 — cliente nao quer responder isso, era obrigatorio e atrasava o
+// momento mais critico do funil (chegar na cotacao). UTMs do anuncio ja dao
+// essa info via Meta Pixel + utm-tracker. Mantemos clienteOrigem="" no payload
+// pra nao quebrar tipos no backend.
 interface StepClientDataProps {
   onNext: (data: { clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string }) => void;
   onBack: () => void;
@@ -18,15 +18,11 @@ interface StepClientDataProps {
   tradeinConfig?: TradeInConfig | null;
 }
 
-export default function StepClientData({ onNext, onBack, initialNome, initialWhatsApp, initialInstagram, initialOrigem, tradeinConfig }: StepClientDataProps) {
+export default function StepClientData({ onNext, onBack, initialNome, initialWhatsApp, initialInstagram, tradeinConfig }: StepClientDataProps) {
   const [nome, setNome] = useState(initialNome || ""); const [whatsapp, setWhatsapp] = useState(initialWhatsApp || "");
-  const [instagram, setInstagram] = useState(initialInstagram || ""); const [origem, setOrigem] = useState(initialOrigem || "");
-  const canProceed = nome.trim() !== "" && whatsapp.trim() !== "" && origem !== "";
+  const [instagram, setInstagram] = useState(initialInstagram || "");
+  const canProceed = nome.trim() !== "" && whatsapp.trim() !== "";
 
-  const origens = useMemo(() => {
-    const list = tradeinConfig?.origens;
-    return list && list.length > 0 ? list : DEFAULT_ORIGENS;
-  }, [tradeinConfig]);
   const lbl = tradeinConfig?.labels || {};
 
   const inputStyle: React.CSSProperties = {
@@ -59,24 +55,9 @@ export default function StepClientData({ onNext, onBack, initialNome, initialWha
           className="w-full px-4 py-3.5 rounded-2xl text-[15px] transition-colors" style={inputStyle} />
       </div>
 
-      <div className="animate-fadeIn">
-        <label className="block text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: "var(--ti-muted)" }}>{lbl.step3_origem_label || "Como nos encontrou?"}</label>
-        <div className="grid grid-cols-2 gap-2">
-          {origens.map((o) => (
-            <button key={o} onClick={() => setOrigem(origem === o ? "" : o)}
-              className="px-3 py-3 rounded-2xl text-[13px] font-medium transition-all duration-200 text-left"
-              style={origem === o
-                ? { backgroundColor: "var(--ti-accent-light)", color: "var(--ti-accent-text)", border: "1px solid var(--ti-accent)" }
-                : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }}>
-              {o}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="space-y-3 pt-2">
         {canProceed && (
-          <button onClick={() => onNext({ clienteNome: nome.trim().toUpperCase(), clienteWhatsApp: whatsapp.trim(), clienteInstagram: instagram.trim(), clienteOrigem: origem })}
+          <button onClick={() => onNext({ clienteNome: nome.trim().toUpperCase(), clienteWhatsApp: whatsapp.trim(), clienteInstagram: instagram.trim(), clienteOrigem: "" })}
             className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
             style={{ backgroundColor: "var(--ti-accent)" }}>
             Ver minha cotação
