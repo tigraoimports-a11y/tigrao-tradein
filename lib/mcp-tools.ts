@@ -52,7 +52,7 @@ export const TOOLS: MCPTool[] = [
   {
     name: "consultar_vendas",
     description:
-      "Lista vendas em um periodo. Use pra perguntas tipo 'quanto vendi essa semana?', 'vendas do cliente Joao', 'vendas pendentes'. Default: ultimos 7 dias, max 100 resultados.",
+      "Lista vendas em um periodo com totais agregados. Use pra perguntas tipo 'quanto vendi esse mes?', 'vendas do cliente Joao', 'vendas pendentes', 'vendas que vieram de anuncio', 'qual serial/IMEI das vendas de hoje?'. Default: ultimos 7 dias. Inclui serial_no e imei dos produtos.",
     inputSchema: {
       type: "object",
       properties: {
@@ -60,19 +60,26 @@ export const TOOLS: MCPTool[] = [
         ate: { type: "string", description: "Data final YYYY-MM-DD. Default: hoje." },
         cliente: { type: "string", description: "Filtrar por nome do cliente (busca parcial)." },
         status_pagamento: { type: "string", description: "Ex: PAGO, PENDENTE, CANCELADO." },
+        origem: {
+          type: "string",
+          description: "Filtrar por origem do cliente: ANUNCIO, RECOMPRA, INDICACAO, ATACADO, NAO_INFORMARAM.",
+        },
       },
     },
     handler: async (args, supabase) => {
       const { desde, ate } = rangeDatas(args, 7);
+      // Limit alto (5000) pra garantir totais corretos em queries de mes inteiro.
+      // Em ~25 dias com volume tipico (100-200 vendas/mes), 5000 cobre ate ~2 anos.
       let query = supabase
         .from("vendas")
-        .select("data, cliente, telefone, produto, preco_vendido, lucro, status_pagamento, forma, banco")
+        .select("data, cliente, telefone, produto, preco_vendido, lucro, status_pagamento, forma, banco, origem, serial_no, imei")
         .gte("data", desde)
         .lte("data", ate)
         .order("data", { ascending: false })
-        .limit(100);
+        .limit(5000);
       if (args.cliente) query = query.ilike("cliente", `%${args.cliente}%`);
       if (args.status_pagamento) query = query.eq("status_pagamento", args.status_pagamento);
+      if (args.origem) query = query.eq("origem", String(args.origem).toUpperCase());
 
       const { data, error } = await query;
       if (error) throw new Error(error.message);
@@ -80,9 +87,26 @@ export const TOOLS: MCPTool[] = [
         return `Sem vendas no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
       }
 
+      // Agregados sobre TODAS as vendas (nao so as listadas)
       const total = data.reduce((s, v) => s + (Number(v.preco_vendido) || 0), 0);
       const totalLucro = data.reduce((s, v) => s + (Number(v.lucro) || 0), 0);
-      const linhas = data.map((v) => {
+
+      // Quebra por status pra dar contexto (PAGO vs PENDENTE vs CANCELADO)
+      const porStatus = new Map<string, { qtd: number; valor: number }>();
+      for (const v of data) {
+        const s = v.status_pagamento || "?";
+        const cur = porStatus.get(s) || { qtd: 0, valor: 0 };
+        cur.qtd += 1;
+        cur.valor += Number(v.preco_vendido) || 0;
+        porStatus.set(s, cur);
+      }
+      const statusLinhas = Array.from(porStatus.entries())
+        .sort((a, b) => b[1].valor - a[1].valor)
+        .map(([s, agg]) => `  ${s}: ${agg.qtd} (${brl(agg.valor)})`);
+
+      // Lista detalhada (max 100 linhas pra nao explodir tokens)
+      const MAX_LISTA = 100;
+      const linhas = data.slice(0, MAX_LISTA).map((v) => {
         const partes = [
           dataBR(v.data),
           v.cliente || "?",
@@ -91,15 +115,26 @@ export const TOOLS: MCPTool[] = [
           v.status_pagamento || "?",
         ];
         if (v.forma) partes.push(v.forma);
+        // Inclui IMEI/serial se existir (importante pra rastreio de produto vendido)
+        const id = v.imei || v.serial_no;
+        if (id) partes.push(`SN/IMEI: ${id}`);
         return `• ${partes.join(" | ")}`;
       });
+
+      const truncado = data.length > MAX_LISTA
+        ? `\n(mostrando ${MAX_LISTA} de ${data.length} vendas — totais acima ja consideram TODAS)`
+        : "";
 
       return [
         `${data.length} venda${data.length > 1 ? "s" : ""} de ${dataBR(desde)} a ${dataBR(ate)}`,
         `Faturamento ${brl(total)} | Lucro ${brl(totalLucro)}`,
         "",
+        `Por status:`,
+        ...statusLinhas,
+        "",
         ...linhas,
-      ].join("\n");
+        truncado,
+      ].filter(Boolean).join("\n");
     },
   },
 
@@ -275,12 +310,14 @@ export const TOOLS: MCPTool[] = [
     },
     handler: async (args, supabase) => {
       // fiado_parcelas e uma coluna JSONB em vendas: [{ valor, data, recebido }]
+      // Limit alto pra agregar todo fiado em aberto (vendas com fiado costumam
+      // ser raras, mas podem acumular ao longo de meses)
       let query = supabase
         .from("vendas")
         .select("id, cliente, telefone, fiado_parcelas")
         .not("fiado_parcelas", "is", null)
         .order("data", { ascending: false })
-        .limit(500);
+        .limit(2000);
       if (args.cliente) query = query.ilike("cliente", `%${args.cliente}%`);
 
       const { data: vendas, error } = await query;
@@ -439,6 +476,61 @@ export const TOOLS: MCPTool[] = [
   },
 
   {
+    name: "consultar_por_origem",
+    description:
+      "Agrupa vendas por origem do cliente em um periodo. Use pra 'quantos clientes vieram de anuncio?', 'quanto faturei com indicacao?', 'breakdown de vendas por canal', 'recompra ou anuncio gera mais lucro?'. Origens possiveis: ANUNCIO, RECOMPRA, INDICACAO, ATACADO, NAO_INFORMARAM.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        desde: { type: "string", description: "Data inicial YYYY-MM-DD. Default: 30 dias atras." },
+        ate: { type: "string", description: "Data final YYYY-MM-DD. Default: hoje." },
+      },
+    },
+    handler: async (args, supabase) => {
+      const { desde, ate } = rangeDatas(args, 30);
+
+      const { data, error } = await supabase
+        .from("vendas")
+        .select("cliente, origem, preco_vendido, lucro, status_pagamento")
+        .gte("data", desde)
+        .lte("data", ate)
+        .neq("status_pagamento", "CANCELADO")
+        .limit(5000);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) return `Sem vendas no periodo ${dataBR(desde)} a ${dataBR(ate)}.`;
+
+      // Agrupa por origem (clientes unicos + qtd vendas + faturamento + lucro)
+      const porOrigem = new Map<string, { vendas: number; clientes: Set<string>; faturamento: number; lucro: number }>();
+      for (const v of data) {
+        const o = (v.origem || "NAO_INFORMARAM").toUpperCase();
+        const cur = porOrigem.get(o) || { vendas: 0, clientes: new Set<string>(), faturamento: 0, lucro: 0 };
+        cur.vendas += 1;
+        if (v.cliente) cur.clientes.add(String(v.cliente).toLowerCase().trim());
+        cur.faturamento += Number(v.preco_vendido) || 0;
+        cur.lucro += Number(v.lucro) || 0;
+        porOrigem.set(o, cur);
+      }
+
+      const ranking = Array.from(porOrigem.entries()).sort((a, b) => b[1].faturamento - a[1].faturamento);
+      const totalVendas = data.length;
+      const totalFat = data.reduce((s, v) => s + (Number(v.preco_vendido) || 0), 0);
+      const totalLucro = data.reduce((s, v) => s + (Number(v.lucro) || 0), 0);
+
+      const linhas = ranking.map(([origem, agg]) => {
+        const pctFat = totalFat > 0 ? ((agg.faturamento / totalFat) * 100).toFixed(1) : "0";
+        return `• ${origem}: ${agg.clientes.size} cliente(s), ${agg.vendas} venda(s) | Faturamento ${brl(agg.faturamento)} (${pctFat}%) | Lucro ${brl(agg.lucro)}`;
+      });
+
+      return [
+        `Vendas por origem — ${dataBR(desde)} a ${dataBR(ate)}`,
+        `Total: ${totalVendas} vendas | Faturamento ${brl(totalFat)} | Lucro ${brl(totalLucro)}`,
+        "",
+        ...linhas,
+      ].join("\n");
+    },
+  },
+
+  {
     name: "consultar_gastos",
     description:
       "Gastos por periodo, agrupados por categoria. Use pra 'quanto gastei esse mes?', 'gastos com fornecedor X', 'breakdown de despesas'.",
@@ -452,13 +544,15 @@ export const TOOLS: MCPTool[] = [
     },
     handler: async (args, supabase) => {
       const { desde, ate } = rangeDatas(args, 30);
+      // Limit alto (5000) pra agregar mes/trimestre inteiro corretamente.
+      // Volume tipico de gastos: ~50-100/mes.
       let query = supabase
         .from("gastos")
         .select("data, categoria, descricao, valor, banco, contato_nome")
         .gte("data", desde)
         .lte("data", ate)
         .order("data", { ascending: false })
-        .limit(500);
+        .limit(5000);
       if (args.categoria) query = query.ilike("categoria", `%${args.categoria}%`);
 
       const { data, error } = await query;
