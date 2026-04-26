@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getTaxaAsync, calcularLiquido } from "@/lib/taxas";
 
+// Sem isso o Next pode servir resposta cacheada e o admin nao ve a edicao
+// de uma venda refletida na auditoria — bug reportado em 24/04/2026.
+export const dynamic = "force-dynamic";
+
 function auth(request: Request) {
   const pw = request.headers.get("x-admin-password");
   return pw === process.env.ADMIN_PASSWORD;

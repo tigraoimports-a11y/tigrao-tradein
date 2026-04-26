@@ -162,7 +162,7 @@ export default function AuditoriaPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/auditoria?mes=${mesAtual}`, { headers });
+      const res = await fetch(`/api/admin/auditoria?mes=${mesAtual}`, { headers, cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
         setData(json);
