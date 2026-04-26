@@ -1383,32 +1383,45 @@ function CompraForm() {
         <p className="text-sm opacity-90">{encomendaParam ? "📦 ENCOMENDA — Reserva do seu produto" : "Formulario de Compra"}</p>
       </div>
 
-      {/* Banner de encomenda — mini-timeline em 3 passos. Substitui o texto
-          seco anterior por uma visualizacao clara: pagar agora -> aguardar
-          chegada -> retirar (e entregar troca, se houver). Mostra valores em
-          R$ pra o cliente nao precisar calcular ou rolar pro resumo. */}
+      {/* Banner de encomenda — explica claramente que e produto sob encomenda
+          + mini-timeline em 3 passos. Logica unificada (PR #858+): cliente paga
+          TUDO agora (entrada PIX + cartao parcelado), recebe no prazo combinado.
+          Sem mais "paga sinal e resto na entrega". */}
       {encomendaParam && (() => {
-        const temSinal = sinalPctParam > 0 && sinalPctParam < 100;
         const temTrocaEnc = !!trocaProdutoParam;
-        const valorTotalEnc = preco;
-        const valorAposTrocaEnc = Math.max(valorTotalEnc - trocaNum, 0);
-        const valorSinalEnc = temSinal ? Math.round((valorAposTrocaEnc * sinalPctParam) / 100) : valorAposTrocaEnc;
-        const valorRestanteEnc = temSinal ? Math.max(valorAposTrocaEnc - valorSinalEnc, 0) : 0;
+        // Calcula total a pagar agora considerando taxa do cartao se aplicavel
+        const nParcelasEnc = parcelas ? parseInt(parcelas) : 0;
+        const taxaEnc = nParcelasEnc > 0 ? (TAXAS[nParcelasEnc] ?? 0) : 0;
+        const restanteComTaxaEnc = taxaEnc > 0
+          ? Math.ceil(valorParcelar * (1 + taxaEnc / 100))
+          : valorParcelar;
+        const totalAgoraEnc = entradaPixNum + restanteComTaxaEnc;
         return (
           <div className="mx-4 mt-4 rounded-2xl p-5 border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 shadow-sm">
+            {/* Aviso destacado de que eh encomenda */}
+            <div className="mb-4 p-3 rounded-xl bg-blue-600 text-white">
+              <p className="text-sm font-bold flex items-center gap-2">
+                <span className="text-lg">📦</span>
+                <span>PRODUTO SOB ENCOMENDA</span>
+              </p>
+              <p className="text-xs mt-1 opacity-95 leading-relaxed">
+                Este produto sera importado/encomendado especialmente para voce. O pagamento eh antecipado e a entrega acontece no prazo combinado abaixo.
+              </p>
+            </div>
+
             <p className="text-sm font-bold text-blue-900 mb-4 flex items-center gap-1.5">
-              <span>📦</span><span>Como funciona sua encomenda</span>
+              <span>👁</span><span>Como funciona sua encomenda</span>
             </p>
             <div className="grid grid-cols-3 gap-2 relative">
               {/* Linha conectora horizontal — atras dos circulos */}
               <div className="absolute top-4 left-[16.67%] right-[16.67%] h-0.5 bg-blue-300" aria-hidden="true" />
-              {/* Passo 1: Pagar agora */}
+              {/* Passo 1: Pagar agora (TUDO — PIX + cartao) */}
               <div className="relative flex flex-col items-center text-center">
                 <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-md">1</div>
                 <p className="text-[11px] font-bold text-blue-900 leading-tight">Pagar agora</p>
-                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{temSinal ? `Sinal ${sinalPctParam}%` : "Integral"}</p>
-                {valorSinalEnc > 0 && (
-                  <p className="text-xs font-bold text-blue-900 mt-1">R$ {fmt(valorSinalEnc)}</p>
+                <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{entradaPixNum > 0 ? "PIX + cartao" : "Integral"}</p>
+                {totalAgoraEnc > 0 && (
+                  <p className="text-xs font-bold text-blue-900 mt-1">R$ {fmt(totalAgoraEnc)}</p>
                 )}
               </div>
               {/* Passo 2: Aguardar chegada */}
@@ -1418,18 +1431,24 @@ function CompraForm() {
                 <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{previsaoChegadaParam || "em breve"}</p>
                 <p className="text-[10px] text-blue-700 mt-1">📦 chegada</p>
               </div>
-              {/* Passo 3: Retirar (+ entregar troca se houver) */}
+              {/* Passo 3: Retirar (+ entregar troca se houver). Sem valor —
+                  ja pagou tudo no passo 1. */}
               <div className="relative flex flex-col items-center text-center">
                 <div className="w-8 h-8 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-xs font-bold z-10 mb-2 shadow-sm">3</div>
                 <p className="text-[11px] font-bold text-blue-900 leading-tight">Retirar</p>
                 <p className="text-[10px] text-blue-700 mt-0.5 leading-tight">{temTrocaEnc ? "+ entregar troca" : "na loja"}</p>
-                {valorRestanteEnc > 0 && (
-                  <p className="text-xs font-bold text-blue-900 mt-1">R$ {fmt(valorRestanteEnc)}</p>
-                )}
+                <p className="text-[10px] text-blue-700 mt-1">🏬 ja pago</p>
               </div>
             </div>
+            {/* Detalhamento do pagamento agora */}
+            {entradaPixNum > 0 && restanteComTaxaEnc > 0 && (
+              <div className="mt-4 pt-3 border-t border-blue-200 text-xs text-blue-900 space-y-0.5">
+                <p>💰 <span className="font-semibold">Entrada PIX:</span> R$ {fmt(entradaPixNum)}</p>
+                <p>💳 <span className="font-semibold">Restante via cartao{nParcelasEnc > 1 ? ` ${nParcelasEnc}x` : ""}:</span> R$ {fmt(restanteComTaxaEnc)}</p>
+              </div>
+            )}
             {temTrocaEnc && (
-              <p className="text-[11px] text-blue-800 mt-4 pt-3 border-t border-blue-200 leading-relaxed">
+              <p className="text-[11px] text-blue-800 mt-3 pt-3 border-t border-blue-200 leading-relaxed">
                 <span className="font-semibold">💱 Sobre sua troca:</span> seu aparelho usado sera avaliado e recolhido na data da retirada — voce nao precisa entregar antes.
               </p>
             )}
