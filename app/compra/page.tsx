@@ -279,6 +279,10 @@ function CompraForm() {
     if (!nomeProduto) return [];
     if (/Apple Watch Ultra/i.test(nomeProduto)) return [];
     if (/Pencil|Cable|Cabo|Carregador|Adapter|Hub|Case|Capa|Pelicula/i.test(nomeProduto)) return [];
+    // AirPods Pro / AirPods normais nao tem opcao de cor (so AirPods Max).
+    // Se o admin cadastrou cores por engano em catalogo_modelo_configs,
+    // nao deixa esse erro vazar pro cliente.
+    if (/^AirPods\b/i.test(nomeProduto.trim()) && !/AirPods\s*Max/i.test(nomeProduto)) return [];
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
       .replace(/(\d+)\s*[ºª°]/g, "$1")
