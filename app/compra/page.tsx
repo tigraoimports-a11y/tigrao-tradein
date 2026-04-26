@@ -880,20 +880,23 @@ function CompraForm() {
       : "";
 
     // Bloco encomenda — vai logo no topo da mensagem pra equipe ver na
-    // primeira linha que e pedido sob encomenda. Inclui prazo, valor pago
-    // agora (sinal ou integral) e restante na entrega quando aplicavel.
+    // primeira linha que e pedido sob encomenda. Logica unificada (PR #858+):
+    // cliente paga TUDO agora (PIX + parcelado com taxa), recebe no prazo.
+    // Sem mais "sinal X% / restante na entrega". O sinalPctParam continua
+    // persistido pra info historica mas o calculo usa entradaPix + parceladoTotal.
     const encomendaLines: string[] = [];
     if (encomendaParam) {
-      const temSinalEnc = sinalPctParam > 0 && sinalPctParam < 100;
-      const valorSinalEnc = temSinalEnc ? Math.round((valorBaseFinal * sinalPctParam) / 100) : valorBaseFinal;
-      const valorRestanteEnc = temSinalEnc ? Math.max(valorBaseFinal - valorSinalEnc, 0) : 0;
+      // parcelasCalc.total ja inclui a taxa do cartao. Se nao tem parcelas
+      // (ex PIX integral), usa valorParcelarFinal sem taxa.
+      const restanteComTaxa = parcelasCalc ? parcelasCalc.total : valorParcelarFinal;
+      const totalAgoraEnc = entradaFinal + restanteComTaxa;
       encomendaLines.push(`*━━━ 📦 PEDIDO SOB ENCOMENDA ━━━*`);
       if (previsaoChegadaParam) encomendaLines.push(`*Prazo de entrega:* ${previsaoChegadaParam} após pagamento`);
-      if (temSinalEnc) {
-        encomendaLines.push(`*Pagamento agora:* Sinal ${sinalPctParam}% — R$ ${fmt(valorSinalEnc)}`);
-        if (valorRestanteEnc > 0) encomendaLines.push(`*Restante na entrega:* R$ ${fmt(valorRestanteEnc)}`);
-      } else {
-        encomendaLines.push(`*Pagamento agora:* Integral — R$ ${fmt(valorBaseFinal)}`);
+      encomendaLines.push(`*Pagamento agora:* R$ ${fmt(totalAgoraEnc)} (antecipado)`);
+      if (entradaFinal > 0 && restanteComTaxa > 0) {
+        encomendaLines.push(`  • Entrada PIX: R$ ${fmt(entradaFinal)}`);
+        const parcelaInfo = parcelasCalc ? ` ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)}` : "";
+        encomendaLines.push(`  • Restante: R$ ${fmt(restanteComTaxa)} via ${formaPagamento || "forma escolhida"}${parcelaInfo}`);
       }
       if (temTroca) encomendaLines.push(`*Aparelho na troca:* avaliação e coleta no dia da retirada`);
       encomendaLines.push("");
