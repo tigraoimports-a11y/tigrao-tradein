@@ -707,143 +707,9 @@ export default function GerarLinkPage() {
     reutilizarLink(l);
     setEditingLinkId(l.id);
     setEditingShortCode(l.short_code || null);
-    setPasteMsg(`✏️ Editando link ${l.short_code}. Ao clicar em "Gerar Link" as alterações serão salvas.`);
+    setPasteMsg(`✏️ Editando link ${l.short_code}. Ao clicar em "Re-gerar link" o antigo sera arquivado e um link NOVO sera criado.`);
   }
 
-  async function salvarEdicaoLink() {
-    if (!editingLinkId) return false;
-    const useCart = carrinhoLink.length > 0;
-    const prodsFilled = useCart ? carrinhoLink.map(item => item.nome) : produtos.filter(Boolean);
-    const corPTSimples = useCart ? (carrinhoLink[0]?.cor || "") : (corSel ? corParaPT(corSel) : "");
-    const corENCanon = useCart ? (carrinhoLink[0]?.corEN || "") : (corSel ? (corParaEN(corSel) || corSel) : "");
-    const nomeProdutoFinal = corPTSimples ? `${prodsFilled[0]} ${corPTSimples}` : (prodsFilled[0] || "");
-    try {
-      const res = await fetch("/api/admin/link-compras", {
-        method: "PATCH",
-        headers: adminHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          id: editingLinkId,
-          produto: nomeProdutoFinal,
-          produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => {
-            if (useCart) { const item = carrinhoLink[i + 1]; return item?.cor ? `${nome} ${item.cor}` : nome; }
-            const c = coresExtras[i]; return c ? `${nome} ${corParaPT(c)}` : nome;
-          }) : null,
-          cor: corENCanon || null,
-          valor: Number(rawPreco) || 0,
-          desconto: descontoNum || 0,
-          forma_pagamento: forma || null,
-          parcelas: parcelas || null,
-          entrada: Number(rawEntrada) || 0,
-          troca_produto: trocaProduto || null,
-          troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
-          troca_condicao: trocaCondicao || null,
-          troca_cor: trocaCor || null,
-          troca_produto2: temSegundaTroca ? (trocaProduto2 || null) : null,
-          troca_valor2: temSegundaTroca ? (Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0) : 0,
-          troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
-          troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
-          vendedor: vendedorNome || null,
-          campanha: campanha.trim() || null,
-          cliente_nome: cliNome.trim() || null,
-          cliente_telefone: cliTelefone.trim() || null,
-          cliente_cpf: cliCpf.trim() || null,
-          cliente_email: cliEmail.trim() || null,
-          taxa_entrega: Number(rawTaxaEntrega) || 0,
-        }),
-      });
-      if (!res.ok) { const j = await res.json().catch(() => ({})); setPasteMsg(`❌ Erro ao salvar: ${j.error || res.status}`); return false; }
-
-      // Atualizar dados do short link (activity_log) para o cliente ver as mudanças
-      if (editingShortCode) {
-        const aplicarCorExtra = (nome: string, idx: number): string => {
-          if (useCart) { const item = carrinhoLink[idx]; return item?.cor ? `${nome} ${item.cor}` : nome; }
-          const cor = coresExtras[idx - 1]; return cor ? `${nome} ${corParaPT(cor)}` : nome;
-        };
-        const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
-        const shortData: Record<string, string> = {};
-        shortData.p = nomeProdutoFinal;
-        for (let i = 1; i < prodsFilled.length; i++) {
-          shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
-        }
-        // Valor cobrado no link = produto (sinal se encomenda) + extra cobranca
-        const extraNumBase = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
-        const baseCobrado = encomenda && sinalPct
-          ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
-          : Number(rawPreco) || 0;
-        const valorExibir = String(baseCobrado + extraNumBase);
-        if (valorExibir && valorExibir !== "0") shortData.v = valorExibir;
-        if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
-        if (extraNumBase > 0) shortData.ex_v = String(extraNumBase);
-        if (descontoNum > 0) shortData.dc = String(descontoNum);
-        shortData.s = vendedorNome || "";
-        if (campanha.trim()) shortData.cm = campanha.trim();
-        shortData.w = whatsappDestino;
-        if (forma) shortData.f = forma;
-        if (parcelas) shortData.x = parcelas;
-        if (rawEntrada && rawEntrada !== "0") shortData.e = rawEntrada;
-        if (localEntrega) shortData.l = localEntrega;
-        if (shoppingNome) shortData.sh = shoppingNome;
-        if (horario) shortData.h = horario;
-        if (dataEntrega) shortData.dt = dataEntrega;
-        if (rawTaxaEntrega && rawTaxaEntrega !== "0") shortData.te = rawTaxaEntrega;
-        if (trocaProduto) shortData.tp = trocaProduto;
-        if (trocaCondicao) shortData.tcd = trocaCondicao;
-        if (trocaCor) shortData.tc = trocaCor;
-        const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
-        if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
-        if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
-        const rawTroca2 = trocaValor2.replace(/\./g, "").replace(",", ".");
-        if (temSegundaTroca && rawTroca2 && rawTroca2 !== "0") shortData.tv2 = rawTroca2;
-        if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
-        if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
-        if (pagamentoPago) shortData.pp = pagamentoPago;
-        // pm=1 → formulário primeiro, depois cliente paga MP direto do /compra
-        if (pagarMp) shortData.pm = "1";
-        // Encomenda: flag + prazo + % do sinal. Cliente nao pode desativar isso
-        // pelo URL (backend ignora quando o link_compras.tipo for diferente).
-        if (encomenda) {
-          shortData.enc = "1";
-          if (previsaoChegada.trim()) shortData.prev = previsaoChegada.trim();
-          if (sinalPct) shortData.sinal = String(sinalPct);
-        }
-        if (incluirDadosCliente) {
-          if (cliNome.trim()) shortData.cn = cliNome.trim();
-          if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
-          if (cliEmail.trim()) shortData.cem = cliEmail.trim();
-          if (cliTelefone.trim()) shortData.cte = cliTelefone.trim();
-          if (cliCep.trim()) shortData.ccep = cliCep.trim();
-          if (cliEndereco.trim()) shortData.cen = cliEndereco.trim();
-          if (cliNumero.trim()) shortData.cnu = cliNumero.trim();
-          if (cliComplemento.trim()) shortData.cco = cliComplemento.trim();
-          if (cliBairro.trim()) shortData.cba = cliBairro.trim();
-        }
-        shortData.short = editingShortCode;
-        await fetch("/api/short-link", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: editingShortCode, data: shortData }),
-        }).catch(() => {}); // best-effort
-      }
-
-      // Checar se o backend reportou sincronizacao de entrega vinculada
-      let sufixoEntrega = "";
-      try {
-        const j = await res.clone().json();
-        if (j?.entregaSincronizada) sufixoEntrega = " (entrega atualizada)";
-      } catch { /* ignore */ }
-
-      setPasteMsg(`✅ Link ${editingShortCode || editingLinkId.slice(0, 6)} atualizado.${sufixoEntrega}`);
-      setEditingLinkId(null);
-      setEditingShortCode(null);
-      // Recarrega o historico pra UI refletir o estado atualizado do banco
-      // (antes, o state local ficava stale apos editar).
-      fetchHistorico();
-      return true;
-    } catch (e) {
-      setPasteMsg(`❌ Erro: ${String(e)}`);
-      return false;
-    }
-  }
 
   async function encaminharParaEntrega() {
     if (!encaminharLink || !encaminharData) return;
@@ -1093,13 +959,11 @@ export default function GerarLinkPage() {
     // de preencher o prazo ou marcar encomenda por engano. So pede confirmacao
     // em criacao nova (edicao ja tem fluxo proprio acima).
     if (encomenda && !editingLinkId) {
-      const precoEnc = Number(rawPreco) || 0;
+      // Encomenda: cliente paga TUDO agora (PIX + cartao parcelado), recebe no
+      // prazo combinado. Mesma logica de pagamento de venda normal — a unica
+      // diferenca eh o prazo de entrega.
       const trocaTEnc = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
-      const baseEnc = Math.max(precoEnc - trocaTEnc, 0);
-      const pctEnc = Number(sinalPct) || 0;
-      const temSinalConf = pctEnc > 0 && pctEnc < 100;
-      const sinalConf = temSinalConf ? Math.round((baseEnc * pctEnc) / 100) : baseEnc;
-      const restConf = temSinalConf ? Math.max(baseEnc - sinalConf, 0) : 0;
+      const totalAgora = entradaNum + valorComTaxa;
       if (!previsaoChegada.trim()) {
         setPasteMsg("⚠️ Encomenda precisa de prazo de entrega — preencha antes de gerar.");
         return;
@@ -1108,11 +972,10 @@ export default function GerarLinkPage() {
       linhasBody.push(`📦 PEDIDO SOB ENCOMENDA`);
       linhasBody.push(`Prazo: ${previsaoChegada} após pagamento`);
       linhasBody.push("");
-      if (temSinalConf) {
-        linhasBody.push(`Cliente paga AGORA: R$ ${sinalConf.toLocaleString("pt-BR")} (sinal ${pctEnc}%)`);
-        if (restConf > 0) linhasBody.push(`Restante na entrega: R$ ${restConf.toLocaleString("pt-BR")}`);
-      } else {
-        linhasBody.push(`Cliente paga AGORA: R$ ${baseEnc.toLocaleString("pt-BR")} (integral)`);
+      linhasBody.push(`Cliente paga AGORA: R$ ${totalAgora.toLocaleString("pt-BR")}`);
+      if (entradaNum > 0) {
+        linhasBody.push(`  • Entrada PIX: R$ ${entradaNum.toLocaleString("pt-BR")}`);
+        linhasBody.push(`  • ${forma === "Cartao Credito" || forma === "Link de Pagamento" ? `Cartao ${parcelas || 1}x` : forma || "Restante"}: R$ ${valorComTaxa.toLocaleString("pt-BR")}`);
       }
       if (trocaTEnc > 0) {
         linhasBody.push("");
@@ -1135,11 +998,22 @@ export default function GerarLinkPage() {
       return;
     }
 
-    // Modo edição: salva por cima e não cria short_code novo
+    // Modo edição/re-gerar: arquiva o link antigo e segue o fluxo normal
+    // pra criar um link NOVO com short_code novo. O antigo continua valido
+    // (cliente que ja recebeu pode continuar usando) mas some do filtro
+    // "Ativos" no historico.
+    let codigoAntigoArquivado: string | null = null;
     if (editingLinkId) {
-      const ok = await salvarEdicaoLink();
-      if (ok) { setAba("historico"); fetchHistorico(); }
-      return;
+      try {
+        await fetch("/api/admin/link-compras", {
+          method: "PATCH",
+          headers: adminHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ id: editingLinkId, arquivado: true }),
+        });
+        codigoAntigoArquivado = editingShortCode;
+      } catch { /* best-effort: se falhar, segue criando o novo mesmo assim */ }
+      setEditingLinkId(null);
+      setEditingShortCode(null);
     }
 
     const whatsappDestino = getWhatsAppFromVendedores(vendedorNome, vendedoresList, WHATSAPP_DEFAULT);
@@ -1166,11 +1040,11 @@ export default function GerarLinkPage() {
       const precoExtra = useCart ? (carrinhoLink[i]?.preco || 0) : (precosPorProduto[i] || 0);
       if (precoExtra > 0) shortData[`v${i + 1}`] = String(precoExtra);
     }
-    // Encomenda com sinal — cobra sinal no link em vez do total
+    // Valor exibido no link = preco completo + extra cobranca.
+    // (Antes: encomenda+sinal cobrava so o sinal — agora sinal eh helper de PIX,
+    // e o preco continua sendo o preco completo.)
     const extraNumMp = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
-    const baseCobradoMp = encomenda && sinalPct
-      ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
-      : Number(rawPreco) || 0;
+    const baseCobradoMp = Number(rawPreco) || 0;
     const valorExibirMp = String(baseCobradoMp + extraNumMp);
     if (valorExibirMp && valorExibirMp !== "0") shortData.v = valorExibirMp;
     if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
@@ -1227,6 +1101,11 @@ export default function GerarLinkPage() {
         setGeneratedLink(urlCurta);
         setCopied(false);
 
+        // Re-geracao: avisar que o link antigo foi arquivado
+        if (codigoAntigoArquivado) {
+          setPasteMsg(`✅ Link novo gerado. Link antigo (${codigoAntigoArquivado}) foi arquivado automaticamente.`);
+        }
+
         // Salvar no histórico persistente de links de compra
         try {
           const resHist = await fetch("/api/admin/link-compras", {
@@ -1251,11 +1130,11 @@ export default function GerarLinkPage() {
               produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
               cor: corENCanon || null,
-              // valor cobrado no link = produto (ou sinal se encomenda) + extra
+              // valor cobrado no link = preco completo + extra cobranca.
+              // (Antes: encomenda+sinal cobrava so o sinal — agora sinal eh
+              // helper de PIX, e o preco continua sendo o preco completo.)
               valor: (() => {
-                const base = encomenda && sinalPct
-                  ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
-                  : Number(rawPreco) || 0;
+                const base = Number(rawPreco) || 0;
                 const extra = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
                 return base + extra;
               })(),
@@ -1365,11 +1244,11 @@ export default function GerarLinkPage() {
     // `valorComTaxa` porque o /compra recalcula `valorBase = preco - desconto - troca`.
     // Se passássemos valorComTaxa (que já desconta troca), o form subtrairia
     // troca de novo e daria valor errado.
-    // Encomenda com sinal — cobra sinal no link em vez do total
+    // Valor exibido no link = preco completo + extra cobranca.
+    // (Antes: encomenda+sinal cobrava so o sinal — agora sinal eh helper de PIX,
+    // e o preco continua sendo o preco completo.)
     const extraNumMp2 = extraValor ? Number(extraValor.replace(/\./g, "").replace(",", ".")) || 0 : 0;
-    const baseCobradoMp2 = encomenda && sinalPct
-      ? Math.round(((Number(rawPreco) || 0) * Number(sinalPct)) / 100)
-      : Number(rawPreco) || 0;
+    const baseCobradoMp2 = Number(rawPreco) || 0;
     const valorExibirMp2 = String(baseCobradoMp2 + extraNumMp2);
     if (valorExibirMp2 && valorExibirMp2 !== "0") shortData.v = valorExibirMp2;
     if (extraDescricao.trim()) shortData.ex_d = extraDescricao.trim();
@@ -2427,7 +2306,7 @@ export default function GerarLinkPage() {
             <span className="text-lg">✏️</span>
             <div>
               <p className="text-sm font-bold text-blue-900">Editando link {editingShortCode || editingLinkId.slice(0, 6)}</p>
-              <p className="text-[11px] text-blue-700">Clique em <strong>Salvar Alterações</strong> pra gravar por cima. O link curto continua o mesmo.</p>
+              <p className="text-[11px] text-blue-700">Clique em <strong>Re-gerar link</strong>: o link antigo sera arquivado e um link NOVO sera criado com as alteracoes.</p>
             </div>
           </div>
           <button
@@ -2479,8 +2358,21 @@ export default function GerarLinkPage() {
                 const checked = e.target.checked;
                 setEncomenda(checked);
                 if (!checked) { setPrevisaoChegada(""); setSinalPct(""); }
-                // Encomenda nao aceita shopping/correios — limpa se ja selecionado
-                else if (localEntrega === "shopping" || localEntrega === "correios") setLocalEntrega("");
+                else {
+                  // Encomenda nao aceita shopping/correios — limpa se ja selecionado
+                  if (localEntrega === "shopping" || localEntrega === "correios") setLocalEntrega("");
+                  // Forcar modo manual de produto — encomenda nao tem produto no estoque
+                  // ainda, entao operador precisa digitar nome + preco livremente.
+                  if (!produtoManual) {
+                    setProdutoManual(true);
+                    setCarrinhoLink([]);
+                    setCatSel("");
+                    setPickerIdx(null);
+                    setAddingProduct(true);
+                    setCartCatSel("");
+                    setCartCorPending(null);
+                  }
+                }
               }}
               className="w-5 h-5 mt-0.5 rounded accent-blue-600"
             />
@@ -2530,23 +2422,36 @@ export default function GerarLinkPage() {
                 })()}
               </div>
 
-              {/* Pagamento: integral vs sinal */}
+              {/* Pagamento: helper pra calcular entrada PIX automaticamente.
+                  Integral: zera entrada PIX (cliente paga tudo via forma escolhida).
+                  Sinal antecipado: preenche entrada PIX com X% do preco — o RESTO
+                  vai pelo cartao parcelado com taxa (mesma logica do link normal). */}
               <div>
                 <label className="text-xs font-bold text-blue-900 mb-1.5 block uppercase tracking-wide">💳 Como cliente paga? *</label>
+                <p className="text-[10px] text-blue-700 mb-1.5 italic">Calcula automaticamente a Entrada PIX abaixo. O restante vai parcelado.</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setSinalPct("")}
+                    onClick={() => { setSinalPct(""); setEntradaPix(""); }}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold border-2 transition-colors ${!sinalPct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-900 border-blue-200 hover:border-blue-400"}`}
                   >
-                    💯 Integral agora
+                    💯 Integral (sem PIX)
                   </button>
                   <button
                     type="button"
-                    onClick={() => { if (!sinalPct) setSinalPct("50"); }}
+                    onClick={() => {
+                      if (!sinalPct) {
+                        setSinalPct("50");
+                        const preco = Number(rawPreco) || 0;
+                        const trocaT = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+                        const baseAposTroca = Math.max(preco - trocaT, 0);
+                        const sinal = Math.round((baseAposTroca * 50) / 100);
+                        if (sinal > 0) setEntradaPix(sinal.toLocaleString("pt-BR"));
+                      }
+                    }}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold border-2 transition-colors ${sinalPct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-900 border-blue-200 hover:border-blue-400"}`}
                   >
-                    💰 Sinal antecipado
+                    💰 Sinal via PIX
                   </button>
                 </div>
                 {sinalPct && (
@@ -2557,7 +2462,14 @@ export default function GerarLinkPage() {
                         <button
                           key={p}
                           type="button"
-                          onClick={() => setSinalPct(String(p))}
+                          onClick={() => {
+                            setSinalPct(String(p));
+                            const preco = Number(rawPreco) || 0;
+                            const trocaT = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+                            const baseAposTroca = Math.max(preco - trocaT, 0);
+                            const sinal = Math.round((baseAposTroca * p) / 100);
+                            setEntradaPix(sinal > 0 ? sinal.toLocaleString("pt-BR") : "");
+                          }}
                           className={`px-3 py-1 rounded-lg text-xs font-bold border-2 transition-colors ${sinalPct === String(p) ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-700 border-blue-300 hover:border-blue-500"}`}
                         >
                           {p}%
@@ -2565,7 +2477,16 @@ export default function GerarLinkPage() {
                       ))}
                       <input
                         value={sinalPct}
-                        onChange={(e) => setSinalPct(e.target.value.replace(/\D/g, "").slice(0, 3) || "50")}
+                        onChange={(e) => {
+                          const novoPct = e.target.value.replace(/\D/g, "").slice(0, 3) || "50";
+                          setSinalPct(novoPct);
+                          const pctNum = Number(novoPct) || 0;
+                          const preco = Number(rawPreco) || 0;
+                          const trocaT = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
+                          const baseAposTroca = Math.max(preco - trocaT, 0);
+                          const sinal = Math.round((baseAposTroca * pctNum) / 100);
+                          setEntradaPix(sinal > 0 ? sinal.toLocaleString("pt-BR") : "");
+                        }}
                         placeholder="50"
                         inputMode="numeric"
                         className={`${inputCls} max-w-[80px] bg-white`}
@@ -2582,8 +2503,8 @@ export default function GerarLinkPage() {
                       const restante = baseAposTroca - sinal;
                       return (
                         <p className="text-xs text-blue-900 leading-relaxed">
-                          → Cliente paga <strong>R$ {sinal.toLocaleString("pt-BR")}</strong> agora (sinal {pct}%) e <strong>R$ {restante.toLocaleString("pt-BR")}</strong> na entrega
-                          {trocaT > 0 ? ` (já descontada a troca de R$ ${trocaT.toLocaleString("pt-BR")})` : ""}.
+                          → Entrada PIX preenchida: <strong>R$ {sinal.toLocaleString("pt-BR")}</strong> ({pct}% do preco). Restante <strong>R$ {restante.toLocaleString("pt-BR")}</strong> + taxa do cartao vai parcelado abaixo.
+                          {trocaT > 0 ? ` Troca de R$ ${trocaT.toLocaleString("pt-BR")} ja foi descontada.` : ""}
                         </p>
                       );
                     })()}
@@ -2591,15 +2512,11 @@ export default function GerarLinkPage() {
                 )}
               </div>
 
-              {/* Mini preview do banner que cliente vai ver no /compra */}
+              {/* Mini preview do banner que cliente vai ver no /compra.
+                  Logica unificada: cliente paga TUDO agora (PIX + cartao parcelado),
+                  aguarda prazo, retira na loja. Sem mais "paga X agora e Y depois". */}
               {previsaoChegada && (Number(rawPreco) > 0) && (() => {
-                const pctPrev = Number(sinalPct) || 0;
-                const precoPrev = Number(rawPreco) || 0;
-                const trocaTPrev = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
-                const baseAposTrocaPrev = Math.max(precoPrev - trocaTPrev, 0);
-                const temSinalPrev = pctPrev > 0 && pctPrev < 100;
-                const sinalPrev = temSinalPrev ? Math.round((baseAposTrocaPrev * pctPrev) / 100) : baseAposTrocaPrev;
-                const restantePrev = temSinalPrev ? baseAposTrocaPrev - sinalPrev : 0;
+                const totalPagarAgora = entradaNum + valorComTaxa;
                 return (
                   <div className="mt-3 p-3 rounded-xl bg-white border border-blue-300 shadow-sm">
                     <p className="text-[10px] uppercase tracking-wider text-blue-700 font-bold mb-2">👁 Cliente vai ver assim:</p>
@@ -2607,9 +2524,9 @@ export default function GerarLinkPage() {
                       <div className="absolute top-3 left-[16.67%] right-[16.67%] h-0.5 bg-blue-300" />
                       <div className="relative flex flex-col items-center text-center">
                         <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold z-10 mb-1">1</div>
-                        <p className="text-[9px] font-bold text-blue-900">Pagar</p>
-                        <p className="text-[9px] text-blue-700">{temSinalPrev ? `Sinal ${pctPrev}%` : "Integral"}</p>
-                        {sinalPrev > 0 && <p className="text-[10px] font-bold text-blue-900">R$ {sinalPrev.toLocaleString("pt-BR")}</p>}
+                        <p className="text-[9px] font-bold text-blue-900">Pagar agora</p>
+                        <p className="text-[9px] text-blue-700">{entradaNum > 0 ? "PIX + cartao" : "Cartao/forma"}</p>
+                        {totalPagarAgora > 0 && <p className="text-[10px] font-bold text-blue-900">R$ {totalPagarAgora.toLocaleString("pt-BR")}</p>}
                       </div>
                       <div className="relative flex flex-col items-center text-center">
                         <div className="w-6 h-6 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-[10px] font-bold z-10 mb-1">2</div>
@@ -2619,8 +2536,7 @@ export default function GerarLinkPage() {
                       <div className="relative flex flex-col items-center text-center">
                         <div className="w-6 h-6 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center text-[10px] font-bold z-10 mb-1">3</div>
                         <p className="text-[9px] font-bold text-blue-900">Retirar</p>
-                        <p className="text-[9px] text-blue-700">{trocaTPrev > 0 ? "+ troca" : "loja"}</p>
-                        {restantePrev > 0 && <p className="text-[10px] font-bold text-blue-900">R$ {restantePrev.toLocaleString("pt-BR")}</p>}
+                        <p className="text-[9px] text-blue-700">loja</p>
                       </div>
                     </div>
                   </div>
@@ -2630,12 +2546,19 @@ export default function GerarLinkPage() {
           )}
         </div>
 
-        {/* Produto — seleção do estoque ou manual */}
+        {/* Produto — seleção do estoque ou manual.
+            Em encomenda, modo manual eh forcado (produto nao esta no estoque ainda),
+            entao o toggle some pra evitar confusao. */}
         <div className="flex items-center justify-between">
-          <label className={labelCls}>Produto *</label>
-          <button onClick={() => { const goingManual = !produtoManual; setProdutoManual(goingManual); setCatSel(""); setPickerIdx(null); if (goingManual) { setCarrinhoLink([]); setAddingProduct(true); setCartCatSel(""); setCartCorPending(null); } else { setProdutos([""]); setCorSel(""); setPreco(""); setAddingProduct(true); setCartCatSel(""); setCartCorPending(null); } }} className="text-xs text-[#E8740E] font-medium hover:underline">
-            {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
-          </button>
+          <label className={labelCls}>
+            Produto *
+            {encomenda && <span className="ml-2 text-[10px] font-normal text-blue-600">(encomenda — digite produto e preco livremente)</span>}
+          </label>
+          {!encomenda && (
+            <button onClick={() => { const goingManual = !produtoManual; setProdutoManual(goingManual); setCatSel(""); setPickerIdx(null); if (goingManual) { setCarrinhoLink([]); setAddingProduct(true); setCartCatSel(""); setCartCorPending(null); } else { setProdutos([""]); setCorSel(""); setPreco(""); setAddingProduct(true); setCartCatSel(""); setCartCorPending(null); } }} className="text-xs text-[#E8740E] font-medium hover:underline">
+              {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
+            </button>
+          )}
         </div>
 
         {produtoManual ? (
@@ -3225,31 +3148,41 @@ export default function GerarLinkPage() {
         </div>
 
         {/* Bloco fluxo de pagamento — explica em texto claro o que cliente vai
-            pagar agora e quando, especialmente em encomenda com sinal. So
-            renderiza quando ha forma + preco preenchidos. */}
+            pagar agora e quando. Logica unificada: cliente paga TUDO agora
+            (entrada PIX + restante na forma escolhida com taxa). Encomenda
+            so adiciona "aguarda prazo + retira na loja". */}
         {forma && precoBase > 0 && (() => {
           const trocaTotalFx = (Number(rawTrocaVal) || 0) + (Number(rawTrocaVal2) || 0);
-          const baseAposTroca = Math.max(precoBase - trocaTotalFx - descontoNum, 0);
-          const pctFx = Number(sinalPct) || 0;
-          const temSinalFx = encomenda && pctFx > 0 && pctFx < 100;
-          const valorAgora = temSinalFx ? Math.round((baseAposTroca * pctFx) / 100) : baseAposTroca;
-          const valorRestante = temSinalFx ? Math.max(baseAposTroca - valorAgora, 0) : 0;
+          const totalAgoraFx = entradaNum + valorComTaxa;
           const formaLabel = forma === "Pix" ? "PIX" : forma === "Link de Pagamento" ? `Link MP${parcelas ? ` ${parcelas}x` : ""}` : forma === "Cartao Credito" ? `Cartão${parcelas ? ` ${parcelas}x` : ""}` : forma === "Cartao Debito" ? "Débito" : forma === "Especie" ? "Espécie" : forma;
+          let etapa = 1;
           return (
             <div className={`rounded-xl border p-3 text-xs leading-relaxed ${encomenda ? "border-blue-300 bg-blue-50 text-blue-900" : "border-[#D2D2D7] bg-[#F9F9FB] text-[#1D1D1F]"}`}>
               <p className="font-bold mb-1.5">{encomenda ? "📦 Fluxo de pagamento (encomenda)" : "💳 Fluxo de pagamento"}</p>
               <ol className="space-y-1 list-none">
-                <li>
-                  <span className="font-semibold">1.</span> Cliente paga <strong>R$ {valorAgora.toLocaleString("pt-BR")}</strong> agora via <strong>{formaLabel}</strong>{temSinalFx ? ` (sinal ${pctFx}%)` : ""}
-                </li>
-                {encomenda && previsaoChegada && (
-                  <li><span className="font-semibold">2.</span> Aguarda <strong>{previsaoChegada}</strong> para chegada do produto</li>
+                {entradaNum > 0 ? (
+                  <>
+                    <li>
+                      <span className="font-semibold">{etapa++}.</span> Cliente paga <strong>R$ {entradaNum.toLocaleString("pt-BR")}</strong> agora via <strong>PIX</strong>
+                      {encomenda && Number(sinalPct) > 0 && Number(sinalPct) < 100 ? ` (sinal ${sinalPct}%)` : ""}
+                    </li>
+                    <li>
+                      <span className="font-semibold">{etapa++}.</span> Cliente paga <strong>R$ {valorComTaxa.toLocaleString("pt-BR")}</strong> agora via <strong>{formaLabel}</strong>
+                    </li>
+                  </>
+                ) : (
+                  <li>
+                    <span className="font-semibold">{etapa++}.</span> Cliente paga <strong>R$ {totalAgoraFx.toLocaleString("pt-BR")}</strong> agora via <strong>{formaLabel}</strong>
+                  </li>
                 )}
-                {valorRestante > 0 && (
-                  <li><span className="font-semibold">{encomenda && previsaoChegada ? "3" : "2"}.</span> Paga restante <strong>R$ {valorRestante.toLocaleString("pt-BR")}</strong> na entrega</li>
+                {encomenda && previsaoChegada && (
+                  <li><span className="font-semibold">{etapa++}.</span> Aguarda <strong>{previsaoChegada}</strong> para chegada do produto</li>
+                )}
+                {encomenda && (
+                  <li><span className="font-semibold">{etapa++}.</span> 🏬 Retira na loja (ja pagou tudo)</li>
                 )}
                 {trocaTotalFx > 0 && (
-                  <li><span className="font-semibold">{encomenda ? "4" : "2"}.</span> 💱 Aparelho da troca (R$ {trocaTotalFx.toLocaleString("pt-BR")}) recolhido na retirada</li>
+                  <li><span className="font-semibold">{etapa++}.</span> 💱 Aparelho da troca (R$ {trocaTotalFx.toLocaleString("pt-BR")}) recolhido na retirada</li>
                 )}
               </ol>
             </div>
@@ -3524,7 +3457,7 @@ export default function GerarLinkPage() {
           disabled={carrinhoLink.length === 0 && !produtos.some(Boolean)}
           className={`w-full py-3 font-bold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${editingLinkId ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white" : "bg-[#E8740E] hover:bg-[#D06A0D] active:bg-[#B85E0B] text-white"}`}
         >
-          {editingLinkId ? "💾 Salvar Alterações" : "Gerar Link"}
+          {editingLinkId ? "🔄 Re-gerar link (arquiva o antigo)" : "Gerar Link"}
         </button>
 
         {/* ── Link Mercado Pago (pagamento via MP) ─────── */}
