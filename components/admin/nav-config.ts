@@ -37,7 +37,6 @@ export const NAV: NavEntry[] = [
       { href: "/admin/clientes", label: "Cadastros", icon: "\u{1F465}", pageKey: "clientes" },
       { href: "/admin/gastos", label: "Gastos", icon: "\u{1F4E4}", pageKey: "gastos" },
       { href: "/admin/saldos", label: "Saldos", icon: "\u{1F3E6}", pageKey: "saldos" },
-      { href: "/admin/bancos", label: "Bancos (Open Finance)", icon: "\u{1F517}", pageKey: "saldos" },
       { href: "/admin/recebiveis", label: "Recebiveis", icon: "\u{1F4B3}", pageKey: "recebiveis" },
       { href: "/admin/conciliacao", label: "Conciliacao", icon: "\u{1F50D}", pageKey: "conciliacao" },
       { href: "/admin/auditoria", label: "Auditoria", icon: "📋", pageKey: "saldos" },
